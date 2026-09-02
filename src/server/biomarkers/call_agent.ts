@@ -179,7 +179,7 @@ export async function fillBatch(
         model: "gemini-3.5-flash-lite",
         contents: [{ text: user }],
         config: {
-          systemInstruction: fillTemplateInstruction(patientProfileStr),
+          systemInstruction: fillTemplateInstruction(patientProfileStr, (profile as any)?.language),
           responseMimeType: "application/json",
           responseSchema: (kind === "hit" ? hitResponseSchema : missResponseSchema) as any,
           temperature: 0.1,

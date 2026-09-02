@@ -773,13 +773,13 @@ export default function MedicalHistoryTab({
   // Helper to calculate highest risk info for a subcategory
   const getSubCategoryRiskInfo = (cat: string) => {
     if (cat === 'Biomarkers to Review' || cat === 'Unknown Range') {
-      return { label: 'Biomarkers to Review', bg: 'bg-amber-600', text: 'text-white' };
+      return { label: t.biomarkersToReview, bg: 'bg-amber-600', text: 'text-white' };
     }
     const groupMarkers = getBiomarkersForSubCategory(cat);
     let highestRisk: BiomarkerEffectiveRisk = {
       score: NO_DATA_RISK_SCORE,
       severity: null,
-      tag: 'No Data',
+      tag: t.noData,
       bg: 'bg-slate-200 dark:bg-slate-800/50',
       text: 'text-theme-text-secondary'
     };
@@ -872,7 +872,7 @@ export default function MedicalHistoryTab({
         </div>
         <input
           type="text"
-          placeholder="Search conditions or markers..."
+          placeholder={t.searchConditionsOrMarkers}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full pl-10 pr-3 py-2 bg-white dark:bg-slate-800 border border-theme-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm"
@@ -892,7 +892,9 @@ export default function MedicalHistoryTab({
             className="w-full px-2.5 py-1.5 text-xs font-semibold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-theme-border rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:outline-none transition-all cursor-pointer shadow-sm"
           >
             {BIOMARKER_GROUPING_OPTIONS.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
+              <option key={opt.value} value={opt.value}>
+                {opt.value === 'risk' ? t.byRiskCategories : opt.value === 'practice' ? t.byMedicalPractice : t.byMedicalConditions}
+              </option>
             ))}
           </select>
         </div>
@@ -904,8 +906,8 @@ export default function MedicalHistoryTab({
             onChange={(e) => setSortBy(e.target.value as any)}
             className="w-full px-2.5 py-1.5 text-xs font-semibold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-theme-border rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:outline-none transition-all cursor-pointer shadow-sm"
           >
-            <option value="risk">Risk Level</option>
-            <option value="name">Name</option>
+            <option value="risk">{t.sortByRiskLevel}</option>
+            <option value="name">{t.sortByName}</option>
           </select>
         </div>
       </div>
@@ -947,8 +949,8 @@ export default function MedicalHistoryTab({
           <div className="p-8 text-center bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-dashed border-theme-border">
             <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">
               {searchQuery.trim() !== ''
-                ? `No biomarkers found matching "${searchQuery}"`
-                : 'No biomarkers available in this view.'}
+                ? `${t.noBiomarkersFoundMatching} "${searchQuery}"`
+                : t.noBiomarkersAvailableView}
             </p>
             {searchQuery.trim() !== '' && (
               <button
@@ -956,7 +958,7 @@ export default function MedicalHistoryTab({
                 onClick={() => setSearchQuery('')}
                 className="mt-3 px-3 py-1.5 text-xs font-bold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors cursor-pointer shadow-xs"
               >
-                Clear Search
+                {t.clearSearch}
               </button>
             )}
           </div>
@@ -974,7 +976,7 @@ export default function MedicalHistoryTab({
                 className="flex items-center justify-between p-3.5 bg-slate-50/50 dark:bg-slate-900/60 hover:bg-slate-100/60 dark:hover:bg-slate-850/40 cursor-pointer select-none transition-colors border-b border-theme-border/30"
               >
                 <span className="text-xs font-bold text-slate-700 dark:text-slate-200 capitalize">
-  {cat} ({markers.length})
+  {cat === 'Biomarkers to Review' ? t.biomarkersToReview : cat} ({markers.length})
 </span>
 
                 <div className="flex items-center gap-2">
@@ -994,7 +996,7 @@ export default function MedicalHistoryTab({
                     <div className="p-3 bg-amber-500/10 border-b border-amber-500/20 text-amber-900 dark:text-amber-200 text-xs flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                        <span>There are <strong>{markers.length}</strong> biomarker(s) needing calibration or review (scaling/notation errors, missing reference ranges, or improbable log values).</span>
+                        <span>{t.biomarkersNeedingReviewNoticePrefix} <strong>{markers.length}</strong> {t.biomarkersNeedingReviewNoticeSuffix}</span>
                       </div>
                       <button
                         type="button"
@@ -1018,7 +1020,7 @@ export default function MedicalHistoryTab({
                         }}
                         className="px-2.5 py-1 text-[11px] font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors shrink-0 cursor-pointer shadow-xs"
                       >
-                        Fix All with Data Review Agent
+                        {t.fixAllWithDataReviewAgent}
                       </button>
                     </div>
                   )}
@@ -1080,7 +1082,7 @@ export default function MedicalHistoryTab({
                                 <span className="text-[10px] font-mono text-slate-400">({displayUnit})</span>
                               </div>
                               <p className="text-[10px] text-slate-400 mt-0.5">
-                                Normal range: {displayDef.normalRange}
+                                {t.normalRangeLabel} {displayDef.normalRange}
                               </p>
                               
                               {/* Associated Metadata Badges */}
@@ -1088,13 +1090,13 @@ export default function MedicalHistoryTab({
                                 {isEmptyVal && (
                                   <span className="px-1.5 py-0.5 text-[8px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 rounded-md border border-rose-300/80 dark:border-rose-700/60 whitespace-nowrap flex items-center gap-1 animate-pulse">
                                     <AlertCircle className="w-2.5 h-2.5 text-rose-600 dark:text-rose-400" />
-                                    Zero / Empty Value (Flagged to Delete)
+                                    {t.zeroEmptyValueFlagged}
                                   </span>
                                 )}
                                 {isBiomarkerNeedingReview(def.key, profile, activeHistory, biomarkers, allDefinitions, flaggedTelemetryKeys) && (
                                   <span className="px-1.5 py-0.5 text-[8px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-300 rounded-md border border-amber-300/80 dark:border-amber-700/60 whitespace-nowrap flex items-center gap-1">
                                     <AlertCircle className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
-                                    Biomarker to Review
+                                    {t.biomarkerToReview}
                                   </span>
                                 )}
                                 {(() => {
@@ -1104,7 +1106,7 @@ export default function MedicalHistoryTab({
                                   if (optVal && optVal.trim() && optVal.trim() !== def.normalRange) {
                                     return (
                                       <span className="px-1.5 py-0.5 text-[8px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 rounded-md border border-emerald-300/80 dark:border-emerald-700/60 whitespace-nowrap flex items-center gap-1">
-                                        🎯 Target: {optVal}
+                                        🎯 {t.targetLabel}: {optVal}
                                       </span>
                                     );
                                   }
@@ -1113,25 +1115,25 @@ export default function MedicalHistoryTab({
                                 {isNeedsApproval && !isPendingReview && (
                                   <span className="px-1.5 py-0.5 text-[8px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 rounded-md border border-amber-300/80 dark:border-amber-700/60 whitespace-nowrap flex items-center gap-1 animate-pulse">
                                     <Clock className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
-                                    Biomarker to Review
+                                    {t.biomarkerToReview}
                                   </span>
                                 )}
                                 {isMissingUnit && (
                                   <span className="px-1.5 py-0.5 text-[8px] font-bold bg-orange-100 text-orange-800 dark:bg-orange-950/80 dark:text-orange-300 rounded-md border border-orange-300/80 dark:border-orange-700/60 whitespace-nowrap flex items-center gap-1">
                                     <AlertCircle className="w-2.5 h-2.5 text-orange-600 dark:text-orange-400" />
-                                    Missing Unit (To Be Approved)
+                                    {t.missingUnitToBeApproved}
                                   </span>
                                 )}
                                 {isMissingCategory && (
                                   <span className="px-1.5 py-0.5 text-[8px] font-bold bg-yellow-100 text-yellow-800 dark:bg-yellow-950/80 dark:text-yellow-300 rounded-md border border-yellow-300/80 dark:border-yellow-700/60 whitespace-nowrap flex items-center gap-1">
                                     <AlertCircle className="w-2.5 h-2.5 text-yellow-600 dark:text-yellow-400" />
-                                    Missing Category (To Be Approved)
+                                    {t.missingCategoryToBeApproved}
                                   </span>
                                 )}
                                 {status === 'flagged' && (
                                   <span className="px-1.5 py-0.5 text-[8px] font-bold bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 rounded-md border border-purple-300 dark:border-purple-700 whitespace-nowrap animate-pulse flex items-center gap-1">
                                     <AlertCircle className="w-2.5 h-2.5 text-purple-600 dark:text-purple-400" />
-                                    FLAGGED: Improbable Value - Please Review
+                                    {t.flaggedImprobableValue}
                                   </span>
                                 )}
                                 {riskTag && (
@@ -1153,11 +1155,11 @@ export default function MedicalHistoryTab({
                             <div className="text-right flex items-center gap-2">
                               <div className="flex flex-col items-end">
                                 <span className={`text-xs font-bold font-sans ${isEmptyVal ? 'text-rose-600 dark:text-rose-400 font-extrabold' : (hasVal ? colorClass : 'text-slate-300')}`}>
-                                  {hasVal ? (hideSensitive ? '***' : (isEmptyVal ? `${val} (Empty/Zero)` : val)) : 'Unset'}
+                                  {hasVal ? (hideSensitive ? '***' : (isEmptyVal ? `${val} (${t.emptyZero})` : val)) : t.unset}
                                 </span>
                                 {hasVal && (
                                   <span className={`text-[9px] font-bold uppercase tracking-wider ${isEmptyVal ? 'text-rose-600 dark:text-rose-400' : colorClass}`}>
-                                    {isEmptyVal ? 'To Be Deleted' : statusLabel}
+                                    {isEmptyVal ? t.toBeDeleted : statusLabel}
                                   </span>
                                 )}
                               </div>
@@ -1179,6 +1181,7 @@ export default function MedicalHistoryTab({
                               }} onCombineBiomarker={() => {}}
                               def={def}
                               profile={profile}
+                              language={profile.language}
                               biomarkerHistory={activeHistory}
                               biomarkers={biomarkers}
                               onEditBiomarkerLog={onEditBiomarkerLog}
@@ -1213,7 +1216,7 @@ export default function MedicalHistoryTab({
                       );
                     })
                   ) : (
-                    <p className="p-4 text-xs text-slate-400 italic text-center">No biomarkers in this category</p>
+                    <p className="p-4 text-xs text-slate-400 italic text-center">{t.noBiomarkersInCategory}</p>
                   )}
                 </div>
               )}
@@ -1226,11 +1229,11 @@ export default function MedicalHistoryTab({
         <div className="flex flex-wrap items-center gap-6 text-xs text-theme-text-secondary font-medium">
           <div className="flex items-center gap-2">
             <ClipboardList className="w-4 h-4 text-indigo-500" />
-            <span onClick={exportBiomarkersToCSV} className="cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors" title="Download as CSV">Tracked Biomarkers: <strong className="text-slate-800 dark:text-slate-200 font-bold">{totalUniqueBiomarkers}</strong></span>
+            <span onClick={exportBiomarkersToCSV} className="cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors" title={t.downloadAsCsv}>{t.trackedBiomarkers}: <strong className="text-slate-800 dark:text-slate-200 font-bold">{totalUniqueBiomarkers}</strong></span>
           </div>
           <div className="flex items-center gap-2">
             <BrainCircuit className="w-4 h-4 text-indigo-500" />
-            <span onClick={exportLogEntriesToCSV} className="cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors" title="Download as CSV">Total Log Entries: <strong className="text-slate-800 dark:text-slate-200 font-bold">{activeHistory.reduce((sum, h) => sum + Object.keys(h.biomarkers).length, 0)}</strong></span>
+            <span onClick={exportLogEntriesToCSV} className="cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors" title={t.downloadAsCsv}>{t.totalLogEntries}: <strong className="text-slate-800 dark:text-slate-200 font-bold">{activeHistory.reduce((sum, h) => sum + Object.keys(h.biomarkers).length, 0)}</strong></span>
           </div>
         </div>
       </div>
@@ -1241,7 +1244,7 @@ export default function MedicalHistoryTab({
           className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-bold text-xs rounded-xl border border-indigo-100 dark:border-indigo-800/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors cursor-pointer flex items-center gap-2"
         >
           <ClipboardList className="w-4 h-4" />
-          Open Biomarker Dictionary
+          {t.openBiomarkerDictionary}
         </button>
 
         {Object.keys(profile?.notUsedInMedicalHistory || {}).length > 0 && (
@@ -1251,7 +1254,7 @@ export default function MedicalHistoryTab({
             className="px-3 py-1.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 font-bold text-xs rounded-xl border border-amber-200 dark:border-amber-800/60 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors cursor-pointer flex items-center gap-2"
           >
             <EyeOff className="w-3.5 h-3.5" />
-            Not used ({Object.keys(profile?.notUsedInMedicalHistory || {}).length})
+            {t.notUsed} ({Object.keys(profile?.notUsedInMedicalHistory || {}).length})
           </button>
         )}
         
@@ -1263,7 +1266,7 @@ export default function MedicalHistoryTab({
             className="px-4 py-2 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 font-bold text-xs rounded-xl border border-rose-100 dark:border-rose-800/50 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors cursor-pointer flex items-center gap-2"
           >
             <Trash2 className="w-4 h-4" />
-            Delete Empty Biomarkers
+            {t.deleteEmptyBiomarkers}
           </button>
         )}
       </div>

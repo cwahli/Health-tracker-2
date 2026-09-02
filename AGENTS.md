@@ -13,6 +13,7 @@
 3. **Tests only if you changed application code** (`src/`, `server.ts`, `server_*.ts`, `agents/`, `supabase/`). Docs, reviews, and prototype-log reads: **run nothing**. Never `npm test` (~97 files). Named row from `docs/agent/DOMAIN_REGRESSION_MAP.md` only.
 4. **Do not edit** `AGENTS.md` or `docs/agent/**` unless the human asked for a process change. Confirmation in §3 is for **edits**, not reads.
 5. **Follow `plan/ROADMAP.md`.** There is no `studio/` pack folder. “Work on the roadmap” = **Current work**, then the next open ID. Do not invent a pack file. Do not mix F-9.5 (`App.tsx`) with F-10.
+6. **i18n (durable).** User-visible UI copy goes in `src/utils/translations.ts`. `en` is the source of truth; `id` must have the same keys (parity test). New languages: add a locale and fill keys; missing keys fall back to English. Agent system instructions must include `userProfile.language` and tell the model to write **user-visible answers** in that language (JSON keys, nutrient codes, biomarker keys stay English). Do not hardcode English chrome in new UI.
 
 ```text
 plan/ROADMAP.md  = remaining work (the only execute file)

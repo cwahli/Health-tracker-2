@@ -1,3 +1,5 @@
+import { withAgentLanguage } from '../src/utils/i18n.js';
+
 export function formatPatientContext(context: {
   biomarkersNeedingImprovement?: any[];
   remainingAllowance?: any | null;
@@ -169,7 +171,8 @@ export function formatPatientContext(context: {
     targetLimits += `No 7-day history available yet.\nTodays target: ${emptyStateParts.join(', ')}`;
   }
 
-  return { biomarkersList, targetLimits };
+  const languageBlock = withAgentLanguage('', userProfile?.language).trim();
+  return { biomarkersList, targetLimits, languageBlock };
 }
 
 export const DIETITIAN_CORE_DIRECTIVES = `
@@ -358,14 +361,16 @@ export function buildFoodAnalyzeInstruction(context: {
   foodLogs?: any[];
   userProfile?: any;
 }): string {
-  const { biomarkersList, targetLimits } = formatPatientContext(context);
+  const { biomarkersList, targetLimits, languageBlock } = formatPatientContext(context);
   const { activeMeal, forceModifyMode = false } = context;
 
   const sanitizedActiveMeal = sanitizeMealForPrompt(activeMeal);
 
   const mealStr = sanitizedActiveMeal ? JSON.stringify(sanitizedActiveMeal, null, 2) : "None";
 
-  return `CURRENT_ACTIVE_MEAL_STATE: ${mealStr}
+  return `${languageBlock}
+
+CURRENT_ACTIVE_MEAL_STATE: ${mealStr}
 
 ${DIETITIAN_CORE_DIRECTIVES}
 
@@ -387,9 +392,11 @@ export function buildModeAReviewInstruction(context: {
   foodLogs?: any[];
   userProfile?: any;
 }): string {
-  const { biomarkersList, targetLimits } = formatPatientContext(context);
+  const { biomarkersList, targetLimits, languageBlock } = formatPatientContext(context);
 
-  return `${DIETITIAN_CORE_DIRECTIVES}
+  return `${languageBlock}
+
+${DIETITIAN_CORE_DIRECTIVES}
 
 === PATIENT CONTEXT PAYLOAD ===
 CRITICAL PATIENT BIOMARKER WARNINGS & NUTRITIONAL DIRECTIVES:
@@ -449,8 +456,10 @@ export function buildModeAEditInstruction(context: {
   foodLogs?: any[];
   userProfile?: any;
 }): string {
-  const { biomarkersList, targetLimits } = formatPatientContext(context);
-  return `${DIETITIAN_CORE_DIRECTIVES}
+  const { biomarkersList, targetLimits, languageBlock } = formatPatientContext(context);
+  return `${languageBlock}
+
+${DIETITIAN_CORE_DIRECTIVES}
 
 === PATIENT CONTEXT PAYLOAD ===
 CRITICAL PATIENT BIOMARKER WARNINGS & NUTRITIONAL DIRECTIVES:
@@ -472,9 +481,11 @@ export function buildModeDCompareInstruction(context: {
   foodLogs?: any[];
   userProfile?: any;
 }): string {
-  const { biomarkersList, targetLimits } = formatPatientContext(context);
+  const { biomarkersList, targetLimits, languageBlock } = formatPatientContext(context);
 
-  return `${DIETITIAN_CORE_DIRECTIVES}
+  return `${languageBlock}
+
+${DIETITIAN_CORE_DIRECTIVES}
 
 === PATIENT CONTEXT PAYLOAD ===
 CRITICAL PATIENT BIOMARKER WARNINGS & NUTRITIONAL DIRECTIVES:
@@ -504,7 +515,7 @@ export function buildModeDEditInstruction(context: {
   foodLogs?: any[];
   userProfile?: any;
 }): string {
-  const { biomarkersList, targetLimits } = formatPatientContext(context);
+  const { biomarkersList, targetLimits, languageBlock } = formatPatientContext(context);
   let sanitizedComparison = null;
   if (context.activeComparison) {
     sanitizedComparison = { ...context.activeComparison };
@@ -535,7 +546,9 @@ export function buildModeDEditInstruction(context: {
   }
   const compStr = sanitizedComparison ? JSON.stringify(sanitizedComparison, null, 2) : "None";
 
-  return `CURRENT_ACTIVE_COMPARISON_STATE: ${compStr}
+  return `${languageBlock}
+
+CURRENT_ACTIVE_COMPARISON_STATE: ${compStr}
 
 ${DIETITIAN_CORE_DIRECTIVES}
 

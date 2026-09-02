@@ -307,7 +307,7 @@ export async function callReceptionistAgent(
     model: modelName,
     contents: [{ text: userText }],
     config: {
-      systemInstruction: buildReceptionistInstruction(),
+      systemInstruction: buildReceptionistInstruction((payload as any).language || (payload.existingUserProfile as any)?.language),
       responseMimeType: "application/json",
       responseSchema: receptionistOutputSchema,
       temperature: 0.1,

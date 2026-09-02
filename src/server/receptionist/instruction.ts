@@ -1,9 +1,12 @@
+import { withAgentLanguage } from '../../utils/i18n.js';
+
 /**
  * Receptionist & Onboarding Agent System Instruction
  */
 
-export function buildReceptionistInstruction(): string {
-  return [
+export function buildReceptionistInstruction(lang?: unknown): string {
+  return withAgentLanguage([
+
     "You are the Receptionist and Onboarding AI Specialist for an advanced Health & Biomarker Tracker application.",
     "Your primary role is to welcome users, understand their goals, maintain and consolidate persistent user memory, determine what domain data is necessary for specialist agents (such as the Coach or Medical agent), collect any missing data via conversational chat, extract inline biomarker & profile updates, and package consolidated data into a clean handoff payload when ready.",
     "",
@@ -101,6 +104,7 @@ export function buildReceptionistInstruction(): string {
     "   - MANDATORY TEXT CLEANLINESS LAW: Never include filler section headers like 'What should I do?', 'What should I do:', 'What you should do:', or fictional user questions in `userResponse`. Address the user directly, concisely, and cleanly without repeating 'What should I do?' or rhetorical question headers.",
     "",
     "9. OUTPUT FORMAT:",
-    "   - You must output strict JSON conforming to the ReceptionistOutput schema."
-  ].join("\n");
+    "   - You must output strict JSON conforming to the ReceptionistOutput schema.",
+    "   - userResponse, UI form labels, and any chat copy must use the patient UI language from USER OUTPUT LANGUAGE."
+  ].join("\n"), lang);
 }

@@ -2550,7 +2550,9 @@ export default function InsightsTab({
                   className="px-2.5 py-1 text-xs font-semibold bg-theme-bg-card text-slate-700 dark:text-slate-200 border border-theme-border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-sm"
                 >
                   {BIOMARKER_GROUPING_OPTIONS.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    <option key={opt.value} value={opt.value}>
+                      {opt.value === 'risk' ? t.byRiskCategories : opt.value === 'practice' ? t.byMedicalPractice : t.byMedicalConditions}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -2807,7 +2809,9 @@ export default function InsightsTab({
                   className="px-2.5 py-1 text-xs font-semibold bg-theme-bg-card text-slate-700 dark:text-slate-200 border border-theme-border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-sm"
                 >
                   {BIOMARKER_GROUPING_OPTIONS.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    <option key={opt.value} value={opt.value}>
+                      {opt.value === 'risk' ? t.byRiskCategories : opt.value === 'practice' ? t.byMedicalPractice : t.byMedicalConditions}
+                    </option>
                   ))}
                 </select>
               </div>

@@ -157,6 +157,7 @@ export interface ProfileFixture {
   heightCm?: number;
   weightKg?: number;
   unitPreference?: string;
+  language?: string;
   optimalValues?: Record<string, string | number>;
   existingInsights?: Record<string, string>;
   existingCustomRanges?: Record<string, string>;

@@ -152,6 +152,7 @@ import { buildMealFromFinalizeLedgers } from './server_meal_from_finalize.js';
 import { applyMealEdits, applyModifierToItemName } from './server_meal_edit.js';
 import { matchBrandMenu, isPackagedBindItem, inferChainNameFromPackageLabel } from './server_brand_match.js';
 import { classifyDishAtomic } from './server_dish_classify.js';
+import { withScoutLanguage } from './src/utils/i18n.js';
 import {
   addDebugLog,
   logSessionStorage,
@@ -850,7 +851,7 @@ export async function runFoodAnalyze(req: any, res: any) {
             }
             const scoutOutput = await callUnifiedLLM({
               modelId: (typeof engine === 'object' ? engine?.name || engine?.model : engine) || "gemini-3.5-flash-lite",
-              systemInstruction: scoutSystemInstruction,
+              systemInstruction: withScoutLanguage(scoutSystemInstruction, userProfile?.language),
               promptText: scoutPromptText,
               imagePayloads,
               responseMimeType: "application/json",

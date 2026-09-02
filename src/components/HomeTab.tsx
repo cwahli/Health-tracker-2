@@ -1658,8 +1658,8 @@ export default function HomeTab({
               {/* Toggle */}
               <div className="flex items-center justify-between p-1">
                 <div className="space-y-0.5">
-                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Enable Rolling Target</span>
-                  <p className="text-[10px] text-slate-400">Adapt targets dynamically based on history</p>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{t.enableRollingTarget}</span>
+                  <p className="text-[10px] text-slate-400">{t.adaptTargetsHistoryDesc}</p>
                 </div>
                 <button
                   onClick={() => setRollingEnabled(!rollingEnabled)}
@@ -1680,7 +1680,7 @@ export default function HomeTab({
                   {/* Rolling Days */}
                   <div className="space-y-1.5">
                     <div className="flex justify-between text-xs font-bold text-theme-text">
-                      <span>Rolling Timeframe</span>
+                      <span>{t.rollingTimeframe}</span>
                       <span className="text-indigo-650 dark:text-indigo-400 font-mono">{rollingDays} Days</span>
                     </div>
                     <input
@@ -1697,7 +1697,7 @@ export default function HomeTab({
                   {/* Authorization Limit % */}
                   <div className="space-y-1.5">
                     <div className="flex justify-between text-xs font-bold text-theme-text">
-                      <span>Maximum Adjustment Limit</span>
+                      <span>{t.maximumAdjustmentLimit}</span>
                       <span className="text-indigo-650 dark:text-indigo-400 font-mono">{rollingAllowance}%</span>
                     </div>
                     <input
@@ -1766,7 +1766,7 @@ export default function HomeTab({
               {/* View Timeframe Selection */}
               <div className="space-y-1.5 border-t border-theme-border/50 pt-3">
                 <div className="flex justify-between text-xs font-bold text-theme-text">
-                  <span>Display View Timeframe</span>
+                  <span>{t.displayViewTimeframe}</span>
                   <span className="text-indigo-650 dark:text-indigo-400 font-mono">
                     {viewTimeframe === '1' ? 'Today' : `Last ${viewTimeframe} Days`}
                   </span>
@@ -1776,10 +1776,10 @@ export default function HomeTab({
                   onChange={(e) => setViewTimeframe(e.target.value)}
                   className="w-full bg-theme-bg/45 border border-slate-150 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none cursor-pointer"
                 >
-                  <option value="1">Last 1 day (Today)</option>
-                  <option value="7">Last 7 days</option>
-                  <option value="14">Last 14 days</option>
-                  <option value="30">Last 30 days</option>
+                  <option value="1">{t.last1DayToday}</option>
+                  <option value="7">{t.lastNDays.replace('{days}', '7')}</option>
+                  <option value="14">{t.lastNDays.replace('{days}', '14')}</option>
+                  <option value="30">{t.lastNDays.replace('{days}', '30')}</option>
                 </select>
                 <p className="text-[9px] text-slate-400">Average daily intake across the selected timeframe compared to your adjusted budget.</p>
               </div>

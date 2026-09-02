@@ -139,6 +139,7 @@ foodAnalyzeRouter.post("/api/gemini/front-desk", async (req, res) => {
       medicalHistory: Array.isArray(profile.medicalHistory) ? profile.medicalHistory : (profile.medicalConditions ? [profile.medicalConditions] : null),
       dietaryPreferences: Array.isArray(profile.dietaryRestrictions) ? profile.dietaryRestrictions : null,
       targetWeightKg: profile.targetWeight ? Number(profile.targetWeight) : null,
+      language: profile.language || null,
     } : null;
 
     // Convert history into ChatMessage[]
@@ -153,6 +154,7 @@ foodAnalyzeRouter.post("/api/gemini/front-desk", async (req, res) => {
       existingUserProfile,
       existingMemory: null,
       existingActivitiesAndTasks: null,
+      language: profile?.language || null,
     };
 
     addDebugLog(`[FrontDesk] Dispatching receptionist prompt to model: "${targetModel}".`);
@@ -191,7 +193,8 @@ foodAnalyzeRouter.post("/api/gemini/front-desk", async (req, res) => {
           age: profile?.age || 40,
           gender: profile?.gender || 'unknown',
           ethnicity: profile?.ethnicity || 'unknown',
-          unitPreference: profile?.unitPreference || 'SI'
+          unitPreference: profile?.unitPreference || 'SI',
+          language: profile?.language || 'en'
         };
 
         filledRows = await runBiomarkerPipeline(

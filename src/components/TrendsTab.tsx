@@ -290,15 +290,15 @@ export default function TrendsTab({
   const getMetricMeta = () => {
     const nutDef = nutrientDefinitions.find(n => n.key === selectedMetric);
     if (nutDef) {
-      let t = 0;
+      let targetVal = 0;
       if (report?.dailyNutrientTargets && (report.dailyNutrientTargets as any)[selectedMetric]) {
-        t = parseTarget((report.dailyNutrientTargets as any)[selectedMetric], 0);
+        targetVal = parseTarget((report.dailyNutrientTargets as any)[selectedMetric], 0);
       }
-      return { label: nutDef.labels[profile.language] || nutDef.labels.en, unit: nutDef.unit, color: 'var(--color-indigo-500)', target: t || 100 };
+      return { label: nutDef.labels[profile.language] || nutDef.labels.en, unit: nutDef.unit, color: 'var(--color-indigo-500)', target: targetVal || 100 };
     }
     
     if (selectedMetric === 'steps') {
-      return { label: 'Daily Steps', unit: 'steps', color: 'var(--color-emerald-500)', target: report?.dailyNutrientTargets?.steps ? parseTarget(report.dailyNutrientTargets.steps, 3000) : 3000 };
+      return { label: t.dailySteps, unit: 'steps', color: 'var(--color-emerald-500)', target: report?.dailyNutrientTargets?.steps ? parseTarget(report.dailyNutrientTargets.steps, 3000) : 3000 };
     }
 
     const effectiveDef = profile?.customBiomarkers?.[selectedMetric] || biomarkerDefinitions.find(d => d.key === selectedMetric);
@@ -468,23 +468,23 @@ export default function TrendsTab({
   return (
     <div className="space-y-5 pb-40 animation-fade-in max-w-md mx-auto px-4 mt-4 font-sans text-theme-text">
       <div className="flex bg-theme-border/30 p-1 rounded-xl mb-4">
-        <button onClick={() => setActiveSubTab('trends')} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${activeSubTab === 'trends' ? 'bg-theme-bg-card shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-theme-text-secondary'}`}>Trends</button>
-        <button onClick={() => setActiveSubTab('summary')} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${activeSubTab === 'summary' ? 'bg-theme-bg-card shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-theme-text-secondary'}`}>Summary</button>
+        <button onClick={() => setActiveSubTab('trends')} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${activeSubTab === 'trends' ? 'bg-theme-bg-card shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-theme-text-secondary'}`}>{t.trends}</button>
+        <button onClick={() => setActiveSubTab('summary')} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${activeSubTab === 'summary' ? 'bg-theme-bg-card shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-theme-text-secondary'}`}>{t.summary}</button>
       </div>
       
       {activeSubTab === 'summary' && (
         <div className="space-y-6" onClick={() => setSelectedDot(null)}>
           <div className="flex justify-between items-center bg-theme-bg-card border border-theme-border/80 p-3 rounded-xl relative">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide font-mono">Aggregated Time Period</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide font-mono">{t.aggregatedTimePeriod}</span>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-theme-text">Last</span>
+              <span className="text-xs font-bold text-theme-text">{t.last}</span>
               <input 
                 type="number" 
                 value={summaryDays} 
                 onChange={e => setSummaryDays(e.target.value === '' ? '' : parseInt(e.target.value, 10))} 
                 className="w-12 text-center text-xs font-bold text-white bg-slate-800 dark:bg-slate-800 rounded-lg py-1 border-none focus:ring-2 focus:ring-indigo-500/20"
               />
-              <span className="text-xs font-bold text-theme-text">days</span>
+              <span className="text-xs font-bold text-theme-text">{t.days}</span>
             </div>
             
             <button 
@@ -505,14 +505,14 @@ export default function TrendsTab({
               }}
               id="copy-summary-btn"
               className="absolute -top-3 -right-2 p-2 bg-white dark:bg-slate-800 border border-theme-border rounded-full shadow-sm hover:scale-105 transition-all"
-              title="Copy all data"
+              title={t.copyAllData}
             >
               <Copy className="w-3.5 h-3.5 text-slate-500 hover:text-indigo-600 transition-colors" />
             </button>
           </div>
           
           <div>
-            <h3 className="text-xs font-bold text-theme-text mb-3 font-display uppercase tracking-wider">Nutrients (Last {summaryDays} Days)</h3>
+            <h3 className="text-xs font-bold text-theme-text mb-3 font-display uppercase tracking-wider">{t.nutrients} ({t.last} {summaryDays} {t.days})</h3>
             <div className="grid grid-cols-10 gap-x-1 gap-y-3 justify-items-center">
               {nutrientDots.map((dot, i) => (
                 <div 
@@ -536,11 +536,11 @@ export default function TrendsTab({
                     </div>
                     <div className="grid grid-cols-2 gap-2 mt-2">
                       <div>
-                        <span className="block text-[8px] font-bold text-slate-400 uppercase tracking-wide font-mono mb-0.5">Value</span>
+                        <span className="block text-[8px] font-bold text-slate-400 uppercase tracking-wide font-mono mb-0.5">{t.value}</span>
                         <span className="text-xs font-bold text-slate-900 dark:text-slate-200">{dot.value} {dot.unit}</span>
                       </div>
                       <div>
-                        <span className="block text-[8px] font-bold text-slate-400 uppercase tracking-wide font-mono mb-0.5">Target</span>
+                        <span className="block text-[8px] font-bold text-slate-400 uppercase tracking-wide font-mono mb-0.5">{t.targetLabel}</span>
                         <span className="text-xs font-bold text-slate-900 dark:text-slate-200 block truncate">{dot.target}</span>
                       </div>
                     </div>
@@ -554,7 +554,7 @@ export default function TrendsTab({
           </div>
           
           <div>
-            <h3 className="text-xs font-bold text-theme-text mb-3 font-display uppercase tracking-wider mt-6">Biomarkers (Latest Value)</h3>
+            <h3 className="text-xs font-bold text-theme-text mb-3 font-display uppercase tracking-wider mt-6">{t.biomarkersLatestValue}</h3>
             <div className="grid grid-cols-10 gap-x-1 gap-y-3 justify-items-center">
               {biomarkerDots.map((dot, i) => (
                 <div 
@@ -578,11 +578,11 @@ export default function TrendsTab({
                     </div>
                     <div className="grid grid-cols-2 gap-2 mt-2">
                       <div>
-                        <span className="block text-[8px] font-bold text-slate-400 uppercase tracking-wide font-mono mb-0.5">Value</span>
+                        <span className="block text-[8px] font-bold text-slate-400 uppercase tracking-wide font-mono mb-0.5">{t.value}</span>
                         <span className="text-xs font-bold text-slate-900 dark:text-slate-200">{dot.value} {dot.unit}</span>
                       </div>
                       <div>
-                        <span className="block text-[8px] font-bold text-slate-400 uppercase tracking-wide font-mono mb-0.5">Target</span>
+                        <span className="block text-[8px] font-bold text-slate-400 uppercase tracking-wide font-mono mb-0.5">{t.targetLabel}</span>
                         <span className="text-xs font-bold text-slate-900 dark:text-slate-200 block truncate">{dot.target}</span>
                       </div>
                     </div>
@@ -603,22 +603,22 @@ export default function TrendsTab({
       {/* Select Controls Grid */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 font-mono">Select Metric</label>
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 font-mono">{t.selectMetric}</label>
           <select
             id="trend-metric-selector"
             value={selectedMetric}
             onChange={(e) => handleMetricChange(e.target.value)}
             className="w-full text-xs font-bold bg-theme-bg-card border border-theme-border/80 rounded-xl px-2.5 py-2.5 text-theme-neutral focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
           >
-            <option value="steps">Daily Steps</option>
-            <optgroup label="Nutrients">
+            <option value="steps">{t.dailySteps}</option>
+            <optgroup label={t.nutrients}>
               {nutrientDefinitions.map(nut => (
                 <option key={nut.key} value={nut.key}>
                   {nut.labels[profile.language] || nut.labels.en} ({nut.unit})
                 </option>
               ))}
             </optgroup>
-            <optgroup label="Biomarkers">
+            <optgroup label={t.biomarkers}>
               {availableBiomarkerKeys.map(k => {
                 const def = profile?.customBiomarkers?.[k] || biomarkerDefinitions.find(d => d.key === k);
                 const name = def?.name || k.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -634,7 +634,7 @@ export default function TrendsTab({
         </div>
 
         <div>
-          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 font-mono">Time Roll</label>
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 font-mono">{t.timeRoll}</label>
           <div className="grid grid-cols-3 gap-1 bg-theme-bg-card border border-theme-border/80 p-1 rounded-xl">
             {(['daily', 'weekly', 'monthly'] as const).map(p => (
               <button
@@ -646,7 +646,7 @@ export default function TrendsTab({
                     : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
                 }`}
               >
-                {p}
+                {p === 'daily' ? t.daily : p === 'weekly' ? t.weekly : t.monthly}
               </button>
             ))}
           </div>
@@ -659,8 +659,8 @@ export default function TrendsTab({
           /* Masked view to respect privacy toggles in trends as well */
           <div className="h-60 flex flex-col items-center justify-center text-center text-slate-400">
             <EyeOff className="w-8 h-8 text-rose-400 mb-2" />
-            <p className="text-xs font-semibold">Sensitive biometric trends are currently hidden.</p>
-            <p className="text-[10px] mt-1">Disable privacy shield in profile header to display charts.</p>
+            <p className="text-xs font-semibold">{t.sensitiveBiometricHidden}</p>
+            <p className="text-[10px] mt-1">{t.disablePrivacyShield}</p>
           </div>
         ) : (
           <>
@@ -670,11 +670,11 @@ export default function TrendsTab({
                   {metricMeta.label}
                 </span>
                 <span className="text-base font-bold text-slate-950 dark:text-slate-200 font-display">
-                  Timeline ({metricMeta.unit})
+                  {t.timeline} ({metricMeta.unit})
                 </span>
               </div>
               <div className="text-right text-[10px] font-mono text-slate-400 font-bold">
-                Target: {metricMeta.target} {metricMeta.unit}
+                {t.targetLabel}: {metricMeta.target} {metricMeta.unit}
               </div>
             </div>
 
@@ -705,7 +705,7 @@ export default function TrendsTab({
                         y={avg} 
                         stroke="var(--color-slate-500)" 
                         strokeDasharray="3 3" 
-                        label={{ position: 'insideTopLeft', value: `Avg: ${avg.toFixed(1)}`, fill: 'var(--color-slate-500)', fontSize: 10 }}
+                        label={{ position: 'insideTopLeft', value: `${t.avg}: ${avg.toFixed(1)}`, fill: 'var(--color-slate-500)', fontSize: 10 }}
                       />
                     );
                   })()}
@@ -733,7 +733,7 @@ export default function TrendsTab({
                     y={metricMeta.target} 
                     stroke="var(--color-indigo-500)" 
                     strokeDasharray="4 4" 
-                    label={{ value: 'Target', fill: 'var(--color-indigo-500)', fontSize: 9, position: 'top' }} 
+                    label={{ value: t.targetLabel, fill: 'var(--color-indigo-500)', fontSize: 9, position: 'top' }} 
                   />
                   <Line 
                     type="monotone" 
@@ -829,7 +829,7 @@ export default function TrendsTab({
                 <div key={dateStr} className="">
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide font-mono">
-                      Food Consumed on {formatTimelineDate(dateStr)}
+                      {t.foodConsumedOn} {formatTimelineDate(dateStr)}
                     </span>
                     <div className="flex items-center gap-2">
                       <span className={`text-xs font-bold ${totalValue > targetVal ? 'text-rose-500' : 'text-theme-text'}`}>
@@ -869,7 +869,7 @@ export default function TrendsTab({
                             <span 
                               onClick={() => onSelectFood?.(f.id)}
                               className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline transition-colors"
-                              title="Click to view details in Food Log"
+                              title={t.clickToViewFoodLog}
                             >
                               {f.name}
                             </span>

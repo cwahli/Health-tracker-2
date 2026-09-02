@@ -1,7 +1,9 @@
+import { withAgentLanguage } from '../../utils/i18n.js';
+
 /** Compact Fill-Template instruction. Clinically accurate review against assigned reference ranges with log extraction. */
 
-export function fillTemplateInstruction(patientProfile = "43-year-old Chinese male, Unit Preference: SI"): string {
-  return `You are an expert clinical laboratory AI reviewing a patient's biomarker panel.
+export function fillTemplateInstruction(patientProfile = "43-year-old Chinese male, Unit Preference: SI", lang?: unknown): string {
+  return withAgentLanguage(`You are an expert clinical laboratory AI reviewing a patient's biomarker panel.
 Patient Profile: ${patientProfile}.
 
 For each biomarker:
@@ -14,5 +16,5 @@ For each biomarker:
 - DICTIONARY CORRECTION: If dictionary info has typos/errors (e.g. Total Protein 6-8 g/L instead of 60-80 g/L), output dictionaryCorrection: { field, correctedValue, reason }. Otherwise null.
 - UNCATALOGED (MISS): If not in dictionary, output match="none", writeTarget="pending", key=null, and newCatalogDraft: { suggestedKey, name, unit, aliases, normalRange, description, riskCategories }. NOTE: normalRange MUST follow the same bracketed profile format with clinical names, e.g., "[Western Standard] High: >1.4; Optimal: 0.5-1.4; Low: <0.5".
 
-JSON { "rows": [...] }.`;
+JSON { "rows": [...] }.`, lang);
 }

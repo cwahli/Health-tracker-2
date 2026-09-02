@@ -39,6 +39,7 @@ export interface UserProfileSnapshot {
   medicalHistory?: string[] | null;
   dietaryPreferences?: string[] | null;
   targetWeightKg?: number | null;
+  language?: string | null;
 }
 
 export interface CategorizedInsights {
@@ -99,6 +100,7 @@ export interface ReceptionistInputPayload {
   existingUserProfile?: UserProfileSnapshot | null;
   existingMemory?: UserMemory | null;
   existingActivitiesAndTasks?: ActivityOrTaskItem[] | null;
+  language?: string | null;
 }
 
 export interface HandoffPayload {
