@@ -4076,10 +4076,17 @@ export default function App() {
       // /api/jobs/upsert with a burst of simultaneous requests during manual sync.
       const activeJobs = JobStore.getAllJobs().filter(j => j.status === 'succeeded' || j.status === 'awaiting_user');
       const jobUpsertChunkSize = 5;
+      console.log(`[DIAG3] Job upsert loop starting - ${activeJobs.length} jobs queued to sync`);
+      const jobLoopStart = Date.now();
       for (let i = 0; i < activeJobs.length; i += jobUpsertChunkSize) {
         const chunk = activeJobs.slice(i, i + jobUpsertChunkSize);
-        await Promise.all(chunk.map(aj => upsertJobToSupabase(aj, uid).catch(() => {})));
+        const chunkStart = Date.now();
+        await Promise.all(chunk.map(aj => upsertJobToSupabase(aj, uid).catch((e) => {
+          console.log(`[DIAG3] upsertJobToSupabase failed for job ${aj.id}:`, e?.message || e);
+        })));
+        console.log(`[DIAG3] Chunk ${Math.floor(i / jobUpsertChunkSize) + 1} (${chunk.length} jobs) took ${Date.now() - chunkStart}ms`);
       }
+      console.log(`[DIAG3] Job upsert loop finished - ${activeJobs.length} jobs, total ${Date.now() - jobLoopStart}ms`);
 
       // Artificially enforce a minimum rotation time of 800ms so the user gets clear visual confirmation
       await new Promise(resolve => setTimeout(resolve, 800));
