@@ -51,6 +51,7 @@ export type MealEditResult = {
   qa: boolean;
   receiptTable: string;
   notes: string[];
+  beforeItems?: any[];
 };
 
 function itemNames(it: any): string {
@@ -671,6 +672,7 @@ export async function applyMealEdits(opts: {
     qa: false,
     receiptTable: formatMealReceiptTable(items, nutrients, weightGrams),
     notes,
+    beforeItems: original,
   };
 }
 

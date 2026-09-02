@@ -283,7 +283,7 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
   if (Array.isArray(input.userActionBreadcrumbs) && input.userActionBreadcrumbs.length > 0) {
     lines.push(`| Timestamp | Action | Target / Context | Details |`);
     lines.push(`|-----------|--------|------------------|---------|`);
-    for (const b of input.userActionBreadcrumbs.slice(-50)) {
+    for (const b of input.userActionBreadcrumbs.slice(-100)) {
       const ts = b.timestamp ? b.timestamp.slice(11, 19) : '—';
       const act = String(b.action || 'event').replace(/\|/g, '/');
       const tgt = String(b.target || '—').replace(/\|/g, '/');
@@ -609,9 +609,30 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
     for (const entry of input.historyLog.slice(-100)) {
       const when = entry.at || entry.timestamp || '';
       const kind = entry.kind || entry.type || 'event';
-      const msg = entry.message || '';
-      const det = entry.detail || entry.details ? ` (${entry.detail || entry.details})` : '';
-      lines.push(`- **${when}** [${kind}]: ${msg}${det}`);
+      const before = entry.details?.before;
+      const after = entry.details?.after;
+      if (Array.isArray(before) && Array.isArray(after)) {
+        lines.push(`- **${when}** ✏️ Meal Edit — "${entry.details?.userMessage || ''}"`);
+        lines.push('');
+        lines.push(`  | Item | Weight Before | Weight After | Calories Before | Calories After |`);
+        lines.push(`  |------|---------------|--------------|------------------|-----------------|`);
+        const maxLen = Math.max(before.length, after.length);
+        for (let i = 0; i < maxLen; i++) {
+          const b = before[i];
+          const a = after[i];
+          const name = a?.name || b?.name || '—';
+          const wB = b?.weightGrams != null ? `${b.weightGrams}g` : '—';
+          const wA = a?.weightGrams != null ? `${a.weightGrams}g` : '—';
+          const cB = b?.calories != null ? b.calories : '—';
+          const cA = a?.calories != null ? a.calories : '—';
+          lines.push(`  | ${name} | ${wB} | ${wA} | ${cB} | ${cA} |`);
+        }
+        lines.push('');
+      } else {
+        const msg = entry.message || '';
+        const det = entry.detail || entry.details ? ` (${entry.detail || entry.details})` : '';
+        lines.push(`- **${when}** [${kind}]: ${msg}${det}`);
+      }
     }
     lines.push('');
   }

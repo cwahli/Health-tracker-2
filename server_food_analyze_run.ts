@@ -96,6 +96,7 @@ import {
   buildSavableMealFromParsed,
 } from './server_meal_orchestrator.js';
 import { toPendingFoodLog, fromEvaluationComparison } from './src/mealBuild/adapters.js';
+import { appendHistory } from './src/mealBuild/consolidate.js';
 import { projectDietitianInput } from './src/mealBuild/projectors.js';
 import { beginStage, endStage, formatDietitianProjectionBlock } from './src/mealBuild/stageLifecycle.js';
 import { shouldExpandMealAgent } from './src/mealBuild/shouldExpandMealAgent.js';
@@ -3495,6 +3496,30 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           userMessage: message || '',
         });
         for (const note of result.notes) addDebugLog(`[Single-Path Edit] ${note}`);
+        if (result.changed) {
+          try {
+            const summarize = (arr: any[]) => (Array.isArray(arr) ? arr : []).map((it: any) => ({
+              name: it.name || it.canonicalDbName || 'Item',
+              weightGrams: it.weightGrams ?? it.estimatedWeightGrams ?? null,
+              calories: it.nutrients?.calories ?? it.calories ?? null,
+            }));
+            const historySource: any = { historyLog: Array.isArray(activeMeal.historyLog) ? activeMeal.historyLog : [] };
+            const updatedHistorySource = appendHistory(historySource, {
+              type: 'user_action',
+              timestamp: new Date().toISOString(),
+              stage: 'meal_edit',
+              message: result.notes.join('; ') || 'Meal edited',
+              details: {
+                userMessage: message || '',
+                before: summarize(result.beforeItems),
+                after: summarize(result.items),
+              },
+            } as any);
+            activeMeal.historyLog = updatedHistorySource.historyLog;
+          } catch (histErr: any) {
+            addDebugLog(`[Edit History] Failed to append history entry: ${histErr?.message || histErr}`);
+          }
+        }
         activeMeal.itemsBreakdown = result.items;
         activeMeal.nutrients = result.nutrients;
         activeMeal.weightGrams = result.weightGrams;

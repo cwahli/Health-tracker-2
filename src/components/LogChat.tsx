@@ -94,7 +94,7 @@ import { humanizeJobFailure } from '../utils/jobFailure';
 import { ImageStore } from '../jobs/ImageStore';
 import { reserveCredits } from '../jobs/credits';
 import { JobQueueRunner } from '../jobs/JobQueueRunner';
-import { recordBreadcrumb, clearBreadcrumbs } from '../utils/breadcrumbTracker';
+import { recordBreadcrumb } from '../utils/breadcrumbTracker';
 import { consumeGoldenAnalyzeToken, GOLDEN_NEW_ANALYZE_EVENT } from '../utils/goldenIngestClient';
 import { PRIMARY_NUTRIENTS, formatNutrientDisplayValue } from '../utils/nutrients';
 import { AgentType, AGENT_REGISTRY, getAgentRolloutStatus } from '../utils/agentConfig';
@@ -2698,7 +2698,6 @@ ${logsText}`);
               clientSubmitPending: false,
             });
             JobQueueRunner.wake();
-            clearBreadcrumbs();
           })
           .catch(err => {
             console.error('[LogChat] Server submit failed after retries, delegating to JobQueueRunner:', err);

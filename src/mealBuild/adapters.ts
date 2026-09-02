@@ -31,6 +31,7 @@ export function fromPendingFoodLog(log: any, meta?: Partial<MealBuild>): MealBui
     weightGrams: log.weightGrams,
     quantity: log.quantity,
     date: log.date || meta?.date,
+    historyLog: log.historyLog || meta?.historyLog || [],
     ...meta
   };
   
@@ -66,6 +67,7 @@ export function toPendingFoodLog(meal: MealBuild): any {
     degradedStages: meal.degradedStages,
     date: meal.date,
     scoutItems: meal.scoutSnapshot || [],
+    historyLog: meal.historyLog || [],
   };
 }
 
