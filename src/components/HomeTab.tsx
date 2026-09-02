@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile, FoodLog, HealthAction, DailyBenefit, RecommendationReport, BiomarkerLog, ChatMessage, FoodIdea } from '../types';
 import { translations } from '../utils/translations';
-import { displayStatusLabel, displayCategoryLabel, displayNutrientName, interpolate } from '../utils/i18n';
+import { displayStatusLabel, displayCategoryLabel, displayClinicalType, displayIssueChrome, displayNutrientName, displayTimeTag, interpolate } from '../utils/i18n';
 import { CheckCircle2, Circle, AlertCircle, AlertTriangle, ShieldAlert, Wrench, ArrowRight, Heart, ChevronDown, ChevronUp, Calendar, MapPin, Search, Sparkles, Trash2, Clock, Settings, X, TrendingUp, Activity, Copy, FlaskConical, Plus, BrainCircuit, Loader, Loader2, CheckSquare, Square, Edit2, Save, Check, Zap } from 'lucide-react';
 import { parseActionDetails, getDynamicTimeTag, sortActionsByDueDate } from '../utils/actionUtils';
 import { getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, biomarkerDefinitions, isAsianEthnicity, getBiomarkerMetadata, detectFlaggedTelemetryErrors, buildBiomarkerReviewPrefill, isBiomarkerApproved, isBiomarkerValueImprobable, diagnoseTelemetryIssue, getMappedBiomarkerKey, getIdealBmiTarget } from '../utils/biomarkers';
@@ -1186,10 +1186,10 @@ export default function HomeTab({
                 >
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="font-bold">{err.name}:</span>
-                    <span className="font-mono text-[11px] text-amber-700 dark:text-amber-300">{err.samples.join(' → ')}</span>
+                    <span className="font-mono text-[11px] text-amber-700 dark:text-amber-300">{err.samples.map((s: string) => displayIssueChrome(profile.language, s)).join(' → ')}</span>
                     {err.badgeLabel && (
                       <span className="text-[10px] bg-rose-200/80 dark:bg-rose-900/60 text-rose-800 dark:text-rose-200 px-1.5 py-0.5 rounded font-bold">
-                        {err.badgeLabel}
+                        {displayIssueChrome(profile.language, err.badgeLabel)}
                       </span>
                     )}
                   </div>
@@ -2204,7 +2204,7 @@ export default function HomeTab({
                       <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200/80 dark:border-teal-800/60">
                           <FlaskConical className="w-3 h-3 text-teal-600 dark:text-teal-400" />
-                          <span>{parsed.testName}</span>
+                          <span>{displayClinicalType(profile.language, parsed.testName)}</span>
                         </span>
 
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${
@@ -2215,7 +2215,7 @@ export default function HomeTab({
                               : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/60'
                         }`}>
                           <Clock className="w-3 h-3" />
-                          <span>{dynamicTag.label}</span>
+                          <span>{displayTimeTag(profile.language, dynamicTag.label)}</span>
                         </span>
                       </div>
                     </div>
@@ -2328,7 +2328,8 @@ export default function HomeTab({
               <button
                 onClick={(e) => deleteBenefit(ben.id, e)}
                 className="text-slate-400 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 opacity-60 md:opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all cursor-pointer flex-shrink-0"
-                title="Delete benefit item"
+                title={t.deleteBenefitItem}
+                aria-label={t.deleteBenefitItem}
               >
                 <Trash2 className="w-3.8 h-3.8" />
               </button>
@@ -2666,7 +2667,7 @@ export default function HomeTab({
                                 <div className="mt-1.5">
                                   <span className="text-[11px] bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 px-2.5 py-0.5 rounded-full font-bold border border-rose-200 dark:border-rose-800/60 inline-flex items-center gap-1">
                                     <AlertTriangle className="w-3 h-3 text-rose-600 dark:text-rose-400" />
-                                    <span>{err.badgeLabel}</span>
+                                    <span>{displayIssueChrome(profile.language, err.badgeLabel)}</span>
                                   </span>
                                 </div>
                               )}

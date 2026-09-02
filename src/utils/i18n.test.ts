@@ -7,8 +7,12 @@ import {
   dictionaryFor,
   displayCategoryLabel,
   displayEthnicityOption,
+  displayAccountType,
+  displayClinicalType,
+  displayIssueChrome,
   displayNutrientName,
   displayStatusLabel,
+  displayTimeTag,
   interpolate,
   normalizeLocale,
   t,
@@ -122,5 +126,23 @@ describe('display chrome helpers', () => {
   it('translates BMI normal-weight and medium risk chrome', () => {
     expect(displayStatusLabel('id', 'Normal weight')).toBe(translations.id.bmiNormalWeight);
     expect(displayStatusLabel('id', 'medium')).toBe(translations.id.statusMedium);
+  });
+
+  it('translates job Ready badge and demo credits chrome', () => {
+    expect(interpolate(translations.id.jobsReady, { count: 1 })).toBe('Siap (1)');
+    expect(interpolate(translations.id.jobsReadyTooltip, { count: 1 })).toContain('1');
+    expect(interpolate(translations.id.plusNCredits, { n: 15 })).toBe('+15 kredit');
+    expect(interpolate(translations.id.expiresOn, { date: '2 Sep 2026' })).toContain('Kedaluwarsa');
+    expect(displayAccountType('id', 'Demo')).toBe(translations.id.accountTypeDemo);
+  });
+
+  it('translates clinical TYPE/TIMING chrome and issue-card prefixes', () => {
+    expect(displayClinicalType('id', 'Clinical Test')).toBe(translations.id.clinicalTypeClinicalTest);
+    expect(displayClinicalType('id', 'Physician Consultation')).toBe(translations.id.clinicalTypePhysicianConsultation);
+    expect(displayClinicalType('id', 'Vitamin D3 Panel')).toBe('Vitamin D3 Panel');
+    expect(displayTimeTag('id', 'in 3-6 months')).toBe(interpolate(translations.id.inMonthsRange, { min: 3, max: 6 }));
+    expect(displayIssueChrome('id', 'Current: 14.5 g/dL')).toBe(translations.id.currentColon + ' 14.5 g/dL');
+    expect(displayIssueChrome('id', 'Outlier: 10× High')).toBe(translations.id.outlierColon + ' 10× High');
+    expect(displayIssueChrome('id', 'Unit: 10× Multiplier')).toBe(translations.id.unitColon + ' 10× Multiplier');
   });
 });

@@ -3,6 +3,7 @@ import { AgentCardProps } from './types';
 import { Check, Edit2, Sparkles, ArrowRight, X, RotateCcw, MessageSquare, ShieldCheck, AlertCircle, Info, Trash2 } from 'lucide-react';
 
 import { biomarkerDefinitions } from '../../utils/biomarkers';
+import { translations } from '../../utils/translations';
 
 export function getMappedBiomarkerKey(rawNameOrKey: string): string {
   if (!rawNameOrKey) return '';
@@ -202,6 +203,7 @@ export function extractFallbackModifications(text: string, history: any[], profi
 }
 
 export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedical, profile, biomarkerHistory, onDeleteMessage }) => {
+  const t = translations[profile?.language || 'en'] || translations.en;
   const rawTargetKey = msg.data?.targetBiomarkerKey || msg.data?.agentResult?.targetBiomarkerKey || msg.data?.agentResult?.proposal?.key || msg.data?.agentResult?.proposal?.keyName || msg.data?.proposal?.key || msg.data?.proposal?.name || (msg.agentResult as any)?.targetBiomarkerKey || '';
   const proposal = msg.data?.agentResult?.proposal || msg.data?.proposal || (msg.agentResult as any)?.proposal || null;
   const mods = msg.data?.agentResult?.modificationCommand || msg.data?.modificationCommand || msg.modificationCommand || (msg.agentResult as any)?.modificationCommand || null;
@@ -631,14 +633,14 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
 
                 {mod.action === 'remove_biomarker' ? (
                   <div className="text-rose-600 dark:text-rose-400 font-medium text-[11px] flex items-center gap-2 pt-0.5">
-                    <span>Current: <span className="line-through font-bold">{oldValStr || 'Flagged value'}</span></span>
+                    <span>{t.currentColon} <span className="line-through font-bold">{oldValStr || 'Flagged value'}</span></span>
                     <ArrowRight className="w-3 h-3 shrink-0" />
                     <span className="font-bold text-rose-600">Entry Removed</span>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between bg-white/40 dark:bg-slate-900/30 p-2.5 rounded-lg border border-indigo-100/30 dark:border-indigo-900/10">
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="text-slate-500 dark:text-slate-400 font-medium text-[10px] uppercase tracking-wider">Current:</span>
+                      <span className="text-slate-500 dark:text-slate-400 font-medium text-[10px] uppercase tracking-wider">{t.currentColon}</span>
                       <span className="line-through text-rose-500 font-mono font-bold bg-rose-50 dark:bg-rose-950/30 px-2 py-0.5 rounded border border-rose-200/40 dark:border-rose-800/20">
                         {oldValStr || 'Unspecified'}
                       </span>
@@ -663,7 +665,7 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
                       </div>
 
                       <div className="flex items-center gap-1.5">
-                        <span className="text-slate-500 dark:text-slate-400 font-medium text-[10px] uppercase tracking-wider">Unit:</span>
+                        <span className="text-slate-500 dark:text-slate-400 font-medium text-[10px] uppercase tracking-wider">{t.unitColon}</span>
                         <input
                           type="text"
                           list={`units-list-${i}`}

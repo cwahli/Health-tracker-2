@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { UserProfile, DbInteraction, QuotaData, FoodLog } from '../types';
 import { translations } from '../utils/translations';
-import { ETHNICITY_SELECT_OPTIONS, interpolate } from '../utils/i18n';
+import { ETHNICITY_SELECT_OPTIONS, displayAccountType, interpolate } from '../utils/i18n';
 import { getAvailableCredits } from '../utils/creditManager';
 import { NutrientPieChart } from './NutrientPieChart';
 import {
@@ -1350,25 +1350,27 @@ export default function Header({
                       }`}
                       title={
                         runningCount > 0 
-                          ? `${runningCount} job(s) running (${activeProgress}%)` 
+                          ? interpolate(t.jobsActiveTooltip, { count: runningCount, percent: activeProgress })
                           : queuedCount > 0 
-                          ? `${queuedCount} job(s) queued`
-                          : `${readyCount} job result(s) ready`
+                          ? interpolate(t.jobsQueuedTooltip, { count: queuedCount })
+                          : interpolate(t.jobsReadyTooltip, { count: readyCount })
                       }
                     >
                       {runningCount > 0 ? (
                         <>
                           <Loader className="w-2.5 h-2.5 animate-spin" />
-                          <span>Active ({runningCount}){activeProgress > 0 ? ` • ${activeProgress}%` : ''}</span>
+                          <span>{activeProgress > 0
+                            ? interpolate(t.jobsActiveProgress, { count: runningCount, percent: activeProgress })
+                            : interpolate(t.jobsActive, { count: runningCount })}</span>
                         </>
                       ) : queuedCount > 0 ? (
                         <>
-                          <span>Queued ({queuedCount})</span>
+                          <span>{interpolate(t.jobsQueued, { count: queuedCount })}</span>
                         </>
                       ) : (
                         <>
                           <Check className="w-2.5 h-2.5" />
-                          <span>Ready ({readyCount})</span>
+                          <span>{interpolate(t.jobsReady, { count: readyCount })}</span>
                         </>
                       )}
                     </span>
@@ -1653,7 +1655,7 @@ export default function Header({
                     <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{t.agentCredits}</span>
                   </div>
                   <span className="text-[10px] bg-indigo-100/80 dark:bg-indigo-950/65 text-indigo-700 dark:text-indigo-450 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                    {creditInfo.userType} Account
+                    {displayAccountType(profile.language, creditInfo.userType)}
                   </span>
                 </div>
 
@@ -1676,8 +1678,8 @@ export default function Header({
                     <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider">{t.grantedCredits}</span>
                     {creditInfo.grantedDetails.map((gc, idx) => (
                       <div key={idx} className="flex justify-between items-center text-[10px] text-slate-650 dark:text-slate-350">
-                        <span className="font-semibold text-indigo-600 dark:text-indigo-400">+{gc.amount} credits</span>
-                        <span className="text-[9px] font-mono text-slate-400">Expires: {new Date(gc.expiresAt).toLocaleDateString()}</span>
+                        <span className="font-semibold text-indigo-600 dark:text-indigo-400">{interpolate(t.plusNCredits, { n: gc.amount })}</span>
+                        <span className="text-[9px] font-mono text-slate-400">{interpolate(t.expiresOn, { date: new Date(gc.expiresAt).toLocaleDateString(profile.language === 'id' ? 'id-ID' : undefined) })}</span>
                       </div>
                     ))}
                   </div>

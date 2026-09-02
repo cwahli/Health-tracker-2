@@ -206,3 +206,52 @@ export function displayNutrientName(lang: unknown, nutrientKey: string, opts?: {
   if (nut) return nut.labels[locale] || nut.labels.en;
   return nutrientKey.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase());
 }
+
+const CLINICAL_TYPE_KEYS: Record<string, TranslationKey> = {
+  'Clinical Test': 'clinicalTypeClinicalTest',
+  'Physician Consultation': 'clinicalTypePhysicianConsultation',
+};
+
+/** Translate clinical-action TYPE chrome. Seeded test names pass through. */
+export function displayClinicalType(lang: unknown, englishName: string | null | undefined): string {
+  if (!englishName) return '';
+  const key = CLINICAL_TYPE_KEYS[englishName] || CLINICAL_TYPE_KEYS[englishName.trim()];
+  if (key) return t(lang, key);
+  return englishName;
+}
+
+/** Translate "in 3-6 months" / "in N months" timing chrome. Other tags pass through. */
+export function displayTimeTag(lang: unknown, englishLabel: string | null | undefined): string {
+  if (!englishLabel) return '';
+  const raw = String(englishLabel).trim();
+  const range = raw.match(/^in (\d+)-(\d+) months$/i);
+  if (range) return interpolate(t(lang, 'inMonthsRange'), { min: range[1], max: range[2] });
+  const single = raw.match(/^in (\d+) months?$/i);
+  if (single) return interpolate(t(lang, 'inMonths'), { n: single[1] });
+  return raw;
+}
+
+const ISSUE_CHROME_PREFIXES: [string, TranslationKey][] = [
+  ['Outlier:', 'outlierColon'],
+  ['Current:', 'currentColon'],
+  ['Unit:', 'unitColon'],
+];
+
+/** Localize issue-card chrome prefixes; keep numeric / generated tails. */
+export function displayIssueChrome(lang: unknown, text: string | null | undefined): string {
+  if (!text) return '';
+  const raw = String(text);
+  for (const [en, key] of ISSUE_CHROME_PREFIXES) {
+    if (raw.startsWith(en)) {
+      return t(lang, key) + raw.slice(en.length);
+    }
+  }
+  return raw;
+}
+
+export function displayAccountType(lang: unknown, userType: string | null | undefined): string {
+  const raw = String(userType || '').trim().toLowerCase();
+  if (raw === 'demo') return t(lang, 'accountTypeDemo');
+  if (raw === 'admin') return t(lang, 'accountTypeAdmin');
+  return t(lang, 'accountTypeStandard');
+}

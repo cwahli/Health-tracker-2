@@ -721,9 +721,12 @@ ${logsText}`);
   const [conversationsList, setConversationsList] = useState<any[]>([]);
   const [isLoadingConversations, setIsLoadingConversations] = useState<boolean>(false);
   const getWelcomeMessage = () => {
-    let welcomeText = activeAgentConfig?.welcomeMessage
+    const dict = translations[profile?.language || 'en'] || translations.en;
+    let welcomeText = activeAgentKey === 'food'
+      ? dict.agentFoodWelcome
+      : (activeAgentConfig?.welcomeMessage
       ? (typeof activeAgentConfig.welcomeMessage === 'function' ? activeAgentConfig.welcomeMessage({ dataReviewBatchIdx }) : activeAgentConfig.welcomeMessage)
-      : 'Hello! How can I help you today?';
+      : 'Hello! How can I help you today?');
     if (isAgent('health_baseline') && handoffPayload) {
       const summary = handoffPayload.summaryForAgent || handoffPayload.userContextSummary || '';
       welcomeText = `Hello! I received your profile and handoff from the Front Desk:\n\n${summary ? `> "${summary}"\n\n` : ''}I am analyzing your biometrics, caloric needs, and lifestyle habits to construct your personalized health plan. Let's begin!`;
@@ -4856,7 +4859,7 @@ ${logsText}`);
             </div>
             <div>
               <h2 className="text-sm font-bold text-theme-text font-display">
-                {activeAgentKey === 'data_review' ? `${dataReviewBatchIdx === 'custom' ? 'Custom Test Batch' : 'Batch ' + (dataReviewBatchIdx !== null && dataReviewBatchIdx !== undefined ? (dataReviewBatchIdx as number) + 1 : 1)}` : (activeAgentConfig?.displayName || t.addMedical)}
+                {activeAgentKey === 'data_review' ? `${dataReviewBatchIdx === 'custom' ? 'Custom Test Batch' : 'Batch ' + (dataReviewBatchIdx !== null && dataReviewBatchIdx !== undefined ? (dataReviewBatchIdx as number) + 1 : 1)}` : (activeAgentKey === 'food' ? t.agentFoodNutrition : (activeAgentConfig?.displayName || t.addMedical))}
               </h2>
               <button
                 type="button"
@@ -4872,7 +4875,7 @@ ${logsText}`);
             <button
               onClick={() => setShowFullScreenDebugLogs(true)}
               className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-indigo-500 hover:text-indigo-600 dark:text-indigo-400 transition-colors"
-              title="View Historical Logs"
+              title={t.viewHistoricalLogs}
             >
               <Terminal className="w-5 h-5" />
             </button>
@@ -5109,7 +5112,7 @@ ${logsText}`);
                 className="w-full flex items-center justify-between text-slate-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 font-bold cursor-pointer transition-colors"
               >
                 <span className="flex items-center gap-1.5 text-sm font-semibold font-sans text-theme-text-secondary">
-                  Data used by agent
+                  {t.dataUsedByAgent}
                 </span>
                 <div className="flex items-center text-slate-400 dark:text-slate-500">
                   {showDataUsed ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
