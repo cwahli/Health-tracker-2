@@ -1,0 +1,89 @@
+{
+  "id": "UC-08",
+  "title": "Multimodal Meal Logging & Mode D Comparison Relay",
+  "description": "Multi-turn food orchestrator flow. In Turn 1, the user asks to compare two dishes (Chipotle chicken bowl vs Sweetgreen harvest bowl) against their active cardiovascular biomarkers (LDL 151, BP 134/86); Front Desk packages the comparison payload and relays to food_compare (Mode D). In Turn 2, the user uploads a real photo of a home-cooked meal asking to log it; Front Desk identifies the food photo, sets targetAgent: food with intent: meal_logging, packages the image, and relays to the Food & Nutrition logging agent.",
+  "systemInstruction": [
+    "You are the Receptionist and Onboarding AI Specialist for an advanced Health & Biomarker Tracker application.",
+    "For 2-dish comparisons against biomarkers, route to food_compare (Mode D).",
+    "For food photos uploaded for meal logging, route to food (Meal Logging Agent)."
+  ],
+  "userPayload": {
+    "promptText": [
+      "<user_message>",
+      "Should I get the Chipotle chicken bowl or Sweetgreen harvest bowl for dinner considering my high LDL and borderline blood pressure?",
+      "</user_message>"
+    ],
+    "jsonPayload": {
+      "currentUserMessage": "Should I get the Chipotle chicken bowl or Sweetgreen harvest bowl for dinner considering my high LDL and borderline blood pressure?",
+      "chatHistory": [
+        {
+          "role": "user",
+          "content": "Should I get the Chipotle chicken bowl or Sweetgreen harvest bowl for dinner considering my high LDL and borderline blood pressure?"
+        }
+      ],
+      "existingUserProfile": {
+        "name": "Alex",
+        "age": 42,
+        "gender": "male"
+      },
+      "existingMemory": {
+        "goalSummary": "Lower LDL cholesterol and stabilize blood pressure",
+        "conversationState": "ongoing_support",
+        "keyInsights": ["Elevated LDL 151 mg/dL", "Borderline BP 134/86"],
+        "lastInteractionSummary": "User logged morning vitals.",
+        "workHistoryLog": ["2026-09-03: Recorded morning vitals"]
+      },
+      "biomarkers": {
+        "ldl": 151,
+        "blood_pressure": "134/86"
+      }
+    }
+  },
+  "turns": [
+    {
+      "turnIndex": 1,
+      "userMessage": "Should I get the Chipotle chicken bowl or Sweetgreen harvest bowl for dinner considering my high LDL and borderline blood pressure?",
+      "expectedOutput": {
+        "intent": "compare_meal",
+        "targetAgent": "food_compare",
+        "status": "ready_for_handoff",
+        "expectedMissingFields": [],
+        "mustIncludeInResponse": [
+          "compare",
+          "bowl"
+        ],
+        "memoryValidation": {
+          "stateEquals": "ready_for_handoff"
+        },
+        "handoffValidation": {
+          "targetAgent": "food_compare",
+          "hasPayload": true
+        }
+      }
+    },
+    {
+      "turnIndex": 2,
+      "userMessage": "I decided to eat at home instead. Here is a photo of my dinner plate with grilled salmon and vegetables, please log it for me.",
+      "images": [
+        "tests/Golden_meal/1. Multi-food log/PXL_20260811_173542345.jpg"
+      ],
+      "expectedOutput": {
+        "intent": "meal_logging",
+        "targetAgent": "food",
+        "status": "ready_for_handoff",
+        "expectedMissingFields": [],
+        "mustIncludeInResponse": [
+          "food",
+          "log"
+        ],
+        "memoryValidation": {
+          "stateEquals": "ready_for_handoff"
+        },
+        "handoffValidation": {
+          "targetAgent": "food",
+          "hasPayload": true
+        }
+      }
+    }
+  ]
+}

@@ -94,15 +94,17 @@ export async function runCase(
   const model = options.model || "gemini-3.5-flash-lite";
 
   // Check if case defines multi-turn steps
-  const turns = benchmark.turns && benchmark.turns.length > 0
+  const turns = (benchmark.turns && benchmark.turns.length > 0)
     ? benchmark.turns
-    : [
-        {
-          turnIndex: 1,
-          userMessage: benchmark.userPayload.jsonPayload.currentUserMessage,
-          expectedOutput: benchmark.expectedOutput,
-        },
-      ];
+    : ((benchmark as any).expectedTurns && (benchmark as any).expectedTurns.length > 0)
+      ? (benchmark as any).expectedTurns
+      : [
+          {
+            turnIndex: 1,
+            userMessage: benchmark.userPayload.jsonPayload.currentUserMessage,
+            expectedOutput: benchmark.expectedOutput,
+          },
+        ];
 
   let currentMemory: any = benchmark.userPayload.jsonPayload.existingMemory || null;
   const chatHistory: any[] = [...(benchmark.userPayload.jsonPayload.chatHistory || [])];
@@ -131,6 +133,7 @@ export async function runCase(
       existingMemory: currentMemory,
       existingActivitiesAndTasks:
         benchmark.userPayload.jsonPayload.existingActivitiesAndTasks || null,
+      images: turn.images || benchmark.userPayload.jsonPayload.images || null,
     };
 
     let output: ReceptionistOutput;
@@ -138,7 +141,22 @@ export async function runCase(
 
     if (options.dryRun) {
       console.log(`[DRY RUN] Using reference turn output...`);
-      output = (benchmark as any).agentOutput;
+      output = (turn as any).agentOutput || (benchmark as any).agentOutput || {
+        intent: 'weight_loss',
+        targetAgent: 'general_receptionist',
+        status: 'needs_info',
+        missingFields: [],
+        collectedData: {},
+        isDisambiguationRequired: false,
+        disambiguationContext: null,
+        userResponse: 'Dry run output',
+        handoffPayload: null,
+        uiForm: null,
+        memory: null,
+        newBiomarkerLogs: null,
+        updatedProfile: null,
+        modificationCommand: null
+      };
     } else {
       console.log(`[LIVE RUN] Calling model: ${model} ...`);
       const result = await callReceptionistAgent(ai!, payload, model);
@@ -149,7 +167,7 @@ export async function runCase(
     }
 
     lastOutput = output;
-    currentMemory = output.memory;
+    currentMemory = output?.memory || null;
     chatHistory.push({ role: "assistant", content: output.userResponse });
 
     console.log(`\n--- RECEPTIONIST OUTPUT (Turn ${turn.turnIndex}) ---`);
@@ -313,12 +331,25 @@ export async function runCase(
 }
 
 async function main() {
-  const caseArg = arg("--case", "C1")!;
+  const caseArg = arg("--case", "UC-01")!;
   const modelArg = arg("--model", "gemini-3.5-flash-lite");
   const dry = hasFlag("--dry");
 
+  const allCanonicalCases = [
+    "UC-01",
+    "UC-02",
+    "UC-03",
+    "UC-04",
+    "UC-05",
+    "UC-06",
+    "UC-07",
+    "UC-08",
+    "UC-09",
+    "UC-10",
+  ];
+
   const casesToRun =
-    caseArg === "all" || hasFlag("--all") ? ["C1", "C2", "C3"] : [caseArg];
+    caseArg === "all" || hasFlag("--all") ? allCanonicalCases : [caseArg];
 
   console.log(`Starting Receptionist Benchmark Runner`);
   console.log(`Cases: ${casesToRun.join(", ")}, Dry: ${dry}, Model: ${modelArg}`);

@@ -164,6 +164,7 @@ export interface UserProfile {
   agentContextualizerSummary?: string;// Agent 3 summary
   agentInterventionSummary?: string; // Agent 4 summary
   agentLiteratureSummary?: string;   // Agent 5 summary
+  agentMemory?: any;                 // Persistent UserMemory across sessions
   agentAnalyses?: AgentAnalysis[];
   agent2TimelineProjections?: {
     year2: string;

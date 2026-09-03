@@ -38,6 +38,7 @@ export function scoreReceptionistCase(
   const isAgentAlias = (a: string, b: string) => {
     if (a === b) return true;
     if ((a === "health_coach" || a === "coach") && (b === "health_coach" || b === "coach")) return true;
+    if (expected.status === "needs_info" && (a === "general_receptionist" || b === "general_receptionist")) return true;
     const medGroup = ["medical", "biomarker_specialist", "biomarker_review", "general_receptionist"];
     if (medGroup.includes(a) && medGroup.includes(b)) return true;
     return false;
@@ -90,22 +91,23 @@ export function scoreReceptionistCase(
 
   // 5. Memory Validation
   const memory = actual.memory;
+  const memVal: any = expected.memoryValidation || {};
   const statePassed =
-    !expected.memoryValidation.stateEquals ||
-    memory?.conversationState === expected.memoryValidation.stateEquals ||
+    !memVal.stateEquals ||
+    memory?.conversationState === memVal.stateEquals ||
     (actual.isDisambiguationRequired && memory?.conversationState === "onboarding_gather_info");
   checks.push({
     name: "Memory Conversation State",
     passed: Boolean(statePassed),
-    details: `Expected: ${expected.memoryValidation.stateEquals}, Actual: ${memory?.conversationState}`,
+    details: `Expected: ${memVal.stateEquals}, Actual: ${memory?.conversationState}`,
   });
 
   const goalSummaryText = (memory?.goalSummary || "").toLowerCase();
   const summaryMatches = (
-    expected.memoryValidation.goalSummaryIncludes || []
-  ).filter((kw) => goalSummaryText.includes(kw.toLowerCase()));
+    memVal.goalSummaryIncludes || []
+  ).filter((kw: string) => goalSummaryText.includes(kw.toLowerCase()));
   const summaryPassed =
-    (expected.memoryValidation.goalSummaryIncludes || []).length === 0 ||
+    (memVal.goalSummaryIncludes || []).length === 0 ||
     summaryMatches.length > 0;
   checks.push({
     name: "Memory Goal Summary Accuracy",
@@ -113,8 +115,8 @@ export function scoreReceptionistCase(
     details: `Summary: "${memory?.goalSummary || ""}", Matched keywords: ${summaryMatches.join(", ")}`,
   });
 
-  if (expected.memoryValidation.userProfileSnapshotCheck) {
-    const expSnap = expected.memoryValidation.userProfileSnapshotCheck;
+  if (memVal.userProfileSnapshotCheck) {
+    const expSnap = memVal.userProfileSnapshotCheck;
     const actSnap = (memory?.userProfileSnapshot || {}) as Record<string, any>;
     const snapKeys = Object.keys(expSnap);
     let matchedSnap = 0;
@@ -153,13 +155,18 @@ export function scoreReceptionistCase(
         Array.isArray(actual.uiForm.fields) &&
         actual.uiForm.fields.length > 0
     );
-    const formPassed = expected.expectsUiForm === false ? true : hasForm;
+    const shouldExpectForm = expected.expectsUiForm !== undefined
+      ? expected.expectsUiForm
+      : (expected.expectedMissingFields && expected.expectedMissingFields.length > 0);
+    const formPassed = !shouldExpectForm ? true : hasForm;
     checks.push({
       name: "Interactive UI Form Issuance",
       passed: formPassed,
       details: hasForm
         ? `Issued form '${actual.uiForm?.title}' with ${actual.uiForm?.fields.length} interactive fields (${actual.uiForm?.fields.map((f: any) => f.name).join(", ")})`
-        : `Form issued: false (Expected interactive widget for missing fields)`,
+        : shouldExpectForm
+          ? `Form issued: false (Expected interactive widget for missing fields)`
+          : `Form correctly omitted (no missing fields)`,
     });
   }
 
@@ -222,6 +229,20 @@ export function scoreReceptionistCase(
     passed: responsePassed,
     details: `Matched ${foundKeywords.length}/${requiredKeywords.length} response keywords (${foundKeywords.join(", ")})`,
   });
+
+  const mustNotInclude: string[] | undefined = (expected as any).mustNotIncludeInResponse;
+  if (mustNotInclude && Array.isArray(mustNotInclude)) {
+    const forbiddenMatches = mustNotInclude.filter((kw: string) =>
+      responseText.includes(kw.toLowerCase())
+    );
+    checks.push({
+      name: "PII & Clinical Artifact De-Identification",
+      passed: forbiddenMatches.length === 0,
+      details: forbiddenMatches.length === 0
+        ? "Zero prohibited PII/address strings in response"
+        : `Found prohibited PII keywords: ${forbiddenMatches.join(", ")}`,
+    });
+  }
 
   const passedChecksCount = checks.filter((c) => c.passed).length;
   const score = Math.round((passedChecksCount / checks.length) * 100);

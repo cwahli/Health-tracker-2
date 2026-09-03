@@ -52,11 +52,13 @@ export interface CategorizedInsights {
 export interface UserMemory {
   goalSummary: string;
   userProfileSnapshot: UserProfileSnapshot;
-  preferencesAndConstraints: Record<string, unknown>;
+  preferencesAndConstraints?: Record<string, unknown>;
   conversationState: "onboarding_gather_info" | "ready_for_handoff" | "ongoing_support";
   pendingItems: string[];
   keyInsights: string[];
   categorizedInsights?: CategorizedInsights;
+  lastInteractionSummary?: string;
+  workHistoryLog?: string[];
   lastUpdated?: string;
 }
 
@@ -94,6 +96,16 @@ export interface ChatMessage {
   timestamp?: string;
 }
 
+export interface ModificationCommand {
+  action: "update_biomarker" | "remove_biomarker" | "update_profile";
+  keyName: string;
+  newValue?: string | number;
+  oldValue?: string | number;
+  date?: string;
+  unit?: string;
+  reason?: string;
+}
+
 export interface ReceptionistInputPayload {
   currentUserMessage: string;
   chatHistory: ChatMessage[];
@@ -101,6 +113,12 @@ export interface ReceptionistInputPayload {
   existingMemory?: UserMemory | null;
   existingActivitiesAndTasks?: ActivityOrTaskItem[] | null;
   language?: string | null;
+  biomarkers?: Record<string, any> | null;
+  foodLogs?: any[] | null;
+  biomarkerHistory?: any[] | null;
+  images?: string[] | null;
+  systemCurrentDate?: string | null;
+  userTimezone?: string | null;
 }
 
 export interface HandoffPayload {
@@ -111,6 +129,10 @@ export interface HandoffPayload {
   recommendedTasks?: ActivityOrTaskItem[];
   consolidatedUserProfile?: UserProfileSnapshot;
   consolidatedMemory?: UserMemory;
+  rawLabReport?: string;
+  images?: string[];
+  compareDishes?: { dishA: string; dishB: string };
+  literatureTopic?: string;
 }
 
 export interface ExtractedBiomarkerLog {
@@ -134,4 +156,5 @@ export interface ReceptionistOutput {
   handoffPayload: HandoffPayload | null;
   newBiomarkerLogs?: ExtractedBiomarkerLog[] | null;
   updatedProfile?: Record<string, unknown> | null;
+  modificationCommand?: ModificationCommand[] | null;
 }

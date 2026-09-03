@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { enforceReadyHandoffContract, maybePromoteHandoff, synthesizeReadyHandoffPayload } from "./call_agent.js";
+import { enforceReadyHandoffContract, maybePromoteHandoff, synthesizeReadyHandoffPayload, formatReceptionistInput, compactUserMemory } from "./call_agent.js";
 
 const completeProfile = {
   age: 43,
@@ -174,5 +174,86 @@ describe("maybePromoteHandoff + contract (U0 / C1 / C5)", () => {
     expect(out.targetAgent).toBe("general_receptionist");
     expect(out.status).toBe("needs_info");
     expect(out.handoffPayload).toBeNull();
+  });
+});
+
+describe("formatReceptionistInput & Context Anchors", () => {
+  it("formats system_anchors, active_biomarkers, foodLogs, and attached images cleanly", () => {
+    const formatted = formatReceptionistInput({
+      currentUserMessage: "Is my sodium too high?",
+      chatHistory: [],
+      existingUserProfile: completeProfile,
+      existingMemory: {
+        goalSummary: "Manage cardiovascular health",
+        userProfileSnapshot: completeProfile,
+        conversationState: "ongoing_support",
+        pendingItems: [],
+        keyInsights: ["Borderline BP 138/88"],
+        lastInteractionSummary: "User asked about morning vitals.",
+        workHistoryLog: ["2026-09-02: Recorded morning vitals"]
+      },
+      biomarkers: { blood_pressure: "138/88", ldl: 151 },
+      foodLogs: [{ name: "Ramen", date: "2026-09-03", nutrients: { sodium: 1850 } }],
+      biomarkerHistory: [{ date: "2026-09-02", biomarkers: { fasting_glucose: 94 } }],
+      images: ["base64_data_p1", "base64_data_p2", "base64_data_p3"],
+      systemCurrentDate: "2026-09-03",
+      userTimezone: "America/New_York",
+      language: "en"
+    });
+
+    expect(formatted).toContain("<system_anchors>");
+    expect(formatted).toContain("Current System Date: 2026-09-03");
+    expect(formatted).toContain("User Timezone: America/New_York");
+    expect(formatted).toContain("User Language: en");
+    expect(formatted).toContain("<active_biomarkers>");
+    expect(formatted).toContain('"blood_pressure": "138/88"');
+    expect(formatted).toContain("<recent_food_logs>");
+    expect(formatted).toContain('"sodium": 1850');
+    expect(formatted).toContain("<recent_biomarker_history>");
+    expect(formatted).toContain('"fasting_glucose": 94');
+    expect(formatted).toContain("<attached_images>");
+    expect(formatted).toContain("3 clinical image(s)");
+    expect(formatted).toContain("<existing_memory>");
+    expect(formatted).toContain("lastInteractionSummary");
+    expect(formatted).toContain("workHistoryLog");
+  });
+});
+
+describe("compactUserMemory & Active Consolidation", () => {
+  it("caps keyInsights at 7 and deduplicates entries", () => {
+    const mem = compactUserMemory({
+      keyInsights: [
+        "Fact 1",
+        "Fact 2",
+        "Fact 2", // exact duplicate
+        "Fact 3",
+        "Fact 4",
+        "Fact 5",
+        "Fact 6",
+        "Fact 7",
+        "Fact 8"
+      ]
+    });
+    expect(mem.keyInsights.length).toBe(7);
+    expect(mem.keyInsights).toContain("Fact 8");
+    expect(mem.keyInsights).toContain("Fact 2");
+    expect(mem.keyInsights.filter((x: string) => x === "Fact 2").length).toBe(1);
+  });
+
+  it("caps workHistoryLog at 5 entries preserving oldest milestone at index 0", () => {
+    const mem = compactUserMemory({
+      workHistoryLog: [
+        "Milestone 2026-08: Initial setup",
+        "Action 1",
+        "Action 2",
+        "Action 3",
+        "Action 4",
+        "Action 5",
+        "Action 6"
+      ]
+    });
+    expect(mem.workHistoryLog.length).toBe(5);
+    expect(mem.workHistoryLog[0]).toBe("Milestone 2026-08: Initial setup");
+    expect(mem.workHistoryLog[4]).toBe("Action 6");
   });
 });

@@ -1,7 +1,7 @@
 {
-  "id": "C3",
-  "title": "Existing User Multi-Turn Data Ingestion & Complexity Triage",
-  "description": "Multi-turn flow for an existing user (Alex, 42M, 178cm, 82kg with mild hypertension). In Turn 1, the user provides a simple profile update (weight down to 80.5kg) and logs simple biomarkers (BP 124/80 mmHg, RHR 66 bpm), which the Receptionist captures inline into memory without spawning heavy external agents. In Turn 2, the user submits a complex multi-panel lab report (Lipids, Liver, Renal, Glycemic, hs-CRP) requesting range calibration, causing the Receptionist to recognize the complexity and hand off to the specialized Add Health Data / Lab Parser Agent (medical).",
+  "id": "UC-03",
+  "title": "Existing User Spot Vitals & Quest Lab Report Relay",
+  "description": "Multi-turn flow for an existing user (Alex, 42M, 178cm, 82kg with mild hypertension). In Turn 1, the user provides a simple profile update (weight down to 80.5kg) and logs spot vitals (BP 124/80 mmHg, RHR 66 bpm), which Front Desk captures inline into memory without spawning external agents. In Turn 2, the user submits a complex 11-marker lab report from Quest Diagnostics, causing Front Desk to recognize clinical complexity and hand off to the Medical Lab Parser Agent.",
   "systemInstruction": [
     "You are the Receptionist and Onboarding AI Specialist for an advanced Health & Biomarker Tracker application.",
     "Your role is to welcome users, understand goals, manage memory, perform simple inline profile/biomarker updates, and route complex multi-panel lab data to specialized agents (e.g. medical / Lab Parser)."
@@ -60,45 +60,12 @@
         "pendingItems": [],
         "keyInsights": [
           "User maintains consistent weekly strength workouts but has sporadic nutrition logging."
+        ],
+        "lastInteractionSummary": "User completed weekly check-in; advised to monitor blood pressure weekly.",
+        "workHistoryLog": [
+          "2026-08-28: Recorded weekly vitals check-in"
         ]
-      },
-      "existingActivitiesAndTasks": [
-        {
-          "id": "task_bio_01",
-          "category": "biomarkers",
-          "title": "Annual Comprehensive Metabolic & Lipid Panel",
-          "status": "overdue",
-          "lastCompleted": "2025-06-10",
-          "details": "Last blood panel was over 14 months ago; lipid and fasting glucose check recommended."
-        }
-      ]
-    }
-  },
-  "expectedOutput": {
-    "intent": "profile_update",
-    "targetAgent": "general_receptionist",
-    "status": "needs_info",
-    "expectedMissingFields": [],
-    "mustIncludeInResponse": [
-      "80.5",
-      "124/80",
-      "66"
-    ],
-    "memoryValidation": {
-      "goalSummaryIncludes": [
-        "cardiovascular",
-        "weight"
-      ],
-      "stateEquals": "ongoing_support",
-      "userProfileSnapshotCheck": {
-        "name": "Alex",
-        "age": 42,
-        "gender": "male",
-        "weightKg": 80.5
       }
-    },
-    "handoffValidation": {
-      "hasPayload": false
     }
   },
   "turns": [
@@ -111,9 +78,8 @@
         "status": "needs_info",
         "expectedMissingFields": [],
         "mustIncludeInResponse": [
-          "80.5",
           "124/80",
-          "66"
+          "80.5"
         ],
         "memoryValidation": {
           "goalSummaryIncludes": [

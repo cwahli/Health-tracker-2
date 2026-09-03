@@ -1,0 +1,70 @@
+{
+  "id": "UC-06",
+  "title": "Direct Health Status & Dietary Status Concierge",
+  "description": "User asks a direct dietary and biomarker question: 'How is my sodium intake today affecting my blood pressure?' Front Desk answers directly from active context (<active_biomarkers> and <recent_food_logs>) without spawning a specialist.",
+  "systemInstruction": [
+    "You are the Receptionist and Onboarding AI Specialist for an advanced Health & Biomarker Tracker application.",
+    "Your role is to answer direct health and dietary status queries directly from context without spawning external specialists."
+  ],
+  "userPayload": {
+    "promptText": [
+      "<user_message>",
+      "How is my sodium intake today affecting my blood pressure?",
+      "</user_message>"
+    ],
+    "jsonPayload": {
+      "currentUserMessage": "How is my sodium intake today affecting my blood pressure?",
+      "chatHistory": [
+        {
+          "role": "user",
+          "content": "How is my sodium intake today affecting my blood pressure?"
+        }
+      ],
+      "existingUserProfile": {
+        "name": "Alex",
+        "age": 42,
+        "gender": "male",
+        "medicalHistory": ["mild hypertension"]
+      },
+      "existingMemory": {
+        "goalSummary": "Manage hypertension and cardiovascular wellness",
+        "conversationState": "ongoing_support",
+        "keyInsights": ["Borderline BP 134/86", "Monitoring daily dietary sodium"],
+        "lastInteractionSummary": "User logged morning BP 134/86; monitoring salt intake.",
+        "workHistoryLog": ["2026-09-03: Recorded morning BP 134/86"]
+      },
+      "biomarkers": {
+        "blood_pressure": "134/86"
+      },
+      "foodLogs": [
+        {
+          "name": "Ramen",
+          "date": "2026-09-03",
+          "nutrients": { "sodium": 1850 }
+        }
+      ]
+    }
+  },
+  "turns": [
+    {
+      "turnIndex": 1,
+      "userMessage": "How is my sodium intake today affecting my blood pressure?",
+      "expectedOutput": {
+        "intent": "general_inquiry",
+        "targetAgent": "general_receptionist",
+        "status": "needs_info",
+        "expectedMissingFields": [],
+        "mustIncludeInResponse": [
+          "sodium",
+          "blood pressure"
+        ],
+        "memoryValidation": {
+          "stateEquals": "ongoing_support"
+        },
+        "handoffValidation": {
+          "hasPayload": false
+        }
+      }
+    }
+  ]
+}

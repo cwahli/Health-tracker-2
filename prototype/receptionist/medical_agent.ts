@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import { GoogleGenAI, Type } from "@google/genai";
 import type { HandoffPayload } from "./schema.ts";
 
@@ -72,15 +74,48 @@ Summary: ${handoffPayload.summaryForAgent}
 Insights: ${(handoffPayload.actionableInsights || []).join("; ")}
 Tasks: ${JSON.stringify(handoffPayload.recommendedTasks || [])}`;
 
+  const contentParts: any[] = [{ text: promptText }];
+
+  if (handoffPayload.images && Array.isArray(handoffPayload.images) && handoffPayload.images.length > 0) {
+    for (const img of handoffPayload.images) {
+      if (typeof img === "string") {
+        const resolvedPath = path.isAbsolute(img) ? img : path.resolve(process.cwd(), img);
+        try {
+          if (fs.existsSync(resolvedPath)) {
+            const buf = fs.readFileSync(resolvedPath);
+            contentParts.push({
+              inlineData: {
+                mimeType: "image/png",
+                data: buf.toString("base64"),
+              },
+            });
+            continue;
+          }
+        } catch {}
+
+        const match = img.match(/^data:([^;]+);base64,(.+)$/);
+        if (match) {
+          contentParts.push({
+            inlineData: {
+              mimeType: match[1],
+              data: match[2],
+            },
+          });
+        }
+      }
+    }
+  }
+
   const started = Date.now();
   const response = await ai.models.generateContent({
     model: modelName,
-    contents: promptText,
+    contents: contentParts,
     config: {
       systemInstruction: buildMedicalExtractInstruction(),
       responseMimeType: "application/json",
       responseSchema: medicalExtractSchema,
       temperature: 0.2,
+      maxOutputTokens: 8192,
     },
   });
 

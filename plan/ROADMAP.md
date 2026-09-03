@@ -107,6 +107,24 @@ Do **not** add a sixth plan file. F-10 lives here + [FOOD.md](./FOOD.md) Process
 
 ---
 
+## Agent Consolidation & Deprecation Strategy (2026-09-03)
+
+The following multi-agent sprawl is scheduled for removal to streamline the architecture:
+
+1. **Biomarker Agents Replacement**:
+   - **Agents to be removed**: Lab Parser (`medical` / `agent1`), Range Calibrator (`data_review` / `agent5`), Categoriser (`agent2`), and Biomarker Reviewer (`biomarker_review`).
+   - **Single Unified Replacement**: The new Biomarker Agent developed and benchmarked on the biomarker prototype (`prototype/biomarkers/` with cases C1–C7) will replace all four fragmented biomarker agents with a single-dispatch pipeline.
+2. **Peripheral Agent Removals**:
+   - **Agents to be removed**: Culinary Ideation Agent (`food_idea`) and Daily Actions Agent (`daily_recommendation`).
+3. **Front Desk Routing Strategy**:
+   - Plan all routing accordingly: Front Desk operates as the primary intake passation gateway and will route directly to:
+     - **Unified Biomarker Agent** for clinical lab panels, blood tests, and reference range queries.
+     - **Adaptive Meal Agent** (`food`) for all dietary logging and nutritional breakdown.
+     - **Health Coach** (`health_baseline`) for metabolic baseline and lifestyle habit planning.
+     - **Front Desk Inline** (`general_receptionist`) for direct profile updates, single vitals, and general Q&A.
+
+---
+
 # Remaining work
 
 ## Track B — Biomarkers (active)

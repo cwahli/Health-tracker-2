@@ -171,13 +171,27 @@ export const handoffPayloadSchema = {
       items: taskItemSchema,
       nullable: true,
     },
+    consolidatedUserProfile: userProfileSchema,
   },
-  required: [
-    "targetAgent",
-    "intent",
-    "summaryForAgent",
-    "actionableInsights",
-  ],
+  required: ["targetAgent", "intent", "summaryForAgent", "actionableInsights"],
+  nullable: true,
+};
+
+export const modificationCommandSchema = {
+  type: Type.OBJECT,
+  properties: {
+    action: {
+      type: Type.STRING,
+      enum: ["update_biomarker", "remove_biomarker", "update_profile"],
+    },
+    keyName: { type: Type.STRING },
+    newValue: { type: Type.STRING, nullable: true },
+    oldValue: { type: Type.STRING, nullable: true },
+    date: { type: Type.STRING, nullable: true },
+    unit: { type: Type.STRING, nullable: true },
+    reason: { type: Type.STRING, nullable: true },
+  },
+  required: ["action", "keyName"],
 };
 
 export const receptionistResponseSchema = {
@@ -195,6 +209,10 @@ export const receptionistResponseSchema = {
         "profile_update",
         "meal_logging",
         "general_inquiry",
+        "onboarding_inquiry",
+        "compare_meal",
+        "literature_review",
+        "test_planning",
         "unknown",
       ],
     },
@@ -209,6 +227,9 @@ export const receptionistResponseSchema = {
         "nutritionist",
         "fitness_specialist",
         "general_receptionist",
+        "food_compare",
+        "agent7",
+        "agent4",
       ],
     },
     status: {
@@ -235,6 +256,11 @@ export const receptionistResponseSchema = {
       ...handoffPayloadSchema,
       nullable: true,
     },
+    modificationCommand: {
+      type: Type.ARRAY,
+      items: modificationCommandSchema,
+      nullable: true,
+    },
   },
   required: [
     "intent",
@@ -246,48 +272,19 @@ export const receptionistResponseSchema = {
   ],
 };
 
+import {
+  callReceptionistAgent as callServerReceptionistAgent,
+  formatReceptionistInput as formatServerReceptionistInput,
+} from "../../src/server/receptionist/call_agent.ts";
+
 export function formatReceptionistInput(input: ReceptionistInputPayload): string {
-  const parts: string[] = [];
-
-  parts.push("<user_turn>");
-  parts.push(`Current Message: ${input.currentUserMessage}`);
-  parts.push("</user_turn>");
-
-  parts.push("\n<chat_history>");
-  parts.push(JSON.stringify(input.chatHistory || [], null, 2));
-  parts.push("</chat_history>");
-
-  if (input.existingUserProfile) {
-    parts.push("\n<existing_user_profile>");
-    parts.push(JSON.stringify(input.existingUserProfile, null, 2));
-    parts.push("</existing_user_profile>");
-  } else {
-    parts.push("\n<existing_user_profile>\nnull\n</existing_user_profile>");
-  }
-
-  if (input.existingMemory) {
-    parts.push("\n<existing_memory>");
-    parts.push(JSON.stringify(input.existingMemory, null, 2));
-    parts.push("</existing_memory>");
-  } else {
-    parts.push("\n<existing_memory>\nnull\n</existing_memory>");
-  }
-
-  if (input.existingActivitiesAndTasks && input.existingActivitiesAndTasks.length > 0) {
-    parts.push("\n<existing_activities_and_tasks>");
-    parts.push(JSON.stringify(input.existingActivitiesAndTasks, null, 2));
-    parts.push("</existing_activities_and_tasks>");
-  }
-
-  return parts.join("\n");
+  return formatServerReceptionistInput(input as any);
 }
-
-import { callReceptionistAgent as callServerReceptionistAgent } from "../../src/server/receptionist/call_agent.ts";
 
 export async function callReceptionistAgent(
   ai: GoogleGenAI,
   input: ReceptionistInputPayload,
   modelName = "gemini-3.5-flash-lite"
 ): Promise<{ output: ReceptionistOutput; raw: string; ms: number }> {
-  return callServerReceptionistAgent(ai, input, modelName);
+  return callServerReceptionistAgent(ai, input as any, modelName);
 }

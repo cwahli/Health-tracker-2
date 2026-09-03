@@ -165,6 +165,17 @@ foodAnalyzeRouter.post("/api/gemini/front-desk", async (req, res) => {
       content: typeof h.content === 'string' ? h.content : (h.message || JSON.stringify(h.content || ''))
     }));
 
+    const userTimezone = profile?.timezone || "UTC";
+    const systemCurrentDate = new Date().toISOString().split('T')[0];
+
+    // Check if images or complex medical report were submitted
+    let base64Images: string[] = [];
+    if (images && Array.isArray(images) && images.length > 0) {
+      base64Images = images;
+    } else if (image) {
+      base64Images = [image];
+    }
+
     const receptionistPayload = {
       currentUserMessage: message || "",
       chatHistory,
@@ -172,6 +183,12 @@ foodAnalyzeRouter.post("/api/gemini/front-desk", async (req, res) => {
       existingMemory: existingMemory || null,
       existingActivitiesAndTasks: existingActivitiesAndTasks || null,
       language: profile?.language || null,
+      biomarkers: biomarkers || null,
+      foodLogs: foodLogs || null,
+      biomarkerHistory: biomarkerHistory || null,
+      images: base64Images.length > 0 ? base64Images : null,
+      systemCurrentDate,
+      userTimezone,
     };
 
     const sessionId = logSessionStorage.getStore() || "global";
@@ -194,14 +211,6 @@ foodAnalyzeRouter.post("/api/gemini/front-desk", async (req, res) => {
     let updatedProfile = recOutput.updatedProfile ? { ...profile, ...recOutput.updatedProfile } : null;
     let newBiomarkerLogs = recOutput.newBiomarkerLogs || null;
     let filledRows: any[] = [];
-
-    // Check if images or complex medical report were submitted
-    let base64Images: string[] = [];
-    if (images && Array.isArray(images) && images.length > 0) {
-      base64Images = images;
-    } else if (image) {
-      base64Images = [image];
-    }
 
     if (base64Images.length > 0 || (recOutput.targetAgent === 'medical' && recOutput.status === 'ready_for_handoff')) {
       try {
@@ -244,8 +253,8 @@ foodAnalyzeRouter.post("/api/gemini/front-desk", async (req, res) => {
             newBiomarkerLogs = [...(newBiomarkerLogs || []), ...autoLogs];
           }
         }
-      } catch (pipeErr) {
-        console.warn("[FrontDesk] Biomarker pipeline execution warning:", pipeErr);
+      } catch (err: any) {
+        addDebugLog(`[FrontDesk-MedicalExtractError] Failed to extract medical biomarkers: ${err.message}`);
       }
     }
 
@@ -285,6 +294,7 @@ foodAnalyzeRouter.post("/api/gemini/front-desk", async (req, res) => {
       handoffChain: recOutput.handoffPayload ? ['Front Desk (triage)', recOutput.targetAgent === 'medical' ? 'Medical Specialist' : 'Health Coach'] : undefined,
       updatedProfile,
       newBiomarkerLogs,
+      modificationCommand: recOutput.modificationCommand || null,
       filledRows,
       backendLogs,
       type: 'front_desk'

@@ -1,0 +1,59 @@
+{
+  "id": "UC-07",
+  "title": "Multi-Field Historical Mutation Engine (modificationCommand)",
+  "description": "User asks to edit historical records: 'Yesterday's fasting glucose was actually 94 mg/dL not 104, and please delete the cuff error blood pressure reading of 220/120 from last Friday.' Front Desk resolves date anchors and emits modificationCommand array.",
+  "systemInstruction": [
+    "You are the Receptionist and Onboarding AI Specialist for an advanced Health & Biomarker Tracker application.",
+    "When a user asks to correct or remove historical records, emit the modificationCommand array."
+  ],
+  "userPayload": {
+    "promptText": [
+      "<user_message>",
+      "Yesterday's fasting glucose was actually 94 mg/dL not 104, and please delete the cuff error blood pressure reading of 220/120 from last Friday.",
+      "</user_message>"
+    ],
+    "jsonPayload": {
+      "currentUserMessage": "Yesterday's fasting glucose was actually 94 mg/dL not 104, and please delete the cuff error blood pressure reading of 220/120 from last Friday.",
+      "chatHistory": [
+        {
+          "role": "user",
+          "content": "Yesterday's fasting glucose was actually 94 mg/dL not 104, and please delete the cuff error blood pressure reading of 220/120 from last Friday."
+        }
+      ],
+      "existingUserProfile": {
+        "name": "Alex",
+        "age": 42
+      },
+      "existingMemory": {
+        "goalSummary": "Manage metabolic and cardiovascular biomarkers",
+        "conversationState": "ongoing_support",
+        "keyInsights": ["Fasting glucose logged at 104 mg/dL", "Artifact BP 220/120 logged"],
+        "lastInteractionSummary": "User completed glucose check.",
+        "workHistoryLog": ["2026-09-02: Recorded fasting glucose"]
+      },
+      "systemCurrentDate": "2026-09-03"
+    }
+  },
+  "turns": [
+    {
+      "turnIndex": 1,
+      "userMessage": "Yesterday's fasting glucose was actually 94 mg/dL not 104, and please delete the cuff error blood pressure reading of 220/120 from last Friday.",
+      "expectedOutput": {
+        "intent": "profile_update",
+        "targetAgent": "general_receptionist",
+        "status": "needs_info",
+        "expectedMissingFields": [],
+        "mustIncludeInResponse": [
+          "glucose",
+          "94"
+        ],
+        "memoryValidation": {
+          "stateEquals": "ongoing_support"
+        },
+        "handoffValidation": {
+          "hasPayload": false
+        }
+      }
+    }
+  ]
+}

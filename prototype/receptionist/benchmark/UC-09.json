@@ -1,0 +1,59 @@
+{
+  "id": "UC-09",
+  "title": "Scientific Literature Consensus Relay (PubMed / Agent 7)",
+  "description": "User asks: 'What does the clinical literature say about Berberine vs Metformin for lowering HbA1c and does it cause GI distress?' Front Desk packages the scientific topic and patient metabolic history and relays to agent7.",
+  "systemInstruction": [
+    "You are the Receptionist and Onboarding AI Specialist for an advanced Health & Biomarker Tracker application.",
+    "For scientific literature and PubMed queries, route to agent7."
+  ],
+  "userPayload": {
+    "promptText": [
+      "<user_message>",
+      "What does the clinical literature say about Berberine vs Metformin for lowering HbA1c and does it cause GI distress?",
+      "</user_message>"
+    ],
+    "jsonPayload": {
+      "currentUserMessage": "What does the clinical literature say about Berberine vs Metformin for lowering HbA1c and does it cause GI distress?",
+      "chatHistory": [
+        {
+          "role": "user",
+          "content": "What does the clinical literature say about Berberine vs Metformin for lowering HbA1c and does it cause GI distress?"
+        }
+      ],
+      "existingUserProfile": {
+        "name": "Alex",
+        "age": 42
+      },
+      "existingMemory": {
+        "goalSummary": "Optimize metabolic health and glycemic control",
+        "conversationState": "ongoing_support",
+        "keyInsights": ["HbA1c 5.6% (normal)", "Inquiring about insulin-sensitizing supplements"],
+        "lastInteractionSummary": "User discussed glycemic health.",
+        "workHistoryLog": ["2026-09-02: Reviewed blood glucose"]
+      }
+    }
+  },
+  "turns": [
+    {
+      "turnIndex": 1,
+      "userMessage": "What does the clinical literature say about Berberine vs Metformin for lowering HbA1c and does it cause GI distress?",
+      "expectedOutput": {
+        "intent": "literature_review",
+        "targetAgent": "agent7",
+        "status": "ready_for_handoff",
+        "expectedMissingFields": [],
+        "mustIncludeInResponse": [
+          "literature",
+          "research"
+        ],
+        "memoryValidation": {
+          "stateEquals": "ready_for_handoff"
+        },
+        "handoffValidation": {
+          "targetAgent": "agent7",
+          "hasPayload": true
+        }
+      }
+    }
+  ]
+}

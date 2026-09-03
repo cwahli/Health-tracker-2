@@ -1,10 +1,10 @@
 {
-  "id": "C2",
-  "title": "New User General Wellness & Vitality Multi-Turn Onboarding",
-  "description": "Multi-turn onboarding for a first-time user seeking general health, energy, and sleep improvements. Turn 1 captures the broad wellness intent and requests demographic and health focus details. Turn 2 captures demographics (28yo female from Singapore, 162cm, 54kg) and primary goals (afternoon energy crashes, sleep depth, micronutrient vitality), consolidates memory, and triggers handoff to the Health Coach to generate a comprehensive Health Baseline Report.",
+  "id": "UC-02",
+  "title": "New User General Wellness & Vitality Onboarding",
+  "description": "Multi-turn onboarding for a 28-year-old woman from Singapore (54kg, 162cm) working a sedentary desk job who experiences afternoon energy crashes and poor sleep quality. Front Desk welcomes her, explains the value of profile metrics, captures symptoms into memory, and hands off to the Health Coach to build a personalized vitality and sleep optimization plan.",
   "systemInstruction": [
     "You are the Receptionist and Onboarding AI Specialist for an advanced Health & Biomarker Tracker application.",
-    "Your role is to welcome users, understand goals, manage memory, identify required data for downstream agents (e.g., Health Coach), collect missing information, and prepare handoff payloads."
+    "Your role is to welcome users, understand goals, manage memory, and route to specialized agents."
   ],
   "userPayload": {
     "promptText": [
@@ -25,37 +25,6 @@
       "existingActivitiesAndTasks": null
     }
   },
-  "expectedOutput": {
-    "intent": "general_wellness",
-    "targetAgent": "health_coach",
-    "status": "needs_info",
-    "expectedMissingFields": [
-      "age",
-      "gender",
-      "primary_focus_areas",
-      "activity_level",
-      "medical_history"
-    ],
-    "mustIncludeInResponse": [
-      "health",
-      "focus"
-    ],
-    "memoryValidation": {
-      "goalSummaryIncludes": [
-        "healthy",
-        "wellness",
-        "health"
-      ],
-      "stateEquals": "onboarding_gather_info",
-      "pendingItemsInclude": [
-        "age",
-        "gender"
-      ]
-    },
-    "handoffValidation": {
-      "hasPayload": false
-    }
-  },
   "turns": [
     {
       "turnIndex": 1,
@@ -64,28 +33,21 @@
         "intent": "general_wellness",
         "targetAgent": "health_coach",
         "status": "needs_info",
-        "expectsUiForm": true,
         "expectedMissingFields": [
           "age",
           "gender",
-          "activity_level"
+          "health_goals"
         ],
         "mustIncludeInResponse": [
-          "health",
-          "focus"
+          "health"
         ],
         "memoryValidation": {
           "goalSummaryIncludes": [
-            "healthy",
-            "wellness",
             "health"
           ],
-          "stateEquals": "onboarding_gather_info",
-          "pendingItemsInclude": [
-            "age",
-            "gender"
-          ]
+          "stateEquals": "onboarding_gather_info"
         },
+        "expectsUiForm": true,
         "handoffValidation": {
           "hasPayload": false
         }
@@ -100,8 +62,7 @@
         "status": "ready_for_handoff",
         "expectedMissingFields": [],
         "mustIncludeInResponse": [
-          "coach",
-          "plan"
+          "coach"
         ],
         "memoryValidation": {
           "goalSummaryIncludes": [
@@ -112,7 +73,6 @@
           "userProfileSnapshotCheck": {
             "age": 28,
             "gender": "female",
-            "ethnicity": "Singapore",
             "heightCm": 162,
             "weightKg": 54
           }

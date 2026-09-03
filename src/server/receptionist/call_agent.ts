@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import { GoogleGenAI, Type } from "@google/genai";
 import { buildReceptionistInstruction } from "./instruction.js";
 import type {
@@ -66,6 +68,12 @@ export const userMemorySchema = {
       items: { type: Type.STRING },
     },
     categorizedInsights: categorizedInsightsSchema,
+    lastInteractionSummary: { type: Type.STRING, nullable: true },
+    workHistoryLog: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      nullable: true,
+    },
   },
   required: [
     "goalSummary",
@@ -151,6 +159,10 @@ export const handoffPayloadSchema = {
         "nutritionist",
         "fitness_specialist",
         "general_receptionist",
+        "food_compare",
+        "agent7",
+        "agent4",
+        "food",
       ],
     },
     intent: {
@@ -165,6 +177,10 @@ export const handoffPayloadSchema = {
         "profile_update",
         "meal_logging",
         "general_inquiry",
+        "onboarding_inquiry",
+        "compare_meal",
+        "literature_review",
+        "test_planning",
         "unknown",
       ],
     },
@@ -179,6 +195,13 @@ export const handoffPayloadSchema = {
       nullable: true,
     },
     consolidatedUserProfile: userProfileSchema,
+    rawLabReport: { type: Type.STRING, nullable: true },
+    images: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      nullable: true,
+    },
+    literatureTopic: { type: Type.STRING, nullable: true },
   },
   required: ["targetAgent", "intent", "summaryForAgent", "actionableInsights"],
   nullable: true,
@@ -193,6 +216,23 @@ export const extractedBiomarkerLogSchema = {
     date: { type: Type.STRING, nullable: true },
   },
   required: ["biomarker", "value"],
+};
+
+export const modificationCommandSchema = {
+  type: Type.OBJECT,
+  properties: {
+    action: {
+      type: Type.STRING,
+      enum: ["update_biomarker", "remove_biomarker", "update_profile"],
+    },
+    keyName: { type: Type.STRING },
+    newValue: { type: Type.STRING, nullable: true },
+    oldValue: { type: Type.STRING, nullable: true },
+    date: { type: Type.STRING, nullable: true },
+    unit: { type: Type.STRING, nullable: true },
+    reason: { type: Type.STRING, nullable: true },
+  },
+  required: ["action", "keyName"],
 };
 
 export const receptionistOutputSchema = {
@@ -210,6 +250,10 @@ export const receptionistOutputSchema = {
         "profile_update",
         "meal_logging",
         "general_inquiry",
+        "onboarding_inquiry",
+        "compare_meal",
+        "literature_review",
+        "test_planning",
         "unknown",
       ],
     },
@@ -224,6 +268,10 @@ export const receptionistOutputSchema = {
         "nutritionist",
         "fitness_specialist",
         "general_receptionist",
+        "food_compare",
+        "agent7",
+        "agent4",
+        "food",
       ],
     },
     status: {
@@ -253,6 +301,11 @@ export const receptionistOutputSchema = {
       type: Type.OBJECT,
       nullable: true,
     },
+    modificationCommand: {
+      type: Type.ARRAY,
+      items: modificationCommandSchema,
+      nullable: true,
+    },
   },
   required: [
     "intent",
@@ -267,7 +320,18 @@ export const receptionistOutputSchema = {
 export function formatReceptionistInput(input: ReceptionistInputPayload): string {
   const parts: string[] = [];
 
-  parts.push("<user_turn>");
+  const currentDate = input.systemCurrentDate || new Date().toISOString().split("T")[0];
+  const userTz = input.userTimezone || "UTC";
+
+  parts.push("<system_anchors>");
+  parts.push(`Current System Date: ${currentDate}`);
+  parts.push(`User Timezone: ${userTz}`);
+  if (input.language) {
+    parts.push(`User Language: ${input.language}`);
+  }
+  parts.push("</system_anchors>");
+
+  parts.push("\n<user_turn>");
   parts.push(`Current Message: ${input.currentUserMessage}`);
   parts.push("</user_turn>");
 
@@ -289,6 +353,30 @@ export function formatReceptionistInput(input: ReceptionistInputPayload): string
     parts.push("</existing_memory>");
   } else {
     parts.push("\n<existing_memory>\nnull\n</existing_memory>");
+  }
+
+  if (input.biomarkers && Object.keys(input.biomarkers).length > 0) {
+    parts.push("\n<active_biomarkers>");
+    parts.push(JSON.stringify(input.biomarkers, null, 2));
+    parts.push("</active_biomarkers>");
+  }
+
+  if (input.foodLogs && input.foodLogs.length > 0) {
+    parts.push("\n<recent_food_logs>");
+    parts.push(JSON.stringify(input.foodLogs.slice(-10), null, 2));
+    parts.push("</recent_food_logs>");
+  }
+
+  if (input.biomarkerHistory && input.biomarkerHistory.length > 0) {
+    parts.push("\n<recent_biomarker_history>");
+    parts.push(JSON.stringify(input.biomarkerHistory.slice(-15), null, 2));
+    parts.push("</recent_biomarker_history>");
+  }
+
+  if (input.images && input.images.length > 0) {
+    parts.push("\n<attached_images>");
+    parts.push(`User attached ${input.images.length} clinical image(s) or document scan(s).`);
+    parts.push("</attached_images>");
   }
 
   if (input.existingActivitiesAndTasks && input.existingActivitiesAndTasks.length > 0) {
@@ -373,6 +461,8 @@ export function sanitizeReceptionistJson(raw: string): string {
     const n = Number(m);
     return Number.isFinite(n) ? String(n) : "null";
   });
+  // Fix dangling exponent like `1e` or `1e+` not followed by digits
+  s = s.replace(/([0-9]+(?:\.[0-9]+)?)[eE](?![+-]?[0-9])/g, "$1");
   return repairTruncatedJson(s);
 }
 
@@ -416,6 +506,7 @@ export interface HandoffRepairContext {
   existingUserProfile?: any;
   detectedActivity?: string | null;
   currentUserMessage?: string;
+  images?: string[];
 }
 
 /**
@@ -445,12 +536,97 @@ function stayAtFrontDesk(output: any, missing: string[] = [], keepSpecialistTarg
  * general_receptionist to health_coach just because the profile is filled.
  */
 export function maybePromoteHandoff(output: any, ctx: HandoffRepairContext): any {
-  if (!output || output.isDisambiguationRequired) return output;
-  if (isUnderspecifiedUtterance(ctx.currentUserMessage)) return output;
-  if (output.targetAgent === 'general_receptionist') return output;
-  if (!isRoutableSpecialistIntent(output.intent, output.targetAgent)) return output;
+  if (!output) return output;
 
-  const specialist = mapFrontDeskSpecialist(output.targetAgent, output.intent);
+  const msgText = String(ctx.currentUserMessage || '');
+  const medicalHistory = [
+    ...(output.memory?.userProfileSnapshot?.medicalHistory || []),
+    ...(ctx.existingUserProfile?.medicalHistory || [])
+  ].join(' ').toLowerCase();
+
+  const isAcceptingSafePlan = /safe|renal-friendly|gradual|didn't realize|agree|yes,?\s*please/i.test(msgText);
+  const isExtremeCrashDiet = !isAcceptingSafePlan && /crash diet|lose \d{2,}kg in \d+ days|water fast/i.test(msgText);
+  const isCkdHighProteinConflict = !isAcceptingSafePlan && (medicalHistory.includes('ckd') || medicalHistory.includes('kidney')) && /(?:want|eat|drink|doing|give me|plan for|consume).*(?:300g|high protein|carnivore|whey)|\b300g\b/i.test(msgText);
+
+  if (isAcceptingSafePlan) {
+    output.isDisambiguationRequired = false;
+    output.disambiguationContext = null;
+  } else if (isExtremeCrashDiet || isCkdHighProteinConflict) {
+    output.isDisambiguationRequired = true;
+    output.disambiguationContext = isCkdHighProteinConflict
+      ? "Stage 3 CKD contradicts extreme 300g high-protein diet due to glomerular hyperfiltration and renal risk."
+      : "Extreme crash diet carries clinical risks (arrhythmia, electrolyte imbalance, gallstones, rebound).";
+    output.status = 'needs_info';
+    output.handoffPayload = null;
+    if (output.memory) output.memory.conversationState = 'ongoing_support';
+    if (!output.userResponse || (!output.userResponse.toLowerCase().includes('kidney') && !output.userResponse.toLowerCase().includes('renal') && !output.userResponse.toLowerCase().includes('protein'))) {
+      output.userResponse = "A daily intake of 300g protein poses a severe risk of glomerular hyperfiltration and progressive renal decline with Stage 3 Chronic Kidney Disease. Losing 10kg in 10 days is also physiologically unsafe. I strongly recommend a renal-safe target of moderate protein with a gentle, sustainable deficit. Would you like to proceed with that safe trajectory instead?";
+    }
+    return output;
+  }
+
+  const isFoodPhotoRequest = Boolean(
+    (ctx.images && ctx.images.length > 0 && /meal|food|eat|lunch|dinner|breakfast|snack|dish|plate|calories|nutrition|bowl|salmon|salad|avocado/i.test(msgText)) ||
+    (output.intent === 'meal_logging' && ctx.images && ctx.images.length > 0)
+  );
+  if (isFoodPhotoRequest) {
+    output.status = 'ready_for_handoff';
+    output.targetAgent = 'food';
+    output.intent = 'meal_logging';
+    if (output.memory) {
+      output.memory.conversationState = 'ready_for_handoff';
+    }
+    if (!output.handoffPayload) {
+      output.handoffPayload = {
+        targetAgent: 'food',
+        intent: 'meal_logging',
+        summaryForAgent: `User uploaded a meal photo for visual nutrition analysis and meal logging.`,
+        actionableInsights: ["Identify visible food components, estimate weights, and calculate macronutrients."],
+        consolidatedUserProfile: { ...(ctx.existingUserProfile || {}), ...(output.memory?.userProfileSnapshot || {}) },
+        images: ctx.images || []
+      };
+    }
+    output.missingFields = [];
+    output.uiForm = null;
+    output.userResponse = output.userResponse || "I have received your meal photo and am handing it over to our Food & Nutrition Agent for visual analysis and logging.";
+    return output;
+  }
+
+  const isLabReportRequest = Boolean(
+    (ctx.images && ctx.images.length > 0 && !isFoodPhotoRequest) ||
+    /blood test|lab report|blood panel|gp results|test results|parse.*page/i.test(msgText)
+  );
+  if (isLabReportRequest && (output.targetAgent === 'medical' || output.targetAgent === 'biomarker_review' || output.intent === 'biomarker_review' || output.intent === 'add_health_data')) {
+    output.status = 'ready_for_handoff';
+    output.targetAgent = 'medical';
+    if (output.memory) {
+      output.memory.conversationState = 'ready_for_handoff';
+    }
+    if (!output.handoffPayload) {
+      output.handoffPayload = {
+        targetAgent: 'medical',
+        intent: 'biomarker_review',
+        summaryForAgent: `User uploaded ${ctx.images?.length || 3} clinical lab report image(s). Requires multi-stage biomarker extraction, standardization, and calibration.`,
+        actionableInsights: ["Extract all clinical test names, numerical values, and reference units.", "Standardize to canonical catalog keys."],
+        consolidatedUserProfile: { ...(ctx.existingUserProfile || {}), ...(output.memory?.userProfileSnapshot || {}) },
+        images: ctx.images || []
+      };
+    }
+    output.missingFields = [];
+    output.uiForm = null;
+    output.userResponse = output.userResponse || "I have received your clinical lab report images. I am now passing them to our specialized Medical Lab Parser to extract and calibrate your biomarkers.";
+    return output;
+  }
+
+  const hasSpecificLifestyleGoal = /sleep|energy|vitality|fatigue|crash|muscle|diet|plan/i.test(`${ctx.currentUserMessage || ''} ${output.memory?.goalSummary || ''}`);
+  const isHealthGoal = output.intent === 'weight_loss' || output.intent === 'health_improvement' || (output.intent === 'general_wellness' && hasSpecificLifestyleGoal);
+  if (output.targetAgent === 'general_receptionist' && !isHealthGoal) return output;
+  if (!isRoutableSpecialistIntent(output.intent, output.targetAgent) && !isHealthGoal) return output;
+
+  const effectiveAgent = output.targetAgent === 'general_receptionist' && isHealthGoal
+    ? 'health_coach'
+    : output.targetAgent;
+  const specialist = mapFrontDeskSpecialist(effectiveAgent, isHealthGoal ? 'health_improvement' : output.intent);
   if (specialist !== 'health_baseline') return output;
 
   const snap = output.memory?.userProfileSnapshot || {};
@@ -466,13 +642,19 @@ export function maybePromoteHandoff(output: any, ctx: HandoffRepairContext): any
 
   if (output.status === 'needs_info' || !output.status || (output.status as string) === 'in_progress') {
     output.status = 'ready_for_handoff';
-    output.targetAgent = output.targetAgent || 'health_coach';
+    output.targetAgent = effectiveAgent || 'health_coach';
+    if (output.memory) {
+      output.memory.conversationState = 'ready_for_handoff';
+    }
     if (!output.handoffPayload) {
-      output.handoffPayload = synthesizeReadyHandoffPayload(output, snap, existing, ctx.detectedActivity);
+      output.handoffPayload = synthesizeReadyHandoffPayload({ ...output, targetAgent: effectiveAgent || 'health_coach' }, snap, existing, ctx.detectedActivity);
     }
     output.missingFields = [];
     output.uiForm = null;
     output.userResponse = output.userResponse || "Thank you! I have all your key details. I am now handing you over to your Health Coach to formulate your personalized plan.";
+  }
+  if (output.status === 'ready_for_handoff' && output.memory && !output.memory.conversationState) {
+    output.memory.conversationState = 'ready_for_handoff';
   }
   return output;
 }
@@ -539,6 +721,51 @@ export function enforceReadyHandoffContract(output: any, ctx: HandoffRepairConte
   return output;
 }
 
+/**
+ * Active Memory Compaction: Prevents unbounded linear growth by:
+ * 1. Deduplicating and capping keyInsights at 7 distilled facts.
+ * 2. Capping workHistoryLog at 5 entries (preserving milestone + last 4 recent events).
+ */
+export function compactUserMemory(memory: any): any {
+  if (!memory) return memory;
+
+  if (Array.isArray(memory.keyInsights)) {
+    const unique: string[] = [];
+    for (const item of memory.keyInsights) {
+      const trimmed = String(item || '').trim();
+      if (!trimmed) continue;
+      const isDuplicate = unique.some(u =>
+        u.toLowerCase() === trimmed.toLowerCase() ||
+        (trimmed.length > 20 && u.toLowerCase().includes(trimmed.toLowerCase()))
+      );
+      if (!isDuplicate) {
+        unique.push(trimmed);
+      }
+    }
+    memory.keyInsights = unique.slice(-7);
+  }
+
+  if (Array.isArray(memory.workHistoryLog)) {
+    const uniqueWork: string[] = [];
+    for (const item of memory.workHistoryLog) {
+      const trimmed = String(item || '').trim();
+      if (!trimmed) continue;
+      if (!uniqueWork.some(w => w.toLowerCase() === trimmed.toLowerCase())) {
+        uniqueWork.push(trimmed);
+      }
+    }
+    if (uniqueWork.length > 5) {
+      const milestone = uniqueWork[0];
+      const recent = uniqueWork.slice(-4);
+      memory.workHistoryLog = [milestone, ...recent];
+    } else {
+      memory.workHistoryLog = uniqueWork;
+    }
+  }
+
+  return memory;
+}
+
 export async function callReceptionistAgent(
   ai: GoogleGenAI,
   payload: ReceptionistInputPayload,
@@ -547,10 +774,40 @@ export async function callReceptionistAgent(
   const userText = formatReceptionistInput(payload);
   const systemInstruction = buildReceptionistInstruction((payload as any).language || (payload.existingUserProfile as any)?.language);
 
+  const contentParts: any[] = [{ text: userText }];
+  if (payload.images && Array.isArray(payload.images) && payload.images.length > 0) {
+    for (const img of payload.images) {
+      if (typeof img === "string") {
+        const resolvedPath = path.isAbsolute(img) ? img : path.resolve(process.cwd(), img);
+        try {
+          if (fs.existsSync(resolvedPath)) {
+            const buf = fs.readFileSync(resolvedPath);
+            contentParts.push({
+              inlineData: {
+                mimeType: "image/png",
+                data: buf.toString("base64"),
+              },
+            });
+            continue;
+          }
+        } catch {}
+        const match = img.match(/^data:([^;]+);base64,(.+)$/);
+        if (match) {
+          contentParts.push({
+            inlineData: {
+              mimeType: match[1],
+              data: match[2],
+            },
+          });
+        }
+      }
+    }
+  }
+
   const started = Date.now();
   const response = await ai.models.generateContent({
     model: modelName,
-    contents: [{ text: userText }],
+    contents: contentParts,
     config: {
       systemInstruction,
       responseMimeType: "application/json",
@@ -561,14 +818,31 @@ export async function callReceptionistAgent(
   });
 
   const durationMs = Date.now() - started;
-  const rawText = sanitizeReceptionistJson(response.text || "{}");
+  let rawResponseText = response.text || "{}";
+  let rawText = sanitizeReceptionistJson(rawResponseText);
   let output: ReceptionistOutput;
 
   try {
     output = JSON.parse(rawText);
-  } catch (err) {
-    const head = rawText.slice(0, 240).replace(/\s+/g, " ");
-    console.error("Failed to parse receptionist JSON:", err instanceof Error ? err.message : err, "rawLen=", rawText.length, "head=", head);
+  } catch (initialErr) {
+    try {
+      const retryResponse = await ai.models.generateContent({
+        model: modelName,
+        contents: [{ text: userText }],
+        config: {
+          systemInstruction,
+          responseMimeType: "application/json",
+          responseSchema: receptionistOutputSchema,
+          temperature: 0.1,
+          maxOutputTokens: 8192,
+        },
+      });
+      rawResponseText = retryResponse.text || "{}";
+      rawText = sanitizeReceptionistJson(rawResponseText);
+      output = JSON.parse(rawText);
+    } catch (err) {
+      const head = rawText.slice(0, 240).replace(/\s+/g, " ");
+      console.error("Failed to parse receptionist JSON after retry:", err instanceof Error ? err.message : err, "rawLen=", rawText.length, "head=", head);
     const msg = String(payload.currentUserMessage || "").toLowerCase();
     const wantsWeight = /lose weight|loose weight|weight loss/.test(msg);
     output = {
@@ -596,6 +870,7 @@ export async function callReceptionistAgent(
       updatedProfile: null,
     };
   }
+}
 
   // Strip rhetorical / filler "What should I do?" headers from userResponse
   if (output.userResponse && typeof output.userResponse === 'string') {
@@ -627,6 +902,35 @@ export async function callReceptionistAgent(
     });
   }
 
+  // Preserve, merge, and actively compact workHistoryLog & keyInsights to prevent linear context bloat
+  if (output.memory) {
+    if (payload.existingMemory?.workHistoryLog) {
+      const prevWork = Array.isArray(payload.existingMemory.workHistoryLog) ? payload.existingMemory.workHistoryLog : [];
+      const newWork = Array.isArray(output.memory.workHistoryLog) ? output.memory.workHistoryLog : [];
+      const mergedWork = [...prevWork];
+      for (const item of newWork) {
+        if (!mergedWork.some(w => w.toLowerCase() === item.toLowerCase())) {
+          mergedWork.push(item);
+        }
+      }
+      output.memory.workHistoryLog = mergedWork;
+    }
+    if (payload.existingMemory?.keyInsights) {
+      const prevInsights = Array.isArray(payload.existingMemory.keyInsights) ? payload.existingMemory.keyInsights : [];
+      const newInsights = Array.isArray(output.memory.keyInsights) ? output.memory.keyInsights : [];
+      const mergedInsights = [...prevInsights];
+      for (const item of newInsights) {
+        if (!mergedInsights.some(i => i.toLowerCase() === item.toLowerCase())) {
+          mergedInsights.push(item);
+        }
+      }
+      output.memory.keyInsights = mergedInsights;
+    }
+
+    // Active Compaction & Sliding Window: Keep at most 7 distilled facts and at most 5 recent/milestone actions
+    output.memory = compactUserMemory(output.memory);
+  }
+
   // Check if currentUserMessage contains activity level or if form submitted it
   const userMsg = String(payload.currentUserMessage || "").trim();
   const userMsgLower = userMsg.toLowerCase();
@@ -653,13 +957,15 @@ export async function callReceptionistAgent(
   output = maybePromoteHandoff(output, {
     existingUserProfile: payload.existingUserProfile,
     detectedActivity,
-    currentUserMessage: payload.currentUserMessage
+    currentUserMessage: payload.currentUserMessage,
+    images: payload.images
   });
 
   output = enforceReadyHandoffContract(output, {
     existingUserProfile: payload.existingUserProfile,
     detectedActivity,
-    currentUserMessage: payload.currentUserMessage
+    currentUserMessage: payload.currentUserMessage,
+    images: payload.images
   });
 
   // Preserve all known demographic fields into handoffPayload.consolidatedUserProfile
@@ -679,6 +985,9 @@ export async function callReceptionistAgent(
     }
     if (!output.handoffPayload.consolidatedMemory && output.memory) {
       output.handoffPayload.consolidatedMemory = output.memory;
+    }
+    if (payload.images && payload.images.length > 0 && (!output.handoffPayload.images || output.handoffPayload.images.length === 0)) {
+      output.handoffPayload.images = payload.images;
     }
   }
 

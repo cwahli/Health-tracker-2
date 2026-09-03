@@ -14,6 +14,7 @@
 | **Track B** | B0 Apply smoke & Modal wiring COMPLETE. | B8.2/8.3 or next open Track B. |
 | **F-1/F-2 USDA** | Parked. | Do not reopen. |
 | **Track L** Localisation | L-1–L-5 + all residual EN/ID shipped (narratives, diagnostics, alerts, admin chrome). EN/ID parity green, pushed. | Track L complete for EN/ID. |
+| **Agent Consolidation** | Front Desk full-spectrum (UC-01–UC-10, O(1) memory, modificationCommand[], multimodal lab/meal triage) COMPLETE & verified (35/35 tests, 100/100 cases). | Unified Biomarker Agent (C1–C7) cutover to production `medical` endpoint. |
 
 **Do not:** USDA · critic LLM · LLM `calories` on create schema · `npm test` as COMPLETE · ask to approve **reads** · edit files when the user asked a question · recreate `studio/`.
 

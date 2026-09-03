@@ -1,0 +1,76 @@
+{
+  "id": "UC-10",
+  "title": "Testing Agent Relay - Biomarker Gaps & Retest Schedule (Agent 4)",
+  "description": "User asks: 'When should I retest my lipid panel, and what essential blood tests am I currently missing from my routine health checkups?' Front Desk identifies the test planning and diagnostic gaps intent, packages the user's active biomarkers and last test dates into handoffPayload, and routes to agent4 (Test Planner).",
+  "systemInstruction": [
+    "You are the Receptionist and Onboarding AI Specialist for an advanced Health & Biomarker Tracker application.",
+    "For test planning, retest intervals, and missing biomarker gap audits, route to agent4 (Test Planner)."
+  ],
+  "userPayload": {
+    "promptText": [
+      "<user_message>",
+      "When should I retest my lipid panel, and what essential blood tests am I currently missing from my routine health checkups?",
+      "</user_message>"
+    ],
+    "jsonPayload": {
+      "currentUserMessage": "When should I retest my lipid panel, and what essential blood tests am I currently missing from my routine health checkups?",
+      "chatHistory": [
+        {
+          "role": "user",
+          "content": "When should I retest my lipid panel, and what essential blood tests am I currently missing from my routine health checkups?"
+        }
+      ],
+      "existingUserProfile": {
+        "name": "Alex",
+        "age": 42,
+        "gender": "male",
+        "medicalHistory": ["mild hypertension"]
+      },
+      "existingMemory": {
+        "goalSummary": "Audit biomarker testing intervals and schedule preventative blood panels",
+        "conversationState": "ongoing_support",
+        "keyInsights": ["Lipids last checked 6 months ago (LDL 151)", "ApoB, Vitamin D, and hs-CRP never tested"],
+        "lastInteractionSummary": "User reviewed previous lipid lab report.",
+        "workHistoryLog": ["2026-06-05: Recorded Quest Diagnostics lipid panel"]
+      },
+      "biomarkers": {
+        "total_cholesterol": 228,
+        "ldl": 151,
+        "hdl": 42,
+        "triglycerides": 175
+      },
+      "existingActivitiesAndTasks": [
+        {
+          "id": "task_bio_01",
+          "category": "biomarkers",
+          "title": "Annual Comprehensive Metabolic & Lipid Panel",
+          "status": "overdue",
+          "dueDate": "2026-08-01"
+        }
+      ]
+    }
+  },
+  "turns": [
+    {
+      "turnIndex": 1,
+      "userMessage": "When should I retest my lipid panel, and what essential blood tests am I currently missing from my routine health checkups?",
+      "expectedOutput": {
+        "intent": "test_planning",
+        "targetAgent": "agent4",
+        "status": "ready_for_handoff",
+        "expectedMissingFields": [],
+        "mustIncludeInResponse": [
+          "test",
+          "planner"
+        ],
+        "memoryValidation": {
+          "stateEquals": "ready_for_handoff"
+        },
+        "handoffValidation": {
+          "targetAgent": "agent4",
+          "hasPayload": true
+        }
+      }
+    }
+  ]
+}

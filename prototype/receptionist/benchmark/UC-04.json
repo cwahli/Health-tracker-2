@@ -1,0 +1,112 @@
+{
+  "id": "UC-04",
+  "title": "Multimodal 3-Page Clinical Lab Report Ingestion (NHS GP Panel)",
+  "description": "User uploads 3 high-resolution NHS GP lab report pages (Renal, LFT, Bone, FBC, QRISK3, Lipids) with a request to add them to their health profile. Front Desk identifies the dense multimodal lab data, packages the images and user clinical context into handoffPayload, routes to medical (Lab Parser), and triggers downstream multi-agent extraction.",
+  "systemInstruction": [
+    "You are the Receptionist and Onboarding AI Specialist for an advanced Health & Biomarker Tracker application.",
+    "Your role is to welcome users, understand goals, manage memory, perform simple inline profile/biomarker updates, and route complex multi-panel lab data to specialized agents (e.g. medical / Lab Parser)."
+  ],
+  "userPayload": {
+    "promptText": [
+      "<user_message>",
+      "I want to add these new blood test results to my health profile. Please parse all three pages of my GP lab report and update my records.",
+      "</user_message>"
+    ],
+    "jsonPayload": {
+      "currentUserMessage": "I want to add these new blood test results to my health profile. Please parse all three pages of my GP lab report and update my records.",
+      "chatHistory": [
+        {
+          "role": "user",
+          "content": "I want to add these new blood test results to my health profile. Please parse all three pages of my GP lab report and update my records."
+        }
+      ],
+      "existingUserProfile": {
+        "name": "Alex",
+        "age": 42,
+        "gender": "male",
+        "heightCm": 178,
+        "weightKg": 80.5,
+        "activityLevel": "moderately_active",
+        "medicalHistory": [
+          "mild hypertension"
+        ],
+        "dietaryPreferences": [
+          "mediterranean-leaning"
+        ]
+      },
+      "existingMemory": {
+        "goalSummary": "Optimize overall longevity and manage cardiovascular health",
+        "userProfileSnapshot": {
+          "name": "Alex",
+          "age": 42,
+          "gender": "male",
+          "heightCm": 178,
+          "weightKg": 80.5,
+          "activityLevel": "moderately_active",
+          "medicalHistory": [
+            "mild hypertension"
+          ],
+          "dietaryPreferences": [
+            "mediterranean-leaning"
+          ]
+        },
+        "preferencesAndConstraints": {
+          "dietaryPreference": "mediterranean-leaning"
+        },
+        "conversationState": "ongoing_support",
+        "pendingItems": [],
+        "keyInsights": [
+          "Known mild hypertension history",
+          "Recent NHS GP blood draw scheduled"
+        ],
+        "lastInteractionSummary": "User logged morning vitals (80.5kg, 124/80 BP, 66 bpm); informed that recent blood work was coming.",
+        "workHistoryLog": [
+          "2026-09-03: Recorded spot vitals inline (80.5kg, 124/80 BP, 66 bpm)"
+        ]
+      },
+      "images": [
+        "prototype/biomarkers/image/nhs_gp_results_p1_hba1c_renal_lft.png",
+        "prototype/biomarkers/image/nhs_gp_results_p2_bone_fbc.png",
+        "prototype/biomarkers/image/nhs_gp_results_p3_qrisk_lipids.png"
+      ]
+    }
+  },
+  "turns": [
+    {
+      "turnIndex": 1,
+      "userMessage": "I want to add these new blood test results to my health profile. Please parse all three pages of my GP lab report and update my records.",
+      "expectedOutput": {
+        "intent": "biomarker_review",
+        "targetAgent": "medical",
+        "status": "ready_for_handoff",
+        "expectedMissingFields": [],
+        "memoryValidation": {
+          "goalSummaryIncludes": [
+            "cardiovascular",
+            "longevity",
+            "health"
+          ],
+          "stateEquals": "ready_for_handoff",
+          "userProfileSnapshotCheck": {
+            "name": "Alex",
+            "weightKg": 80.5
+          }
+        },
+        "isDisambiguationRequired": false,
+        "handoffValidation": {
+          "hasPayload": true,
+          "targetAgent": "medical"
+        },
+        "mustIncludeInResponse": [
+          "specialist",
+          "medical"
+        ],
+        "mustNotIncludeInResponse": [
+          "SSN",
+          "Surgery Phone",
+          "Postcode"
+        ]
+      }
+    }
+  ]
+}

@@ -3489,6 +3489,13 @@ ${logsText}`);
           );
           if (priorFrontDeskMsg) {
             bodyData.existingMemory = priorFrontDeskMsg.agentResult?.memory || priorFrontDeskMsg.data?.agentResult?.memory || priorFrontDeskMsg.data?.memory;
+          } else if (profile?.agentMemory) {
+            bodyData.existingMemory = profile.agentMemory;
+          } else {
+            try {
+              const cached = localStorage.getItem('health_tracker_agent_memory');
+              if (cached) bodyData.existingMemory = JSON.parse(cached);
+            } catch {}
           }
         }
         if (reviewBiomarkerKey) {
@@ -4212,6 +4219,39 @@ ${logsText}`);
       }
       if (resData.newBiomarkerLogs && resData.newBiomarkerLogs.length > 0 && onAddBiomarkerLogs) {
         onAddBiomarkerLogs(resData.newBiomarkerLogs);
+      }
+      if (resData.modificationCommand && Array.isArray(resData.modificationCommand) && resData.modificationCommand.length > 0 && onLogMedical) {
+        onLogMedical({}, undefined, undefined, undefined, resData.modificationCommand, true);
+      }
+      if (resData.memory) {
+        try {
+          localStorage.setItem('health_tracker_agent_memory', JSON.stringify(resData.memory));
+        } catch {}
+        if (onSaveProfile) {
+          onSaveProfile({ agentMemory: resData.memory });
+        }
+      }
+      if (isHandoffContinuation && (resData.report || resData.extractedData || resData.foodLogs)) {
+        try {
+          const currentMemRaw = localStorage.getItem('health_tracker_agent_memory');
+          if (currentMemRaw) {
+            const currentMem = JSON.parse(currentMemRaw);
+            const todayStr = new Date().toISOString().split('T')[0];
+            const specialistName = downstreamTargetAgent === 'health_baseline' ? 'Health Coach' : (downstreamTargetAgent === 'medical' ? 'Medical Specialist' : 'Nutritionist');
+            const actionDesc = `${todayStr}: ${specialistName} completed analysis and recommendations.`;
+            if (!currentMem.workHistoryLog) currentMem.workHistoryLog = [];
+            if (!currentMem.workHistoryLog.includes(actionDesc)) {
+              currentMem.workHistoryLog.push(actionDesc);
+              if (currentMem.workHistoryLog.length > 5) {
+                currentMem.workHistoryLog = [currentMem.workHistoryLog[0], ...currentMem.workHistoryLog.slice(-4)];
+              }
+            }
+            localStorage.setItem('health_tracker_agent_memory', JSON.stringify(currentMem));
+            if (onSaveProfile) {
+              onSaveProfile({ agentMemory: currentMem });
+            }
+          }
+        } catch {}
       }
       const assistantMsg: ChatMessage = {
         id: `msg_${Date.now() + 1}`,
