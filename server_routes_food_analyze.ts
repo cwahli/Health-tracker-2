@@ -236,6 +236,14 @@ foodAnalyzeRouter.post("/api/gemini/front-desk", async (req, res) => {
     }
 
     let updatedProfile = recOutput.updatedProfile ? { ...profile, ...recOutput.updatedProfile } : null;
+    if (recOutput.modificationCommand && Array.isArray(recOutput.modificationCommand)) {
+      if (!updatedProfile) updatedProfile = { ...profile };
+      recOutput.modificationCommand.forEach((cmd: any) => {
+        if (cmd.field && cmd.value !== undefined) {
+           updatedProfile[cmd.field] = cmd.value;
+        }
+      });
+    }
     let newBiomarkerLogs = recOutput.newBiomarkerLogs || null;
     let filledRows: any[] = [];
 

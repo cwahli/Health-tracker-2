@@ -1535,7 +1535,7 @@ ${logsText}`);
             }
           };
           setMessages([...dedupedBaseMsgs, liveMsg], false);
-        } else if (job.status === 'succeeded' && lastMsg?.role === 'user') {
+        } else if (job.status === 'succeeded' && (lastMsg?.role === 'user' || lastMsg?.isLive)) {
           const raw = job.result?.raw || (job.result as any)?.clean_result || job.result || {};
           const latestFoodLog = resolvePendingFoodLog(job);
           const rawContent = raw.message || raw.reply || raw.text || raw.globalSummary || 'Analysis complete.';
@@ -1590,7 +1590,7 @@ ${logsText}`);
           })) {
             setMessages(mergeFoodEditMessages(dedupedBaseMsgs, assistantMsg), false);
           } else {
-            setMessages([...dedupedBaseMsgs, assistantMsg], false);
+            setMessages([...dedupedBaseMsgs.filter(m => !m.isLive), assistantMsg], false);
           }
         } else if (job.status === 'succeeded') {
           const latestFoodLog = resolvePendingFoodLog(job);
@@ -6102,7 +6102,7 @@ ${logsText}`);
                   {/* Render extracted Pending Food Log info */}
                   {(() => {
                     const isFoodMsg = msg.agentType === 'food' || msg.agentType === 'food_log' || msg.agentType === 'food_analyze' || msg.agentType === 'food_compare' || msg.agentType === 'new_log' || msg.agentType === 'modify' || msg.agentType === 'review' || !!(msg.pendingFoodLog || msg.data?.pendingFoodLog || msg.data?.scoutItems?.length || msg.data?.portionClarify || msg.data?.needsPortionClarify);
-                    const hasReviewFixes = !isFoodMsg && !!(
+                    const hasReviewFixes = !isFoodMsg && msg.agentType !== 'front_desk' && !!(
                       (Array.isArray(msg.modificationCommand) && msg.modificationCommand.length) ||
                       (Array.isArray(msg.data?.agentResult?.modificationCommand) && msg.data.agentResult.modificationCommand.length) ||
                       msg.data?.agentResult?.proposal
