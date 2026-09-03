@@ -674,7 +674,7 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
     const collapsedLineIndices = new Set<number>();
 
     const instructionBlocks: string[] = [];
-    const instructionStartPattern = /(Dispatched System Instruction|Dispatched Prompt|System Instruction:|UnifiedLLM-Prompt|Instruction dispatched|\[FrontDesk\]\s*Dispatched)/i;
+    const instructionStartPattern = /(Dispatched System Instruction|Dispatched Prompt|System Instruction:|UnifiedLLM-Prompt|Instruction dispatched|\[FrontDesk\]\s*Dispatched|\[HealthCoach\]\s*Dispatched|\[Medical(?:Analyze)?\]\s*Dispatched|\[Agent\d+\]\s*Dispatched)/i;
     for (let i = 0; i < logLines.length; i++) {
       if (instructionStartPattern.test(logLines[i])) {
         const block: string[] = [logLines[i]];
@@ -697,7 +697,7 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
         const normalizedKey = block
           .replace(/^\[backend\]\s*\[UnifiedLLM-Prompt:[^\]]+\]\s*/i, '')
           .replace(/^System Instruction:\s*/i, '')
-          .replace(/^\[FrontDesk\]\s*/i, '')
+          .replace(/^\[(FrontDesk|HealthCoach|Medical|Agent\d+)\]\s*/i, '')
           .trim();
         if (seenInstr.has(normalizedKey)) continue;
         seenInstr.add(normalizedKey);
@@ -712,13 +712,13 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
         lines.push('```');
         lines.push('');
         shown += 1;
-        if (shown >= 16) break;
+        if (shown >= 24) break;
       }
     }
 
     // Agent replies: show each unique reply once, then collapse logger-echo copies.
     const replyBlocks: string[] = [];
-    const responseStartPattern = /(Response received \(\d+ chars\)\.\s*Raw output:|\[FrontDesk\]\s*Response received)/i;
+    const responseStartPattern = /(Response received \(\d+ chars\)\.\s*Raw output:|\[(FrontDesk|HealthCoach|Medical|Agent\d+)\]\s*(?:Response received|Raw response))/i;
     for (let i = 0; i < logLines.length; i++) {
       if (responseStartPattern.test(logLines[i])) {
         const block: string[] = [logLines[i]];
@@ -747,12 +747,12 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
         lines.push('```');
         lines.push('');
         shownReplies += 1;
-        if (shownReplies >= 8) break;
+        if (shownReplies >= 12) break;
       }
     }
 
     // Agent Handoff Chain:
-    const handoffChainLines = logLines.filter(l => /\[FrontDesk-HandoffChain\]|Handoff Payload Generated|handoffChain/i.test(l));
+    const handoffChainLines = logLines.filter(l => /\[FrontDesk-HandoffChain\]|\[Multi-Agent Handoff\]|Handoff Payload Generated|handoffChain|Handoff Context|Initiating seamless handoff/i.test(l));
     if (handoffChainLines.length > 0 || (input.handoffChain && input.handoffChain.length > 0)) {
       lines.push(`## ⛓️ Agent Handoff Chain & Workflow`);
       lines.push('');
@@ -766,10 +766,11 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
     }
 
     const errorLines = logLines.filter((l) =>
-      /^\[(error|warn|warning)\]/i.test(l.trim()) ||
+      /^\[(error|warn|warning|fail|failed)\]/i.test(l.trim()) ||
       /^Backend (Error|Warning)/i.test(l.trim()) ||
-      /\b(Error|Exception|Warning):\s/i.test(l) ||
-      /"level":\s*"(warning|error)"/i.test(l)
+      /\b(Error|Exception|Warning|Fail|Failed):\s/i.test(l) ||
+      /"level":\s*"(warning|error)"/i.test(l) ||
+      /\[(?:HealthCoach|Medical|FrontDesk)-(?:Error|Warning)\]/i.test(l)
     );
     lines.push(`## ⚠️ Errors & Warnings`);
     lines.push('');

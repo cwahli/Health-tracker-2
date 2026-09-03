@@ -698,6 +698,10 @@ ${logsText}`);
   const chatStorageKey = agentType ? `chat_messages_${userIdentifier}_${type}_${agentType}_${dataReviewBatchIdx ?? 'none'}` : `chat_messages_${userIdentifier}_${type}`;
   const [lastSentPayload, setLastSentPayload] = useState<any>(null);
   const [messages, setMessagesInternal] = useState<ChatMessage[]>([]);
+  const messagesRef = useRef<ChatMessage[]>([]);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
   const [flagMsg, setFlagMsg] = useState<ChatMessage | null>(null);
   const [userSelectedMode, setUserSelectedMode] = useState<"review" | "compare" | "edit">("review");
   const hasUnsavedChangesRef = useRef<boolean>(false);
@@ -714,6 +718,7 @@ ${logsText}`);
       if (isAgent('food') && newVal.length > 11) {
         newVal = [newVal[0], ...newVal.slice(-10)];
       }
+      messagesRef.current = newVal;
       return newVal;
     });
   };
@@ -2260,8 +2265,14 @@ ${logsText}`);
       return;
     }
     if (isSendingRef.current || isAnalyzing || isSubmitting) {
-      console.log('[handleSend] Blocked — analysis already in progress or duplicate tap.');
-      return;
+      if (!isHandoffContinuation) {
+        console.log('[handleSend] Blocked — analysis already in progress or duplicate tap.');
+        return;
+      }
+      console.log('[handleSend] isHandoffContinuation: clearing prior in-progress state to proceed with seamless handoff');
+      isSendingRef.current = false;
+      setIsSubmitting(false);
+      setIsAnalyzing(false);
     }
     lastSendClickTimeRef.current = now;
     recordBreadcrumb('submit_initiated', 'chat_composer', {
@@ -3582,7 +3593,9 @@ ${logsText}`);
           stepsHistory: thisMonthSteps
         };
       } else if (isAgent('health_baseline') || (isHandoffContinuation && (downstreamTargetAgent === 'health_baseline' || !downstreamTargetAgent))) {
-        bodyData.biomarkerHistory = activeHistory;
+        bodyData.biomarkers = biomarkers;
+        bodyData.foodLogs = (activeFoodLogs || foodLogs || []).map((f: any) => ({ name: f.name, date: f.date, nutrients: f.nutrients }));
+        bodyData.biomarkerHistory = activeHistory || biomarkerHistory;
         bodyData.outOfRangeBiomarkers = outOfRangeBiomarkers;
         bodyData.calibratedInsights = getAllAgentCalibrations();
         bodyData.handoffPayload = extraOptions?.downstreamHandoffPayload || delegatedHandoffPayload || handoffPayload;
@@ -4583,14 +4596,18 @@ ${logsText}`);
       setDelegatedHandoffPayload(handoff);
     }
 
-    // 3. Trigger seamless continuation with the specialist agent
+    // 3. Clear submitting flags and trigger seamless continuation with the specialist agent
+    isSendingRef.current = false;
+    setIsSubmitting(false);
+    setIsAnalyzing(false);
+
     setTimeout(() => {
       handleSend(prompt, undefined, {
         isHandoffContinuation: true,
         downstreamTargetAgent: effectiveTarget,
         downstreamHandoffPayload: handoff
       });
-    }, 250);
+    }, 150);
   };
 
   const handleInternalOrExternalOpenAgent = (
@@ -6283,21 +6300,21 @@ ${logsText}`);
                 <>
                   <button
                     type="button"
-                    onClick={() => onOpenAgentFromFrontDesk?.('medical')}
+                    onClick={() => handleInternalOrExternalOpenAgent('medical')}
                     className="whitespace-nowrap px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-full transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
                   >
                     <span>➕ {t.addMedicalData || 'Add medical data'}</span>
                   </button>
                   <button
                     type="button"
-                    onClick={() => onOpenAgentFromFrontDesk?.('health_baseline')}
+                    onClick={() => handleInternalOrExternalOpenAgent('health_baseline')}
                     className="whitespace-nowrap px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-theme-neutral text-xs font-bold rounded-full transition-colors flex items-center gap-1.5 cursor-pointer"
                   >
                     <span>🎯 {t.healthPlanning || 'Health planning'}</span>
                   </button>
                   <button
                     type="button"
-                    onClick={() => onOpenAgentFromFrontDesk?.('agent7')}
+                    onClick={() => handleInternalOrExternalOpenAgent('agent7')}
                     className="whitespace-nowrap px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-theme-neutral text-xs font-bold rounded-full transition-colors flex items-center gap-1.5 cursor-pointer"
                   >
                     <span>💡 {t.medicalInsightsAction || 'Medical insights'}</span>

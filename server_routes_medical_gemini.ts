@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getGeminiClient } from './server.js';
+import { getGeminiClient, addDebugLog } from './server.js';
 import { runBiomarkerPipeline } from './src/server/biomarkers/pipeline.js';
 import { withGeminiRetry } from './server_gemini_retry.js';
 
@@ -8,6 +8,7 @@ export const medicalGeminiRouter = Router();
 medicalGeminiRouter.post("/api/gemini/medical-analyze", async (req, res) => {
   const isStream = req.query.stream === 'true';
   let hasSentHeaders = false;
+  const sessionId = (req.headers["x-session-id"] as string) || (req.query.sessionId as string) || "global";
 
   if (isStream) {
     res.setHeader('Content-Type', 'text/event-stream');
@@ -48,7 +49,6 @@ medicalGeminiRouter.post("/api/gemini/medical-analyze", async (req, res) => {
 
     const ai = getGeminiClient();
     
-    // In production, the old format had single `image` base64 string or `images` array.
     let base64Images: string[] = [];
     if (images && Array.isArray(images)) {
         base64Images = images;
@@ -56,18 +56,19 @@ medicalGeminiRouter.post("/api/gemini/medical-analyze", async (req, res) => {
         base64Images = [req.body.image];
     }
 
+    addDebugLog(`[MedicalAnalyze] Request received (session: ${sessionId}, message: "${(message || '').substring(0, 80)}", images: ${base64Images.length})`);
+    if (userProfile) {
+      addDebugLog(`[MedicalAnalyze] Dispatched user profile: ${JSON.stringify(userProfile)}`);
+    }
+
     const onProgress = (msg: string) => {
+       addDebugLog(`[MedicalAnalyze-Progress] ${msg}`);
        sendStreamEvent({ type: 'log', logType: 'status', message: msg, timestamp: Date.now() });
     };
 
     onProgress("Starting Medical Analyze Pipeline...");
     
-    // Clean up history to match Record<string, LogPoint[]> expected by backoffice
     const formattedHistory: Record<string, any[]> = {};
-    if (history && Array.isArray(history)) {
-       // but wait, `history` in the old backend actually came from `biomarkerHistory` or `history` (messages).
-       // In LogChat.tsx, it sends `biomarkerHistory`.
-    }
     const biomarkerHistory = req.body.biomarkerHistory || [];
     for (const h of biomarkerHistory) {
          if (h.biomarkers) {
@@ -90,6 +91,7 @@ medicalGeminiRouter.post("/api/gemini/medical-analyze", async (req, res) => {
        onProgress
     );
 
+    addDebugLog(`[MedicalAnalyze-Complete] Pipeline processed ${finalRows.length} biomarker row(s).`);
     sendStreamEvent({ type: 'log', logType: 'status', message: "Pipeline complete", timestamp: Date.now() });
     
     const result = {
@@ -104,6 +106,7 @@ medicalGeminiRouter.post("/api/gemini/medical-analyze", async (req, res) => {
     }
   } catch (error: any) {
     console.error("Pipeline error:", error);
+    addDebugLog(`[MedicalAnalyze-Error] ${error.message || error}\n${error.stack || ''}`);
     if (isStream && hasSentHeaders) {
        sendStreamEvent({ error: error.message });
        res.end();
@@ -116,6 +119,7 @@ medicalGeminiRouter.post("/api/gemini/medical-analyze", async (req, res) => {
 medicalGeminiRouter.post("/api/gemini/health-baseline-analyze", async (req, res) => {
   const isStream = req.query.stream === 'true';
   let hasSentHeaders = false;
+  const sessionId = (req.headers["x-session-id"] as string) || (req.query.sessionId as string) || "global";
 
   if (isStream) {
     res.setHeader('Content-Type', 'text/event-stream');
@@ -164,8 +168,6 @@ medicalGeminiRouter.post("/api/gemini/health-baseline-analyze", async (req, res)
     const profile = userProfile || rawProfile || {};
     const effectiveEngine = (typeof engine === 'string' && engine) || (typeof selectedModelId === 'string' && selectedModelId) || 'gemini-3.5-flash-lite';
 
-    sendStreamEvent({ type: 'log', logType: 'status', message: "Health Coach initialized. Evaluating health context...", timestamp: Date.now() });
-
     // Calculate baseline biometrics
     const weightKg = Number(profile.weight || profile.weightKg || handoffPayload?.collectedData?.weight || 0);
     const heightCm = Number(profile.height || profile.heightCm || handoffPayload?.collectedData?.height || 0);
@@ -177,6 +179,13 @@ medicalGeminiRouter.post("/api/gemini/health-baseline-analyze", async (req, res)
     if (weightKg > 0 && heightCm > 0) {
       bmi = parseFloat((weightKg / Math.pow(heightCm / 100, 2)).toFixed(1));
     }
+
+    addDebugLog(`[HealthCoach] Dispatching request to model: "${effectiveEngine}" (session: ${sessionId}). User Demographics: Age ${age}, Gender ${gender}, Height ${heightCm}cm, Weight ${weightKg}kg (BMI: ${bmi || 'N/A'}), Activity: ${activityLevel}`);
+    if (handoffPayload) {
+      addDebugLog(`[Multi-Agent Handoff] Front Desk ➔ Health Coach (${effectiveEngine}) | Handoff Context: ${JSON.stringify(handoffPayload)}`);
+    }
+
+    sendStreamEvent({ type: 'log', logType: 'status', message: "Health Coach initialized. Evaluating health context...", timestamp: Date.now() });
 
     sendStreamEvent({ 
       type: 'thought', 
@@ -246,7 +255,7 @@ You MUST respond strictly with a valid JSON object in this format:
       { "nutrientKey": "sodium", "targetValue": "< 2,000 mg", "rationale": "Supports healthy arterial blood pressure." }
     ],
     "topWeeklyNutrientTargets": [
-      { "nutrientKey": "fiber", "targetValue": "25 - 30 g", "rationale": "Supports gut motility and satiety." },
+      { "nutrientKey": "fiber", "targetValue": "25 - 30 g", "rationale": "Supports gut microbiome and metabolic stability." },
       { "nutrientKey": "added_sugars", "targetValue": "< 25 g", "rationale": "Minimizes insulin spikes." }
     ],
     "generalNutrientTargets": {
@@ -265,6 +274,9 @@ You MUST respond strictly with a valid JSON object in this format:
 
     const promptText = `User message / Request: "${message || handoffPayload?.summaryForAgent || 'Please create my personalized health baseline plan.'}"`;
 
+    addDebugLog(`[HealthCoach] Dispatched System Instruction:\n${systemInstruction}`);
+    addDebugLog(`[HealthCoach] Dispatched Prompt:\n${promptText}`);
+
     sendStreamEvent({ type: 'log', logType: 'status', message: "Generating clinical health baseline...", timestamp: Date.now() });
 
     let parsedResult: any = null;
@@ -281,6 +293,7 @@ You MUST respond strictly with a valid JSON object in this format:
       }), { label: 'Health Baseline Agent' });
 
       const rawText = response.text || '{}';
+      addDebugLog(`[HealthCoach] Response received (${rawText.length} chars). Raw output:\n${rawText}`);
       try {
         const cleaned = rawText.replace(/```(?:json)?/gi, '').trim();
         parsedResult = JSON.parse(cleaned);
@@ -292,8 +305,9 @@ You MUST respond strictly with a valid JSON object in this format:
           } catch (e) {}
         }
       }
-    } catch (llmErr) {
+    } catch (llmErr: any) {
       console.warn("Health baseline LLM error, falling back to deterministic calculation:", llmErr);
+      addDebugLog(`[HealthCoach-Warning] LLM error, falling back to deterministic calculation: ${llmErr?.message || llmErr}`);
     }
 
     if (!parsedResult || !parsedResult.report) {
@@ -356,6 +370,7 @@ You MUST respond strictly with a valid JSON object in this format:
       };
     }
 
+    addDebugLog(`[HealthCoach-Summary] Plan generated. Summary: "${parsedResult.report?.globalSummary || parsedResult.text?.substring(0, 100)}"`);
     sendStreamEvent({ type: 'log', logType: 'status', message: "Health baseline analysis finalized.", timestamp: Date.now() });
 
     if (isStream) {
@@ -366,6 +381,7 @@ You MUST respond strictly with a valid JSON object in this format:
     }
   } catch (error: any) {
     console.error("[Health Baseline Error]:", error);
+    addDebugLog(`[HealthCoach-Error] ${error.message || error}\n${error.stack || ''}`);
     if (isStream && hasSentHeaders) {
       sendStreamEvent({ error: error.message || "Failed to generate health baseline" });
       res.end();
