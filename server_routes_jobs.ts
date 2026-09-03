@@ -416,7 +416,11 @@ jobsRouter.all('/api/jobs/debug', async (req, res) => {
         historyLog: safePayload.result?.historyLog,
         ingestTrace: safePayload.result?.ingestTrace,
         report: safePayload.result?.report,
-        conversationHistory: safePayload.conversationHistory || safePayload.result?.conversationHistory
+        conversationHistory: safePayload.conversationHistory || safePayload.result?.conversationHistory,
+        handoffChain: safePayload.result?.handoffChain || safePayload.handoffChain,
+        handoffPayload: safePayload.result?.handoffPayload || safePayload.handoffPayload,
+        agentPayload: safePayload.inputSnapshot || safePayload.result?.inputSnapshot || safePayload.payload,
+        agentInstructions: safePayload.result?.agentInstructions || safePayload.agentInstructions
       });
       res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="debug-${cleanJobId}.md"`);

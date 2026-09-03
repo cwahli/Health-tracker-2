@@ -4443,27 +4443,9 @@ ${logsText}`);
           : (insights.length > 0 ? insights.map((i: string) => `• ${i}`).join('\n') : 'Please create my personalized health plan based on my profile.');
         console.log(`[DIAG6] handoff triggered: targetAgent=${targetAgent}, promptLength=${prompt.length}`);
 
-        if (type === 'front_desk') {
-          setTimeout(() => {
-            initiateSeamlessHandoff(targetAgent, handoff, prompt, handoff.collectedData || resData.updatedProfile);
-          }, 350);
-        } else {
-          // Directly open the coach/specialist and execute the analysis immediately without requiring confirmation
-          setTimeout(() => {
-            console.log(`[DIAG6] handoff: calling onOpenAgentFromFrontDesk now with targetAgent=${targetAgent}`);
-            try {
-              onOpenAgentFromFrontDesk?.(targetAgent, {
-                handoffPayload: handoff,
-                prefillMessage: prompt,
-                autoSendMessage: prompt,
-                updatedProfile: handoff.collectedData || resData.updatedProfile
-              });
-              console.log(`[DIAG6] handoff: onOpenAgentFromFrontDesk call completed without throwing`);
-            } catch (handoffErr: any) {
-              console.log(`[DIAG6] handoff: onOpenAgentFromFrontDesk threw an error:`, handoffErr?.message || handoffErr);
-            }
-          }, 400);
-        }
+        setTimeout(() => {
+          initiateSeamlessHandoff(targetAgent, handoff, prompt, handoff.collectedData || resData.updatedProfile);
+        }, 350);
       }
     } catch (err: any) {
       console.error(err);
@@ -4614,22 +4596,18 @@ ${logsText}`);
     targetAgent: any,
     options?: { prefillMessage?: string; autoSendMessage?: string; handoffPayload?: any; updatedProfile?: any }
   ) => {
-    if (type === 'front_desk') {
-      const summary = options?.handoffPayload?.summaryForAgent || options?.handoffPayload?.userContextSummary || '';
-      const insights = Array.isArray(options?.handoffPayload?.actionableInsights) ? options.handoffPayload.actionableInsights : [];
-      const prompt = options?.autoSendMessage || options?.prefillMessage || (summary 
-        ? `${summary}${insights.length > 0 ? '\n\nKey Insights:\n' + insights.map((i: string) => `• ${i}`).join('\n') : ''}`
-        : (insights.length > 0 ? insights.map((i: string) => `• ${i}`).join('\n') : 'Please create my personalized health plan based on my profile.'));
+    const summary = options?.handoffPayload?.summaryForAgent || options?.handoffPayload?.userContextSummary || '';
+    const insights = Array.isArray(options?.handoffPayload?.actionableInsights) ? options.handoffPayload.actionableInsights : [];
+    const prompt = options?.autoSendMessage || options?.prefillMessage || (summary 
+      ? `${summary}${insights.length > 0 ? '\n\nKey Insights:\n' + insights.map((i: string) => `• ${i}`).join('\n') : ''}`
+      : (insights.length > 0 ? insights.map((i: string) => `• ${i}`).join('\n') : 'Please create my personalized health plan based on my profile.'));
 
-      initiateSeamlessHandoff(
-        targetAgent,
-        options?.handoffPayload,
-        prompt,
-        options?.updatedProfile || options?.handoffPayload?.collectedData
-      );
-    } else {
-      onOpenAgentFromFrontDesk?.(targetAgent, options);
-    }
+    initiateSeamlessHandoff(
+      targetAgent,
+      options?.handoffPayload,
+      prompt,
+      options?.updatedProfile || options?.handoffPayload?.collectedData
+    );
   };
 
   const lastAutoSendKeyRef = useRef<string | null>(null);

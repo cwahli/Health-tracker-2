@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getGeminiClient, addDebugLog } from './server.js';
+import { getGeminiClient, addDebugLog, sessionDebugLogs, globalDebugLogs } from './server.js';
 import { runBiomarkerPipeline } from './src/server/biomarkers/pipeline.js';
 import { withGeminiRetry } from './server_gemini_retry.js';
 
@@ -94,8 +94,13 @@ medicalGeminiRouter.post("/api/gemini/medical-analyze", async (req, res) => {
     addDebugLog(`[MedicalAnalyze-Complete] Pipeline processed ${finalRows.length} biomarker row(s).`);
     sendStreamEvent({ type: 'log', logType: 'status', message: "Pipeline complete", timestamp: Date.now() });
     
+    const logsToUse = sessionDebugLogs[sessionId] || globalDebugLogs || [];
+    const backendLogs = logsToUse.map((l: any) => typeof l === 'string' ? l : (l.timestamp ? `[${l.timestamp}] ${l.message}` : (l.message || JSON.stringify(l)))).join('\n');
+
     const result = {
-        filledRows: finalRows, text: `Processed ${finalRows.length} biomarker(s).`
+        filledRows: finalRows,
+        text: `Processed ${finalRows.length} biomarker(s).`,
+        backendLogs
     };
 
     if (isStream) {
@@ -372,6 +377,14 @@ You MUST respond strictly with a valid JSON object in this format:
 
     addDebugLog(`[HealthCoach-Summary] Plan generated. Summary: "${parsedResult.report?.globalSummary || parsedResult.text?.substring(0, 100)}"`);
     sendStreamEvent({ type: 'log', logType: 'status', message: "Health baseline analysis finalized.", timestamp: Date.now() });
+
+    const logsToUse = sessionDebugLogs[sessionId] || globalDebugLogs || [];
+    const backendLogs = logsToUse.map((l: any) => typeof l === 'string' ? l : (l.timestamp ? `[${l.timestamp}] ${l.message}` : (l.message || JSON.stringify(l)))).join('\n');
+    parsedResult.backendLogs = backendLogs;
+    if (handoffPayload) {
+      parsedResult.handoffChain = ['Front Desk (Triage)', 'Health Coach (Clinical Baseline)'];
+      parsedResult.handoffPayload = handoffPayload;
+    }
 
     if (isStream) {
       sendStreamEvent({ final: true, result: parsedResult });

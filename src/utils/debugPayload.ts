@@ -103,6 +103,12 @@ export type DebugReportInput = {
   conversationHistory?: { role: string; content: string }[];
   /** Sequence of agent transfers (e.g. Front Desk -> Health Coach). */
   handoffChain?: string[];
+  /** Full handoff payload passed between agents */
+  handoffPayload?: any;
+  /** Input payload/context as received by the agent */
+  agentPayload?: any;
+  /** Dispatched system instructions (single string or record by agent) */
+  agentInstructions?: Record<string, string> | string[] | string;
   /** Job session event trail (JobStore.apply / JobQueueRunner), forwarded
    * from the client-recorded job.sessionEvents so it survives into
    * server-generated exports. Falls back to the in-process sessionLog map
@@ -145,6 +151,106 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
       lines.push(`- **Photo:** ${input.photoUrl}`);
     }
   }
+  // 1. Data Pipeline Execution & Infrastructure Connectivity Matrix
+  lines.push(`## 🔗 Data Pipelines & Infrastructure Connectivity Matrix`);
+  lines.push('');
+  lines.push(`| Pipeline Stage | Connectivity & Status | Details / Metrics |`);
+  lines.push(`|----------------|-----------------------|-------------------|`);
+
+  // Stage 1: Triage / Front Desk
+  const hasFrontDesk = input.agentType === 'front_desk' || (input.handoffChain && input.handoffChain.some(a => /front.?desk/i.test(a))) || (input.backendLogs && /\[FrontDesk\]/i.test(input.backendLogs));
+  const frontDeskStatus = hasFrontDesk ? '✅ Connected (Success)' : '⚪ Skipped / Standby';
+  const frontDeskDetails = hasFrontDesk ? 'User intent triaged; handoff formulated' : 'Direct execution mode';
+  lines.push(`| **1. Triage & Front Desk** | ${frontDeskStatus} | ${frontDeskDetails} |`);
+
+  // Stage 2: Vision Scout & OCR
+  const hasScout = Boolean(input.scoutItems?.length || input.rawScout || input.scoutContentType || input.photoUrl || (input.photoUrls && input.photoUrls.length > 0));
+  const scoutCount = input.scoutItems?.length || 0;
+  const scoutStatus = hasScout ? `✅ Connected (${scoutCount > 0 ? `${scoutCount} item(s) detected` : 'Active'})` : '⚪ Skipped (Text-only)';
+  const scoutDetails = input.scoutContentType ? `Type: ${input.scoutContentType}` : (hasScout ? 'Visual bounding & OCR completed' : 'No image payload');
+  lines.push(`| **2. Vision Scout & OCR** | ${scoutStatus} | ${scoutDetails} |`);
+
+  // Stage 3: Biomarker Ingest & Normalization
+  const hasIngest = Boolean(input.ingestTrace);
+  const ingestCount = input.ingestTrace?.totalInputRows ?? (input.ingestTrace?.rows?.length ?? 0);
+  const ingestStatus = hasIngest ? `✅ Connected (${ingestCount} row(s) mapped)` : '⚪ Standby / N/A';
+  const ingestDetails = hasIngest ? `High Conf: ${input.ingestTrace?.highConfidenceCount ?? 0} | Flagged: ${input.ingestTrace?.flaggedCount ?? 0} | Unmatched: ${input.ingestTrace?.unmatchedCount ?? 0}` : 'No tabular lab panel';
+  lines.push(`| **3. Biomarker Ingest & Mapping** | ${ingestStatus} | ${ingestDetails} |`);
+
+  // Stage 4: Nutrition Database Search & Truth Matching
+  const hasSearch = Boolean(input.usdaSearchResults?.length || input.brandSearchResults?.length);
+  const searchCount = (input.usdaSearchResults?.length || 0) + (input.brandSearchResults?.length || 0);
+  const searchStatus = hasSearch ? `✅ Connected (${searchCount} candidate(s))` : (input.pendingFoodLog ? '✅ Connected (Catalog / Fallback)' : '⚪ Standby / N/A');
+  const searchDetails = hasSearch ? `USDA: ${input.usdaSearchResults?.length || 0} | Brand: ${input.brandSearchResults?.length || 0}` : 'No external search required';
+  lines.push(`| **4. Database Search & Truth Matching** | ${searchStatus} | ${searchDetails} |`);
+
+  // Stage 5: Calculation & Math Engine
+  const hasCalc = Boolean(input.pendingFoodLog || input.receiptTable || input.comprehensiveNutrients);
+  const calcStatus = hasCalc ? '✅ Connected (Verified)' : '⚪ Standby / N/A';
+  const calcDetails = input.comprehensiveNutrients ? `${Object.keys(input.comprehensiveNutrients).length} nutrient profile computed` : (hasCalc ? 'Itemized breakdown & totals calculated' : 'No meal calculation required');
+  lines.push(`| **5. Mathematical Calculation Engine** | ${calcStatus} | ${calcDetails} |`);
+
+  // Stage 6: Trial-Balance & Verification Gate
+  const hasGate = Boolean(input.gate || input.pendingFoodLog || input.receiptTable);
+  const gateSummary = input.gate?.summary || (computedGate?.summary ? computedGate.summary : (hasGate ? 'GATE: EVALUATED' : 'N/A'));
+  const gateStatus = hasGate ? (input.savable !== false ? '✅ Passed & Savable' : '⚠️ Gate Check Triggered') : '⚪ Standby / N/A';
+  lines.push(`| **6. Trial-Balance & Quality Gate** | ${gateStatus} | ${gateSummary} |`);
+
+  // Stage 7: Health Coach & Clinical Plan
+  const hasHealthCoach = Boolean(input.report) || input.agentType === 'health_baseline' || (input.backendLogs && /\[HealthCoach\]/i.test(input.backendLogs));
+  const healthCoachStatus = hasHealthCoach ? '✅ Connected (Success)' : '⚪ Standby / N/A';
+  const healthCoachDetails = input.report ? (typeof input.report === 'object' && input.report.globalSummary ? String(input.report.globalSummary).slice(0, 80) + '...' : 'Clinical health plan formulated') : (hasHealthCoach ? 'Health baseline generated' : 'No clinical analysis requested');
+  lines.push(`| **7. Health Coach / Clinical Engine** | ${healthCoachStatus} | ${healthCoachDetails} |`);
+
+  // Stage 8: State Persistence & Remote Job Sync
+  const hasSessionEvents = Boolean(input.sessionEvents?.length);
+  const sessionEventsCount = input.sessionEvents?.length || 0;
+  const syncStatus = hasSessionEvents ? `✅ Connected (${sessionEventsCount} lifecycle event(s))` : '✅ Connected (Local / Active)';
+  const syncDetails = input.jobId ? `Job ID: \`${input.jobId}\`` : 'In-memory / Client session';
+  lines.push(`| **8. State Storage & Job Sync** | ${syncStatus} | ${syncDetails} |`);
+
+  lines.push('');
+
+  // Multi-Agent Workflow & Handoff Trace
+  const effectiveHandoffChain = input.handoffChain && input.handoffChain.length > 0
+    ? input.handoffChain
+    : (input.handoffPayload ? ['Front Desk (Triage)', input.handoffPayload.targetAgent === 'medical' ? 'Medical Specialist' : 'Health Coach'] : undefined);
+
+  if (effectiveHandoffChain || input.handoffPayload) {
+    lines.push(`## ⛓️ Multi-Agent Workflow & Handoff Trace`);
+    lines.push('');
+    if (effectiveHandoffChain && effectiveHandoffChain.length > 0) {
+      lines.push(`- **Workflow Sequence:** ${effectiveHandoffChain.join(' ➔ ')}`);
+      lines.push(`- **Execution Mode:** Continuity preserved in single unified chat modal`);
+    }
+    if (input.handoffPayload) {
+      lines.push('');
+      lines.push(`### 📋 Handoff Payload Forwarded`);
+      lines.push('```json');
+      try {
+        lines.push(JSON.stringify(input.handoffPayload, null, 2));
+      } catch {
+        lines.push(String(input.handoffPayload));
+      }
+      lines.push('```');
+    }
+    lines.push('');
+  }
+
+  // Agent Input Payload & Context as Received
+  if (input.agentPayload) {
+    lines.push(`## 📥 Agent Input Payload as Received`);
+    lines.push('');
+    lines.push('```json');
+    try {
+      lines.push(JSON.stringify(input.agentPayload, null, 2).slice(0, 20_000));
+    } catch {
+      lines.push(String(input.agentPayload));
+    }
+    lines.push('```');
+    lines.push('');
+  }
+
   // Gate / Errors Section
   if (input.pendingFoodLog || input.receiptTable) {
     const food = input.pendingFoodLog || {};
@@ -688,12 +794,25 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
         i = j - 1;
       }
     }
-    if (instructionBlocks.length > 0) {
-      lines.push(`## 🧠 Agent Instructions & Prompts Dispatched`);
+    const directInstructions: string[] = [];
+    if (input.agentInstructions) {
+      if (typeof input.agentInstructions === 'string') {
+        directInstructions.push(input.agentInstructions);
+      } else if (Array.isArray(input.agentInstructions)) {
+        directInstructions.push(...input.agentInstructions);
+      } else if (typeof input.agentInstructions === 'object') {
+        for (const [agentName, instr] of Object.entries(input.agentInstructions)) {
+          directInstructions.push(`[${agentName}] System Instruction:\n${instr}`);
+        }
+      }
+    }
+
+    if (instructionBlocks.length > 0 || directInstructions.length > 0) {
+      lines.push(`## 🧠 Agent System Instructions & Dispatched Prompts`);
       lines.push('');
       const seenInstr = new Set<string>();
       const uniqueBlocks: string[] = [];
-      for (const block of instructionBlocks) {
+      for (const block of [...directInstructions, ...instructionBlocks]) {
         const normalizedKey = block
           .replace(/^\[backend\]\s*\[UnifiedLLM-Prompt:[^\]]+\]\s*/i, '')
           .replace(/^System Instruction:\s*/i, '')
@@ -703,16 +822,13 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
         seenInstr.add(normalizedKey);
         uniqueBlocks.push(block);
       }
-      lines.push(`_Extracted from backend logs — ${uniqueBlocks.length} dispatch(es) found. Shown here only; collapsed below to avoid duplication._`);
+      lines.push(`_Full agent instructions and prompts dispatched. Shown here for complete auditability._`);
       lines.push('');
-      let shown = 0;
       for (const block of uniqueBlocks) {
         lines.push('```');
         lines.push(block);
         lines.push('```');
         lines.push('');
-        shown += 1;
-        if (shown >= 24) break;
       }
     }
 

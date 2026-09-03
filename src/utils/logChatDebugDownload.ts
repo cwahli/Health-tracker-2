@@ -192,6 +192,10 @@ export async function downloadJobDebugReport(args: {
   }
 
   if (format === 'markdown') {
+    const handoffChain = job?.result?.handoffChain || msg?.data?.handoffChain || msg?.data?.agentResult?.handoffChain || (msg?.data?.handoffPayload || msg?.data?.agentResult?.handoffPayload ? ['Front Desk (Triage)', (msg?.data?.handoffPayload?.targetAgent || msg?.data?.agentResult?.handoffPayload?.targetAgent) === 'medical' ? 'Medical Specialist' : 'Health Coach'] : undefined);
+    const handoffPayload = job?.result?.handoffPayload || msg?.data?.handoffPayload || msg?.data?.agentResult?.handoffPayload || msg?.handoffPayload;
+    const agentPayload = job?.inputSnapshot || msg?.data?.payload || msg?.data?.sentPayload || lastUserAction?.details || lastUserAction?.payload;
+
     const mdContent = buildDebugMarkdownReport({
       jobId: resolvedJobId,
       status: job?.status || (msg?.isError || msg?.agentUnavailable ? 'failed' : 'unknown'),
@@ -218,6 +222,9 @@ export async function downloadJobDebugReport(args: {
       stageLedger: job?.result?.stageLedger || msg?.data?.stageLedger,
       historyLog: job?.result?.historyLog || msg?.data?.historyLog,
       conversationHistory,
+      handoffChain,
+      handoffPayload,
+      agentPayload,
     });
     triggerBlobDownload(new Blob([mdContent], { type: 'text/markdown;charset=utf-8' }), `debug-${resolvedJobId}.md`);
   } else {
