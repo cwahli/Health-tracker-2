@@ -4270,8 +4270,10 @@ ${logsText}`);
           messageText = resData.explanation;
         }
       }
+      let latestProfile = profile ? { ...profile } : {};
       if (resData.updatedProfile && onSaveProfile) {
-        onSaveProfile(resData.updatedProfile);
+        latestProfile = { ...latestProfile, ...resData.updatedProfile };
+        onSaveProfile(latestProfile);
       }
       if (resData.newBiomarkerLogs && resData.newBiomarkerLogs.length > 0 && onAddBiomarkerLogs) {
         onAddBiomarkerLogs(resData.newBiomarkerLogs);
@@ -4284,7 +4286,8 @@ ${logsText}`);
           localStorage.setItem('health_tracker_agent_memory', JSON.stringify(resData.memory));
         } catch {}
         if (onSaveProfile) {
-          onSaveProfile({ agentMemory: resData.memory });
+          latestProfile = { ...latestProfile, agentMemory: resData.memory };
+          onSaveProfile(latestProfile);
         }
       }
       if (isHandoffContinuation && (resData.report || resData.extractedData || resData.foodLogs)) {
@@ -4311,7 +4314,8 @@ ${logsText}`);
             }
             localStorage.setItem('health_tracker_agent_memory', JSON.stringify(currentMem));
             if (onSaveProfile) {
-              onSaveProfile({ agentMemory: currentMem });
+              latestProfile = { ...latestProfile, agentMemory: currentMem };
+              onSaveProfile(latestProfile);
             }
           }
         } catch {}
