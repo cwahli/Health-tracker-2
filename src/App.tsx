@@ -1816,7 +1816,7 @@ export default function App() {
     setActiveJobId(jobId);
     const job = JobStore.getJob(jobId);
     if (job && job.kind === 'medical') {
-      const jobAgentType = (job.inputSnapshot as any)?.agentType;
+      const jobAgentType = (job.inputSnapshot as any)?.agentType || (job.result as any)?.agentType || (job.result?.report ? 'health_baseline' : null);
       if (jobAgentType && jobAgentType !== 'agent1_step1') {
         const validTypes = ['agent1','agent2','agent3','agent4','agent5','health_baseline','agent7','data_review','biomarker_review'] as const;
         const matched = validTypes.find(t => t === jobAgentType);

@@ -4443,9 +4443,20 @@ ${logsText}`);
           : (insights.length > 0 ? insights.map((i: string) => `• ${i}`).join('\n') : 'Please create my personalized health plan based on my profile.');
         console.log(`[DIAG6] handoff triggered: targetAgent=${targetAgent}, promptLength=${prompt.length}`);
 
-        setTimeout(() => {
-          initiateSeamlessHandoff(targetAgent, handoff, prompt, handoff.collectedData || resData.updatedProfile);
-        }, 350);
+        if (onOpenAgentFromFrontDesk) {
+          setTimeout(() => {
+            onOpenAgentFromFrontDesk(targetAgent, {
+              handoffPayload: handoff,
+              prefillMessage: prompt,
+              autoSendMessage: prompt,
+              updatedProfile: handoff.collectedData || resData.updatedProfile
+            });
+          }, 350);
+        } else {
+          setTimeout(() => {
+            initiateSeamlessHandoff(targetAgent, handoff, prompt, handoff.collectedData || resData.updatedProfile);
+          }, 350);
+        }
       }
     } catch (err: any) {
       console.error(err);
@@ -4596,6 +4607,10 @@ ${logsText}`);
     targetAgent: any,
     options?: { prefillMessage?: string; autoSendMessage?: string; handoffPayload?: any; updatedProfile?: any }
   ) => {
+    if (onOpenAgentFromFrontDesk) {
+      onOpenAgentFromFrontDesk(targetAgent, options);
+      return;
+    }
     const summary = options?.handoffPayload?.summaryForAgent || options?.handoffPayload?.userContextSummary || '';
     const insights = Array.isArray(options?.handoffPayload?.actionableInsights) ? options.handoffPayload.actionableInsights : [];
     const prompt = options?.autoSendMessage || options?.prefillMessage || (summary 
@@ -4618,7 +4633,7 @@ ${logsText}`);
   }, [isOpen]);
 
   useEffect(() => {
-    const effectiveAutoSend = autoSendMessage || (isAgent('health_baseline') && handoffPayload ? (handoffPayload.summaryForAgent || 'Please create my personalized health baseline plan.') : (isAgent('health_baseline') ? 'Please create my personalized health baseline plan.' : null));
+    const effectiveAutoSend = autoSendMessage || (isAgent('health_baseline') && handoffPayload ? (handoffPayload.summaryForAgent || (handoffPayload.userContextSummary ? `${handoffPayload.userContextSummary}\nPlease create my personalized health plan based on my profile.` : null)) : null);
     console.log(`[DIAG5] auto-send effect fired: isOpen=${isOpen}, agentType=${agentType}, hasHandoffPayload=${!!handoffPayload}, effectiveAutoSend=${effectiveAutoSend ? JSON.stringify(effectiveAutoSend).slice(0, 120) : 'null'}`);
     if (isOpen && effectiveAutoSend && (isAgent('medical') || isAgent('daily_recommendation') || isAgent('health_baseline'))) {
       if (agentType === 'agent1' || agentType === 'agent2' || agentType === 'agent3' || agentType === 'agent4' || agentType === 'agent5' || agentType === 'agent7') {
