@@ -13,6 +13,7 @@ import {
   isRoutableSpecialistIntent,
   mapFrontDeskSpecialist,
 } from "../../utils/frontDeskRouting.js";
+import { t, normalizeLocale } from "../../utils/i18n.js";
 
 export const userProfileSchema = {
   type: Type.OBJECT,
@@ -634,7 +635,7 @@ export function maybePromoteHandoff(output: any, ctx: HandoffRepairContext): any
   const isFollowUpInquiry = Boolean(
     hasContainers &&
     !/new plan|different plan|recalculate|redo|here is (my|another) (lab|blood|photo)|uploaded/i.test(msgText) &&
-    (/what|why|how|can i|is it|should i|tell me|explain|best weight/i.test(msgText) || output.intent === 'general_inquiry')
+    (/what|why|how|can i|is it|should i|tell me|explain|best weight|kalori|calorie|calories/i.test(msgText) || output.intent === 'general_inquiry')
   );
   if (isFollowUpInquiry) {
     output.status = 'needs_info';
@@ -1003,6 +1004,7 @@ export async function callReceptionistAgent(
   else if (/moderately\s*active|moderate\s*exercise|\bmoderate\b/i.test(userMsgLower)) detectedActivity = 'moderately_active';
   else if (/very\s*active|heavy\s*exercise|\bintense\b|\bvery\b/i.test(userMsgLower)) detectedActivity = 'very_active';
   else if (/extra\s*active|\bathlete\b/i.test(userMsgLower)) detectedActivity = 'extra_active';
+  else if (/mahasiswa|pelajar|\bstudent\b|kantoran|kantor|\boffice\b|ringan|sedentari/i.test(userMsgLower)) detectedActivity = 'lightly_active';
 
   if (detectedActivity && output.memory?.userProfileSnapshot) {
     output.memory.userProfileSnapshot.activityLevel = detectedActivity as any;
@@ -1081,25 +1083,28 @@ export async function callReceptionistAgent(
     output.missingFields &&
     output.missingFields.length > 0
   ) {
+    const formLang = normalizeLocale(
+       (payload as any).language || payload.existingUserProfile?.language || "en"
+    );
     const fields: any[] = [];
     const fieldMapping: Record<
       string,
       { label: string; type: "text" | "number" | "select"; unit?: string; options?: string[] }
     > = {
-      gender: { label: "Gender", type: "select", options: ["female", "male", "other"] },
-      age: { label: "Age", type: "number", unit: "years" },
-      height: { label: "Height", type: "number", unit: "cm" },
-      heightcm: { label: "Height", type: "number", unit: "cm" },
-      weight: { label: "Current Weight", type: "number", unit: "kg" },
-      weightkg: { label: "Current Weight", type: "number", unit: "kg" },
+      gender: { label: t(formLang, "gender"), type: "select", options: ["female", "male", "other"] },
+      age: { label: t(formLang, "age"), type: "number", unit: "years" },
+      height: { label: t(formLang, "height"), type: "number", unit: "cm" },
+      heightcm: { label: t(formLang, "height"), type: "number", unit: "cm" },
+      weight: { label: t(formLang, "recepCurrentWeight"), type: "number", unit: "kg" },
+      weightkg: { label: t(formLang, "recepCurrentWeight"), type: "number", unit: "kg" },
       activitylevel: {
-        label: "Activity Level",
+        label: t(formLang, "recepActivityLevel"),
         type: "select",
         options: ["sedentary", "light", "moderate", "very_active"],
       },
-      medicalhistory: { label: "Medical History / Conditions", type: "text" },
-      targetweight: { label: "Target Weight", type: "number", unit: "kg" },
-      targetweightkg: { label: "Target Weight", type: "number", unit: "kg" },
+      medicalhistory: { label: t(formLang, "medicalHistory"), type: "text" },
+      targetweight: { label: t(formLang, "recepTargetWeight"), type: "number", unit: "kg" },
+      targetweightkg: { label: t(formLang, "recepTargetWeight"), type: "number", unit: "kg" },
     };
 
     output.missingFields.forEach((mf) => {
@@ -1128,11 +1133,40 @@ export async function callReceptionistAgent(
 
     output.uiForm = {
       formId: `${output.intent || "onboarding"}_details_form`,
-      title: "Complete Missing Details",
-      description: "Provide the following information to tailor your health plan:",
-      submitLabel: "Submit Details",
+      title: t(formLang, "recepFormTitle"),
+      description: t(formLang, "recepFormDescription"),
+      submitLabel: t(formLang, "recepSubmit"),
       fields,
     };
+  }
+
+  const replyLang = normalizeLocale(
+     (payload as any).language || payload.existingUserProfile?.language || "en"
+  );
+  if (output.uiForm) {
+    output.uiForm.title = t(replyLang, "recepFormTitle");
+    output.uiForm.description = t(replyLang, "recepFormDescription");
+    output.uiForm.submitLabel = t(replyLang, "recepSubmit");
+    if (Array.isArray(output.uiForm.fields)) {
+      output.uiForm.fields = output.uiForm.fields.map((field: any) => {
+        const key = String(field?.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        let label = field?.label;
+        if (key.includes("gender")) label = t(replyLang, "gender");
+        else if (key.includes("age")) label = t(replyLang, "age");
+        else if (key.includes("height")) label = t(replyLang, "height");
+        else if (key.includes("weight") && key.includes("target")) label = t(replyLang, "recepTargetWeight");
+        else if (key.includes("weight")) label = t(replyLang, "recepCurrentWeight");
+        else if (key.includes("activity")) label = t(replyLang, "recepActivityLevel");
+        else if (key.includes("medical")) label = t(replyLang, "medicalHistory");
+        return { ...field, label };
+      });
+    }
+  }
+  if (!String(output.userResponse || "").trim()) {
+    output.userResponse =
+      replyLang === "id"
+        ? "Saya masih butuh sedikit informasi untuk menyesuaikan saran. Silakan isi detail yang kurang, atau tanyakan lagi."
+        : "I still need a bit more information to tailor advice. Please fill in any missing details, or ask again.";
   }
 
   return { output, raw: rawText, ms: durationMs, systemInstruction, userText };

@@ -11,7 +11,7 @@ import { saveAgentRequestLog, getAgentRequestLogs } from '../utils/agentLogsTrac
 import React, { useState, useRef, useEffect, Suspense } from 'react';
 import { ChatMessage, FoodLog, UserProfile, FoodIdea } from '../types';
 import { translations } from '../utils/translations';
-import { displayStatusLabel } from '../utils/i18n';
+import { displayStatusLabel, dictionaryFor } from '../utils/i18n';
 import { X, Send, Image, Camera, FolderOpen, MessageSquare, Sparkles, Plus, Terminal, ChevronDown, ChevronUp, Loader, MapPin, Trash2, Check, Table, RotateCcw, RefreshCw, AlertTriangle, ShieldAlert, Edit2, Maximize2, Minimize2, Flag, BrainCircuit, Download } from 'lucide-react';
 import { UniversalModal } from './UniversalModal';
 import { nutrientDefinitions } from '../utils/nutrition';
@@ -752,9 +752,11 @@ ${logsText}`);
   const [conversationsList, setConversationsList] = useState<any[]>([]);
   const [isLoadingConversations, setIsLoadingConversations] = useState<boolean>(false);
   const getWelcomeMessage = () => {
-    const dict = translations[profile?.language || 'en'] || translations.en;
+    const dict = dictionaryFor(profile?.language);
     let welcomeText = activeAgentKey === 'food'
       ? dict.agentFoodWelcome
+      : activeAgentKey === 'front_desk'
+      ? (dict.agentFrontDeskWelcome || translations.en.agentFrontDeskWelcome)
       : (activeAgentConfig?.welcomeMessage
       ? (typeof activeAgentConfig.welcomeMessage === 'function' ? activeAgentConfig.welcomeMessage({ dataReviewBatchIdx }) : activeAgentConfig.welcomeMessage)
       : 'Hello! How can I help you today?');
@@ -2559,7 +2561,7 @@ ${logsText}`);
             currentTurn: (job.currentTurn || 1) + 1,
             finishedAt: undefined,
             clientSubmitPending: true,
-            statusMessage: submissionMode === 'edit' ? 'Updating meal...' : 'Uploading to server… Keep this tab open',
+            statusMessage: submissionMode === 'edit' ? (t.updatingMeal || 'Updating meal...') : (t.uploadingKeepTabOpen || 'Uploading to server… Keep this tab open'),
           });
         } else {
           JobStore.createJob({
@@ -2578,7 +2580,7 @@ ${logsText}`);
             currentTurn: 1,
             finishedAt: undefined,
             clientSubmitPending: true,
-            statusMessage: submissionMode === 'edit' ? 'Updating meal...' : 'Uploading to server… Keep this tab open',
+            statusMessage: submissionMode === 'edit' ? (t.updatingMeal || 'Updating meal...') : (t.uploadingKeepTabOpen || 'Uploading to server… Keep this tab open'),
           });
         }
         // Keep modal open, append messages to local React state
@@ -3029,7 +3031,7 @@ ${logsText}`);
             // changed until a retry (isRetryAttempt) forced clientOwnsSubmit
             // false and the submit finally fired.
             clientSubmitPending: false,
-            statusMessage: 'Uploading to server… Keep this tab open',
+            statusMessage: t.uploadingKeepTabOpen || 'Uploading to server… Keep this tab open',
             ...(isDifferentBiomarkerAction ? { attemptCount: 1, maxAttempts: 3 } : {}),
           });
         } else {
@@ -3047,7 +3049,7 @@ ${logsText}`);
             // medical jobs rely on JobQueueRunner to perform the actual
             // /api/jobs/submit fetch, so this must be false, not true.
             clientSubmitPending: false,
-            statusMessage: 'Uploading to server… Keep this tab open',
+            statusMessage: t.uploadingKeepTabOpen || 'Uploading to server… Keep this tab open',
           });
         }
         // Keep modal open, append messages to local React state
@@ -3348,7 +3350,7 @@ ${logsText}`);
           if (effectiveJobId) {
             JobStore.updateJob(effectiveJobId, {
               status: 'awaiting_user',
-              statusMessage: 'Waiting for portion choice',
+              statusMessage: t.waitingForPortionChoice || 'Waiting for portion choice',
               progressPercent: 45,
               result: resData,
             });
@@ -4614,7 +4616,10 @@ ${logsText}`);
       console.error(err);
       const isTimeout = err.message?.includes("timed out") || err.message?.includes("150s") || err.message?.includes("timeout") || err.message?.includes("took too long") || err.message?.toLowerCase()?.includes("abort");
       const isQuota = err.message?.includes("429") || err.message?.includes("quota") || err.message?.toUpperCase()?.includes("RESOURCE_EXHAUSTED");
-      let displayErr = err.message || "An error occurred during processing.";
+      let displayErr = humanizeJobFailure(err.message) || err.message || "An error occurred during processing.";
+      if (/Vision Scout Corrupted/i.test(String(err.message || displayErr))) {
+        displayErr = t.analysisFailed || 'Analysis failed';
+      }
       if (err.message && err.message.toLowerCase().includes("failed to fetch")) {
         displayErr = (t.networkErrorReachServer || "Network error: Failed to reach the server. Please check your internet connection or verify that the server is running. (Original error: {error})").replace('{error}', err.message);
       } else if (err.message && err.message.toLowerCase() === "network error") {
@@ -5255,7 +5260,7 @@ ${logsText}`);
             </div>
             <div>
               <h2 className="text-sm font-bold text-theme-text font-display">
-                {chromeAgentKey === 'data_review' ? `${dataReviewBatchIdx === 'custom' ? 'Custom Test Batch' : 'Batch ' + (dataReviewBatchIdx !== null && dataReviewBatchIdx !== undefined ? (dataReviewBatchIdx as number) + 1 : 1)}` : (chromeAgentKey === 'food' ? t.agentFoodNutrition : (chromeAgentConfig?.displayName || t.addMedical))}
+                {chromeAgentKey === 'data_review' ? `${dataReviewBatchIdx === 'custom' ? 'Custom Test Batch' : 'Batch ' + (dataReviewBatchIdx !== null && dataReviewBatchIdx !== undefined ? (dataReviewBatchIdx as number) + 1 : 1)}` : (chromeAgentKey === 'food' ? t.agentFoodNutrition : chromeAgentKey === 'front_desk' ? (t.agentFrontDesk || 'Front Desk') : (chromeAgentConfig?.displayName || t.addMedical))}
               </h2>
               <button
                 type="button"
@@ -6075,7 +6080,7 @@ ${logsText}`);
                                 title="Download complete raw debug logs and diagnostics"
                               >
                                 <Download className="w-3.5 h-3.5 text-indigo-500" />
-                                <span>Download Debug Logs</span>
+                                <span>{t.downloadDebugLogs || t.downloadDebugLog || 'Download Debug Logs'}</span>
                               </button>
                             )}
                             {isErrorMsg && (

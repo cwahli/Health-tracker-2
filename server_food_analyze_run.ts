@@ -143,6 +143,7 @@ import {
   mergeScoutItems,
   parseAndHealVisionScout,
   reconcileIngredientsToComponents,
+  userSafeScoutFailureMessage,
 } from './server_vision_scout.js';
 import { buildVisualScoutPrompt, parseBracketedFoodItems } from './agents/scoutInstructions.js';
 import { isDishEstimateEnabled } from './server_food_flags.js';
@@ -968,9 +969,12 @@ export async function runFoodAnalyze(req: any, res: any) {
         }
         if (!scoutResult) {
           addDebugLog(`[Vision Scout Failed Permanently] Both attempts failed. Last error: ${lastScoutErr?.message}`);
-          const raw = String(lastScoutErr?.message || '');
-          const isQuota = /429|RESOURCE_EXHAUSTED|quota exceeded/i.test(raw);
-          const isUnavailable = /503|UNAVAILABLE|overloaded/i.test(raw);
+          const raw = userSafeScoutFailureMessage(lastScoutErr);
+          const isQuota = /429|RESOURCE_EXHAUSTED|quota exceeded/i.test(String(lastScoutErr?.message || ''));
+          const isUnavailable = /503|UNAVAILABLE|overloaded/i.test(String(lastScoutErr?.message || ''));
+          if (/Vision Scout Corrupted/i.test(String(lastScoutErr?.message || ''))) {
+            throw new Error(t(userProfile?.language, 'analysisFailed'));
+          }
           if (isQuota) {
             throw new Error(
               `Vision Scout Failed: Gemini quota (429) on this model — wait the retry-after window or switch model. Not a bad photo. (Details: ${raw})`

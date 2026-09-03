@@ -52,7 +52,7 @@ export function agentOutputLanguageBlock(lang: unknown): string {
     '=== USER OUTPUT LANGUAGE ===',
     `The patient's UI language is ${name} (code: ${locale}).`,
     `Write every user-visible string you generate (verdicts, summaries, chat replies, dietitian lines, card titles, explanations, medicalInsight) in ${name}.`,
-    'Keep JSON keys, nutrient codes, biomarker keys, enum values, and schema field names in English.',
+    'Keep JSON keys, nutrient codes, biomarker keys, enum values, and schema field names in English. User-visible nutrient labels must be in the UI language; never show raw keys like Saturated_fat to the patient.',
     'Keep numbers, units (g, kcal, mg/dL), and scientific abbreviations as-is.',
   ];
   if (locale !== 'en') {

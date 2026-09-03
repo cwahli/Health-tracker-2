@@ -107,6 +107,37 @@ export function extractBalancedJson(text: string): string {
   return cleaned;
 }
 
+export function closeTruncatedJson(raw: string): string {
+  if (!raw || !raw.trim()) return "{}";
+  let s = raw.trim();
+  try {
+    JSON.parse(s);
+    return s;
+  } catch {
+    // repair below
+  }
+  let inString = false;
+  let isEscaped = false;
+  const stack: string[] = [];
+  for (let i = 0; i < s.length; i++) {
+    const char = s[i];
+    if (inString) {
+      if (isEscaped) isEscaped = false;
+      else if (char === "\\") isEscaped = true;
+      else if (char === "\"") inString = false;
+    } else {
+      if (char === "\"") inString = true;
+      else if (char === "{") stack.push("}");
+      else if (char === "[") stack.push("]");
+      else if ((char === "}" || char === "]") && stack.length > 0 && stack[stack.length - 1] === char) stack.pop();
+    }
+  }
+  if (inString) s += "\"";
+  s = s.replace(/(?:,\s*)?"[^"]*"\s*:\s*$/, "").replace(/[:,\s]+$/, "");
+  while (stack.length > 0) s += stack.pop();
+  return s;
+}
+
 // Defensive numeric guard for weight values coming from LLM output.
 // Number(x) alone is not safe here: an overlong digit string overflows to
 // Infinity, and "Infinity || fallback" still evaluates to Infinity because

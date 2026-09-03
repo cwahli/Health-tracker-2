@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { extractBalancedJson } from "./server_pure_helpers";
+import { extractBalancedJson, closeTruncatedJson } from "./server_pure_helpers";
 import { parseLabelCalories } from "./server_budget_reconcile";
 import { isStandaloneCondimentPacket, reconcileContainerVolumeBudget } from "./server_dish_classify";
 import { computeSolubleFibre } from "./server_derivation";
@@ -257,9 +257,22 @@ export function checkScoutSanity(parsedScout: any, addDebugLog: (msg: string) =>
     if (!item || typeof item !== "object") return { valid: false, reason: `Item at index ${idx} is not an object` };
     for (const [key, value] of Object.entries(item)) {
       if (typeof value === "string") {
-        const isLongText = ['ingredientsList', 'confidenceComment', 'scoutConfidenceComment', 'description', 'notes', 'reason', 'summary', 'internalReasoning', '_internalReasoning', 'reasoning', 'rationale', 'comment', 'explanation', 'details'].includes(key);
+        const isReasoning = ['internalReasoning', '_internalReasoning', 'reasoning', 'rationale'].includes(key);
+        const isLongText = ['ingredientsList', 'confidenceComment', 'scoutConfidenceComment', 'description', 'notes', 'reason', 'summary', 'comment', 'explanation', 'details', 'packageLabelText', 'clinicalAdvice', 'message', 'portionDescription'].includes(key) || isReasoning;
         const maxLen = isLongText ? 3000 : 150;
-        if (value.length > maxLen) return { valid: false, reason: `Item field '${key}' length (${value.length}) exceeds ${maxLen}` };
+        if (key === 'internalReasoning' || key === '_internalReasoning') {
+          delete item[key];
+          continue;
+        }
+        if (isReasoning) {
+          if (value.length > maxLen) item[key] = value.slice(0, maxLen);
+          continue;
+        }
+        if (value.length > maxLen) {
+          // Heal OCR dumps / long names instead of failing the whole scout.
+          item[key] = value.slice(0, maxLen);
+          continue;
+        }
         const valLower = value.toLowerCase();
         if (!isLongText && jsonKeyHeuristics.some(h => valLower.includes(h + '"') || valLower.includes(h + ':'))) {
           return { valid: false, reason: `Item field '${key}' contains raw JSON-like keys` };
@@ -270,11 +283,19 @@ export function checkScoutSanity(parsedScout: any, addDebugLog: (msg: string) =>
       if (item.visualIngredients.length > 20) return { valid: false, reason: `Item visualIngredients exceeds limit (20)` };
       for (let j = 0; j < item.visualIngredients.length; j++) {
         const ing = item.visualIngredients[j];
-        if (typeof ing !== "string") return { valid: false, reason: `visualIngredients entry is not a string` };
-        if (ing.length > 250) return { valid: false, reason: `visualIngredients entry exceeds 250 characters` };
+        if (typeof ing !== "string") {
+          item.visualIngredients.splice(j, 1);
+          j--;
+          continue;
+        }
+        if (ing.length > 250) {
+          item.visualIngredients[j] = ing.slice(0, 250);
+          continue;
+        }
         const ingLower = ing.toLowerCase();
         if (jsonKeyHeuristics.some(h => ingLower.includes(h + '"') || ingLower.includes(h + ':'))) {
-          return { valid: false, reason: `visualIngredients entry looks like JSON` };
+          item.visualIngredients.splice(j, 1);
+          j--;
         }
       }
     }
@@ -284,8 +305,18 @@ export function checkScoutSanity(parsedScout: any, addDebugLog: (msg: string) =>
         if (comp && typeof comp === "object") {
           for (const [ckey, cval] of Object.entries(comp)) {
             if (typeof cval === "string") {
-              const compMaxLen = ['ingredients', 'description', 'notes', 'ingredientsList', 'internalReasoning', '_internalReasoning', 'reasoning', 'rationale', 'comment', 'explanation', 'details'].includes(ckey) ? 3000 : 300;
-              if (cval.length > compMaxLen) return { valid: false, reason: `Component field '${ckey}' exceeds ${compMaxLen}` };
+              if (ckey === 'internalReasoning' || ckey === '_internalReasoning') {
+                delete (comp as any)[ckey];
+                continue;
+              }
+              const compMaxLen = ['ingredients', 'description', 'notes', 'ingredientsList', 'reasoning', 'rationale', 'comment', 'explanation', 'details'].includes(ckey) ? 3000 : 300;
+              if (cval.length > compMaxLen) {
+                if (['reasoning', 'rationale', 'comment', 'explanation', 'details'].includes(ckey)) {
+                  (comp as any)[ckey] = cval.slice(0, compMaxLen);
+                  continue;
+                }
+                return { valid: false, reason: `Component field '${ckey}' exceeds ${compMaxLen}` };
+              }
             }
           }
         }
@@ -294,6 +325,16 @@ export function checkScoutSanity(parsedScout: any, addDebugLog: (msg: string) =>
   }
   return { valid: true };
 }
+
+/** Strip internal scout fatals so callers never surface "Vision Scout Corrupted" to the user. */
+export function userSafeScoutFailureMessage(raw: unknown): string {
+  const s = String((raw as any)?.message || raw || "").trim();
+  if (/Vision Scout Corrupted/i.test(s)) {
+    return "Analysis failed";
+  }
+  return s;
+}
+
 export function resolvePackageAndContextItems(
   items: any[],
   addDebugLog: (msg: string) => void,
@@ -816,6 +857,7 @@ export function parseAndHealVisionScout(
   isCompareMode: boolean = false,
   userMessage: string = ""
 ): VisionScoutResult {
+  try {
   let parsedScout: any = null;
   let extractedScratchpad = "";
   try {
@@ -824,7 +866,16 @@ export function parseAndHealVisionScout(
     const cleanOutput = typeof scoutOutput === "string" ? scoutOutput : JSON.stringify(scoutOutput);
     const jsonStr = extractBalancedJson(cleanOutput);
     extractedScratchpad = cleanOutput.replace(jsonStr, "").trim();
-    parsedScout = JSON.parse(jsonStr);
+    try {
+      parsedScout = JSON.parse(jsonStr);
+    } catch {
+      try {
+        parsedScout = JSON.parse(closeTruncatedJson(jsonStr));
+      } catch (healErr: any) {
+        addDebugLog(`[Vision Scout] Could not parse scout JSON (${healErr?.message || healErr}). Using empty fallback.`);
+        parsedScout = { items: [] };
+      }
+    }
   }
   parsedScout = validateOrFallback(
     VisionScoutSchema,
@@ -1012,7 +1063,8 @@ export function parseAndHealVisionScout(
           sourceImageIndex: d.sourceImageIndex ?? 0,
           boundingBox2D: d.boundingBox2D || [0, 0, 1000, 1000],
           isStandaloneCondimentPacket: d.isStandaloneCondimentPacket || false,
-          internalReasoning: parsedScout._internalReasoning || null,
+          // Keep long _internalReasoning on the scout root only — copying it onto
+          // every dish item trips checkScoutSanity (length > 3000) on retries.
           components: components.length > 0 ? components : undefined,
           componentsDetailList: components.length > 0 ? components : undefined,
           compositeSiblings: components.length > 0 ? components : undefined,
@@ -1633,9 +1685,15 @@ export function parseAndHealVisionScout(
   // Perform structural sanity check on final items (Fix 2)
   const sanity = checkScoutSanity({ items: visionScoutItems }, addDebugLog);
   if (!sanity.valid) {
-    const warningMsg = `[Vision Scout Corrupted] Sanity check failed: ${sanity.reason}`;
-    addDebugLog(warningMsg);
-    throw new Error(warningMsg);
+    addDebugLog(`[Vision Scout] Sanity check failed: ${sanity.reason}. Filtering insane items instead of throwing.`);
+    const saneItems = visionScoutItems.filter((item: any) => checkScoutSanity({ items: [item] }, addDebugLog).valid);
+    if (saneItems.length > 0) {
+      visionScoutItems = saneItems;
+    } else if (visionScoutItems.length > 0) {
+      addDebugLog(`[Vision Scout] All ${visionScoutItems.length} items failed sanity; returning partial scout rather than a fatal error.`);
+    } else {
+      addDebugLog(`[Vision Scout] Sanity failed with no items (${sanity.reason}); returning empty scout.`);
+    }
   }
   return {
     items: visionScoutItems,
@@ -1651,4 +1709,21 @@ export function parseAndHealVisionScout(
     rawDishes: parsedScout?.dishes || [],
     rawScoutJson: parsedScout || null,
   };
+  } catch (healErr: any) {
+    addDebugLog(`[Vision Scout] Unexpected heal failure (${healErr?.message || healErr}). Returning empty scout.`);
+    return {
+      items: [],
+      scoutConfidenceRating: "Low",
+      scoutConfidenceComment: "",
+      scoutCookingMethod: "",
+      visionScoutContentType: "visual",
+      scoutRecommendedMode: null,
+      queriesToSearch: [],
+      visionScoutRanAndReturnedItems: false,
+      diningEnvironment: "unknown",
+      internalReasoning: null,
+      rawDishes: [],
+      rawScoutJson: null,
+    };
+  }
 }

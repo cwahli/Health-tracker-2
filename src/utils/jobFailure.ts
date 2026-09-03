@@ -15,5 +15,9 @@ export function humanizeJobFailure(raw: string | null | undefined, modelHint?: s
   if (/503|UNAVAILABLE|high demand/i.test(s)) {
     return `Gemini ${model} is overloaded (503). Wait a moment or switch to Gemini 3.1 Flash Lite.`;
   }
-  return s || 'Analysis failed.';
+  if (/Vision Scout Corrupted/i.test(s)) {
+    return 'Analysis failed.';
+  }
+  const out = s || 'Analysis failed.';
+  return /Vision Scout Corrupted/i.test(out) ? 'Analysis failed.' : out;
 }

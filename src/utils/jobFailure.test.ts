@@ -14,4 +14,12 @@ describe('humanizeJobFailure', () => {
     expect(s).toMatch(/quota/i);
     expect(s).toMatch(/3\.1 Flash Lite/i);
   });
+
+  it('never leaks Vision Scout Corrupted to the caller', () => {
+    const s = humanizeJobFailure('[Vision Scout Corrupted] Sanity check failed: Item field packageLabelText length (4000) exceeds 150');
+    expect(s).not.toMatch(/Vision Scout Corrupted/);
+    expect(s).toMatch(/Analysis failed/i);
+    const nested = humanizeJobFailure("Vision Scout Failed: Couldn't reliably read this image (Details: [Vision Scout Corrupted] foo)");
+    expect(nested).not.toMatch(/Vision Scout Corrupted/);
+  });
 });

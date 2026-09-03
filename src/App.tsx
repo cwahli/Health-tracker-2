@@ -1018,7 +1018,7 @@ export default function App() {
         if (effectiveAttempt > 1) {
           console.log(`[JobQueueRunner] Retrying job ${job.id} (Attempt ${effectiveAttempt}/${maxAttempts})`);
           JobStore.updateJob(job.id, {
-            statusMessage: `Retrying (attempt ${effectiveAttempt}/${maxAttempts})...`
+            statusMessage: ((translations[profile?.language] || translations.en).retryingAttemptNofM || 'Retrying (attempt {n}/{max})...').replace('{n}', String(effectiveAttempt)).replace('{max}', String(maxAttempts))
           });
         }
 
@@ -1272,7 +1272,7 @@ export default function App() {
                   });
 
                   // B6c — short status strip while full clarify question stays in the assistant bubble
-                  const portionStatusMsg = 'Waiting for portion choice';
+                  const portionStatusMsg = (translations[profileRef.current?.language] || translations.en).waitingForPortionChoice || 'Waiting for portion choice';
                   const latestJobState = JobStore.getJob(job.id) || job;
                   const nonLiveMsgs = (latestJobState.messages || job.messages || []).filter((m) => !m.isLive && m.id !== `msg_assistant_clarify_${job.id}`);
                     const clarifiedScoutList = (Array.isArray(cleanResult.scoutItems) && cleanResult.scoutItems.length > 0)
@@ -1752,7 +1752,7 @@ export default function App() {
           // Retry policy v1: immediate only, max 3 total attempts (1 + 2), transient/checkpoint only.
           console.log(`[Job] retry attempt=${attempts}/3 class=${error.class || 'transient'} jobId=${job.id}`);
           JobStore.updateJob(job.id, {
-            statusMessage: `Retrying (attempt ${attempts + 1}/${maxAttempts})...`
+            statusMessage: ((translations[profile?.language] || translations.en).retryingAttemptNofM || 'Retrying (attempt {n}/{max})...').replace('{n}', String(attempts + 1)).replace('{max}', String(maxAttempts))
           });
         }
       }
@@ -3331,12 +3331,15 @@ export default function App() {
     const freshEmptyDemoLogin = isDemoUser && demoType === 'empty' && localStorage.getItem('demo_fresh_login') === '1';
     if (freshEmptyDemoLogin) {
       localStorage.removeItem('demo_fresh_login');
-      // Drop any prior front-desk conversation memory so the empty profile's
-      // first chat starts clean instead of inheriting a previous session.
-      clearChatMemoryKeys();
-      JobStore.resetAllJobs();
     }
     if (isDemoUser && (!loadedProfile || loadedHistory.length === 0 || freshEmptyDemoLogin)) {
+      if (demoType === 'empty') {
+        // Any empty-demo reseed (not only the one-shot fresh-login flag) must
+        // drop Front Desk transcripts + JobStore so leftover chats cannot win
+        // over the localized welcome.
+        clearChatMemoryKeys();
+        JobStore.resetAllJobs();
+      }
       loadedProfile = getDemoProfile(demoType);
       loadedFoods = getDemoFoodLogs(demoType);
       loadedHistory = getDemoBiomarkerHistory(demoType);
@@ -7754,7 +7757,7 @@ export default function App() {
                   <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
                     <span className="w-5 h-5 border-2 border-emerald-600 dark:border-emerald-400 border-t-transparent rounded-full animate-spin" />
                   </div>
-                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">Opening Front Desk...</p>
+                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">{(translations[profile?.language] || translations.en).openingFrontDesk || 'Opening Front Desk...'}</p>
                 </div>
               </div>
             ) : null

@@ -560,6 +560,8 @@ class JobStoreImpl {
   resetAllJobs() {
     this.jobs.clear();
     this.deletedJobIds.clear();
+    this.saveJobs();
+    this.saveDeletedJobIds();
     this.notify();
   }
 

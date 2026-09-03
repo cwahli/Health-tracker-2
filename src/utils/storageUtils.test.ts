@@ -185,11 +185,17 @@ describe('Storage and Snapshot Utils', () => {
       localStorage.setItem('last_sent_payload_demo_x_front_desk', '{}');
       localStorage.setItem('active_session_id_front_desk_none', 's1');
       localStorage.setItem('jobstore_jobs', '{}');
+      localStorage.setItem('chat_messages_demo_front_desk', '[]');
+      localStorage.setItem('chat_payload_demo_front_desk', '{}');
+      localStorage.setItem('chat_index_uid_medical_front_desk', '[]');
       localStorage.setItem('preferred_language', 'en');
       clearChatMemoryKeys();
       expect(localStorage.getItem('last_sent_payload_demo_x_front_desk')).toBeNull();
       expect(localStorage.getItem('active_session_id_front_desk_none')).toBeNull();
       expect(localStorage.getItem('jobstore_jobs')).toBeNull();
+      expect(localStorage.getItem('chat_messages_demo_front_desk')).toBeNull();
+      expect(localStorage.getItem('chat_payload_demo_front_desk')).toBeNull();
+      expect(localStorage.getItem('chat_index_uid_medical_front_desk')).toBeNull();
       expect(localStorage.getItem('preferred_language')).toBe('en');
     });
   });

@@ -1,7 +1,88 @@
 import { describe, it, expect } from "vitest";
-import { parseAndHealVisionScout, mergeScoutItems, canMergeScoutLabelIntoFood, resolvePackageAndContextItems, reconcileIngredientsToComponents, clusterSpatialCompositeDishes } from "./server_vision_scout";
+import { parseAndHealVisionScout, checkScoutSanity, userSafeScoutFailureMessage, mergeScoutItems, canMergeScoutLabelIntoFood, resolvePackageAndContextItems, reconcileIngredientsToComponents, clusterSpatialCompositeDishes } from "./server_vision_scout";
 
 describe("server_vision_scout", () => {
+  it("heals unterminated string JSON from a truncated scout reply", () => {
+    const raw = '{"items":[{"keyword":"mie suit","originalName":"Mie Suit';
+    const result = parseAndHealVisionScout(raw, () => {});
+    expect(Array.isArray(result.items)).toBe(true);
+  });
+
+  it("heals extra long internalReasoning instead of throwing Vision Scout Corrupted", () => {
+    const huge = "retry dump " + "x".repeat(4000);
+    const raw = {
+      _internalReasoning: huge,
+      internalReasoning: huge,
+      dishes: [
+        {
+          dishName: "Sup Daging Sapi",
+          estimatedWeightGrams: 690,
+          cookingMethod: "boiled",
+          foods: [
+            { foodName: "Beef", weightGrams: 110, nutrients: { protein: 24, carbohydrates: 0 } }
+          ]
+        }
+      ]
+    };
+    expect(() => parseAndHealVisionScout(raw, () => {})).not.toThrow();
+    const result = parseAndHealVisionScout(raw, () => {});
+    expect(result.items.length).toBeGreaterThan(0);
+    expect(result.items[0].originalName).toBe("Sup Daging Sapi");
+    expect(JSON.stringify(result)).not.toMatch(/Vision Scout Corrupted/);
+  });
+
+  it("checkScoutSanity strips item internalReasoning rather than failing", () => {
+    const items = [
+      {
+        originalName: "Broccoli",
+        keyword: "broccoli",
+        estimatedWeightGrams: 80,
+        internalReasoning: "x".repeat(5000),
+        _internalReasoning: "y".repeat(5000),
+      }
+    ];
+    const sanity = checkScoutSanity({ items }, () => {});
+    expect(sanity.valid).toBe(true);
+    expect(items[0].internalReasoning).toBeUndefined();
+    expect(items[0]._internalReasoning).toBeUndefined();
+  });
+
+  it("userSafeScoutFailureMessage does not leak Vision Scout Corrupted to the caller", () => {
+    const direct = userSafeScoutFailureMessage("[Vision Scout Corrupted] Sanity check failed: Item field packageLabelText length (4000) exceeds 150");
+    expect(direct).not.toMatch(/Vision Scout Corrupted/);
+    expect(direct).toBe("Analysis failed");
+    const wrapped = userSafeScoutFailureMessage(
+      "Vision Scout Failed: Couldn't reliably read this image, please try again or re-upload. (Details: [Vision Scout Corrupted] Sanity check failed: foo)"
+    );
+    expect(wrapped).not.toMatch(/Vision Scout Corrupted/);
+    const fromError = userSafeScoutFailureMessage(new Error("[Vision Scout Corrupted] Sanity check failed"));
+    expect(fromError).not.toMatch(/Vision Scout Corrupted/);
+  });
+
+  it("parseAndHeal never throws and never returns Vision Scout Corrupted for unrecoverable JSON", () => {
+    expect(() => parseAndHealVisionScout("not json {{{", () => {})).not.toThrow();
+    const result = parseAndHealVisionScout("not json {{{", () => {});
+    expect(Array.isArray(result.items)).toBe(true);
+    expect(JSON.stringify(result)).not.toMatch(/Vision Scout Corrupted/);
+  });
+
+  it("heals overlong packageLabelText from barcode OCR instead of throwing Corrupted", () => {
+    const raw = {
+      dishes: [
+        {
+          dishName: "Beef Blade",
+          estimatedWeightGrams: 110,
+          cookingMethod: "raw",
+          packageLabelText: "BEEF BLADE OCR " + "x".repeat(400),
+          foods: [{ foodName: "Beef Blade", weightGrams: 110, packageLabelText: "LABEL " + "y".repeat(400), nutrients: { protein: 24, carbohydrates: 0 } }]
+        }
+      ]
+    };
+    expect(() => parseAndHealVisionScout(raw, () => {})).not.toThrow();
+    const result = parseAndHealVisionScout(raw, () => {});
+    expect(result.items.length).toBeGreaterThan(0);
+    expect(JSON.stringify(result)).not.toMatch(/Vision Scout Corrupted/);
+  });
   describe("DISH_DROP via genericEnglishName", () => {
     it("DISH_DROP: should map a local food component to a generic english searchQuery", () => {
       const llmOutput = {
@@ -275,7 +356,7 @@ describe("server_vision_scout", () => {
       expect(result.items[2].estimatedWeightGrams).toBe(300);
     });
 
-    it("rejects corrupted/overlong strings and throws sanity check errors", () => {
+    it("does not throw Vision Scout Corrupted for overlong strings; returns a partial scout", () => {
       const corruptedOutput = {
         recommendedMode: "new_log",
         contentType: "visual",
@@ -289,10 +370,12 @@ describe("server_vision_scout", () => {
         ]
       };
 
-      expect(() => parseAndHealVisionScout(corruptedOutput, () => {})).toThrow("[Vision Scout Corrupted]");
+      expect(() => parseAndHealVisionScout(corruptedOutput, () => {})).not.toThrow();
+      const result = parseAndHealVisionScout(corruptedOutput, () => {});
+      expect(Array.isArray(result.items)).toBe(true);
     });
 
-    it("rejects visualIngredients containing JSON heuristics", () => {
+    it("does not throw Vision Scout Corrupted for visualIngredients JSON heuristics", () => {
       const corruptedOutput = {
         recommendedMode: "new_log",
         contentType: "visual",
@@ -307,7 +390,9 @@ describe("server_vision_scout", () => {
         ]
       };
 
-      expect(() => parseAndHealVisionScout(corruptedOutput, () => {})).toThrow("[Vision Scout Corrupted]");
+      expect(() => parseAndHealVisionScout(corruptedOutput, () => {})).not.toThrow();
+      const result = parseAndHealVisionScout(corruptedOutput, () => {});
+      expect(Array.isArray(result.items)).toBe(true);
     });
 
     it("merges separate standalone label item into primary packaged food item and clears visualIngredients", () => {

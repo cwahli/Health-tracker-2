@@ -1,4 +1,4 @@
-import { get as idbGet, set as idbSet, del as idbDel, createStore, UseStore } from 'idb-keyval';
+import { get as idbGet, set as idbSet, del as idbDel, keys as idbKeys, createStore, UseStore } from 'idb-keyval';
 import { UserProfile, FoodLog, BiomarkerLog, HealthAction, DailyBenefit, RecommendationReport, FoodIdea } from '../types';
 import { migrateMealSchema } from '../mealBuild';
 
@@ -379,21 +379,60 @@ export const deleteLocalSnapshot = async (email: string | null | undefined, id: 
  * dedupe ids). These are keyed per email and would otherwise leak a previous
  * conversation into a fresh profile's first chat.
  */
+export const CHAT_MEMORY_PREFIXES = [
+  'last_sent_payload_',
+  'active_session_id_',
+  'logged_message_ids_',
+  'chat_messages_',
+  'chat_payload_',
+  'chat_index_',
+];
+
+const dropMatchingStorageKeys = (storage: Storage | undefined, prefixes: string[]) => {
+  if (!storage) return;
+  for (let i = storage.length - 1; i >= 0; i--) {
+    const key = storage.key(i);
+    if (key && prefixes.some((p) => key.startsWith(p))) {
+      storage.removeItem(key);
+    }
+  }
+};
+
 export const clearChatMemoryKeys = () => {
+  const prefixes = CHAT_MEMORY_PREFIXES;
   try {
-    if (typeof localStorage === 'undefined') return;
-    const prefixes = ['last_sent_payload_', 'active_session_id_', 'logged_message_ids_'];
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-      const key = localStorage.key(i);
-      if (key && prefixes.some((p) => key.startsWith(p))) {
-        localStorage.removeItem(key);
+    if (typeof localStorage !== 'undefined') {
+      dropMatchingStorageKeys(localStorage, prefixes);
+      localStorage.removeItem('jobstore_jobs');
+      localStorage.removeItem('jobstore_deleted_ids');
+    }
+  } catch {}
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      dropMatchingStorageKeys(sessionStorage, prefixes);
+    }
+  } catch {}
+  try {
+    for (const key of Array.from(memoryStorageCache.keys())) {
+      if (prefixes.some((p) => key.startsWith(p)) || key === 'jobstore_jobs' || key === 'jobstore_deleted_ids') {
+        memoryStorageCache.delete(key);
       }
     }
-    // JobStore threads carry full chat transcripts; without this a fresh login
-    // re-sends the previous profile's conversation to the agent.
-    localStorage.removeItem('jobstore_jobs');
-    localStorage.removeItem('jobstore_deleted_ids');
   } catch {}
+  void (async () => {
+    try {
+      const stores: Array<UseStore | undefined> = [getStore(), undefined];
+      for (const store of stores) {
+        const allKeys = store ? await idbKeys(store) : await idbKeys();
+        for (const k of allKeys) {
+          if (typeof k === 'string' && prefixes.some((p) => k.startsWith(p))) {
+            if (store) await idbDel(k, store);
+            else await idbDel(k);
+          }
+        }
+      }
+    } catch {}
+  })();
 };
 
 /**

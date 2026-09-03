@@ -233,12 +233,22 @@ export const ScratchpadMarkdownViewer: React.FC<{ content: any; className?: stri
   const cleanContent = strContent.replace(/\\\|/g, '•');
 
   // Strip duplicate 31-nutrient table from screen rendering if legacy/stream text has it
-  const displayContent = cleanContent.includes('### 📋 Comprehensive Nutrient Values')
-    ? cleanContent.split('### 📋 Comprehensive Nutrient Values')[0].trim()
-    : cleanContent;
+  const localizeReceiptChrome = (md: string) => {
+    if (!md) return md;
+    return md
+      .replace(/Nutrition calculation/g, t.nutritionCalculation || 'Nutrition calculation')
+      .replace(/ITEM \/ INGREDIENT/g, t.itemIngredientHeader || 'ITEM / INGREDIENT')
+      .replace(/Item \/ Ingredient/g, t.itemIngredientHeader || 'ITEM / INGREDIENT')
+      .replace(/GRAND MEAL TOTAL/g, t.grandMealTotal || 'GRAND MEAL TOTAL');
+  };
+  const displayContent = localizeReceiptChrome(
+    cleanContent.includes('### 📋 Comprehensive Nutrient Values')
+      ? cleanContent.split('### 📋 Comprehensive Nutrient Values')[0].trim()
+      : cleanContent
+  );
 
   const buildFullMarkdownText = () => {
-    let fullTextToCopy = cleanContent.trim();
+    let fullTextToCopy = localizeReceiptChrome(cleanContent.trim());
     if (!fullTextToCopy.includes('Comprehensive Nutrient Values') && nutrients) {
       const nutMd = build31NutrientsMarkdownClient(nutrients);
       if (nutMd) {
@@ -246,8 +256,8 @@ export const ScratchpadMarkdownViewer: React.FC<{ content: any; className?: stri
       }
     }
 
-    if (!fullTextToCopy.includes('### 🧾 Nutrition calculation') && (fullTextToCopy.startsWith('|') || fullTextToCopy.includes('Item / Ingredient'))) {
-      fullTextToCopy = `### 🧾 Nutrition calculation\n\n${fullTextToCopy}`;
+    if (!fullTextToCopy.includes('Nutrition calculation') && !fullTextToCopy.includes(t.nutritionCalculation || '') && (fullTextToCopy.startsWith('|') || fullTextToCopy.includes('Item / Ingredient'))) {
+      fullTextToCopy = `### 🧾 ${t.nutritionCalculation || 'Nutrition calculation'}\n\n${fullTextToCopy}`;
     }
 
     const footnotes: string[] = [];
@@ -1615,7 +1625,7 @@ export const FoodCard: React.FC<AgentCardProps & {
             </div>
             <div className="min-w-0">
               <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
-                {isEditMode ? 'Updating Meal Analysis' : isCompareMode ? 'Comparing Meals' : 'Analyzing Meal'}
+                {isEditMode ? (t.updatingMealAnalysis || 'Updating Meal Analysis') : isCompareMode ? (t.comparingMeals || 'Comparing Meals') : (t.analyzingMeal || 'Analyzing Meal')}
               </h4>
               <p className="text-[11px] text-theme-text-secondary truncate mt-0.5">
                 {statusMsg}
@@ -1624,7 +1634,7 @@ export const FoodCard: React.FC<AgentCardProps & {
           </div>
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/60 dark:border-indigo-800/60 flex-shrink-0">
             <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping" />
-            <span>{isEditMode ? 'Refining' : 'Processing'}</span>
+            <span>{isEditMode ? (t.refining || 'Refining') : (t.processing || 'Processing')}</span>
           </span>
         </div>
 
@@ -3468,7 +3478,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                           : 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300';
                         return (
                           <div className="py-2 border-b border-theme-border/50 flex items-center gap-2 flex-wrap text-left w-full">
-                            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 font-sans">Verdict:</span>
+                            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 font-sans">{t.verdictLabel || 'Verdict:'}</span>
                             <span className={`text-[11px] font-bold px-3 py-0.5 rounded-full border inline-block ${colorCls} font-sans`}>
                               {v.label}
                             </span>

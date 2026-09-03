@@ -59,6 +59,24 @@ describe('dictionaryFor', () => {
     expect(dict.sendToAdmin).toBe(translations.id.sendToAdmin);
     expect(dict.sendToAdmin).not.toBe(translations.en.sendToAdmin);
   });
+
+  it('uses Indonesian Front Desk welcome, not the English Health Preparation Agent string', () => {
+    const dict = dictionaryFor('id');
+    expect(dict.agentFrontDeskWelcome).toBe(translations.id.agentFrontDeskWelcome);
+    expect(dict.agentFrontDeskWelcome).not.toContain('Hello! I am your Health Preparation Agent');
+    expect(dict.agentFrontDeskWelcome).toMatch(/Halo|Persiapan Kesehatan/);
+    expect(translations.en.agentFrontDeskWelcome).toContain('Hello! I am your Health Preparation Agent');
+  });
+
+  it('translates leftover meal-10 chrome in Indonesian', () => {
+    const dict = dictionaryFor('id');
+    expect(dict.waitingForPortionChoice).toBe(translations.id.waitingForPortionChoice);
+    expect(dict.waitingForPortionChoice).not.toBe(translations.en.waitingForPortionChoice);
+    expect(dict.nutritionCalculation).toBe(translations.id.nutritionCalculation);
+    expect(dict.nutritionCalculation).not.toBe(translations.en.nutritionCalculation);
+    expect(dict.verdictLabel).toBe(translations.id.verdictLabel);
+    expect(dict.downloadDebugLogs).toBe(translations.id.downloadDebugLogs);
+  });
 });
 
 describe('agentOutputLanguageBlock', () => {
