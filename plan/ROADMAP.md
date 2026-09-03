@@ -31,11 +31,12 @@ Do **not** open `archive/`, `plan/archive/`, `FOOD.md` Part A/B, or old F-9 pack
 
 ---
 
-## Current work — F-10.2 (do this now)
+## Current work — F-8.10
 
 **Already done:** `src/mealBuild/shouldExpandMealAgent.ts` + vitest + `scripts/assert-f10-pr1.mjs`. Do not rewrite.
 
 **Do:**
+1. `server_food_analyze_run.ts` split into 400-600 line shards.
 
 1. `server_derivation.ts` `calculateDerivedNutrients`: when protein, carbohydrates, and totalFat are all numbers, **calories = `computeCaloriesFromMacros`** (ignore `base.calories`). `deriveCarbohydratesFromEnergy` only when carbohydrates is missing. Printed-kcal lock stays in `finalizeDishLedger`, not this helper.
 2. Append to `server_derivation.test.ts`:
