@@ -7,13 +7,13 @@
 | **This file** | What is left, in order — AI Studio works **this file** |
 | [BIOMARKER_LIFECYCLE.md](./BIOMARKER_LIFECYCLE.md) | Pillar 1 architecture |
 | [FOOD.md](./FOOD.md) | Pillar 2 — Process (stop at the module table) |
-| [RELIABILITY.md](./RELIABILITY.md) | Pillar 3 — infra / quotas |
+| [RELIABILITY.md](./RELIABILITY.md) | Pillar 3 — infra / quotas + how we fix the site (working process) |
 | [QUALITY.md](./QUALITY.md) | Pillar 4 — how we test (§1.4 only unless Q-6/Q-7) |
 
 Laws: `docs/agent/domains/{biomarkers,food-calc,sync}.md`  
 WIP: `AI_HANDOVER.md` (header only) · Completed: `archive/` · `plan/archive/`
 
-**As of 2026-09-02.** F-8.1–F-8.9 and F-9 PR1–PR4 bulk are in tree. F-10.1 expand gate is in tree. Production create still Scout→Dietitian. EN/ID chrome shipped; leftover localisation is **Track L (parked)**. Do not reopen USDA/curator or Q-1.
+**As of 2026-09-04.** F-8.1–F-8.9 and F-9 PR1–PR4 bulk are in tree. F-10.1–F-10.5 and F-10.7 shipped. Production create still Scout→Dietitian on expand. EN/ID chrome shipped; leftover localisation is **Track L (parked)** except live leftover chrome in **Track S**. Site class-fixes from the 2026-09-03 live pass live in **Track S** (not a 10-case queue). Do not reopen USDA/curator or Q-1.
 
 ---
 
@@ -100,9 +100,11 @@ Locked converts never change: `1.293` / `1.411` / `3.362` / `79.56` / `13.68`.
 | Biomarkers | **B0** Apply smoke, then B2 leftover hygiene, then real G-B2. Chat UX = fill-template (one agent + TS batch), not 10 personas. |
 | Site is slow | **R-8** measure (Q-1 is already green). Then R-9 defer. Not FoodCard/App splits first |
 | Quota / egress spike | **R-1** measure, then only the matching R-id |
-| Localisation leftover | **Parked.** Track L below. Do not start until the human reopens it. |
+| Localisation leftover | **Parked** except live leftover chrome then **S-1**. Do not start L-2 to L-5 until the human reopens Track L. |
+| Website / live-pass bugs | **Track S** below. One class, named vitest. Not the next live case. |
+| New feature or update | [RELIABILITY.md](./RELIABILITY.md) **§10** gate table in the same change, then the F / B / L id. Do not start with a live case matrix. |
 
-Do **not** start: USDA/FDC workstream, curator rebuild, B7.4/B7.5, Track R D1, god-file rewrite to look done, more NHS aliases before G-B2 lexer + G-B4 green, a Commercial Cooking Critic LLM, production wiring of fill-template before C1–C7 green, **Track L** (parked).  
+Do **not** start: USDA/FDC workstream, curator rebuild, B7.4/B7.5, Track R D1, god-file rewrite to look done, more NHS aliases before G-B2 lexer + G-B4 green, a Commercial Cooking Critic LLM, production wiring of fill-template before C1–C7 green, **Track L-2 to L-5** (parked), a 10-case live replay queue.  
 Do **not** add a sixth plan file. F-10 lives here + [FOOD.md](./FOOD.md) Process.
 
 ---
@@ -124,6 +126,26 @@ The following multi-agent sprawl is scheduled for removal to streamline the arch
      - **Front Desk Inline** (`general_receptionist`) for direct profile updates, single vitals, and general Q&A.
 
 ---
+
+## Track S — Site class-fixes (2026-09-04)
+
+**Standing process for all new work:** [RELIABILITY.md](./RELIABILITY.md) §10. **This table** is only the 2026-09-03 live-pass burn-down. **Test method:** [QUALITY.md](./QUALITY.md).
+**Do not** treat unrun live cases (C4, C6, UC-03 to UC-08) as a to-do list. They are examples for the class they hit.
+
+Landed on GitHub `155a49a` (2026-09-04): empty-demo chat wipe, vision-scout heal so Vision Scout Corrupted does not reach the user, some Meal-06/10 EN/ID chrome, receptionist form locale plus empty-reply fallback.
+
+| ID | Class | Status | Gate (inner) | Frozen example (outer, only after green) | Do not |
+|---|---|---|---|---|---|
+| **S-1** | `LEAK_EN_CHROME` | Partial | `src/utils/i18n.test.ts` plus leftover-string list in that test | One Kosong Front Desk plus one meal chrome check after the list is green | Unpark L-2 to L-5; translate food names |
+| **S-2** | `LEAK_EN_AGENT` | Open | `agents/dietitianInstructions.i18n.test.ts` plus receptionist/coach `withAgentLanguage` | **L-1** one Indonesian meal-log proof (verdict/advice) | Treat old saved English analyses as chrome bugs |
+| **S-3** | `SCOUT_PARSE_FATAL` | Landed; live replay pending | `server_vision_scout.test.ts` | One Meal-10 replay only | 10-case food loop; claim first-pass live green |
+| **S-4** | `SCOUT_UNDERCOUNT` | Open | golden meal locks plus card chrome (kcal/P/C/F visible) | Meal-06 / Meal-10 numbers vs GT | Paint expected.json to match the undercount |
+| **S-5** | `CHAT_STALE` | Landed | `src/utils/storageUtils.test.ts` | — | Re-find by logging Kosong live every session |
+| **S-6** | `HANDOFF_I18N` | Partial | `src/server/receptionist/handoffContract.test.ts` driven by `prototype/receptionist/benchmark/UC-0x.json` | One UC-02 vitality after the test is green | Full receptionist click-through of UC-01 to 09 |
+
+**Parked leftovers under S-1 (do not dump a 50-key i18n pass):** 1 serving; Preparation:; View Diagnostic Logs; receipt internals (Item Sub-Total / Estimated / Printed Packaging Label); Gender/debug chrome.
+
+**Who runs Track S:** OpenCode plus Token Plan Qwen (DeepSeek PAYG after Token Plan is gone) for one class / one PR. Antigravity only on chiwah.liu@gmail.com for a large class-fix. Grok Bot triages a red golden or reviews a short diff and does not click the next seven cases. Skip Aider+Qwen and Alibaba Qwen Code / Lingma.
 
 # Remaining work
 
@@ -290,7 +312,7 @@ Same pattern as biomarkers: one Review for n=1–5; TypeScript decides batch/exp
 |---|---|---|
 | **R-1** | Re-measure Firestore writes / Supabase egress | Quota or bill spike |
 | **R-2** | Cloudflare Pages for `dist/` | Static latency actually hurts |
-| **R-3** | Playwright E2E | After soak; not instead of class goldens |
+| **R-3** | Playwright leftover-English plus demo-empty smoke | After **S-1** string list is green; not instead of class goldens |
 | **R-4** | Finish `server.ts` router split | Already touching the monolith (`server_routes_{jobs,biomarkers,food}.ts` exist; `server.ts` still huge) |
 | **R-5** | D1 as primary SQL | **After** R-1 still fails free tier |
 | **R-6** | Job recovery soak | Interrupted jobs still orphan (unit test exists; not a soak) |

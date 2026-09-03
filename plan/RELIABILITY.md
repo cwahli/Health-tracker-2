@@ -9,8 +9,8 @@ Infra and quotas, not a patient/data lifecycle. Was `RELIABILITY_FREE_TIER_PLAN.
 
 **Pillar:** 3 — Sync / reliability. Map: `plan/README.md`.
 
-**Status:** M23–M28 **core COMPLETE** (`assert-free-tier-complete.mjs` exit 0, 2026-08-16). Remaining = parked list in §9 only.  
-**Updated:** 2026-08-16  
+**Status:** M23–M28 **core COMPLETE** (`assert-free-tier-complete.mjs` exit 0, 2026-08-16). Remaining parked R-ids are in §8–9. Standing gate for every new feature or update is §10.  
+**Updated:** 2026-09-04  
 **Code truth:** Desktop working tree; ship via AI Studio packs only  
 **Domain:** `docs/agent/domains/sync.md` (Class L/X when touching merge/tombstones)
 
@@ -163,7 +163,7 @@ Absorbed from archived `Reliability_perf.md`. **Do not start these to “finish 
 |---|---|---|---|
 | R-1 | Re-measure Firestore writes / Supabase egress on a normal day | Quota or bill spike | — |
 | R-2 | Cloudflare Pages for `dist/` | Global static latency actually hurts | Never required for personal use |
-| R-3 | Playwright E2E (upload → parse → edit → save) | After soak; not before | Not a substitute for class goldens |
+| R-3 | Playwright leftover-English crawl plus Kosong empty Front Desk | After Track **S-1** string list is green; not a 10-case meal loop | Not a substitute for class goldens |
 | R-4 | Extract `server.ts` routes (food / jobs / biomarkers) | Touching the monolith anyway | Do not big-bang for free-tier |
 | R-5 | Investigate D1 as primary SQL | **After** R-1, free tier still fails | Default: stay on thin Supabase + R2 |
 | R-6 | Job crash recovery soak | Interrupted jobs still orphan | Partial today — fix the bug, no new plan |
@@ -256,3 +256,55 @@ npx tsx scripts/check-supabase-row-sizes.ts
 ---
 
 **Abandoned from the 6-phase draft (do not rebuild):** dual-write removal in `firestoreUtils` / `SupabaseJobSync` (already gone); re-running image→R2 migrations; RLS-only without token verify (M27 did token verify).
+
+---
+
+## 10. Reliability process for every new feature or update (2026-09-04)
+
+Applies to AI Studio, Grok Bot, OpenCode, Antigravity, and humans. Track S on ROADMAP.md is only the burn-down of classes found in the 2026-09-03 live pass. This section is the standing gate so the next feature does not recreate those classes.
+
+Infra and quotas stay in sections 1 to 9. Test method stays in QUALITY.md.
+
+### 10.1 Before you write
+
+If it is a bug: pick or add one class on Track S or an existing B / F / L / Q id. The work item is that class, not a live case.
+
+If it is a feature or update: name which slices in 10.2 you must not regress, and add or extend the named vitest in the same change.
+
+### 10.2 Gate table (new work, same change)
+
+| If you touch | You must also | Named gate |
+|---|---|---|
+| UI chrome or copy | EN and ID keys in the same PR | src/utils/i18n.test.ts |
+| Agent replies (Front Desk, coach, dietitian, medical) | Follow profile.language | dietitianInstructions.i18n.test.ts or handoffContract.test.ts |
+| Vision or meal analyze | Heal truncated JSON; no raw fatal string to the user | server_vision_scout.test.ts |
+| Meal numbers or meal card | Honest residual; show C/F if macros are shown | tests/golden_meals.test.ts |
+| Demo, profile switch, or chat keys | Empty Kosong still wipes Front Desk | src/utils/storageUtils.test.ts |
+| Front Desk or specialist handoff | UC fixture contract | src/server/receptionist/handoffContract.test.ts |
+| Biomarker ingest or units | Class golden, not paint a 140-row NHS file green | tests/golden_biomarker.test.ts |
+| Sync, jobs, or row size | One writer; no fat JSONB or base64 in rows | existing M23 to M28 asserts |
+
+### 10.3 Order of work
+
+1. Named vitest first.
+2. Smallest change that makes that gate green.
+3. One frozen example only if the golden cannot see the UI.
+4. No live case matrix as the inner loop.
+
+### 10.4 Who runs new work
+
+| Who | Does | Does not |
+|---|---|---|
+| OpenCode plus Token Plan Qwen | One class or one feature slice | Whole-file rewrite of huge chat files |
+| OpenCode plus DeepSeek PAYG | Same, after Token Plan is gone | New Alibaba CLI |
+| Antigravity on chiwah.liu@gmail.com | Large class-fix only | The other Google weekly pot |
+| Grok Bot | Triage a red golden or review a short diff | Click remaining live cases |
+| Aider or Lingma or Qwen Code | Do not use | — |
+
+### 10.5 Playwright (R-3)
+
+After S-1 has a leftover-string list: thin smoke only (Kosong, empty Front Desk, no listed English chrome). Not a meal-analyze soak.
+
+### 10.6 Chat and demo (S-5)
+
+Empty-demo reseed must wipe chat keys and jobs (landed 155a49a). New stale-thread bugs extend storageUtils.test.ts; they do not start as a live Kosong click-through.
