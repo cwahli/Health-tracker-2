@@ -232,6 +232,9 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
 
   const handleDemoLogin = async () => {
     localStorage.setItem('demo_profile_type', selectedDemoType);
+    // One-shot marker: an explicit demo-button login (vs session restore).
+    // App.loadUserData consumes it to force-reseed "Initial Start (Empty)".
+    localStorage.setItem('demo_fresh_login', '1');
     setErrorMsg('');
     setStatus('sending');
     const demoEmail = 'demo@healthcockpit.com';

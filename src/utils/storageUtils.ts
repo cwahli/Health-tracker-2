@@ -374,6 +374,53 @@ export const deleteLocalSnapshot = async (email: string | null | undefined, id: 
   } catch (e) {}
 };
 
+/**
+ * Removes persisted chat/conversation memory keys (front-desk payloads, session ids,
+ * dedupe ids). These are keyed per email and would otherwise leak a previous
+ * conversation into a fresh profile's first chat.
+ */
+export const clearChatMemoryKeys = () => {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    const prefixes = ['last_sent_payload_', 'active_session_id_', 'logged_message_ids_'];
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key && prefixes.some((p) => key.startsWith(p))) {
+        localStorage.removeItem(key);
+      }
+    }
+    // JobStore threads carry full chat transcripts; without this a fresh login
+    // re-sends the previous profile's conversation to the agent.
+    localStorage.removeItem('jobstore_jobs');
+    localStorage.removeItem('jobstore_deleted_ids');
+  } catch {}
+};
+
+/**
+ * Clears all locally cached app data for one email (memory + localStorage + IndexedDB).
+ * Used on sign-out so the next login starts clean instead of resurrecting stale state.
+ */
+export const clearCachedAppData = async (email?: string | null, fallbackEmail?: string | null) => {
+  try {
+    memoryStorageCache.clear();
+  } catch {}
+  clearChatMemoryKeys();
+  const keys = [getStorageKey(email, fallbackEmail), getSnapshotKey(email, fallbackEmail)];
+  for (const key of keys) {
+    try {
+      removeLocalStorageItem(key);
+    } catch {}
+    try {
+      const store = getStore();
+      if (store) {
+        await idbDel(key, store).catch(() => {});
+      } else {
+        await idbDel(key).catch(() => {});
+      }
+    } catch {}
+  }
+};
+
 export const safeSaveToLocalStorage = async (key: string, bundle: any) => {
   try {
     const existing = await get(key) || {};

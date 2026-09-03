@@ -282,54 +282,12 @@ export function formatReceptionistInput(input: ReceptionistInputPayload): string
   return parts.join("\n");
 }
 
+import { callReceptionistAgent as callServerReceptionistAgent } from "../../src/server/receptionist/call_agent.ts";
+
 export async function callReceptionistAgent(
   ai: GoogleGenAI,
   input: ReceptionistInputPayload,
   modelName = "gemini-3.5-flash-lite"
 ): Promise<{ output: ReceptionistOutput; raw: string; ms: number }> {
-  const userText = formatReceptionistInput(input);
-  const started = Date.now();
-  let response: any;
-
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      const callPromise = ai.models.generateContent({
-        model: modelName,
-        contents: [{ text: userText }],
-        config: {
-          systemInstruction: buildReceptionistInstruction(),
-          responseMimeType: "application/json",
-          responseSchema: receptionistResponseSchema as any,
-          temperature: 0.1,
-        },
-      });
-
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Request timeout after 45s")), 45000)
-      );
-
-      response = await Promise.race([callPromise, timeoutPromise]);
-      break;
-    } catch (err: any) {
-      if (attempt === 3) throw err;
-      console.warn(
-        `[callReceptionistAgent] Attempt ${attempt} failed (${err?.message || err}), retrying in 2s...`
-      );
-      await new Promise((r) => setTimeout(r, 2000));
-    }
-  }
-
-  const raw = response.text || "{}";
-  const output = JSON.parse(raw) as ReceptionistOutput;
-
-  // Consolidate memory snapshot with existing user profile baseline
-  if (output.memory) {
-    output.memory.userProfileSnapshot = {
-      ...(input.existingUserProfile || {}),
-      ...(input.existingMemory?.userProfileSnapshot || {}),
-      ...(output.memory.userProfileSnapshot || {}),
-    };
-  }
-
-  return { output, raw, ms: Date.now() - started };
+  return callServerReceptionistAgent(ai, input, modelName);
 }

@@ -9,7 +9,9 @@ import {
   saveLocalSnapshot,
   loadLocalSnapshots,
   deleteLocalSnapshot,
-  safeSaveToLocalStorage
+  safeSaveToLocalStorage,
+  clearCachedAppData,
+  clearChatMemoryKeys
 } from './storageUtils';
 
 describe('Storage and Snapshot Utils', () => {
@@ -175,6 +177,30 @@ describe('Storage and Snapshot Utils', () => {
       const res = await get(key);
       expect(res.name).toBe('Updated');
       expect(res.lastSyncedAt).toBe(123456789);
+    });
+  });
+
+  describe('clearChatMemoryKeys', () => {
+    it('removes front-desk memory keys but keeps unrelated keys', async () => {
+      localStorage.setItem('last_sent_payload_demo_x_front_desk', '{}');
+      localStorage.setItem('active_session_id_front_desk_none', 's1');
+      localStorage.setItem('jobstore_jobs', '{}');
+      localStorage.setItem('preferred_language', 'en');
+      clearChatMemoryKeys();
+      expect(localStorage.getItem('last_sent_payload_demo_x_front_desk')).toBeNull();
+      expect(localStorage.getItem('active_session_id_front_desk_none')).toBeNull();
+      expect(localStorage.getItem('jobstore_jobs')).toBeNull();
+      expect(localStorage.getItem('preferred_language')).toBe('en');
+    });
+  });
+
+  describe('clearCachedAppData', () => {
+    it('removes the email storage key so the next login starts clean', async () => {
+      const email = 'logout.probe@gmail.com';
+      await set(getStorageKey(email), { profile: { nickname: 'Probe' } });
+      expect(await get(getStorageKey(email))).toBeTruthy();
+      await clearCachedAppData(email);
+      expect(await get(getStorageKey(email))).toBeUndefined();
     });
   });
 });

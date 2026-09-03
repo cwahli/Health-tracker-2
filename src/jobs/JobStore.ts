@@ -556,6 +556,13 @@ class JobStoreImpl {
     this.listeners.clear();
   }
 
+  /** Clears all cached job threads (fresh demo login, sign-out). Keeps listeners; notifies once. */
+  resetAllJobs() {
+    this.jobs.clear();
+    this.deletedJobIds.clear();
+    this.notify();
+  }
+
   private notify() {
     this.listeners.forEach((l) => l());
   }

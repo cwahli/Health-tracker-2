@@ -371,6 +371,102 @@ export function sanitizeReceptionistJson(raw: string): string {
   return repairTruncatedJson(s);
 }
 
+/**
+ * Build the synthesized ready_for_handoff payload (shared by the
+ * demographics-upgrade path and the contract-enforcement path below).
+ */
+export function synthesizeReadyHandoffPayload(output: any, snap: any, existing: any, detectedActivity?: string | null) {
+  const age = snap.age || existing?.age || 40;
+  const gender = snap.gender || existing?.gender || 'unknown';
+  const height = snap.heightCm || existing?.heightCm || 165;
+  const weight = snap.weightKg || existing?.weightKg || 65;
+  const act = snap.activityLevel || existing?.activityLevel || detectedActivity || 'lightly_active';
+  return {
+    targetAgent: output.targetAgent,
+    intent: output.intent || 'general_inquiry',
+    summaryForAgent: `User onboarding profile complete. Age: ${age}, Gender: ${gender}, Height: ${height}cm, Weight: ${weight}kg, Activity Level: ${act}. Goal: ${output.memory?.goalSummary || 'Weight management & metabolic health'}.`,
+    actionableInsights: ["Complete baseline profile collected.", "Ready for personalized caloric calculation and macro plan."],
+    consolidatedUserProfile: {
+      age: Number(age),
+      gender: String(gender),
+      heightCm: Number(height),
+      weightKg: Number(weight),
+      activityLevel: String(act),
+      ...(existing || {}),
+      ...snap
+    },
+    consolidatedMemory: output.memory
+  };
+}
+
+export interface HandoffRepairContext {
+  existingUserProfile?: any;
+  detectedActivity?: string | null;
+  currentUserMessage?: string;
+}
+
+/**
+ * Enforce the handoff contract: `ready_for_handoff` MUST carry a usable
+ * payload (targetAgent + summary) AND a non-empty user reply.
+ *
+ * Class repaired: HANDOFF_WITHOUT_PAYLOAD — the model sometimes emits
+ * `ready_for_handoff` with a null payload and no reply (e.g. "I want to
+ * loose weight" with an incomplete profile). The client then fired a blind
+ * handoff with a generic prompt and the modal showed no answer.
+ *
+ * Repair: demographics complete → synthesize the payload; otherwise
+ * downgrade to `needs_info` with the missing fields + a safe re-question
+ * (the needs_info uiForm synthesizer downstream builds the form).
+ */
+export function enforceReadyHandoffContract(output: any, ctx: HandoffRepairContext): any {
+  if (!output || output.status !== 'ready_for_handoff') return output;
+  const snap = output.memory?.userProfileSnapshot || {};
+  const existing = ctx.existingUserProfile || {};
+  const lang = existing?.language === 'id' ? 'id' : 'en';
+  const hp = output.handoffPayload;
+  const usable = hp && typeof hp === 'object' && hp.targetAgent && (hp.summaryForAgent || hp.userContextSummary);
+  if (!usable) {
+    const missing: string[] = [];
+    if (!(snap.age || existing.age)) missing.push('age');
+    if (!(snap.gender || existing.gender)) missing.push('gender');
+    if (!(snap.heightCm || existing.heightCm)) missing.push('height');
+    if (!(snap.weightKg || existing.weightKg)) missing.push('weight');
+    if (!(snap.activityLevel || existing.activityLevel || ctx.detectedActivity)) missing.push('activity_level');
+    if (missing.length === 0) {
+      output.targetAgent = output.targetAgent === 'general_receptionist' ? 'health_coach' : (output.targetAgent || 'health_coach');
+      output.handoffPayload = synthesizeReadyHandoffPayload(output, snap, existing, ctx.detectedActivity);
+      output.missingFields = [];
+      output.uiForm = null;
+    } else {
+      output.status = 'needs_info';
+      output.handoffPayload = null;
+      output.missingFields = missing;
+      if (!output.userResponse || !String(output.userResponse).trim()) {
+        const msg = String(ctx.currentUserMessage || '');
+        const goal = String(output.memory?.goalSummary || '');
+        const wantsWeight = /lose weight|loose weight|weight loss|turun.*berat|berat badan/i.test(`${msg} ${goal}`);
+        output.userResponse = lang === 'id'
+          ? (wantsWeight
+            ? `Saya bisa membantu Anda menurunkan berat badan dengan aman. Agar rencananya tepat, saya masih membutuhkan: ${missing.join(', ')}. Boleh dibagikan?`
+            : `Terima kasih! Agar bisa lanjut, saya masih membutuhkan: ${missing.join(', ')}.`)
+          : (wantsWeight
+            ? `I can help you lose weight safely. To build your plan I still need: ${missing.join(', ')}. Could you share them?`
+            : `Thanks! To proceed I still need: ${missing.join(', ')}.`);
+      }
+      return output;
+    }
+  } else {
+    output.missingFields = [];
+    output.uiForm = null;
+  }
+  if (!output.userResponse || !String(output.userResponse).trim()) {
+    output.userResponse = lang === 'id'
+      ? 'Terima kasih! Detail Anda sudah lengkap. Saya teruskan ke Health Coach untuk menyusun rencana personal Anda.'
+      : 'Thank you! I have all your key details. I am now handing you over to your Health Coach to formulate your personalized plan.';
+  }
+  return output;
+}
+
 export async function callReceptionistAgent(
   ai: GoogleGenAI,
   payload: ReceptionistInputPayload,
@@ -496,32 +592,18 @@ export async function callReceptionistAgent(
     output.status = 'ready_for_handoff';
     output.targetAgent = output.targetAgent === 'general_receptionist' ? 'health_coach' : (output.targetAgent || 'health_coach');
     if (!output.handoffPayload) {
-      const age = currentSnap.age || payload.existingUserProfile?.age || 40;
-      const gender = currentSnap.gender || payload.existingUserProfile?.gender || 'unknown';
-      const height = currentSnap.heightCm || payload.existingUserProfile?.heightCm || 165;
-      const weight = currentSnap.weightKg || payload.existingUserProfile?.weightKg || 65;
-      const act = currentSnap.activityLevel || payload.existingUserProfile?.activityLevel || detectedActivity || 'lightly_active';
-      output.handoffPayload = {
-        targetAgent: output.targetAgent,
-        intent: output.intent || 'general_inquiry',
-        summaryForAgent: `User onboarding profile complete. Age: ${age}, Gender: ${gender}, Height: ${height}cm, Weight: ${weight}kg, Activity Level: ${act}. Goal: ${output.memory?.goalSummary || 'Weight management & metabolic health'}.`,
-        actionableInsights: ["Complete baseline profile collected.", "Ready for personalized caloric calculation and macro plan."],
-        consolidatedUserProfile: {
-          age: Number(age),
-          gender: String(gender),
-          heightCm: Number(height),
-          weightKg: Number(weight),
-          activityLevel: String(act),
-          ...(payload.existingUserProfile || {}),
-          ...currentSnap
-        },
-        consolidatedMemory: output.memory
-      };
+      output.handoffPayload = synthesizeReadyHandoffPayload(output, currentSnap, payload.existingUserProfile, detectedActivity);
     }
     output.missingFields = [];
     output.uiForm = null;
     output.userResponse = output.userResponse || "Thank you! I have all your key details. I am now handing you over to your Health Coach to formulate your personalized plan.";
   }
+
+  output = enforceReadyHandoffContract(output, {
+    existingUserProfile: payload.existingUserProfile,
+    detectedActivity,
+    currentUserMessage: payload.currentUserMessage
+  });
 
   // Preserve all known demographic fields into handoffPayload.consolidatedUserProfile
   if (output.handoffPayload) {

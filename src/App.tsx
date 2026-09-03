@@ -121,7 +121,7 @@ import { applyModificationCommands, overlayFingerprint, resolveAgentDestination,
 import { extractFallbackModifications } from './components/chat-cards/BiomarkerReviewCard';
 import { formatOptimalTargetValue } from './utils/agentCalibration';
 import { standardizeUnit, CONVERSION_FACTORS } from './utils/unitConversion';
-import { get, set, pruneLocalStorageToFreeSpace, getStorageKey, getSnapshotKey, saveLocalSnapshot, loadLocalSnapshots, deleteLocalSnapshot, safeSaveToLocalStorage, getAggregatedAppData } from './utils/storageUtils';
+import { get, set, pruneLocalStorageToFreeSpace, getStorageKey, getSnapshotKey, saveLocalSnapshot, loadLocalSnapshots, deleteLocalSnapshot, safeSaveToLocalStorage, getAggregatedAppData, clearCachedAppData, clearChatMemoryKeys } from './utils/storageUtils';
 const FIRESTORE_READ_BUDGET = 3000; // generous for one real session; a runaway loop hits this fast
 function firestoreReadGuard(label: string, docCount: number = 1): boolean {
   const key = 'firestoreReadCountThisSession';
@@ -3324,8 +3324,19 @@ export default function App() {
     }
 
     const isDemoUser = newEmail === 'demo@healthcockpit.com';
-    if (isDemoUser && (!loadedProfile || loadedHistory.length === 0)) {
-      const demoType = (localStorage.getItem('demo_profile_type') || 'average') as DemoProfileType;
+    const demoType = (localStorage.getItem('demo_profile_type') || 'average') as DemoProfileType;
+    // Explicit "Initial Start (Empty)" demo login always reseeds empty, even when
+    // stale cached state exists for the shared demo account. One-shot flag set by
+    // AuthScreen.handleDemoLogin and consumed here.
+    const freshEmptyDemoLogin = isDemoUser && demoType === 'empty' && localStorage.getItem('demo_fresh_login') === '1';
+    if (freshEmptyDemoLogin) {
+      localStorage.removeItem('demo_fresh_login');
+      // Drop any prior front-desk conversation memory so the empty profile's
+      // first chat starts clean instead of inheriting a previous session.
+      clearChatMemoryKeys();
+      JobStore.resetAllJobs();
+    }
+    if (isDemoUser && (!loadedProfile || loadedHistory.length === 0 || freshEmptyDemoLogin)) {
       loadedProfile = getDemoProfile(demoType);
       loadedFoods = getDemoFoodLogs(demoType);
       loadedHistory = getDemoBiomarkerHistory(demoType);
@@ -3650,46 +3661,6 @@ export default function App() {
       console.warn("Failed to auto-restore images:", e);
     }
   }, [foodLogs.length]);
-  // Swapping out the current demo profile on the fly
-  const handleSwitchDemoProfile = async (type: DemoProfileType) => {
-    localStorage.setItem('demo_profile_type', type);
-    const newProfile = getDemoProfile(type);
-    const newFoods = getDemoFoodLogs(type);
-    const newHistory = getDemoBiomarkerHistory(type);
-    let newBiomarkers: { [key: string]: any } = {};
-    if (type === 'average') {
-      newBiomarkers = { fasting_glucose: 91, hba1c: 5.3, total_cholesterol: 208, ldl: 132, hdl: 46, triglycerides: 155, egfr: 94, vitamin_d: 22, wbc: 6.2, hemoglobin: 14.6, bmi: 23.4 };
-    } else if (type === 'complex') {
-      newBiomarkers = { fasting_glucose: 131, hba1c: 7.1, total_cholesterol: 228, ldl: 151, hdl: 38, triglycerides: 198, egfr: 64, vitamin_d: 19, wbc: 6.9, hemoglobin: 14.1, bmi: 30.2 };
-    }
-    const newReport = getDemoReport(type, profile?.language);
-    const newActions = newReport.actions || [];
-    const newBenefits = newReport.dailyBenefits || [];
-
-    setProfile(newProfile);
-    setFoodLogs(newFoods);
-    setBiomarkerHistory(newHistory);
-    setBiomarkers(newBiomarkers);
-    setReport(newReport);
-    setActions(newActions);
-    setDailyBenefits(newBenefits);
-
-    // Save locally
-    const bundle = {
-      profile: newProfile,
-      foodLogs: newFoods,
-      biomarkers: newBiomarkers,
-      biomarkerHistory: newHistory,
-      actions: newActions,
-      dailyBenefits: newBenefits,
-      report: newReport
-    };
-    safeSaveToLocalStorage(getStorageKey(newProfile.email), bundle);
-
-    // In sandbox demo mode, switching profiles is completely client-side.
-    // No Firestore writes are made to prevent conflicts on the shared demo account.
-  };
-
   // Save changes to local storage and sync to Server cloud database
   const saveAndSync = async (
     currProfile: UserProfile | null,
@@ -4251,7 +4222,16 @@ export default function App() {
       setSyncState('local');
       localStorage.removeItem('last_active_email');
       localStorage.removeItem('demo_profile_type');
+      localStorage.removeItem('demo_fresh_login');
       sessionStorage.clear();
+      // Clear IndexedDB + localStorage app cache so the next login starts clean
+      // instead of resurrecting this user's stale state.
+      try {
+        await clearCachedAppData(profile?.email);
+      } catch (e) {
+        console.warn('Failed to clear cached app data on sign-out:', e);
+      }
+      JobStore.resetAllJobs();
 
       for (let i = localStorage.length - 1; i >= 0; i--) {
         const key = localStorage.key(i);

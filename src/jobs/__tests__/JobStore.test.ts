@@ -18,6 +18,19 @@ describe('JobStore', () => {
     JobStore.clearForTests();
   });
 
+  it('resetAllJobs clears threads but keeps subscribers notified', async () => {
+    let notified = 0;
+    const unsub = JobStore.subscribe(() => { notified++; });
+    JobStore.createJob({ id: 'r1' });
+    JobStore.createJob({ id: 'r2' });
+    expect(JobStore.getAllJobs().length).toBe(2);
+    JobStore.resetAllJobs();
+    expect(JobStore.getAllJobs().length).toBe(0);
+    expect(JobStore.getJob('r1')).toBeUndefined();
+    expect(notified).toBeGreaterThan(0);
+    unsub();
+  });
+
   it('creates, updates and deletes a job', async () => {
     const job = JobStore.createJob({ id: 'j1' });
     expect(job.status).toBe('draft');

@@ -3164,8 +3164,8 @@ app.get("/api/gemini/test-menu-image-search", async (req, res) => {
 app.get("/api/gemini/debug-logs", (req, res) => {
   const sessionId = (req.headers["x-session-id"] as string) || (req.query.sessionId as string) || "global";
   let logs: any[] = [];
-  if (sessionId !== "global") {
-    logs = sessionDebugLogs[sessionId] || [];
+  if (sessionId !== "global" && sessionDebugLogs[sessionId] && sessionDebugLogs[sessionId].length > 0) {
+    logs = sessionDebugLogs[sessionId];
   } else {
     logs = globalDebugLogs;
   }

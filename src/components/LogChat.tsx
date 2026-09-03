@@ -2,6 +2,7 @@ import { formatMessageContent } from '../utils/formatUtils';
 import {
  ErrorBoundary } from './ErrorBoundary';
 import { agentCardRegistry } from './chat-cards';
+import { decideFrontDeskHandoff } from '../utils/handoffGuard';
 import { AgentThoughtBox } from './chat-cards/FoodCard';
 import { trackApiCall, setActiveQueryId, generateQueryId } from '../utils/apiTracker';
 import { saveAgentRequestLog, getAgentRequestLogs } from '../utils/agentLogsTracker';
@@ -705,6 +706,7 @@ ${logsText}`);
   const [flagMsg, setFlagMsg] = useState<ChatMessage | null>(null);
   const [userSelectedMode, setUserSelectedMode] = useState<"review" | "compare" | "edit">("review");
   const hasUnsavedChangesRef = useRef<boolean>(false);
+  const handoffFiredKeyRef = useRef<string | null>(null);
   const activeAnalysisIdRef = useRef<string | null>(null);
   const setMessages = (
     update: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[]),
@@ -3298,7 +3300,7 @@ ${logsText}`);
           }
         }
         // Handle `done` event payload identical to existing implementation
-        let messageText = resData.message || resData.text || resData.reply || '';
+      let messageText = resData.message || resData.userResponse || resData.text || resData.reply || '';
         if (messageText === 'null' || messageText === '""') messageText = '';
         if (!messageText || (typeof messageText === 'string' && messageText.trim().startsWith('{'))) {
           if (resData.report?.globalSummary) messageText = resData.report.globalSummary;
@@ -4431,36 +4433,43 @@ ${logsText}`);
       });
       console.log('[DIAG2] setMessages call completed (isLive placeholder should be cleared)');
 
-      console.log(`[DIAG6] handoff check: isAgent('front_desk')=${isAgent('front_desk')}, resData.status=${resData.status}, hasHandoffPayload=${!!resData.handoffPayload}, hasOnOpenAgentFromFrontDesk=${typeof onOpenAgentFromFrontDesk === 'function'}`);
-      if (isAgent('front_desk') && (resData.status === 'ready_for_handoff' || resData.handoffPayload)) {
-        const handoff = resData.handoffPayload || {};
-        const isMed = handoff.targetAgent === 'medical' || handoff.targetAgent === 'biomarker_review';
-        const targetAgent = isMed ? 'medical' : 'health_baseline';
-        const summary = handoff.summaryForAgent || handoff.userContextSummary || '';
-        const insights = Array.isArray(handoff.actionableInsights) ? handoff.actionableInsights : [];
-        const prompt = summary 
-          ? `${summary}${insights.length > 0 ? '\n\nKey Insights:\n' + insights.map((i: string) => `• ${i}`).join('\n') : ''}`
-          : (insights.length > 0 ? insights.map((i: string) => `• ${i}`).join('\n') : 'Please create my personalized health plan based on my profile.');
-        console.log(`[DIAG6] handoff triggered: targetAgent=${targetAgent}, promptLength=${prompt.length}`);
-
-        if (targetAgent === 'health_baseline' || (targetAgent as string) === 'health_coach') {
-          setTimeout(() => {
-            initiateSeamlessHandoff(targetAgent, handoff, prompt, handoff.collectedData || resData.updatedProfile);
-          }, 350);
-        } else if (onOpenAgentFromFrontDesk) {
-          setTimeout(() => {
-            onOpenAgentFromFrontDesk(targetAgent, {
-              handoffPayload: handoff,
-              prefillMessage: prompt,
-              autoSendMessage: prompt,
-              updatedProfile: handoff.collectedData || resData.updatedProfile
-            });
-          }, 350);
+      console.log(`[DIAG6] handoff check: isAgent('front_desk')=${isAgent('front_desk')}, resData.agentType=${resData.agentType}, resData.status=${resData.status}, hasHandoffPayload=${!!resData.handoffPayload}, hasOnOpenAgentFromFrontDesk=${typeof onOpenAgentFromFrontDesk === 'function'}`);
+      // HANDOFF_LOOP guard: only genuine front_desk answers with a usable
+      // payload may fire (see decideFrontDeskHandoff). Downstream echoes and
+      // empty payloads fall through and render as normal replies.
+      const handoffDecision = isAgent('front_desk')
+        ? decideFrontDeskHandoff(resData, { isHandoffContinuation })
+        : null;
+      if (handoffDecision) {
+        const { targetAgent, handoff, prompt } = handoffDecision;
+        const firedKey = `${targetAgent}|${prompt}`;
+        if (handoffFiredKeyRef.current === firedKey) {
+          console.log('[DIAG6] handoff skipped: identical handoff already fired');
         } else {
-          setTimeout(() => {
-            initiateSeamlessHandoff(targetAgent, handoff, prompt, handoff.collectedData || resData.updatedProfile);
-          }, 350);
+          handoffFiredKeyRef.current = firedKey;
+          console.log(`[DIAG6] handoff triggered: targetAgent=${targetAgent}, promptLength=${prompt.length}`);
+
+          if (targetAgent === 'health_baseline' || (targetAgent as string) === 'health_coach') {
+            setTimeout(() => {
+              initiateSeamlessHandoff(targetAgent, handoff, prompt, handoff.collectedData || resData.updatedProfile, currentReqId);
+            }, 350);
+          } else if (onOpenAgentFromFrontDesk) {
+            setTimeout(() => {
+              onOpenAgentFromFrontDesk(targetAgent, {
+                handoffPayload: handoff,
+                prefillMessage: prompt,
+                autoSendMessage: prompt,
+                updatedProfile: handoff.collectedData || resData.updatedProfile
+              });
+            }, 350);
+          } else {
+            setTimeout(() => {
+              initiateSeamlessHandoff(targetAgent, handoff, prompt, handoff.collectedData || resData.updatedProfile, currentReqId);
+            }, 350);
+          }
         }
+      } else if (isAgent('front_desk') && resData.status === 'ready_for_handoff') {
+        console.log('[DIAG6] handoff not fired: ready_for_handoff without a usable payload; rendering reply as-is');
       }
     } catch (err: any) {
       console.error(err);
@@ -4575,12 +4584,13 @@ ${logsText}`);
     targetAgent: AgentType | string,
     handoff: any,
     prompt: string,
-    updatedProf?: any
+    updatedProf?: any,
+    parentRequestId?: string
   ) => {
     const isMed = targetAgent === 'medical' || targetAgent === 'biomarker_review' || handoff?.targetAgent === 'medical' || handoff?.targetAgent === 'biomarker_review';
     const effectiveTarget: AgentType = isMed ? 'medical' : 'health_baseline';
 
-    console.log(`[LogChat] initiateSeamlessHandoff: target=${effectiveTarget}`);
+    console.log(`[LogChat] initiateSeamlessHandoff: target=${effectiveTarget}, parentRequestId=${parentRequestId}`);
 
     // 1. Sync updated profile
     if (updatedProf && onSaveProfile) {
@@ -4602,7 +4612,8 @@ ${logsText}`);
       handleSend(prompt, undefined, {
         isHandoffContinuation: true,
         downstreamTargetAgent: effectiveTarget,
-        downstreamHandoffPayload: handoff
+        downstreamHandoffPayload: handoff,
+        requestId: parentRequestId || activeReqId
       });
     }, 150);
   };
@@ -4626,7 +4637,8 @@ ${logsText}`);
       targetAgent,
       options?.handoffPayload,
       prompt,
-      options?.updatedProfile || options?.handoffPayload?.collectedData
+      options?.updatedProfile || options?.handoffPayload?.collectedData,
+      activeReqId
     );
   };
 
