@@ -189,6 +189,19 @@ foodAnalyzeRouter.post("/api/gemini/front-desk", async (req, res) => {
       synchronizedBiomarkers.bmi = Number((existingUserProfile.weightKg / (hM * hM)).toFixed(1));
     }
 
+    // Force sync existingMemory.userProfileSnapshot with the true existingUserProfile
+    // If the database profile was cleared, we must not let stale localStorage data persist.
+    if (existingMemory && existingMemory.userProfileSnapshot) {
+      if (existingUserProfile) {
+        existingMemory.userProfileSnapshot.age = existingUserProfile.age || null;
+        existingMemory.userProfileSnapshot.heightCm = existingUserProfile.heightCm || null;
+        existingMemory.userProfileSnapshot.weightKg = existingUserProfile.weightKg || null;
+        existingMemory.userProfileSnapshot.gender = existingUserProfile.gender || null;
+      } else {
+        existingMemory.userProfileSnapshot = {};
+      }
+    }
+
     const receptionistPayload = {
       currentUserMessage: message || "",
       chatHistory,
@@ -251,7 +264,9 @@ foodAnalyzeRouter.post("/api/gemini/front-desk", async (req, res) => {
           message || "",
           base64Images,
           formattedHistory,
-          medicalProfile as any
+          medicalProfile as any,
+          undefined,
+          targetModel
         );
 
         if (filledRows && filledRows.length > 0) {
@@ -319,7 +334,16 @@ foodAnalyzeRouter.post("/api/gemini/front-desk", async (req, res) => {
     if (err.stack) {
       addDebugLog(`[FrontDesk-Error-Stack] ${err.stack}`);
     }
-    res.status(500).json({ error: err.message, stack: err.stack, agentType: 'front_desk' });
+    const isQuota = /429|quota|RESOURCE_EXHAUSTED/i.test(err.message || '');
+    const is503 = /503|UNAVAILABLE|overloaded/i.test(err.message || '');
+    const statusCode = (isQuota || is503) ? 503 : 500;
+    
+    // Omit stack trace in response for clean errors, only send stack on true 500
+    res.status(statusCode).json({ 
+       error: err.message, 
+       stack: statusCode === 500 ? err.stack : undefined, 
+       agentType: 'front_desk' 
+    });
   }
 });
 

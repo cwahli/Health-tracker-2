@@ -10,7 +10,8 @@ export async function runBiomarkerPipeline(
   imagesBase64: string[],
   history: Record<string, any>,
   profile: ProfileFixture,
-  onProgress?: (msg: string) => void
+  onProgress?: (msg: string) => void,
+  targetModel: string = "gemini-3.5-flash-lite"
 ): Promise<FillRow[]> {
   let rows: any[] = [];
   
@@ -48,7 +49,7 @@ export async function runBiomarkerPipeline(
       };
       
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash-lite",
+        model: targetModel,
         contents: [
             "Extract all lab results from this text. Pay close attention to dates. Use YYYY-MM-DD for dates. Keep the exact printed name (e.g. 'HbA1c'). For ranges, extract the printed range exactly as shown. If a value is qualitative (e.g. 'Positive'), you can leave value as null or 0 and just note it, but prefer numeric where possible.",
             `Text: ${message}`

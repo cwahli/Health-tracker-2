@@ -3876,22 +3876,74 @@ ${logsText}`);
       if (endpoint === '/api/gemini/food-analyze' || endpoint === '/api/gemini/health-baseline-analyze' || endpoint === '/api/gemini/medical-analyze') {
         fetchEndpoint += '?stream=true';
       }
-      const response = await fetch(fetchEndpoint, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'X-Session-ID': currentReqId
-        },
-        body: JSON.stringify(bodyData),
-        signal: controller?.signal
-      });
-      if (!response.ok) {
-        const rawText = await response.text().catch(() => '');
-        const looksLikeTimeout = response.status === 504 || response.status === 502 || response.status === 503 || rawText.trim().toLowerCase().startsWith('<!doctype') || rawText.trim().toLowerCase().startsWith('<html');
-        throw new Error(looksLikeTimeout
-          ? "This analysis took too long and the server timed out. Please try again — if it keeps happening, it may need a longer server timeout setting."
-          : `Request failed (${response.status}). Please try again.\n${rawText ? 'Details: ' + rawText.substring(0, 500) : ''}`);
+
+      let response: Response | null = null;
+      let rawText = '';
+      let fetchAttempts = 0;
+      let currentEngine = bodyData.engine || selectedModelId;
+
+      while (fetchAttempts < 2) {
+        fetchAttempts++;
+        let timeoutId: any;
+        if (!controller) {
+           controller = new AbortController();
+        }
+        timeoutId = setTimeout(() => controller?.abort(), 150000);
+        
+        bodyData.engine = currentEngine;
+
+        try {
+          response = await fetch(fetchEndpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Session-ID': currentReqId
+            },
+            body: JSON.stringify(bodyData),
+            signal: controller?.signal
+          });
+          
+          clearTimeout(timeoutId);
+
+          if (!response.ok) {
+            rawText = await response.text().catch(() => '');
+            const is503 = response.status === 503 || rawText.includes('503') || rawText.includes('quota') || rawText.includes('RESOURCE_EXHAUSTED') || rawText.includes('UNAVAILABLE');
+            
+            if (is503 && currentEngine !== 'gemini-3.1-flash-lite' && fetchAttempts === 1) {
+              console.warn("[LogChat] Got 503/Quota error. Auto-fallback to gemini-3.1-flash-lite.");
+              currentEngine = 'gemini-3.1-flash-lite';
+              controller = new AbortController();
+              continue;
+            }
+            
+            const looksLikeTimeout = response.status === 504 || response.status === 502 || response.status === 503 || rawText.trim().toLowerCase().startsWith('<!doctype') || rawText.trim().toLowerCase().startsWith('<html');
+            const cleanRaw = is503 ? 'Gemini API is temporarily unavailable or over quota.' : rawText.substring(0, 500);
+            
+            throw new Error(looksLikeTimeout || is503
+              ? "This analysis took too long or the AI service is currently unavailable/over capacity. Please try again or switch models."
+              : `Request failed (${response.status}). Please try again.\n${cleanRaw ? 'Details: ' + cleanRaw : ''}`);
+          }
+          break; // success
+        } catch (fetchErr: any) {
+          clearTimeout(timeoutId);
+          if (fetchErr.name === 'AbortError') {
+             throw new Error("This analysis took too long and the server timed out (150s). Please try again.");
+          }
+          if (fetchAttempts >= 2) throw fetchErr;
+          
+          if (fetchAttempts === 1) {
+              console.warn("[LogChat] Fetch failed, retrying once.");
+              controller = new AbortController();
+              continue;
+          }
+          throw fetchErr;
+        }
       }
+
+      if (!response) {
+         throw new Error("Failed to execute request.");
+      }
+
       const contentType = response.headers.get("content-type");
       console.log("[Client SSE] Fetch complete. Status:", response.status, "Content-Type:", contentType);
       console.log("[Client SSE] Response body present:", !!response.body);

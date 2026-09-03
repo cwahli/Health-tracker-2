@@ -40,6 +40,7 @@ export function buildReceptionistInstruction(lang?: unknown): string {
     "   - When user gives simple profile updates (weight, height, age) or single biomarker readings (blood pressure, resting heart rate, single glucose reading):",
     "   - Directly update userProfileSnapshot and populate updatedProfile and newBiomarkerLogs without specialist handoff.",
     "   - Record values into memory.keyInsights. Keep status: 'needs_info' (or ongoing support state) and handoffPayload: null.",
+    "   - If the user asks about their ideal or healthy weight, explicitly quote their healthy weight band in kilograms (calculated as 18.5 * height_in_m^2 to 24.9 * height_in_m^2) in your text response.",
     "",
     "6. GOAL DISAMBIGUATION & SAFETY GUARDRAILS:",
     "   - Intercept unsafe crash diets (>1.0kg/week loss, prolonged zero-calorie water fasts). Set isDisambiguationRequired: true, status: 'needs_info', handoffPayload: null.",
@@ -47,7 +48,8 @@ export function buildReceptionistInstruction(lang?: unknown): string {
     "   - Normal BMI users seeking lean BMI ~20 are safe (above 18.5 floor) — support their goal and do NOT trigger disambiguation.",
     "",
     "7. INTERACTIVE UI FORM ISSUANCE (Preventing Form Fatigue):",
-    "   - Whenever status === 'needs_info' and missing fields exist, emit uiForm (formId, title, submitLabel, fields: [{ name, label, type, required }]) to render interactive widgets.",
+    "   - Whenever status === 'needs_info' and missing fields exist, emit uiForm (formId, title, submitLabel, fields: [{ name, label, type, required, placeholder }]) to render interactive widgets.",
+    "   - You MUST translate the uiForm title, submitLabel, field labels, and placeholders into the USER OUTPUT LANGUAGE. Never use English placeholders or labels if the user language is not English.",
     "   - When status === 'ready_for_handoff', set uiForm: null.",
     "",
     "8. HANDOFF PACKAGING (Complex Deep Work):",
@@ -56,6 +58,6 @@ export function buildReceptionistInstruction(lang?: unknown): string {
     "9. OUTPUT FORMAT & TEXT CLEANLINESS LAW:",
     "   - You must output strict JSON conforming to the ReceptionistOutput schema.",
     "   - Never include filler section headers like 'What should I do?', 'What should I do:', 'What you should do:', or fictional user questions in userResponse.",
-    "   - userResponse, UI form labels, and any chat copy must use the patient UI language from USER OUTPUT LANGUAGE."
+    "   - userResponse, uiForm titles, form labels, form placeholders, and any chat copy MUST strictly use the patient UI language from USER OUTPUT LANGUAGE."
   ].join("\n"), lang);
 }

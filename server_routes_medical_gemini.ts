@@ -174,11 +174,11 @@ medicalGeminiRouter.post("/api/gemini/health-baseline-analyze", async (req, res)
     const effectiveEngine = (typeof engine === 'string' && engine) || (typeof selectedModelId === 'string' && selectedModelId) || 'gemini-3.5-flash-lite';
 
     // Calculate baseline biometrics
-    const weightKg = Number(profile.weight || profile.weightKg || handoffPayload?.collectedData?.weight || 0);
-    const heightCm = Number(profile.height || profile.heightCm || handoffPayload?.collectedData?.height || 0);
-    const age = Number(profile.age || handoffPayload?.collectedData?.age || 30);
-    const gender = (profile.gender || handoffPayload?.collectedData?.gender || 'unknown').toLowerCase();
-    const activityLevel = (profile.activityLevel || handoffPayload?.collectedData?.activityLevel || 'sedentary').toLowerCase();
+    const weightKg = Number(profile.weight || profile.weightKg || handoffPayload?.consolidatedUserProfile?.weightKg || handoffPayload?.collectedData?.weight || 0);
+    const heightCm = Number(profile.height || profile.heightCm || handoffPayload?.consolidatedUserProfile?.heightCm || handoffPayload?.collectedData?.height || 0);
+    const age = Number(profile.age || handoffPayload?.consolidatedUserProfile?.age || handoffPayload?.collectedData?.age || 30);
+    const gender = (profile.gender || handoffPayload?.consolidatedUserProfile?.gender || handoffPayload?.collectedData?.gender || 'unknown').toLowerCase();
+    const activityLevel = (profile.activityLevel || handoffPayload?.consolidatedUserProfile?.activityLevel || handoffPayload?.collectedData?.activityLevel || 'sedentary').toLowerCase();
 
     let bmi = 0;
     if (weightKg > 0 && heightCm > 0) {
@@ -213,7 +213,7 @@ Context:
 - Out-of-Range Biomarkers: ${JSON.stringify(outOfRangeBiomarkers || [])}
 
 Clinical & Coaching Directives:
-1. If the user's BMI is in a normal or lean range (e.g. BMI ~ 18.5 - 24.9) and they express a desire to loose weight, NEVER prescribe a severe or extreme caloric restriction. Instead, educate and guide them towards body recomposition, gentle muscle toning, nutrient density (adequate protein, micronutrients), and safe, progressive energy balance.
+1. If the user's BMI is in a normal or lean range (e.g. BMI ~ 18.5 - 24.9) and they express a desire to loose weight, NEVER prescribe a severe or extreme caloric restriction. Instead, educate and guide them towards body recomposition, gentle muscle toning, nutrient density (adequate protein, micronutrients), and safe, progressive energy balance. ALWAYS explicitly quote the user's healthy weight band in kilograms (calculated as 18.5 * height_in_m^2 to 24.9 * height_in_m^2) in your text response.
 2. Formulate 2 to 4 structured risk/focus categories with specific physiological targets and daily activities.
 3. Top nutrient targets MUST include daily 'calories', 'protein', 'saturated_fat', and 'sodium'.
 4. Top weekly nutrient targets should include 'fiber' and 'added_sugars'.
