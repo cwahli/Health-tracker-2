@@ -497,20 +497,26 @@ export default function LogChat({
   onJobEnqueued,
   handoffPayload = null
 }: LogChatProps) {
-  const activeAgentKey = (type === 'medical' && agentType) ? (agentType as AgentType) : (type as AgentType);
+  const [delegatedAgentType, setDelegatedAgentType] = useState<AgentType | null>(null);
+  const [delegatedHandoffPayload, setDelegatedHandoffPayload] = useState<any>(null);
+
+  const effectiveAgentType = delegatedAgentType || agentType;
+  const activeAgentKey = delegatedAgentType
+    ? (delegatedAgentType as AgentType)
+    : ((type === 'medical' && agentType) ? (agentType as AgentType) : (type as AgentType));
   const activeAgentConfig = AGENT_REGISTRY[activeAgentKey] || AGENT_REGISTRY[type as AgentType];
   const isUnified = ['food', 'medical', 'food_idea', 'daily_recommendation'].includes(type) && getAgentRolloutStatus(type as AgentType) === 'unified';
   const isAgent = (targetType: AgentType | string) => {
-    if (agentType === targetType) return true;
-    if (targetType === 'health_baseline' && ((agentType as any) === 'health_coach' || agentType === 'health_baseline')) return true;
+    if (effectiveAgentType === targetType) return true;
+    if (targetType === 'health_baseline' && ((effectiveAgentType as any) === 'health_coach' || effectiveAgentType === 'health_baseline')) return true;
     if (['medical', 'food', 'food_idea', 'daily_recommendation'].includes(targetType)) {
-      if (targetType === 'medical' && (agentType === 'health_baseline' || (agentType as any) === 'health_coach' || (agentType as any) === 'front_desk')) {
+      if (targetType === 'medical' && (effectiveAgentType === 'health_baseline' || (effectiveAgentType as any) === 'health_coach' || (effectiveAgentType as any) === 'front_desk')) {
         return false;
       }
-      return type === targetType;
+      return delegatedAgentType ? (delegatedAgentType === targetType) : (type === targetType);
     }
     if (isUnified) return activeAgentConfig?.id === targetType;
-    return type === targetType;
+    return delegatedAgentType ? (delegatedAgentType === targetType) : (type === targetType);
   };
   const isSendingRef = useRef(false);
   const lastSendClickTimeRef = useRef<number>(0);
@@ -1808,6 +1814,8 @@ ${logsText}`);
     if (!isOpen) {
       setIsAnalyzing(false);
       isSendingRef.current = false;
+      setDelegatedAgentType(null);
+      setDelegatedHandoffPayload(null);
     }
   }, [isOpen]);
   const handleDownloadDebug = async (jobIdToDownload: string, msg: any, format: 'json' | 'markdown' = 'markdown') => {
@@ -2244,8 +2252,10 @@ ${logsText}`);
       console.log('[handleSend] Blocked — both text and images are empty.');
       return;
     }
+    const isHandoffContinuation = !!extraOptions?.isHandoffContinuation;
+    const downstreamTargetAgent = extraOptions?.downstreamTargetAgent;
     const now = Date.now();
-    if (now - lastSendClickTimeRef.current < 1000) {
+    if (!isHandoffContinuation && (now - lastSendClickTimeRef.current < 1000)) {
       console.log('[handleSend] Blocked — debounced duplicate click within 1000ms.');
       return;
     }
@@ -3078,36 +3088,84 @@ ${logsText}`);
         }
       }
     }
-    const userMsg: ChatMessage = {
-      id: `msg_${Date.now()}`,
-      role: 'user',
-      content: textToSend,
-      timestamp: new Date().toISOString(),
-      imageUrl: finalImages[0] || undefined,
-      imageUrls: finalImages.length > 0 ? finalImages : undefined,
-      data: {
-        userSelectedMode: mappedMode
-      }
-    };
     const isFood = isAgent('food');
-    const liveMsg: ChatMessage = {
-      id: `msg_live_${Date.now()}`,
-      role: 'assistant',
-      content: '',
-      timestamp: new Date().toISOString(),
-      isLive: true,
-      agentType: isFood ? 'food' : (isAgent('food_idea') ? 'food_idea' : (agentType || 'agent1')),
-      data: {
-        userSelectedMode: mappedMode,
-        hasImage: finalImages.length > 0,
-        agentResult: {
-          scoutScratchpad: '',
-          dietitianScratchpad: ''
+    const liveAgentType = isHandoffContinuation
+      ? (downstreamTargetAgent || delegatedAgentType || 'health_baseline')
+      : (isFood ? 'food' : (isAgent('food_idea') ? 'food_idea' : (agentType || 'agent1')));
+
+    let newMsgs: ChatMessage[];
+    let userMsg: ChatMessage | null = null;
+    let liveMsg: ChatMessage | null = null;
+
+    if (isHandoffContinuation) {
+      const targetAgentKey = downstreamTargetAgent || delegatedAgentType || 'health_baseline';
+      const targetAgentName = targetAgentKey === 'medical'
+        ? (t.medicalSpecialist || 'Medical Lab Specialist')
+        : (t.healthCoach || 'Health Coach');
+      const handoffNoticeMsg: ChatMessage = {
+        id: `msg_handoff_${Date.now()}`,
+        role: 'assistant',
+        agentType: 'front_desk',
+        content: (t.passedToAgent || 'Passed to {agent}').replace('{agent}', targetAgentName),
+        timestamp: new Date().toISOString(),
+        data: {
+          isHandoffNotice: true,
+          targetAgent: targetAgentKey,
+          targetName: targetAgentName,
+          handoffPayload: extraOptions?.downstreamHandoffPayload || delegatedHandoffPayload || handoffPayload
         }
-      }
-    };
+      };
+      liveMsg = {
+        id: `msg_live_${Date.now()}`,
+        role: 'assistant',
+        content: '',
+        timestamp: new Date().toISOString(),
+        isLive: true,
+        agentType: liveAgentType,
+        data: {
+          userSelectedMode: mappedMode,
+          hasImage: false,
+          agentResult: {
+            scoutScratchpad: '',
+            dietitianScratchpad: ''
+          }
+        }
+      };
+      newMsgs = [...messages, handoffNoticeMsg, liveMsg];
+      setMessages(prev => [...prev, handoffNoticeMsg, liveMsg]);
+    } else {
+      userMsg = {
+        id: `msg_${Date.now()}`,
+        role: 'user',
+        content: textToSend,
+        timestamp: new Date().toISOString(),
+        imageUrl: finalImages[0] || undefined,
+        imageUrls: finalImages.length > 0 ? finalImages : undefined,
+        data: {
+          userSelectedMode: mappedMode
+        }
+      };
+      liveMsg = {
+        id: `msg_live_${Date.now()}`,
+        role: 'assistant',
+        content: '',
+        timestamp: new Date().toISOString(),
+        isLive: true,
+        agentType: liveAgentType,
+        data: {
+          userSelectedMode: mappedMode,
+          hasImage: finalImages.length > 0,
+          agentResult: {
+            scoutScratchpad: '',
+            dietitianScratchpad: ''
+          }
+        }
+      };
+      newMsgs = [...messages, userMsg, liveMsg];
+      setMessages(prev => [...prev, userMsg, liveMsg]);
+    }
     let currentJobId = jobId;
-    if (isAgent('front_desk')) {
+    if (isAgent('front_desk') || type === 'front_desk') {
       if (!currentJobId) {
         currentJobId = `job_frontdesk_${Date.now()}`;
         if (onJobCreated) {
@@ -3115,11 +3173,9 @@ ${logsText}`);
         }
       }
     }
-    const newMsgs = [...messages, userMsg, liveMsg];
-    setMessages(prev => [...prev, userMsg, liveMsg]);
     const targetId = currentJobId || jobId;
     if (targetId) {
-      if (isAgent('front_desk') && !JobStore.getJob(targetId)) {
+      if ((isAgent('front_desk') || type === 'front_desk') && !JobStore.getJob(targetId)) {
         JobStore.createJob({
           id: targetId,
           kind: 'front_desk',
@@ -3283,7 +3339,7 @@ ${logsText}`);
         }
         if (resData.data) {
           const lastFoodLog = [...messages].reverse().find(m => m.data?.pendingFoodLog)?.data?.pendingFoodLog;
-          const currentTranscript = [...messages, userMsg, liveMsg].map(m => ({
+          const currentTranscript = [...messages, ...(userMsg ? [userMsg] : []), ...(liveMsg ? [liveMsg] : [])].map(m => ({
             role: m.role as 'user' | 'assistant',
             content: m.content,
             timestamp: m.timestamp
@@ -3318,8 +3374,8 @@ ${logsText}`);
       if (isAgent('food')) endpoint = '/api/gemini/food-analyze';
       else if (isAgent('food_idea')) endpoint = '/api/gemini/food-idea';
       else if (isAgent('daily_recommendation')) endpoint = '/api/gemini/daily-recommendation-chat';
-      else if (isAgent('health_baseline')) endpoint = '/api/gemini/health-baseline-analyze';
-      else if (isAgent('front_desk')) endpoint = '/api/gemini/front-desk';
+      else if (isAgent('health_baseline') || (isHandoffContinuation && (downstreamTargetAgent === 'health_baseline' || !downstreamTargetAgent))) endpoint = '/api/gemini/health-baseline-analyze';
+      else if (isAgent('front_desk') && !isHandoffContinuation) endpoint = '/api/gemini/front-desk';
       else endpoint = '/api/gemini/medical-analyze';
       const lightProfile = profile ? { ...profile } as any : null;
       if (lightProfile) {
@@ -3356,7 +3412,7 @@ ${logsText}`);
       const activeSessionIdx = lastWelcomeIndex >= 0 ? lastWelcomeIndex : 0;
       const bodyData: any = {
         userId: auth.currentUser?.uid || undefined,
-        message: userMsg.content,
+        message: userMsg?.content || textToSend,
         image: tempAnalysisImages[0] || tempImages[0] || undefined,
         images: tempAnalysisImages.length > 0 ? tempAnalysisImages : (tempImages.length > 0 ? tempImages : undefined),
         imageDates: tempDates.length > 0 ? tempDates : undefined,
@@ -3525,11 +3581,11 @@ ${logsText}`);
           dailyNutrientIntake,
           stepsHistory: thisMonthSteps
         };
-      } else if (isAgent('health_baseline')) {
+      } else if (isAgent('health_baseline') || (isHandoffContinuation && (downstreamTargetAgent === 'health_baseline' || !downstreamTargetAgent))) {
         bodyData.biomarkerHistory = activeHistory;
         bodyData.outOfRangeBiomarkers = outOfRangeBiomarkers;
         bodyData.calibratedInsights = getAllAgentCalibrations();
-        bodyData.handoffPayload = handoffPayload;
+        bodyData.handoffPayload = extraOptions?.downstreamHandoffPayload || delegatedHandoffPayload || handoffPayload;
       } else if (isAgent('food_idea')) {
         bodyData.location = loc;
         bodyData.recentMeals = (activeFoodLogs || []).slice(-20).map(f => f.name);
@@ -4137,7 +4193,7 @@ ${logsText}`);
           assistantMsg.pendingFoodIdeas = resData.ideas;
         }
       } else {
-        const activeAgentType = (agentType || resData.agentType || (resData.extractedData && resData.extractedData.trim() && resData.extractedData.trim() !== '[]' ? 'agent1' : null)) as string | null;
+        const activeAgentType = ((isHandoffContinuation ? (downstreamTargetAgent || delegatedAgentType) : null) || agentType || resData.agentType || (resData.extractedData && resData.extractedData.trim() && resData.extractedData.trim() !== '[]' ? 'agent1' : null)) as string | null;
         if (activeAgentType) {
           assistantMsg.agentType = (activeAgentType === 'agent1_step1' ? 'agent1' : activeAgentType) as AgentType;
           assistantMsg.agentResult = resData;
@@ -4372,23 +4428,29 @@ ${logsText}`);
         const prompt = summary 
           ? `${summary}${insights.length > 0 ? '\n\nKey Insights:\n' + insights.map((i: string) => `• ${i}`).join('\n') : ''}`
           : (insights.length > 0 ? insights.map((i: string) => `• ${i}`).join('\n') : 'Please create my personalized health plan based on my profile.');
-        console.log(`[DIAG6] handoff triggered: targetAgent=${targetAgent}, promptLength=${prompt.length}, willCallOnOpenAgentFromFrontDesk in 400ms`);
+        console.log(`[DIAG6] handoff triggered: targetAgent=${targetAgent}, promptLength=${prompt.length}`);
 
-        // Directly open the coach/specialist and execute the analysis immediately without requiring confirmation
-        setTimeout(() => {
-          console.log(`[DIAG6] handoff: calling onOpenAgentFromFrontDesk now with targetAgent=${targetAgent}`);
-          try {
-            onOpenAgentFromFrontDesk?.(targetAgent, {
-              handoffPayload: handoff,
-              prefillMessage: prompt,
-              autoSendMessage: prompt,
-              updatedProfile: handoff.collectedData || resData.updatedProfile
-            });
-            console.log(`[DIAG6] handoff: onOpenAgentFromFrontDesk call completed without throwing`);
-          } catch (handoffErr: any) {
-            console.log(`[DIAG6] handoff: onOpenAgentFromFrontDesk threw an error:`, handoffErr?.message || handoffErr);
-          }
-        }, 400);
+        if (type === 'front_desk') {
+          setTimeout(() => {
+            initiateSeamlessHandoff(targetAgent, handoff, prompt, handoff.collectedData || resData.updatedProfile);
+          }, 350);
+        } else {
+          // Directly open the coach/specialist and execute the analysis immediately without requiring confirmation
+          setTimeout(() => {
+            console.log(`[DIAG6] handoff: calling onOpenAgentFromFrontDesk now with targetAgent=${targetAgent}`);
+            try {
+              onOpenAgentFromFrontDesk?.(targetAgent, {
+                handoffPayload: handoff,
+                prefillMessage: prompt,
+                autoSendMessage: prompt,
+                updatedProfile: handoff.collectedData || resData.updatedProfile
+              });
+              console.log(`[DIAG6] handoff: onOpenAgentFromFrontDesk call completed without throwing`);
+            } catch (handoffErr: any) {
+              console.log(`[DIAG6] handoff: onOpenAgentFromFrontDesk threw an error:`, handoffErr?.message || handoffErr);
+            }
+          }, 400);
+        }
       }
     } catch (err: any) {
       console.error(err);
@@ -4498,6 +4560,61 @@ ${logsText}`);
       }
     }
   };
+
+  const initiateSeamlessHandoff = (
+    targetAgent: AgentType | string,
+    handoff: any,
+    prompt: string,
+    updatedProf?: any
+  ) => {
+    const isMed = targetAgent === 'medical' || targetAgent === 'biomarker_review' || handoff?.targetAgent === 'medical' || handoff?.targetAgent === 'biomarker_review';
+    const effectiveTarget: AgentType = isMed ? 'medical' : 'health_baseline';
+
+    console.log(`[LogChat] initiateSeamlessHandoff: target=${effectiveTarget}`);
+
+    // 1. Sync updated profile
+    if (updatedProf && onSaveProfile) {
+      onSaveProfile(updatedProf);
+    }
+
+    // 2. Set delegated state
+    setDelegatedAgentType(effectiveTarget);
+    if (handoff) {
+      setDelegatedHandoffPayload(handoff);
+    }
+
+    // 3. Trigger seamless continuation with the specialist agent
+    setTimeout(() => {
+      handleSend(prompt, undefined, {
+        isHandoffContinuation: true,
+        downstreamTargetAgent: effectiveTarget,
+        downstreamHandoffPayload: handoff
+      });
+    }, 250);
+  };
+
+  const handleInternalOrExternalOpenAgent = (
+    targetAgent: any,
+    options?: { prefillMessage?: string; autoSendMessage?: string; handoffPayload?: any; updatedProfile?: any }
+  ) => {
+    if (type === 'front_desk') {
+      const summary = options?.handoffPayload?.summaryForAgent || options?.handoffPayload?.userContextSummary || '';
+      const insights = Array.isArray(options?.handoffPayload?.actionableInsights) ? options.handoffPayload.actionableInsights : [];
+      const prompt = options?.autoSendMessage || options?.prefillMessage || (summary 
+        ? `${summary}${insights.length > 0 ? '\n\nKey Insights:\n' + insights.map((i: string) => `• ${i}`).join('\n') : ''}`
+        : (insights.length > 0 ? insights.map((i: string) => `• ${i}`).join('\n') : 'Please create my personalized health plan based on my profile.'));
+
+      initiateSeamlessHandoff(
+        targetAgent,
+        options?.handoffPayload,
+        prompt,
+        options?.updatedProfile || options?.handoffPayload?.collectedData
+      );
+    } else {
+      onOpenAgentFromFrontDesk?.(targetAgent, options);
+    }
+  };
+
   const lastAutoSendKeyRef = useRef<string | null>(null);
   useEffect(() => {
     if (!isOpen) {
@@ -5646,6 +5763,21 @@ ${logsText}`);
                         return null;
                       }
                     }
+                  if (msg.data?.isHandoffNotice) {
+                    return (
+                      <div
+                        key={msg.id ? `${msg.id}_${idx}` : idx}
+                        className="my-3 py-1 flex items-center justify-center gap-3 animate-fade-in"
+                      >
+                        <div className="h-px bg-slate-200 dark:bg-slate-800 flex-1 max-w-[80px]" />
+                        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-xs font-semibold text-emerald-700 dark:text-emerald-300 shadow-sm">
+                          <Sparkles className="w-3.5 h-3.5 text-emerald-500 animate-pulse" />
+                          <span>{msg.content || (t.passedToAgent || 'Passed to {agent}').replace('{agent}', msg.data?.targetName || 'Health Coach')}</span>
+                        </div>
+                        <div className="h-px bg-slate-200 dark:bg-slate-800 flex-1 max-w-[80px]" />
+                      </div>
+                    );
+                  }
                   return (
                 <div
                   key={msg.id ? `${msg.id}_${idx}` : idx}
@@ -5872,7 +6004,7 @@ ${logsText}`);
                           fileInputRef={fileInputRef}
                           onDeleteMessage={(id) => setMessages(prev => prev.filter(m => m.id !== id))}
                           onLogMedical={onLogMedical}
-                          onOpenAgentFromFrontDesk={onOpenAgentFromFrontDesk}
+                          onOpenAgentFromFrontDesk={handleInternalOrExternalOpenAgent}
                           isAnalyzing={isAnalyzing}
                           agentType={agentType}
                           autoSendMessage={autoSendMessage}

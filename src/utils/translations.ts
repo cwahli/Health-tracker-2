@@ -1,5 +1,8 @@
 const en = {
     sendToAdmin: "Send to Admin",
+    passedToAgent: "Passed to {agent}",
+    continuingConversation: "Continuing consultation seamlessly below",
+    analyzingHealthPlan: "Formulating your personalized health baseline and recommendations...",
     failed: "Failed!",
     sent: "Sent!",
     sending: "Sending...",
@@ -1545,6 +1548,9 @@ export const localePacks = {
   } as any,
   id: {
     sendToAdmin: "Kirim ke Admin",
+    passedToAgent: "Dialihkan ke {agent}",
+    continuingConversation: "Melanjutkan konsultasi di bawah ini",
+    analyzingHealthPlan: "Merumuskan dasar kesehatan dan rekomendasi yang dipersonalisasi...",
     failed: "Gagal!",
     sent: "Terkirim!",
     sending: "Mengirim...",

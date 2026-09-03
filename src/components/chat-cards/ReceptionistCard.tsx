@@ -20,10 +20,12 @@ import {
 
 export const ReceptionistCard: React.FC<AgentCardProps> = ({
   msg,
+  messages = [],
   handleSend,
   onOpenAgentFromFrontDesk,
   onLogMedical,
 }) => {
+  const isHandedOff = Array.isArray(messages) && messages.some(m => m.data?.isHandoffNotice || (m.role === 'assistant' && (m.agentType === 'health_baseline' || m.agentType === 'medical')));
   const agentResult = msg.agentResult || msg.data?.agentResult || msg.data || {};
   const {
     intent,
@@ -322,31 +324,38 @@ export const ReceptionistCard: React.FC<AgentCardProps> = ({
 
           <div className="pt-2 border-t border-indigo-100 dark:border-indigo-900/60 flex items-center justify-between">
             <span className="text-[11px] text-slate-500 dark:text-slate-400">
-              Ready to generate personalized plan
+              {isHandedOff ? 'Handoff complete' : 'Ready to generate personalized plan'}
             </span>
-            <button
-              type="button"
-              onClick={() => {
-                const isMed = handoffPayload.targetAgent === 'medical' || handoffPayload.targetAgent === 'biomarker_review';
-                const targetAgent = isMed ? 'medical' : 'health_baseline';
-                const summary = handoffPayload.summaryForAgent || handoffPayload.userContextSummary || '';
-                const insights = Array.isArray(handoffPayload.actionableInsights) ? handoffPayload.actionableInsights : [];
-                const prompt = summary 
-                  ? `${summary}${insights.length > 0 ? '\n\nKey Insights:\n' + insights.map((i: string) => `• ${i}`).join('\n') : ''}`
-                  : (insights.length > 0 ? insights.map((i: string) => `• ${i}`).join('\n') : 'Please create my personalized health plan based on my profile.');
-                
-                onOpenAgentFromFrontDesk?.(targetAgent, {
-                  handoffPayload,
-                  prefillMessage: prompt,
-                  autoSendMessage: prompt,
-                  updatedProfile: handoffPayload.collectedData || updatedProfile
-                });
-              }}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer"
-            >
-              <span>{handoffPayload.targetAgent === 'medical' ? 'Open Medical Lab Review' : 'Open Health Coach'}</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
+            {isHandedOff ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs font-semibold rounded-xl border border-emerald-200/60 dark:border-emerald-800/60">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>Connected</span>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  const isMed = handoffPayload.targetAgent === 'medical' || handoffPayload.targetAgent === 'biomarker_review';
+                  const targetAgent = isMed ? 'medical' : 'health_baseline';
+                  const summary = handoffPayload.summaryForAgent || handoffPayload.userContextSummary || '';
+                  const insights = Array.isArray(handoffPayload.actionableInsights) ? handoffPayload.actionableInsights : [];
+                  const prompt = summary 
+                    ? `${summary}${insights.length > 0 ? '\n\nKey Insights:\n' + insights.map((i: string) => `• ${i}`).join('\n') : ''}`
+                    : (insights.length > 0 ? insights.map((i: string) => `• ${i}`).join('\n') : 'Please create my personalized health plan based on my profile.');
+                  
+                  onOpenAgentFromFrontDesk?.(targetAgent, {
+                    handoffPayload,
+                    prefillMessage: prompt,
+                    autoSendMessage: prompt,
+                    updatedProfile: handoffPayload.collectedData || updatedProfile
+                  });
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer"
+              >
+                <span>{handoffPayload.targetAgent === 'medical' ? 'Open Medical Lab Review' : 'Open Health Coach'}</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
       )}
