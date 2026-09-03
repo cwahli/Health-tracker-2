@@ -142,6 +142,26 @@ describe("maybePromoteHandoff + contract (U0 / C1 / C5)", () => {
     expect(out.handoffPayload).toBeTruthy();
   });
 
+  it("Existing user with complete profile sending bare 'I want to loose weight' stays at Front Desk to establish target weight", () => {
+    const raw = {
+      intent: "weight_loss",
+      targetAgent: "health_coach",
+      status: "ready_for_handoff",
+      missingFields: [],
+      handoffPayload: { targetAgent: "health_coach" },
+      memory: { goalSummary: "User wants to loose weight", userProfileSnapshot: completeProfile }
+    };
+    const out = runPostProcessor(raw, {
+      currentUserMessage: "I want to loose weight",
+      existingUserProfile: completeProfile
+    });
+    expect(out.status).toBe("needs_info");
+    expect(out.targetAgent).toBe("general_receptionist");
+    expect(out.handoffPayload).toBeNull();
+    expect(out.userResponse).toContain("BMI");
+    expect(out.missingFields).toContain("target_weight");
+  });
+
   it("C5: disambiguation is not auto-promoted even with complete demographics", () => {
     const raw = {
       intent: "weight_loss",

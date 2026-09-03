@@ -41,7 +41,7 @@
           "activity_level"
         ],
         "mustIncludeInResponse": [
-          "plan"
+          "weight"
         ],
         "memoryValidation": {
           "goalSummaryIncludes": [

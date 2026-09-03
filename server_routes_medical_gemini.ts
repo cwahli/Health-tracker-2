@@ -219,6 +219,8 @@ Clinical & Coaching Directives:
 4. Top weekly nutrient targets should include 'fiber' and 'added_sugars'.
 5. Daily activities MUST include realistic movement targets (such as daily steps e.g. '6,000 - 8,000 steps') and mobility/exercise.
 6. Provide an encouraging, clear, and actionable explanation in markdown for the user.
+7. Never hallucinate or invent a user name. If profile.name is null or absent, address the user as 'Welcome!' or 'Hello!' without inventing a name.
+8. Baseline consistency: Base calorie targets strictly on Mifflin-St Jeor BMR and sedentary TDEE; keep targets consistent across interactions.
 
 You MUST respond strictly with a valid JSON object in this format:
 {

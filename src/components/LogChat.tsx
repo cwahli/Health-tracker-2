@@ -3128,21 +3128,6 @@ ${logsText}`);
     let liveMsg: ChatMessage | null = null;
 
     if (isHandoffContinuation) {
-      const targetAgentKey = downstreamTargetAgent || delegatedAgentType || 'health_baseline';
-      const targetAgentName = specialistDisplayName(String(targetAgentKey));
-      const handoffNoticeMsg: ChatMessage = {
-        id: `msg_handoff_${Date.now()}`,
-        role: 'assistant',
-        agentType: 'front_desk',
-        content: (t.passedToAgent || 'Passed to {agent}').replace('{agent}', targetAgentName),
-        timestamp: new Date().toISOString(),
-        data: {
-          isHandoffNotice: true,
-          targetAgent: targetAgentKey,
-          targetName: targetAgentName,
-          handoffPayload: extraOptions?.downstreamHandoffPayload || delegatedHandoffPayload || handoffPayload
-        }
-      };
       liveMsg = {
         id: `msg_live_${Date.now()}`,
         role: 'assistant',
@@ -3159,8 +3144,8 @@ ${logsText}`);
           }
         }
       };
-      newMsgs = [...messages, handoffNoticeMsg, liveMsg];
-      setMessages(prev => [...prev, handoffNoticeMsg, liveMsg]);
+      newMsgs = [...messages, liveMsg];
+      setMessages(prev => [...prev, liveMsg]);
     } else {
       userMsg = {
         id: `msg_${Date.now()}`,

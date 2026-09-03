@@ -668,6 +668,33 @@ export function maybePromoteHandoff(output: any, ctx: HandoffRepairContext): any
   );
   if (!hasCoreDemographics) return output;
 
+  // Existing user weight loss protocol:
+  // If an existing user with complete demographics sends a bare "I want to lose weight" statement
+  // without specifying a target weight or explicitly asking for a plan, engage first to establish
+  // their target weight or recomposition focus rather than firing a blind handoff!
+  const isBareWeightLossDeclaration = /^\s*i\s+want\s+to\s+(?:loose|lose)\s+weight\s*$/i.test(msgText);
+  const isExistingDemographicsUser = Boolean(
+    existing.age && existing.gender && existing.heightCm && existing.weightKg && existing.activityLevel
+  );
+  if (isExistingDemographicsUser && isBareWeightLossDeclaration && !(existing.targetWeightKg || snap.targetWeightKg)) {
+    output.status = 'needs_info';
+    output.targetAgent = 'general_receptionist';
+    output.handoffPayload = null;
+    output.missingFields = ['target_weight'];
+    if (output.memory) {
+      output.memory.conversationState = 'ongoing_support';
+    }
+    const curWeight = snap.weightKg || existing.weightKg;
+    const curHeight = snap.heightCm || existing.heightCm;
+    const heightM = curHeight / 100;
+    const curBmi = Number((curWeight / (heightM * heightM)).toFixed(1));
+    const lang = existing?.language === 'id' ? 'id' : 'en';
+    output.userResponse = lang === 'id'
+      ? `Saya siap membantu Anda mencapai berat badan yang ideal! Dengan tinggi ${curHeight} cm dan berat ${curWeight} kg, BMI Anda saat ini adalah ${curBmi} (kategori sehat normal). Apakah Anda memiliki target berat badan tertentu yang ingin dicapai, atau ingin fokus pada rekomposisi tubuh (mengencangkan otot)?`
+      : `I'd be glad to help you reach your ideal weight and body composition! At ${curHeight} cm and ${curWeight} kg, your current BMI is approximately ${curBmi}, which is in the healthy normal range (18.5–24.9). Do you have a specific target weight in mind, or would you prefer focusing on healthy body recomposition while maintaining around ${curWeight} kg?`;
+    return output;
+  }
+
   if (output.status === 'needs_info' || !output.status || (output.status as string) === 'in_progress') {
     output.status = 'ready_for_handoff';
     output.targetAgent = effectiveAgent || 'health_coach';

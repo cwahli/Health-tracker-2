@@ -177,6 +177,18 @@ foodAnalyzeRouter.post("/api/gemini/front-desk", async (req, res) => {
       base64Images = [image];
     }
 
+    const synchronizedBiomarkers = biomarkers ? { ...biomarkers } : {};
+    if (existingUserProfile?.heightCm) {
+      synchronizedBiomarkers.height = existingUserProfile.heightCm;
+    }
+    if (existingUserProfile?.weightKg) {
+      synchronizedBiomarkers.weight = existingUserProfile.weightKg;
+    }
+    if (existingUserProfile?.heightCm && existingUserProfile?.weightKg) {
+      const hM = existingUserProfile.heightCm / 100;
+      synchronizedBiomarkers.bmi = Number((existingUserProfile.weightKg / (hM * hM)).toFixed(1));
+    }
+
     const receptionistPayload = {
       currentUserMessage: message || "",
       chatHistory,
@@ -184,7 +196,7 @@ foodAnalyzeRouter.post("/api/gemini/front-desk", async (req, res) => {
       existingMemory: existingMemory || null,
       existingActivitiesAndTasks: existingActivitiesAndTasks || null,
       language: profile?.language || null,
-      biomarkers: biomarkers || null,
+      biomarkers: Object.keys(synchronizedBiomarkers).length > 0 ? synchronizedBiomarkers : null,
       foodLogs: foodLogs || null,
       biomarkerHistory: biomarkerHistory || null,
       images: base64Images.length > 0 ? base64Images : null,
