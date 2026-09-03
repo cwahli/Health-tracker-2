@@ -6715,7 +6715,7 @@ export default function App() {
       
       {(() => {
         const handleOpenAgentFromFrontDesk = (
-          agentType: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent7' | 'data_review' | 'health_baseline' | 'medical' | null,
+          agentType: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent7' | 'data_review' | 'health_baseline' | 'medical' | 'food' | 'food_idea' | null,
           options?: { prefillMessage?: string; autoSendMessage?: string; handoffPayload?: any; updatedProfile?: any }
         ) => {
           console.log(`[DIAG7] handleOpenAgentFromFrontDesk called: agentType=${agentType}, hasHandoffPayload=${!!options?.handoffPayload}, hasAutoSendMessage=${!!options?.autoSendMessage}`);
@@ -6725,8 +6725,22 @@ export default function App() {
             saveAndSync(nextProf, foodLogs, biomarkers, biomarkerHistory, actions, dailyBenefits, report, { type: 'profile' });
           }
 
-          // If the target is Health Coach / Health Baseline, keep interaction within the Front Desk modal
-          if (agentType === 'health_baseline' || (agentType as string) === 'health_coach') {
+          // Health Coach / medical passed from Front Desk stay in that thread.
+          if (agentType === 'health_baseline' || (agentType as string) === 'health_coach' || agentType === 'medical') {
+            return;
+          }
+
+          if (agentType === 'food' || (agentType as string) === 'food_log') {
+            setIsFrontDeskOpen(false);
+            const foodJobId = `job_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            JobStore.createJob({
+              id: foodJobId,
+              kind: 'food_log',
+              lockedModeFamily: 'A',
+              status: 'draft',
+              inputSnapshot: { text: options?.autoSendMessage || options?.prefillMessage || '', imageRefs: [] }
+            });
+            setActiveJobId(foodJobId);
             return;
           }
 

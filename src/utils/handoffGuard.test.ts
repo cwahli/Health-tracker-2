@@ -50,6 +50,43 @@ describe('decideFrontDeskHandoff (HANDOFF_LOOP)', () => {
     const d = decideFrontDeskHandoff({ status: 'ready_for_handoff', handoffPayload: payload });
     expect(d?.targetAgent).toBe('health_baseline');
   });
+
+  it('does NOT fire for general_receptionist even with a payload', () => {
+    expect(
+      decideFrontDeskHandoff({
+        agentType: 'front_desk',
+        status: 'ready_for_handoff',
+        handoffPayload: { ...payload, targetAgent: 'general_receptionist' }
+      })
+    ).toBeNull();
+  });
+
+  it('does NOT fire on needs_info (payload alone is not enough)', () => {
+    expect(
+      decideFrontDeskHandoff({
+        agentType: 'front_desk',
+        status: 'needs_info',
+        handoffPayload: payload
+      })
+    ).toBeNull();
+  });
+
+  it('routes meal_logging to food and nutritionist to food_idea', () => {
+    expect(
+      decideFrontDeskHandoff({
+        agentType: 'front_desk',
+        status: 'ready_for_handoff',
+        handoffPayload: { ...payload, targetAgent: 'nutritionist', intent: 'general_wellness' }
+      })?.targetAgent
+    ).toBe('food_idea');
+    expect(
+      decideFrontDeskHandoff({
+        agentType: 'front_desk',
+        status: 'ready_for_handoff',
+        handoffPayload: { ...payload, targetAgent: 'health_coach', intent: 'meal_logging' }
+      })?.targetAgent
+    ).toBe('food');
+  });
 });
 
 describe('isUsableHandoffPayload', () => {

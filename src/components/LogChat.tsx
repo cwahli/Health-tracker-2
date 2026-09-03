@@ -3,6 +3,7 @@ import {
  ErrorBoundary } from './ErrorBoundary';
 import { agentCardRegistry } from './chat-cards';
 import { decideFrontDeskHandoff } from '../utils/handoffGuard';
+import { mapFrontDeskSpecialist, specialistDisplayName } from '../utils/frontDeskRouting';
 import { dedupeConsecutiveAssistantMessages } from '../utils/chatMessageDedupe';
 import { AgentThoughtBox } from './chat-cards/FoodCard';
 import { trackApiCall, setActiveQueryId, generateQueryId } from '../utils/apiTracker';
@@ -425,7 +426,7 @@ interface LogChatProps {
   agentType?: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent7' | 'data_review' | 'health_baseline' | 'biomarker_review' | 'medical' | null;
   reviewBiomarkerKey?: string;
   onOpenAgentFromFrontDesk?: (
-    agentType: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent7' | 'data_review' | 'health_baseline' | 'medical' | null,
+    agentType: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent7' | 'data_review' | 'health_baseline' | 'medical' | 'food' | 'food_idea' | null,
     options?: { prefillMessage?: string; autoSendMessage?: string; handoffPayload?: any; updatedProfile?: any }
   ) => void;
   biomarkerHistory?: any[];
@@ -2848,7 +2849,7 @@ ${logsText}`);
       }
       return;
     }
-    if (isAgent('medical') && !isAgent('health_baseline') && !isAgent('front_desk') && agentType !== 'health_baseline') {
+    if (type !== 'front_desk' && isAgent('medical') && !isAgent('health_baseline') && !isAgent('front_desk') && agentType !== 'health_baseline') {
       try {
         // B2 FIX: Guard against duplicate job creation (e.g. when both autoSend and manual button fire)
         const activeType = agentType || 'agent1_step1';
@@ -3128,9 +3129,7 @@ ${logsText}`);
 
     if (isHandoffContinuation) {
       const targetAgentKey = downstreamTargetAgent || delegatedAgentType || 'health_baseline';
-      const targetAgentName = targetAgentKey === 'medical'
-        ? (t.medicalSpecialist || 'Medical Lab Specialist')
-        : (t.healthCoach || 'Health Coach');
+      const targetAgentName = specialistDisplayName(String(targetAgentKey));
       const handoffNoticeMsg: ChatMessage = {
         id: `msg_handoff_${Date.now()}`,
         role: 'assistant',
@@ -4482,11 +4481,7 @@ ${logsText}`);
           handoffFiredKeyRef.current = firedKey;
           console.log(`[DIAG6] handoff triggered: targetAgent=${targetAgent}, promptLength=${prompt.length}`);
 
-          if (targetAgent === 'health_baseline' || (targetAgent as string) === 'health_coach') {
-            setTimeout(() => {
-              initiateSeamlessHandoff(targetAgent, handoff, prompt, handoff.collectedData || resData.updatedProfile, currentReqId);
-            }, 350);
-          } else if (onOpenAgentFromFrontDesk) {
+          if (targetAgent === 'food' && onOpenAgentFromFrontDesk) {
             setTimeout(() => {
               onOpenAgentFromFrontDesk(targetAgent, {
                 handoffPayload: handoff,
@@ -4619,8 +4614,17 @@ ${logsText}`);
     updatedProf?: any,
     parentRequestId?: string
   ) => {
-    const isMed = targetAgent === 'medical' || targetAgent === 'biomarker_review' || handoff?.targetAgent === 'medical' || handoff?.targetAgent === 'biomarker_review';
-    const effectiveTarget: AgentType = isMed ? 'medical' : 'health_baseline';
+    const mapped = mapFrontDeskSpecialist(String(targetAgent), handoff?.intent);
+    const effectiveTarget: AgentType = (mapped || (targetAgent as AgentType) || 'health_baseline') as AgentType;
+    if (effectiveTarget === 'food' && onOpenAgentFromFrontDesk) {
+      onOpenAgentFromFrontDesk(effectiveTarget as any, {
+        handoffPayload: handoff,
+        prefillMessage: prompt,
+        autoSendMessage: prompt,
+        updatedProfile: updatedProf
+      });
+      return;
+    }
 
     console.log(`[LogChat] initiateSeamlessHandoff: target=${effectiveTarget}, parentRequestId=${parentRequestId}`);
 
@@ -4654,8 +4658,9 @@ ${logsText}`);
     targetAgent: any,
     options?: { prefillMessage?: string; autoSendMessage?: string; handoffPayload?: any; updatedProfile?: any }
   ) => {
-    const isMed = targetAgent === 'medical' || targetAgent === 'biomarker_review' || options?.handoffPayload?.targetAgent === 'medical' || options?.handoffPayload?.targetAgent === 'biomarker_review';
-    if (isMed && onOpenAgentFromFrontDesk) {
+    // Inside Front Desk, append the specialist in this thread. Standalone
+    // screens still open their own modal via onOpenAgentFromFrontDesk.
+    if (type !== 'front_desk' && onOpenAgentFromFrontDesk) {
       onOpenAgentFromFrontDesk(targetAgent, options);
       return;
     }

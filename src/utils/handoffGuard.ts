@@ -1,21 +1,18 @@
 /**
  * Front-desk handoff decision helper.
  *
- * Class repaired: HANDOFF_LOOP — the chat response handler used to fire a
- * seamless handoff whenever `status === 'ready_for_handoff'` OR a payload was
- * present, without checking WHICH agent answered. Downstream agents
- * (health_baseline/medical) echo the handoff payload back, so every
- * specialist reply re-triggered another handoff with a generic fallback
- * prompt (the user's original message was lost) — an infinite,
- * credit-burning loop with no visible answer.
- *
  * Fire rules (all must hold):
  * 1. Not a handoff-continuation turn.
- * 2. The response is genuinely from front_desk
- *    (`agentType === 'front_desk'`, or no agentType + ready_for_handoff).
- * 3. A NON-EMPTY handoffPayload is present (status alone is not enough).
+ * 2. The response is genuinely from front_desk.
+ * 3. status is ready_for_handoff AND a usable specialist payload is present.
+ * 4. targetAgent maps to a real specialist (never general_receptionist → coach).
+ *
+ * Passed-through specialists are appended in the Front Desk thread.
+ * Standalone Health tab / FAB entry points are unchanged.
  */
-export type HandoffTarget = 'medical' | 'health_baseline';
+import { mapFrontDeskSpecialist, type FrontDeskSpecialist } from './frontDeskRouting';
+
+export type HandoffTarget = FrontDeskSpecialist;
 
 export interface HandoffDecision {
   targetAgent: HandoffTarget;
@@ -28,6 +25,7 @@ const GENERIC_HANDOFF_PROMPT = 'Please create my personalized health plan based 
 export function isUsableHandoffPayload(handoff: any): boolean {
   if (!handoff || typeof handoff !== 'object' || Array.isArray(handoff)) return false;
   if (Object.keys(handoff).length === 0) return false;
+  if (handoff.targetAgent === 'general_receptionist') return false;
   return Boolean(handoff.targetAgent || handoff.summaryForAgent || handoff.userContextSummary);
 }
 
@@ -51,12 +49,13 @@ export function decideFrontDeskHandoff(
     resData.agentType === 'front_desk' ||
     (!resData.agentType && resData.status === 'ready_for_handoff');
   if (!fromFrontDesk) return null;
-  if (!(resData.status === 'ready_for_handoff' || resData.handoffPayload)) return null;
+  if (resData.status !== 'ready_for_handoff') return null;
   const handoff = resData.handoffPayload;
   if (!isUsableHandoffPayload(handoff)) return null;
-  const isMed = handoff.targetAgent === 'medical' || handoff.targetAgent === 'biomarker_review';
+  const mapped = mapFrontDeskSpecialist(handoff.targetAgent || resData.targetAgent, handoff.intent || resData.intent);
+  if (!mapped) return null;
   return {
-    targetAgent: isMed ? 'medical' : 'health_baseline',
+    targetAgent: mapped,
     handoff,
     prompt: buildHandoffPrompt(handoff)
   };

@@ -6,6 +6,11 @@ import type {
   UserProfileSnapshot,
   UserMemory,
 } from "./schema.js";
+import {
+  isUnderspecifiedUtterance,
+  isRoutableSpecialistIntent,
+  mapFrontDeskSpecialist,
+} from "../../utils/frontDeskRouting.js";
 
 export const userProfileSchema = {
   type: Type.OBJECT,
@@ -381,11 +386,19 @@ export function synthesizeReadyHandoffPayload(output: any, snap: any, existing: 
   const height = snap.heightCm || existing?.heightCm || 165;
   const weight = snap.weightKg || existing?.weightKg || 65;
   const act = snap.activityLevel || existing?.activityLevel || detectedActivity || 'lightly_active';
+  const intent = output.intent || 'general_inquiry';
+  const goal = output.memory?.goalSummary || (intent === 'weight_loss' ? 'Weight management & metabolic health' : 'Health support');
+  const insights =
+    intent === 'weight_loss'
+      ? ["Complete baseline profile collected.", "Ready for personalized caloric calculation and macro plan."]
+      : intent === 'health_improvement'
+        ? ["Complete baseline profile collected.", "Ready for a health-improvement review."]
+        : ["Complete baseline profile collected."];
   return {
     targetAgent: output.targetAgent,
-    intent: output.intent || 'general_inquiry',
-    summaryForAgent: `User onboarding profile complete. Age: ${age}, Gender: ${gender}, Height: ${height}cm, Weight: ${weight}kg, Activity Level: ${act}. Goal: ${output.memory?.goalSummary || 'Weight management & metabolic health'}.`,
-    actionableInsights: ["Complete baseline profile collected.", "Ready for personalized caloric calculation and macro plan."],
+    intent,
+    summaryForAgent: `User onboarding profile complete. Age: ${age}, Gender: ${gender}, Height: ${height}cm, Weight: ${weight}kg, Activity Level: ${act}. Goal: ${goal}.`,
+    actionableInsights: insights,
     consolidatedUserProfile: {
       age: Number(age),
       gender: String(gender),
@@ -418,29 +431,83 @@ export interface HandoffRepairContext {
  * downgrade to `needs_info` with the missing fields + a safe re-question
  * (the needs_info uiForm synthesizer downstream builds the form).
  */
+function stayAtFrontDesk(output: any, missing: string[] = [], keepSpecialistTarget = false): any {
+  output.status = 'needs_info';
+  output.handoffPayload = null;
+  output.missingFields = missing;
+  if (!keepSpecialistTarget) output.targetAgent = 'general_receptionist';
+  return output;
+}
+
+/**
+ * Only promote needs_info → ready_for_handoff for a named specialist job
+ * (C1b: weight_loss + complete demographics). Never rewrite
+ * general_receptionist to health_coach just because the profile is filled.
+ */
+export function maybePromoteHandoff(output: any, ctx: HandoffRepairContext): any {
+  if (!output || output.isDisambiguationRequired) return output;
+  if (isUnderspecifiedUtterance(ctx.currentUserMessage)) return output;
+  if (output.targetAgent === 'general_receptionist') return output;
+  if (!isRoutableSpecialistIntent(output.intent, output.targetAgent)) return output;
+
+  const specialist = mapFrontDeskSpecialist(output.targetAgent, output.intent);
+  if (specialist !== 'health_baseline') return output;
+
+  const snap = output.memory?.userProfileSnapshot || {};
+  const existing = ctx.existingUserProfile || {};
+  const hasCoreDemographics = Boolean(
+    (snap.age || existing.age) &&
+    (snap.gender || existing.gender) &&
+    (snap.heightCm || existing.heightCm) &&
+    (snap.weightKg || existing.weightKg) &&
+    (snap.activityLevel || existing.activityLevel || ctx.detectedActivity)
+  );
+  if (!hasCoreDemographics) return output;
+
+  if (output.status === 'needs_info' || !output.status || (output.status as string) === 'in_progress') {
+    output.status = 'ready_for_handoff';
+    output.targetAgent = output.targetAgent || 'health_coach';
+    if (!output.handoffPayload) {
+      output.handoffPayload = synthesizeReadyHandoffPayload(output, snap, existing, ctx.detectedActivity);
+    }
+    output.missingFields = [];
+    output.uiForm = null;
+    output.userResponse = output.userResponse || "Thank you! I have all your key details. I am now handing you over to your Health Coach to formulate your personalized plan.";
+  }
+  return output;
+}
+
 export function enforceReadyHandoffContract(output: any, ctx: HandoffRepairContext): any {
   if (!output || output.status !== 'ready_for_handoff') return output;
   const snap = output.memory?.userProfileSnapshot || {};
   const existing = ctx.existingUserProfile || {};
   const lang = existing?.language === 'id' ? 'id' : 'en';
+
+  if (isUnderspecifiedUtterance(ctx.currentUserMessage) || output.targetAgent === 'general_receptionist') {
+    return stayAtFrontDesk(output, []);
+  }
+  if (!isRoutableSpecialistIntent(output.intent, output.targetAgent) && !mapFrontDeskSpecialist(output.targetAgent, output.intent)) {
+    return stayAtFrontDesk(output, []);
+  }
+
   const hp = output.handoffPayload;
-  const usable = hp && typeof hp === 'object' && hp.targetAgent && (hp.summaryForAgent || hp.userContextSummary);
+  const usable = hp && typeof hp === 'object' && hp.targetAgent && hp.targetAgent !== 'general_receptionist' && (hp.summaryForAgent || hp.userContextSummary);
   if (!usable) {
     const missing: string[] = [];
-    if (!(snap.age || existing.age)) missing.push('age');
-    if (!(snap.gender || existing.gender)) missing.push('gender');
-    if (!(snap.heightCm || existing.heightCm)) missing.push('height');
-    if (!(snap.weightKg || existing.weightKg)) missing.push('weight');
-    if (!(snap.activityLevel || existing.activityLevel || ctx.detectedActivity)) missing.push('activity_level');
-    if (missing.length === 0) {
-      output.targetAgent = output.targetAgent === 'general_receptionist' ? 'health_coach' : (output.targetAgent || 'health_coach');
+    const specialist = mapFrontDeskSpecialist(output.targetAgent, output.intent);
+    if (specialist === 'health_baseline') {
+      if (!(snap.age || existing.age)) missing.push('age');
+      if (!(snap.gender || existing.gender)) missing.push('gender');
+      if (!(snap.heightCm || existing.heightCm)) missing.push('height');
+      if (!(snap.weightKg || existing.weightKg)) missing.push('weight');
+      if (!(snap.activityLevel || existing.activityLevel || ctx.detectedActivity)) missing.push('activity_level');
+    }
+    if (missing.length === 0 && isRoutableSpecialistIntent(output.intent, output.targetAgent)) {
       output.handoffPayload = synthesizeReadyHandoffPayload(output, snap, existing, ctx.detectedActivity);
       output.missingFields = [];
       output.uiForm = null;
     } else {
-      output.status = 'needs_info';
-      output.handoffPayload = null;
-      output.missingFields = missing;
+      stayAtFrontDesk(output, missing, true);
       if (!output.userResponse || !String(output.userResponse).trim()) {
         const msg = String(ctx.currentUserMessage || '');
         const goal = String(output.memory?.goalSummary || '');
@@ -460,9 +527,14 @@ export function enforceReadyHandoffContract(output: any, ctx: HandoffRepairConte
     output.uiForm = null;
   }
   if (!output.userResponse || !String(output.userResponse).trim()) {
+    const specialist = mapFrontDeskSpecialist(output.targetAgent, output.intent);
     output.userResponse = lang === 'id'
-      ? 'Terima kasih! Detail Anda sudah lengkap. Saya teruskan ke Health Coach untuk menyusun rencana personal Anda.'
-      : 'Thank you! I have all your key details. I am now handing you over to your Health Coach to formulate your personalized plan.';
+      ? (specialist === 'medical'
+        ? 'Terima kasih! Saya teruskan ke spesialis medis.'
+        : 'Terima kasih! Detail Anda sudah lengkap. Saya teruskan ke Health Coach untuk menyusun rencana personal Anda.')
+      : (specialist === 'medical'
+        ? 'Thank you! I am handing you over to the medical specialist.'
+        : 'Thank you! I have all your key details. I am now handing you over to your Health Coach to formulate your personalized plan.');
   }
   return output;
 }
@@ -578,26 +650,11 @@ export async function callReceptionistAgent(
     }
   }
 
-  // If all core demographic fields are present, trigger handoff to health coach
-  const currentSnap = output.memory?.userProfileSnapshot || {};
-  const hasCoreDemographics = Boolean(
-    (currentSnap.age || payload.existingUserProfile?.age) &&
-    (currentSnap.gender || payload.existingUserProfile?.gender) &&
-    (currentSnap.heightCm || payload.existingUserProfile?.heightCm) &&
-    (currentSnap.weightKg || payload.existingUserProfile?.weightKg) &&
-    (currentSnap.activityLevel || payload.existingUserProfile?.activityLevel || detectedActivity)
-  );
-
-  if (hasCoreDemographics && (output.status === 'needs_info' || !output.status || (output.status as string) === 'in_progress')) {
-    output.status = 'ready_for_handoff';
-    output.targetAgent = output.targetAgent === 'general_receptionist' ? 'health_coach' : (output.targetAgent || 'health_coach');
-    if (!output.handoffPayload) {
-      output.handoffPayload = synthesizeReadyHandoffPayload(output, currentSnap, payload.existingUserProfile, detectedActivity);
-    }
-    output.missingFields = [];
-    output.uiForm = null;
-    output.userResponse = output.userResponse || "Thank you! I have all your key details. I am now handing you over to your Health Coach to formulate your personalized plan.";
-  }
+  output = maybePromoteHandoff(output, {
+    existingUserProfile: payload.existingUserProfile,
+    detectedActivity,
+    currentUserMessage: payload.currentUserMessage
+  });
 
   output = enforceReadyHandoffContract(output, {
     existingUserProfile: payload.existingUserProfile,
