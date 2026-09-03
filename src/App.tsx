@@ -975,6 +975,7 @@ export default function App() {
   const [draftReport, setDraftReport] = useState<RecommendationReport | null>(null);
   // Chat window visibility modals
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [activeFrontDeskJobId, setActiveFrontDeskJobId] = useState<string | null>(null);
   const [isFloatingOpen, setIsFloatingOpen] = useState(false);
 
   // Keep latest states in refs for the background runner to read without stale closures
@@ -6737,6 +6738,8 @@ export default function App() {
         return (
           <React.Suspense fallback={null}>
             <ErrorBoundary>{isFrontDeskOpen && <LogChat type="front_desk"
+            jobId={activeFrontDeskJobId}
+            onJobCreated={setActiveFrontDeskJobId}
             profile={profile}
             isOpen={isFrontDeskOpen}
             onOpenAgentFromFrontDesk={handleOpenAgentFromFrontDesk}

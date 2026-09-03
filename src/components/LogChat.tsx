@@ -23,6 +23,7 @@ import ImageSlider from './ImageSlider';
 import { blobToDurableDataUrl } from '../utils/foodImageSources';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 const FullScreenLogViewer = lazyWithRetry(() => import('./FullScreenLogViewer'));
+const frontDeskAbortControllers = new Map<string, AbortController>();
 import FullScreenInstructionViewer from './FullScreenInstructionViewer';
 import { NutritionLabelTable } from './chat-cards/NutritionLabelTable';
 import { InteractivePlacesMap } from './InteractivePlacesMap';
@@ -398,6 +399,7 @@ interface LogChatProps {
   key?: string;
   type: AgentType;
   jobId?: string | null;
+  onJobCreated?: (id: string) => void;
   profile?: UserProfile | null;
   isOpen: boolean;
   selectedModelId: string;
@@ -457,6 +459,7 @@ const getSessionId = (): string => {
 export default function LogChat({ 
   type, 
   jobId,
+  onJobCreated,
   profile, 
   isOpen, 
   selectedModelId, 
@@ -1808,11 +1811,12 @@ ${logsText}`);
     }
   }, [isOpen]);
   const handleDownloadDebug = async (jobIdToDownload: string, msg: any, format: 'json' | 'markdown' = 'markdown') => {
+    const downloadId = (jobIdToDownload && jobIdToDownload !== 'error_turn') ? jobIdToDownload : (jobId || msg?.data?.jobId || msg?.data?.requestId);
     await downloadJobDebugReport({
-      jobIdToDownload,
+      jobIdToDownload: downloadId,
       msg,
       format,
-      fallbackJobId: jobId,
+      fallbackJobId: jobId || undefined,
       messages,
       inputText,
       globalLiveLogs: globalLiveLogsRef.current,
@@ -3102,10 +3106,35 @@ ${logsText}`);
         }
       }
     };
+    let currentJobId = jobId;
+    if (isAgent('front_desk')) {
+      if (!currentJobId) {
+        currentJobId = `job_frontdesk_${Date.now()}`;
+        if (onJobCreated) {
+          onJobCreated(currentJobId);
+        }
+      }
+    }
     setMessages(prev => {
       const newMsgs = [...prev, userMsg, liveMsg];
-      if (jobId) {
-        JobStore.updateJob(jobId, { messages: newMsgs, status: 'running' });
+      const targetId = currentJobId || jobId;
+      if (targetId) {
+        if (isAgent('front_desk') && !JobStore.getJob(targetId)) {
+          JobStore.createJob({
+            id: targetId,
+            kind: 'front_desk',
+            status: 'running',
+            inputSnapshot: { text: textToSend, imageRefs: [] },
+            messages: newMsgs,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            stepIndex: 1,
+            stepTotal: 1,
+            attemptByStep: {}
+          });
+        } else {
+          JobStore.updateJob(targetId, { messages: newMsgs, status: 'running' });
+        }
       }
       return newMsgs;
     });
@@ -3718,6 +3747,25 @@ ${logsText}`);
         displayPayload.images = displayPayload.images.map((img: any) => typeof img === 'string' ? img.substring(0, 100) + "... [truncated base64]" : img);
       }
       setLastSentPayload(displayPayload);
+      const targetId = currentJobId || jobId;
+      if (isAgent('front_desk') && targetId) {
+        saveAgentRequestLog({
+          id: targetId,
+          timestamp: new Date().toISOString(),
+          summary: `Front Desk: ${textToSend.slice(0, 35)}`,
+          logs: [
+            { timestamp: new Date().toISOString(), message: `[front_desk] Initiated request: ${textToSend.slice(0, 100)}` }
+          ]
+        });
+      }
+      let controller: AbortController | undefined;
+      if (isAgent('front_desk') && targetId) {
+        if (frontDeskAbortControllers.has(targetId)) {
+          frontDeskAbortControllers.get(targetId)?.abort();
+        }
+        controller = new AbortController();
+        frontDeskAbortControllers.set(targetId, controller);
+      }
       let fetchEndpoint = endpoint;
       if (endpoint === '/api/gemini/food-analyze' || endpoint === '/api/gemini/health-baseline-analyze' || endpoint === '/api/gemini/medical-analyze') {
         fetchEndpoint += '?stream=true';
@@ -3728,7 +3776,8 @@ ${logsText}`);
           'Content-Type': 'application/json',
           'X-Session-ID': currentReqId
         },
-        body: JSON.stringify(bodyData)
+        body: JSON.stringify(bodyData),
+        signal: controller?.signal
       });
       if (!response.ok) {
         const rawText = await response.text().catch(() => '');
@@ -3807,10 +3856,15 @@ ${logsText}`);
                      for (const key in resultPatch) {
                         updatedAgentResult[key] = resultPatch[key];
                      }
-                     return [
+                     const finalArray = [
                         ...newMsgs.slice(0, newMsgs.length - 1),
                         { ...lastMsg, data: { ...updatedData, agentResult: updatedAgentResult } }
                      ];
+                     const targetId = currentJobId || jobId;
+                     if (targetId) {
+                       JobStore.updateJob(targetId, { messages: finalArray });
+                     }
+                     return finalArray;
                   }
                   return prev;
                });
@@ -4288,14 +4342,16 @@ ${logsText}`);
             migratedAssistantMsg.data.pendingFoodLog = null;
           }
           const finalArray = [...newPrev, migratedAssistantMsg];
-          if (jobId) {
-            JobStore.updateJob(jobId, { messages: finalArray, status: 'succeeded' });
+          const targetId = currentJobId || jobId;
+          if (targetId) {
+            JobStore.updateJob(targetId, { messages: finalArray, status: 'succeeded' });
           }
           return finalArray;
         }
         const finalArray = [...filteredPrev, migratedAssistantMsg];
-        if (jobId) {
-          JobStore.updateJob(jobId, { messages: finalArray, status: 'succeeded' });
+        const targetId = currentJobId || jobId;
+        if (targetId) {
+          JobStore.updateJob(targetId, { messages: finalArray, status: 'succeeded' });
         }
         return finalArray;
       });
@@ -4398,10 +4454,17 @@ ${logsText}`);
             userSelectedMode: mappedMode
           }
         };
-        setMessages(prev => [
-          ...prev.filter(m => !m.isLive && !m.isError && !m.agentUnavailable && !/Failed to process your request|Analysis failed|Vision Scout Failed|Gemini unavailable|rate limit|quota exceeded|quota \(\d+\)|503|429|Service Unavailable/i.test(m.content || '')),
-          errMsg
-        ]);
+        setMessages(prev => {
+          const finalArray = [
+            ...prev.filter(m => !m.isLive && !m.isError && !m.agentUnavailable && !/Failed to process your request|Analysis failed|Vision Scout Failed|Gemini unavailable|rate limit|quota exceeded|quota \(\d+\)|503|429|Service Unavailable/i.test(m.content || '')),
+            errMsg
+          ];
+          const targetId = currentJobId || jobId;
+          if (targetId) {
+            JobStore.updateJob(targetId, { messages: finalArray, status: 'failed', error: { class: 'transient', message: displayErr } });
+          }
+          return finalArray;
+        });
       }
     } finally {
       console.log('[DIAG2] finally block reached - isAnalyzing about to be reset');
@@ -4410,6 +4473,16 @@ ${logsText}`);
       setIsSubmitting(false);
       setIsAnalyzing(false);
       setActiveReqId(null);
+      const targetId = currentJobId || jobId;
+      if (targetId) {
+        if (frontDeskAbortControllers.has(targetId)) {
+          frontDeskAbortControllers.delete(targetId);
+        }
+        const job = JobStore.getJob(targetId);
+        if (job && job.status === 'running') {
+          JobStore.updateJob(targetId, { status: 'succeeded' });
+        }
+      }
     }
   };
   const lastAutoSendKeyRef = useRef<string | null>(null);

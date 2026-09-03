@@ -295,7 +295,68 @@ export function formatReceptionistInput(input: ReceptionistInputPayload): string
   return parts.join("\n");
 }
 
-/** Repair model JSON that emits runaway decimals (e.g. 74.0000... x thousands) which JSON.parse cannot load. */
+/** Repair truncated JSON string by closing unclosed strings, removing dangling keys, and balancing brackets/braces. */
+export function repairTruncatedJson(raw: string): string {
+  if (!raw || !raw.trim()) return "{}";
+  let s = raw.trim();
+
+  // Strip markdown code fences if present
+  s = s.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+
+  try {
+    JSON.parse(s);
+    return s;
+  } catch {
+    // Needs structural repair
+  }
+
+  let inString = false;
+  let isEscaped = false;
+  const stack: string[] = [];
+
+  for (let i = 0; i < s.length; i++) {
+    const char = s[i];
+    if (inString) {
+      if (isEscaped) {
+        isEscaped = false;
+      } else if (char === "\\") {
+        isEscaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+    } else {
+      if (char === '"') {
+        inString = true;
+      } else if (char === "{") {
+        stack.push("}");
+      } else if (char === "[") {
+        stack.push("]");
+      } else if (char === "}" || char === "]") {
+        if (stack.length > 0 && stack[stack.length - 1] === (char === "}" ? "}" : "]")) {
+          stack.pop();
+        }
+      }
+    }
+  }
+
+  if (inString) {
+    s += '"';
+  }
+
+  // Remove unvalued property key at the end (e.g. `"key":` or `, "key":` or `,"key"`)
+  s = s.replace(/(?:,\s*)?"[^"]*"\s*:\s*$/, "");
+  // Remove trailing commas, colons, or whitespace
+  s = s.replace(/[:,\s]+$/, "");
+
+  // Append remaining closing brackets/braces
+  while (stack.length > 0) {
+    s += stack.pop();
+  }
+
+  return s;
+}
+
+/** Repair model JSON that emits runaway decimals or truncated structure so JSON.parse succeeds. */
 export function sanitizeReceptionistJson(raw: string): string {
   if (!raw) return "{}";
   let s = raw.length > 200_000 ? raw.slice(0, 200_000) : raw;
@@ -307,7 +368,7 @@ export function sanitizeReceptionistJson(raw: string): string {
     const n = Number(m);
     return Number.isFinite(n) ? String(n) : "null";
   });
-  return s;
+  return repairTruncatedJson(s);
 }
 
 export async function callReceptionistAgent(
@@ -326,7 +387,7 @@ export async function callReceptionistAgent(
       responseMimeType: "application/json",
       responseSchema: receptionistOutputSchema,
       temperature: 0.1,
-      maxOutputTokens: 2048,
+      maxOutputTokens: 8192,
     },
   });
 
