@@ -4443,7 +4443,11 @@ ${logsText}`);
           : (insights.length > 0 ? insights.map((i: string) => `• ${i}`).join('\n') : 'Please create my personalized health plan based on my profile.');
         console.log(`[DIAG6] handoff triggered: targetAgent=${targetAgent}, promptLength=${prompt.length}`);
 
-        if (onOpenAgentFromFrontDesk) {
+        if (targetAgent === 'health_baseline' || (targetAgent as string) === 'health_coach') {
+          setTimeout(() => {
+            initiateSeamlessHandoff(targetAgent, handoff, prompt, handoff.collectedData || resData.updatedProfile);
+          }, 350);
+        } else if (onOpenAgentFromFrontDesk) {
           setTimeout(() => {
             onOpenAgentFromFrontDesk(targetAgent, {
               handoffPayload: handoff,
@@ -4607,7 +4611,8 @@ ${logsText}`);
     targetAgent: any,
     options?: { prefillMessage?: string; autoSendMessage?: string; handoffPayload?: any; updatedProfile?: any }
   ) => {
-    if (onOpenAgentFromFrontDesk) {
+    const isMed = targetAgent === 'medical' || targetAgent === 'biomarker_review' || options?.handoffPayload?.targetAgent === 'medical' || options?.handoffPayload?.targetAgent === 'biomarker_review';
+    if (isMed && onOpenAgentFromFrontDesk) {
       onOpenAgentFromFrontDesk(targetAgent, options);
       return;
     }
