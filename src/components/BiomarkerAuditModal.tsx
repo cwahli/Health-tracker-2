@@ -190,9 +190,10 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
       profile?.customBiomarkers || {},
       biomarkerHistory || [],
       biomarkers || {},
-      profile?.deletedCustomBiomarkerKeys || {}
+      profile?.deletedCustomBiomarkerKeys || {},
+      profile?.language
     );
-  }, [isOpen, profile?.customBiomarkers, profile?.deletedCustomBiomarkerKeys, biomarkerHistory, biomarkers]);
+  }, [isOpen, profile?.customBiomarkers, profile?.deletedCustomBiomarkerKeys, profile?.language, biomarkerHistory, biomarkers]);
 
   // Automatic background continuity persistence on any change (no manual button required)
   useEffect(() => {

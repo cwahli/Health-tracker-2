@@ -1469,6 +1469,7 @@ export default function Header({
         isOpen={showBugTracker}
         onClose={() => setShowBugTracker(false)}
         onViewJob={onViewJob}
+        language={profile.language}
       />
       <SyncDiagnosticsModal
         isOpen={showSyncDiagnostics}
@@ -4553,6 +4554,7 @@ export default function Header({
         isOpen={showBugTracker}
         onClose={() => setShowBugTracker(false)}
         onViewJob={onViewJob}
+        language={profile.language}
       />
       <SyncDiagnosticsModal
         isOpen={showSyncDiagnostics}

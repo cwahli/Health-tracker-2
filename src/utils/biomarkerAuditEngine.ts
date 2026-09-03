@@ -29,6 +29,7 @@ import {
   COMMON_UNIT_SUFFIXES
 } from './biomarkers';
 import { CONVERSION_FACTORS } from './unitConversion';
+import { t, interpolate } from './i18n';
 
 export {
   CLINICAL_SYNONYM_MAP,
@@ -630,7 +631,8 @@ export function runGeneralizedBiomarkerAudit(
   customBiomarkers: { [key: string]: any } = {},
   biomarkerHistory: any[] = [],
   currentBiomarkers: { [key: string]: any } = {},
-  deletedCustomBiomarkerKeys: { [key: string]: number } = {}
+  deletedCustomBiomarkerKeys: { [key: string]: number } = {},
+  lang?: unknown
 ): BiomarkerAuditReport {
   ensureCatalogIndexed();
   const items: BiomarkerAuditItem[] = [];
@@ -681,7 +683,7 @@ export function runGeneralizedBiomarkerAudit(
     return getMergedBiomarkerDef(key, catalogByKey.get(key.toLowerCase()), customBiomarkers[key], biomarkerHistory);
   };
 
-  const fakeProfile = { customBiomarkers, deletedCustomBiomarkerKeys };
+  const fakeProfile = { customBiomarkers, deletedCustomBiomarkerKeys, language: lang };
   const telemetryFlags = detectFlaggedTelemetryErrors(
     currentBiomarkers,
     fakeProfile,
@@ -929,10 +931,10 @@ export function runGeneralizedBiomarkerAudit(
           sourceField: source,
           confidence: 0.95,
           reason,
-          issueTitle: tFlag?.issueTitle || 'Unit Multiplier / Format Correction',
+          issueTitle: tFlag?.issueTitle || t(lang, 'auditTitleUnitCorrect'),
           preciseCause: tFlag?.preciseCause || reason,
-          suggestedFix: tFlag?.suggestedFix || `Convert unit to ${proposedUnit}.`,
-          badgeLabel: tFlag?.badgeLabel || `Unit: ${proposedUnit}`
+          suggestedFix: tFlag?.suggestedFix || interpolate(t(lang, 'auditFixUnitCorrect'), { unit: proposedUnit }),
+          badgeLabel: tFlag?.badgeLabel || interpolate(t(lang, 'auditBadgeUnitCorrect'), { unit: proposedUnit })
         };
       } else if (tFlag && !isCorruptedUnit(currentUnit)) {
         status = 'corrupted_unit';
@@ -941,10 +943,10 @@ export function runGeneralizedBiomarkerAudit(
           sourceField: 'logHistory',
           confidence: 0.8,
           reason: tFlag.preciseCause || tFlag.reason,
-          issueTitle: tFlag.issueTitle || 'Unit Scale / Differential Mismatch',
+          issueTitle: tFlag.issueTitle || t(lang, 'auditTitleScaleMismatch'),
           preciseCause: tFlag.preciseCause || tFlag.reason,
           suggestedFix: tFlag.suggestedFix,
-          badgeLabel: tFlag.badgeLabel || 'Scale / Unit Error'
+          badgeLabel: tFlag.badgeLabel || t(lang, 'auditBadgeScaleMismatch')
         };
       } else if (!proposedUnit || proposedUnit !== currentUnit) {
         status = 'corrupted_unit';
@@ -952,11 +954,11 @@ export function runGeneralizedBiomarkerAudit(
           proposedUnit: '',
           sourceField: 'optimalValue',
           confidence: 0.2,
-          reason: 'Unit is corrupted and no internal reference unit could be discovered',
-          issueTitle: 'Unspecified or Missing Unit',
-          preciseCause: 'Biomarker definition has an invalid or corrupted unit declaration.',
-          suggestedFix: 'Standardize unit with AI Agent or manually assign reference unit.',
-          badgeLabel: 'Missing Unit'
+          reason: t(lang, 'auditCauseCorrupt'),
+          issueTitle: t(lang, 'auditTitleMissingUnit'),
+          preciseCause: t(lang, 'auditCauseMissingUnit'),
+          suggestedFix: t(lang, 'auditFixMissingUnit'),
+          badgeLabel: t(lang, 'auditBadgeMissingUnit')
         };
       }
     }

@@ -41,7 +41,7 @@ export function getLocalFallbackReport(profile: UserProfile | null): Recommendat
         riboflavin: "1.3 mg",
         niacin: "16 mg"
       },
-      mostImportantNextStep: "See GP urgently about statin — rosuvastatin 5mg is the evidence-based starting point for East Asian men with your high LDL, HbA1c, and declining kidney filtration.",
+      mostImportantNextStep: t(lang, 'seedFbNext'),
       actions: [
         {
           id: "act_1",
@@ -103,16 +103,16 @@ export function getLocalFallbackReport(profile: UserProfile | null): Recommendat
         }
       ],
       healthRiskForecast: {
-        year5: "Mildly progressive atherosclerosis, risk of transitioning from borderline pre-diabetes to active Type 2 Diabetes, and decline in renal filtration capacity to Stage 3 CKD.",
-        year10: "Significant vascular plaque buildup. Kidney function might drop to GFR < 60, triggering high blood pressure. Elevated Risk of cardiovascular events.",
-        year20: "40% probability of a coronary event. Accelerated kidney wear requiring complex nephrological intervention.",
-        optimized5: "Restored LDL < 100 mg/dL, stabilized blood sugar in normal ranges, and kidney filtration preserved at healthy levels.",
-        optimized10: "Plaque progression halted. Fully functional cardiovascular system and kidney values stabilized in the safe green zone.",
-        optimized20: "Optimal cardiovascular performance. Healthy aging index score 95th percentile, active longevity with zero diabetic or renal complications."
+        year5: t(lang, 'seedFbFc5'),
+        year10: t(lang, 'seedFbFc10'),
+        year20: t(lang, 'seedFbFc20'),
+        optimized5: t(lang, 'seedFbFcOpt5'),
+        optimized10: t(lang, 'seedFbFcOpt10'),
+        optimized20: t(lang, 'seedFbFcOpt20')
       },
       topNutrientTargets: ["calories", "solubleFibre", "saturatedFat", "protein", "sodium", "carbohydrates"],
       topWeeklyNutrientTargets: ["vitaminD", "omega3", "magnesium"],
-      nutrientRankingRationale: "Focusing on Saturated Fat restriction is your single most important clinical priority, as limiting saturated fats directly halts the overproduction of atherogenic LDL particles and vascular plaque buildup. Pairing this with increased Soluble Fibre binds intestinal cholesterol to accelerate lipid excretion and stabilize glucose spikes, creating a foundational baseline for metabolic stability. Managing overall Caloric intake, Sodium, and Protein provides essential protection for renal filtration (eGFR) and vascular pressure, but these serve as secondary supporting targets. Prioritizing saturated fat reduction and soluble fiber intake delivers the highest overall health leverage, addressing the root driver of cardiovascular risk far more effectively than isolated micronutrient adjustments."
+      nutrientRankingRationale: t(lang, 'seedFbRationale')
     };
   }
 
@@ -151,7 +151,7 @@ export function getLocalFallbackReport(profile: UserProfile | null): Recommendat
       riboflavin: "1.3 mg",
       niacin: "16 mg"
     },
-    mostImportantNextStep: "Reduce saturated fat strictly to under 12g per day and complete a clinical blood re-test in 3 months to monitor cholesterol and glucose trends.",
+    mostImportantNextStep: t(lang, 'seedFbGenNext'),
     actions: [
       {
         id: "act_1",
@@ -182,15 +182,15 @@ export function getLocalFallbackReport(profile: UserProfile | null): Recommendat
       }
     ],
     healthRiskForecast: {
-      year5: "Slight vascular stiffness and mild risk of elevated glucose tolerance if sedentary habits persist.",
-      year10: "Increasing risk of metabolic decline and minor cardiovascular strain.",
-      year20: "Elevated probability of cardiovascular plaques and reduced active energy index.",
-      optimized5: "Pristine blood pressure levels, balanced lipid particles, and metabolic health completely optimized.",
-      optimized10: "Robust vascular health, optimized glycemic control, and ideal weight targets maintained.",
-      optimized20: "Healthy aging with minimal chronic disease probability and vibrant metabolic index."
+      year5: t(lang, 'seedFbGenFc5'),
+      year10: t(lang, 'seedFbGenFc10'),
+      year20: t(lang, 'seedFbGenFc20'),
+      optimized5: t(lang, 'seedFbGenFcOpt5'),
+      optimized10: t(lang, 'seedFbGenFcOpt10'),
+      optimized20: t(lang, 'seedFbGenFcOpt20')
     },
     topNutrientTargets: ["calories", "saturatedFat", "sodium", "protein", "solubleFibre", "carbohydrates"],
     topWeeklyNutrientTargets: ["vitaminD", "omega3", "magnesium"],
-    nutrientRankingRationale: "Focusing on Saturated Fat restriction is your single most important clinical priority, as limiting saturated fats directly halts the overproduction of atherogenic LDL particles and vascular plaque buildup. Pairing this with increased Soluble Fibre binds intestinal cholesterol to accelerate lipid excretion and stabilize glucose spikes, creating a foundational baseline for metabolic stability. Managing overall Caloric intake, Sodium, and Protein provides essential protection for renal filtration (eGFR) and vascular pressure, but these serve as secondary supporting targets. Prioritizing saturated fat reduction and soluble fiber intake delivers the highest overall health leverage, addressing the root driver of cardiovascular risk far more effectively than isolated micronutrient adjustments."
+    nutrientRankingRationale: t(lang, 'seedFbGenRationale')
   };
 }

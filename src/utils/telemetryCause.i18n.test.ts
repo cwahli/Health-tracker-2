@@ -17,4 +17,19 @@ describe('diagnoseTelemetryIssue language', () => {
     const d = diagnoseTelemetryIssue('hba1c', 'HbA1c', 5.4, '%', '4.0 - 5.6', undefined, 'id');
     expect(d.preciseCause).toContain('menyimpang signifikan');
   });
+
+  it('localizes issueTitle/suggestedFix/badgeLabel in Indonesian', () => {
+    const d = diagnoseTelemetryIssue('basophils', 'Basophils', 100, '10^9/L', '0.0 - 0.1', undefined, 'id');
+    expect(d.issueTitle).toContain('Kesalahan Skala Unit');
+    expect(d.suggestedFix).toContain('Perbarui nilai menjadi 0.10');
+    expect(d.badgeLabel).toContain('Skala:');
+    expect(d.issueTitle).not.toContain('Unit Scale Error');
+  });
+
+  it('keeps English issueTitle/suggestedFix/badgeLabel by default', () => {
+    const d = diagnoseTelemetryIssue('basophils', 'Basophils', 100, '10^9/L', '0.0 - 0.1');
+    expect(d.issueTitle).toContain('Unit Scale Error');
+    expect(d.suggestedFix).toContain('Update value to 0.10');
+    expect(d.badgeLabel).toContain('Scale:');
+  });
 });

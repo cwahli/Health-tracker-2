@@ -815,7 +815,7 @@ export default function FoodHistoryTab({
 
   const handleSaveManualLog = () => {
     if (!manualLog.name?.trim()) {
-      alert("Please provide a name for the manual log.");
+      alert(t.alertManualName);
       return;
     }
     if (onLogFood) {
@@ -1485,7 +1485,7 @@ export default function FoodHistoryTab({
                                     });
                                     const dngCount = fileList.length - validFiles.length;
                                     if (dngCount > 0) {
-                                      alert("DNG (RAW) files are not supported. Please select standard images like JPEG, PNG, or WEBP.");
+                                      alert(t.alertDng);
                                     }
                                     if (validFiles.length === 0) {
                                       inputEl.value = '';

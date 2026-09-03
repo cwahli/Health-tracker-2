@@ -1724,12 +1724,12 @@ I can analyze these, compare them with our database keys, and find standard mapp
     if (!onBatchConsolidate) return;
     try {
       onBatchConsolidate(mapping);
-      alert("Selected biomarkers successfully consolidated according to Route Agent recommendations!");
+      alert(t(profile.language, 'dictAlertConsolidated'));
       setIsChatMode(false);
       setSelectedKeys([]);
     } catch (e) {
       console.error(e);
-      alert("Error applying mapping.");
+      alert(t(profile.language, 'dictAlertMappingError'));
     }
   };
 
@@ -1971,7 +1971,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
 
     const selectedUpdates = accuracyComparisonResults.filter(item => accuracySelectedFields[item.id]?.selected);
     if (selectedUpdates.length === 0) {
-      alert("Please select at least one biomarker update to apply.");
+      alert(t(profile.language, 'dictAlertSelectUpdate'));
       return;
     }
 
@@ -2042,18 +2042,18 @@ I can analyze these, compare them with our database keys, and find standard mapp
         const successMsg = {
           id: `acc_msg_success_${Date.now()}`,
           role: 'assistant',
-          content: `✅ Successfully applied updates for ${selectedUpdates.length} biomarker(s)! Both your biomarker dictionary definitions and historical logs have been updated and synchronized.`,
+          content: interpolate(t(profile.language, 'dictChatAccuracyApplied'), { n: selectedUpdates.length }),
           timestamp: new Date().toISOString()
         };
         setDataAccuracyMessages(prev => [...prev, successMsg]);
         setAccuracyComparisonResults(null);
       } else {
         onUpdateProfile({ customBiomarkers: newCustomBiomarkers });
-        alert("Dictionary definitions updated. Note: Historical logs could not be updated as the logging interface was not ready.");
+        alert(t(profile.language, 'dictAlertDictUpdated'));
       }
     } catch (err: any) {
       console.error("Failed to apply accuracy updates:", err);
-      alert(`Error applying updates: ${err.message}`);
+      alert(interpolate(t(profile.language, 'dictAlertApplyUpdates'), { msg: err.message }));
     }
   };
 
@@ -2150,12 +2150,12 @@ I can analyze these, compare them with our database keys, and find standard mapp
         onUpdateProfile({ customBiomarkers: newCustoms });
       }
 
-      alert("Batch operation complete!");
+      alert(t(profile.language, 'dictAlertBatchDone'));
       setIsBatchPasteMode(false);
       setPasteText('');
       setParsedMapping(null);
     } catch (e: any) {
-      alert("Operation failed: " + e.message);
+      alert(interpolate(t(profile.language, 'dictAlertOpFailed'), { msg: e.message }));
     }
   };
 
@@ -2319,7 +2319,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
           });
           if (outlierEntry) {
             const rawVal = outlierEntry.value !== undefined ? outlierEntry.value : outlierEntry.val;
-            const telemetryFix = computeBiomarkerTelemetryMultiplier(itemKey, rawVal, range);
+            const telemetryFix = computeBiomarkerTelemetryMultiplier(itemKey, rawVal, range, profile.language);
             if (telemetryFix) {
               multiplier = telemetryFix.multiplier;
               adjustmentReason = telemetryFix.reason;
@@ -2443,7 +2443,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
       }
     } catch (error: any) {
       console.error(error);
-      alert("Error running agent: " + error.message);
+      alert(interpolate(t(profile.language, 'dictAlertAgentError'), { msg: error.message }));
     } finally {
       setAgentLoading(false);
     }
@@ -2647,7 +2647,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
       setStandardizationSummary(null);
     } catch (e: any) {
       console.error(e);
-      alert("Error applying changes: " + e.message);
+      alert(interpolate(t(profile.language, 'dictAlertApplyError'), { msg: e.message }));
     } finally {
       setAgentLoading(false);
     }
@@ -2905,10 +2905,10 @@ I can analyze these, compare them with our database keys, and find standard mapp
       }
     } catch (error: any) {
       console.error(error);
-      alert("Error running name consolidation agent: " + error.message);
+      alert(interpolate(t(profile.language, 'dictAlertConsolidateError'), { msg: error.message }));
       setConsolidationMessages(prev => [...prev, {
         role: 'agent',
-        content: "Error: " + error.message,
+        content: interpolate(t(profile.language, 'dictChatConsolidateError'), { msg: error.message }),
         isError: true,
         timestamp: new Date().toISOString()
       }]);
@@ -3068,7 +3068,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
       setConsolidationGroups(null);
     } catch (e: any) {
       console.error(e);
-      alert("Error applying name consolidation: " + e.message);
+      alert(interpolate(t(profile.language, 'dictAlertConsolidateApplyError'), { msg: e.message }));
     } finally {
       setConsolidationLoading(false);
     }
@@ -4782,11 +4782,11 @@ I can analyze these, compare them with our database keys, and find standard mapp
                         type="button"
                         onClick={() => {
                           navigator.clipboard.writeText(standardizationYaml || "");
-                          alert("JSON code copied to clipboard!");
+                          alert(t(profile.language, 'dictAlertJsonCopied'));
                         }}
                         className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
                       >
-                        <Copy className="w-3 h-3" /> Copy JSON
+                        <Copy className="w-3 h-3" /> {t(profile.language, 'dictCopyJson')}
                       </button>
                     </div>
                     <pre className="p-4 bg-slate-950 text-slate-100 rounded-xl text-[11px] font-mono leading-relaxed overflow-x-auto max-h-48 border border-slate-800 select-text">
@@ -5354,12 +5354,12 @@ I can analyze these, compare them with our database keys, and find standard mapp
                     }).join('\n\n========================================\n\n');
                     
                     navigator.clipboard.writeText(textContent);
-                    alert('Copied ' + filteredKeysToCopy.length + ' biomarkers with full history log to clipboard!');
+                    alert(interpolate(t(profile.language, 'dictAlertCopiedN'), { n: filteredKeysToCopy.length }));
                   }}
                   className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-theme-border rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
                 >
                   <Copy className="w-3.5 h-3.5 text-slate-500" />
-                  Copy All
+                  {t(profile.language, 'dictCopyAll')}
                 </button>
               </div>
 

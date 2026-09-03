@@ -2800,7 +2800,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
                 ) : (
                   <CheckCircle2 className="w-3.5 h-3.5" />
                 )}
-                {isApplying ? 'Applying...' : justApplied ? 'Applied!' : `Apply These ${tableData.length} Now`}
+                {isApplying ? t(profile?.language, 'tableApplying') : justApplied ? t(profile?.language, 'tableApplied') : interpolate(t(profile?.language, 'tableApplyN'), { n: tableData.length })}
               </button>
             )}
           </>
@@ -2810,12 +2810,12 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
           <button
             type="button"
             onClick={() => {
-              alert("Resuming pipeline to analyze the next batch of raw biomarker data coordinates...");
+              alert(t(profile?.language, 'alertResumePipeline'));
             }}
             className="w-full py-1.5 px-3 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/30 dark:hover:bg-indigo-950/50 border border-indigo-200/50 text-indigo-700 dark:text-indigo-400 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer"
           >
             <ArrowRight className="w-3 h-3" />
-            Continue Analysis
+            {t(profile?.language, 'tableContinueAnalysis')}
           </button>
         ) : null}
       </div>

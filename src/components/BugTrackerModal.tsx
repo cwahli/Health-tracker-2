@@ -68,14 +68,16 @@ import {
   tapeBoardIsHydrated,
 } from '../utils/bugTapeReplay';
 import { overlayAutoRemaining, isHumanCheckLine } from '../utils/bugTapeReview';
+import { t } from '../utils/i18n';
 
 interface BugTrackerModalProps {
   isOpen: boolean;
   onClose: () => void;
   onViewJob?: (jobId: string) => void;
+  language?: string;
 }
 
-export default function BugTrackerModal({ isOpen, onClose, onViewJob }: BugTrackerModalProps) {
+export default function BugTrackerModal({ isOpen, onClose, onViewJob, language }: BugTrackerModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<{
@@ -618,7 +620,7 @@ export default function BugTrackerModal({ isOpen, onClose, onViewJob }: BugTrack
           if (ready.length > 0) {
             handleSelectTag(ready[0].id);
           } else {
-            alert('No ready bugs in the queue!');
+            alert(t(language, 'alertNoReadyBugs'));
           }
         }
       }

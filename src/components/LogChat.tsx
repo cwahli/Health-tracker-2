@@ -2184,7 +2184,7 @@ ${logsText}`);
       });
       const dngCount = fileList.length - validFiles.length;
       if (dngCount > 0) {
-        alert("DNG (RAW) files are not supported by web browsers. Please select standard images like JPEG, PNG, or WEBP.");
+        alert(t.alertDng);
       }
       if (validFiles.length === 0) return;
       setIsCompressing(true);

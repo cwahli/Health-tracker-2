@@ -3,6 +3,7 @@ import JSZip from 'jszip';
 import Papa from 'papaparse';
 import { saveAs } from 'file-saver';
 import { FoodLog, BiomarkerLog, UserProfile } from '../types';
+import { t } from '../utils/i18n';
 import { Archive, Download, Upload, AlertCircle, Check, Image as ImageIcon, FileSpreadsheet, RefreshCw } from 'lucide-react';
 
 interface Props {
@@ -130,7 +131,7 @@ export default function BackupRestoreTab({ profile, foodLogs, biomarkerHistory, 
       saveAs(content, filename);
     } catch (e) {
       console.error(e);
-      alert("Failed to create backup.");
+      alert(t(profile?.language, 'alertBackupCreate'));
     }
     setIsExporting(false);
   };
@@ -140,13 +141,13 @@ export default function BackupRestoreTab({ profile, foodLogs, biomarkerHistory, 
     if (!file) return;
 
     setIsImporting(true);
-    setImportStatus('Reading ZIP...');
+    setImportStatus(t(profile?.language, 'backupStReading'));
     try {
       const zip = new JSZip();
       await zip.loadAsync(file);
 
       // Parse food logs
-      setImportStatus('Parsing Food Logs...');
+      setImportStatus(t(profile?.language, 'backupStFoods'));
       let importedFoods: any[] = [];
       const foodFile = zip.file("foodLogs.csv");
       if (foodFile) {
@@ -168,7 +169,7 @@ export default function BackupRestoreTab({ profile, foodLogs, biomarkerHistory, 
       }
 
       // Parse biomarkers
-      setImportStatus('Parsing Biomarkers...');
+      setImportStatus(t(profile?.language, 'backupStBio'));
       let importedBio: any[] = [];
       const bioFile = zip.file("biomarkerHistory.csv");
       if (bioFile) {
@@ -187,7 +188,7 @@ export default function BackupRestoreTab({ profile, foodLogs, biomarkerHistory, 
       }
 
       // Read images
-      setImportStatus('Restoring Images...');
+      setImportStatus(t(profile?.language, 'backupStImages'));
       const imgFolder = zip.folder("images");
       if (imgFolder) {
         for (const log of importedFoods) {
@@ -212,7 +213,7 @@ export default function BackupRestoreTab({ profile, foodLogs, biomarkerHistory, 
         }
       }
 
-      setImportStatus('Checking for conflicts...');
+      setImportStatus(t(profile?.language, 'backupStConflicts'));
       
       const newFoods: FoodLog[] = [];
       const newBio: BiomarkerLog[] = [];
@@ -312,7 +313,7 @@ export default function BackupRestoreTab({ profile, foodLogs, biomarkerHistory, 
       });
 
       if (newFoods.length === 0 && newBio.length === 0) {
-         setImportStatus('No new or changed records found in backup.');
+         setImportStatus(t(profile?.language, 'backupStNoChanges'));
          setTimeout(() => setImportStatus(''), 3000);
       } else {
          setStagedFoods(newFoods);
@@ -325,7 +326,7 @@ export default function BackupRestoreTab({ profile, foodLogs, biomarkerHistory, 
 
     } catch (e) {
       console.error(e);
-      alert("Failed to read backup.");
+      alert(t(profile?.language, 'alertBackupRead'));
       setImportStatus('');
     }
     setIsImporting(false);
@@ -388,7 +389,7 @@ export default function BackupRestoreTab({ profile, foodLogs, biomarkerHistory, 
      }
 
      if (onSaveAndSync) {
-       setImportStatus('Saving and syncing to cloud...');
+       setImportStatus(t(profile?.language, 'backupStSaving'));
        (() => {
          // Clean profile from any deleted log IDs for restored elements so they don't get filtered out
          const cleanProfile = profile ? { ...profile } : null;
@@ -418,12 +419,12 @@ export default function BackupRestoreTab({ profile, foodLogs, biomarkerHistory, 
          return onSaveAndSync(cleanProfile || profile, finalFoods, biomarkers, finalBio, actions || [], dailyBenefits || [], report, { type: 'fullPush' });
        })()
          .then(() => {
-           setImportStatus('Import successful and synced to cloud!');
+           setImportStatus(t(profile?.language, 'backupStSynced'));
            setTimeout(() => setImportStatus(''), 4000);
          })
          .catch((e) => {
            console.error(e);
-           setImportStatus('Import saved locally, but cloud sync failed. Please retry from the sync menu.');
+           setImportStatus(t(profile?.language, 'backupStLocalOnly'));
            setTimeout(() => setImportStatus(''), 6000);
          });
      } else {
@@ -432,7 +433,7 @@ export default function BackupRestoreTab({ profile, foodLogs, biomarkerHistory, 
        // silently claiming success.
        setFoodLogs(finalFoods);
        setBiomarkerHistory(finalBio);
-       setImportStatus('Import applied locally only — could not reach the cloud save pipeline. Refresh may lose this data.');
+       setImportStatus(t(profile?.language, 'backupStNoCloud'));
        setTimeout(() => setImportStatus(''), 6000);
      }
 

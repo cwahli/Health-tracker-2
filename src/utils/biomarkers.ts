@@ -2086,20 +2086,20 @@ export function diagnoseTelemetryIssue(
       // e.g. 100 logged for basophils (range 0.0 - 0.1 10^9/L)
       const multiple = Math.round(num / (refMax || 0.1));
       return {
-        issueTitle: `Unit Scale Error: Cell Count vs 10^9/L`,
+        issueTitle: t(lang, 'outlierTitleWbcCells'),
         preciseCause: interpolate(t(lang, 'outlierWbcCellsCause'), { val, unit: displayUnit || '10^9/L', multiple, range: rangeStr || '0.0 - 0.1', converted: (num / 1000).toFixed(2) }),
-        suggestedFix: `Update value to ${(num / 1000).toFixed(2)} 10^9/L, or update biomarker unit if recording raw cells/µL.`,
-        badgeLabel: `Scale: /µL vs 10^9/L`
+        suggestedFix: interpolate(t(lang, 'outlierFixWbcCells'), { converted: (num / 1000).toFixed(2) }),
+        badgeLabel: t(lang, 'outlierBadgeWbcCells')
       };
     }
     if (num > refMax * 3 || (num >= 1.5 && refMax <= 1.0)) {
       // e.g. 55 for neutrophils, 32 for lymphocytes, 7 for monocytes, 4 for eosinophils
       const multiple = Math.round(num / refMax);
       return {
-        issueTitle: `Unit Scale Error: Percentage Differential vs Absolute Count`,
+        issueTitle: t(lang, 'outlierTitleWbcPct'),
         preciseCause: interpolate(t(lang, 'outlierWbcPctCause'), { val, unit: displayUnit || '10^9/L', multiple, range: rangeStr || '', converted: (num * 0.1).toFixed(2) }),
-        suggestedFix: `If this represents ${val}%, convert to absolute count (${(num * 0.1).toFixed(2)} 10^9/L) or change unit to % differential.`,
-        badgeLabel: `Scale: % vs 10^9/L`
+        suggestedFix: interpolate(t(lang, 'outlierFixWbcPct'), { val, converted: (num * 0.1).toFixed(2) }),
+        badgeLabel: t(lang, 'outlierBadgeWbcPct')
       };
     }
   }
@@ -2107,29 +2107,29 @@ export function diagnoseTelemetryIssue(
   // 2. Ratio vs Percentage scale mismatch (e.g. Hematocrit 0.48 vs 48%)
   if (refMax !== undefined && refMax > 0 && refMax <= 1.0 && !isNaN(num) && num >= 10) {
     return {
-      issueTitle: `Unit Scale Error: Percentage (${val}%) vs Decimal Ratio (0.xx L/L)`,
+      issueTitle: interpolate(t(lang, 'outlierTitleRatioPct'), { val }),
       preciseCause: interpolate(t(lang, 'outlierRatioPctCause'), { val, range: rangeStr }),
-      suggestedFix: `Convert value to ${(num / 100).toFixed(2)} or change reference range to percentage (e.g. 36 - 50 %).`,
-      badgeLabel: `Scale: % vs Ratio`
+      suggestedFix: interpolate(t(lang, 'outlierFixRatioPct'), { converted: (num / 100).toFixed(2) }),
+      badgeLabel: t(lang, 'outlierBadgeRatioPct')
     };
   }
 
   if (bounds.min !== undefined && refMax !== undefined && refMax >= 10 && !isNaN(num) && num > 0 && num < 1.0) {
     return {
-      issueTitle: `Unit Scale Error: Decimal Ratio (${val}) vs Percentage`,
+      issueTitle: interpolate(t(lang, 'outlierTitleRatioDec'), { val }),
       preciseCause: interpolate(t(lang, 'outlierRatioDecCause'), { val, range: rangeStr, refMin, refMax }),
-      suggestedFix: `Convert value to ${(num * 100).toFixed(1)}% or update reference range to decimal ratio (L/L).`,
-      badgeLabel: `Scale: Ratio vs %`
+      suggestedFix: interpolate(t(lang, 'outlierFixRatioDec'), { converted: (num * 100).toFixed(1) }),
+      badgeLabel: t(lang, 'outlierBadgeRatioDec')
     };
   }
 
   // 3. High-baseline unit multiplier mismatch (e.g. Hemoglobin 14.5 g/dL vs 120-180 g/L, or Cholesterol mg/dL vs mmol/L)
   if (bounds.min !== undefined && bounds.max !== undefined && refMin >= 50 && !isNaN(num) && num > 0 && num < refMin * 0.45) {
     return {
-      issueTitle: `Unit Multiplier Mismatch: 10× Scale Error (g/dL vs g/L)`,
+      issueTitle: t(lang, 'outlierTitleTenX'),
       preciseCause: interpolate(t(lang, 'outlierTenXCause'), { val, range: rangeStr }),
-      suggestedFix: `Convert value to ${(num * 10).toFixed(0)} g/L or change unit to g/dL with range ${(refMin / 10).toFixed(1)} - ${(bounds.max / 10).toFixed(1)} g/dL.`,
-      badgeLabel: `Unit: 10× Multiplier`
+      suggestedFix: interpolate(t(lang, 'outlierFixTenX'), { converted: (num * 10).toFixed(0), rMin: (refMin / 10).toFixed(1), rMax: (bounds.max / 10).toFixed(1) }),
+      badgeLabel: t(lang, 'outlierBadgeTenX')
     };
   }
 
@@ -2137,20 +2137,20 @@ export function diagnoseTelemetryIssue(
   if (refMax !== undefined && refMax > 0 && num > refMax * 3.5) {
     const ratio = Math.round(num / refMax);
     return {
-      issueTitle: 'Potentially Improbable High Reading',
+      issueTitle: t(lang, 'outlierTitleHigh'),
       preciseCause: interpolate(t(lang, 'outlierHighCause'), { val, unit: displayUnit, ratio, refMax }),
-      suggestedFix: `Verify lab report value and correct any missing decimal places.`,
-      badgeLabel: `Outlier: ${ratio}× High`
+      suggestedFix: t(lang, 'outlierFixHigh'),
+      badgeLabel: interpolate(t(lang, 'outlierBadgeHigh'), { ratio })
     };
   }
 
   // 5. Very Low Outlier (<0.25x normal min)
   if (refMin !== undefined && refMin > 0 && num < refMin * 0.25) {
     return {
-      issueTitle: 'Potentially Improbable Low Reading',
+      issueTitle: t(lang, 'outlierTitleLow'),
       preciseCause: interpolate(t(lang, 'outlierLowCause'), { val, unit: displayUnit, refMin }),
-      suggestedFix: `Verify lab report value and correct any missing decimal places.`,
-      badgeLabel: 'Outlier: Low Value'
+      suggestedFix: t(lang, 'outlierFixLow'),
+      badgeLabel: t(lang, 'outlierBadgeLow')
     };
   }
 
@@ -2164,20 +2164,20 @@ export function diagnoseTelemetryIssue(
       const minVal = Math.min(...numValues.filter(v => v > 0));
       if (minVal > 0 && maxVal / minVal >= 15) {
         return {
-          issueTitle: 'Telemetry Scale Inconsistency Across History',
+          issueTitle: t(lang, 'outlierTitleHistory'),
           preciseCause: interpolate(t(lang, 'outlierHistoryCause'), { minVal, maxVal, gap: Math.round(maxVal / minVal) }),
-          suggestedFix: `Standardize all historical logs to a consistent clinical unit.`,
-          badgeLabel: 'Mixed Scale History'
+          suggestedFix: t(lang, 'outlierFixHistory'),
+          badgeLabel: t(lang, 'outlierBadgeHistory')
         };
       }
     }
   }
 
   return {
-    issueTitle: 'Biomarker Telemetry Error',
+    issueTitle: t(lang, 'outlierTitleGeneric'),
     preciseCause: interpolate(t(lang, 'outlierGenericCause'), { val, range: rangeStr || 'unknown' }),
-    suggestedFix: 'Standardize unit or verify lab report entry.',
-    badgeLabel: 'Telemetry Error'
+    suggestedFix: t(lang, 'outlierFixGeneric'),
+    badgeLabel: t(lang, 'outlierBadgeGeneric')
   };
 }
 
@@ -2193,7 +2193,8 @@ function rangeFit(value: number, min?: number, max?: number): number {
 export function computeBiomarkerTelemetryMultiplier(
   key: string,
   val: any,
-  rangeStr?: string
+  rangeStr?: string,
+  lang?: unknown
 ): { multiplier: number; reason: string } | null {
   const num = typeof val === 'number' ? val : parseFloat(String(val));
   if (isNaN(num) || num <= 0) return null;
@@ -2222,13 +2223,13 @@ export function computeBiomarkerTelemetryMultiplier(
   if (fitToSi <= fitToUs && fitToSi * 4 < fitToUs) {
     return {
       multiplier: spec.multiply,
-      reason: `Converted ${spec.from} to ${spec.to} (×${spec.multiply})`,
+      reason: interpolate(t(lang, 'auditFixConverted'), { from: spec.from, to: spec.to, m: spec.multiply }),
     };
   }
   if (fitToUs < fitToSi && fitToUs * 4 < fitToSi) {
     return {
       multiplier: 1 / spec.multiply,
-      reason: `Converted ${spec.to} to ${spec.from} (÷${spec.multiply})`,
+      reason: interpolate(t(lang, 'auditFixConvertedBack'), { from: spec.from, to: spec.to, m: spec.multiply }),
     };
   }
   return null;
@@ -2285,14 +2286,14 @@ function _detectFlaggedTelemetryErrors(
   const buildAutoFixProposal = (key: string, val: any, range?: string) => {
     const num = typeof val === 'number' ? val : parseFloat(String(val));
     if (isNaN(num)) return undefined;
-    const fix = computeBiomarkerTelemetryMultiplier(key, num, range);
+    const fix = computeBiomarkerTelemetryMultiplier(key, num, range, profile?.language);
     if (!fix) {
       return {
         canAutoFix: false,
         proposedValue: num,
         proposedMultiplier: 1,
-        fixLabel: 'Needs AI Review',
-        reason: 'Ambiguous scaling discrepancy; requires AI Review Agent'
+        fixLabel: t(profile?.language, 'auditFixNeedsReview'),
+        reason: t(profile?.language, 'auditFixAmbiguous')
       };
     }
     let converted = num * fix.multiplier;
@@ -2448,18 +2449,18 @@ function _detectFlaggedTelemetryErrors(
           name,
           value: customDef?.optimalValue || 'Unspecified',
           unit: customDef?.unit || '',
-          reason: 'Biomarker definition has missing or corrupted unit declaration.',
-          issueTitle: 'Corrupted or Missing Unit',
-          preciseCause: 'Unit definition is null or missing in custom biomarker profile.',
-          suggestedFix: 'Standardize unit or calibrate normal range with AI Review Agent.',
-          badgeLabel: 'Missing Unit',
-          samples: ['Definition: Corrupted Unit'],
+          reason: t(profile?.language, 'auditCauseMissingUnit'),
+          issueTitle: t(profile?.language, 'auditTitleMissingUnit'),
+          preciseCause: t(profile?.language, 'auditCauseMissingUnit'),
+          suggestedFix: t(profile?.language, 'auditFixMissingUnit'),
+          badgeLabel: t(profile?.language, 'auditBadgeMissingUnit'),
+          samples: [t(profile?.language, 'auditSampleCorruptUnit')],
           proposedAutoFix: {
             canAutoFix: false,
             proposedValue: 0,
             proposedMultiplier: 1,
-            fixLabel: 'Needs AI Review',
-            reason: 'Unit is missing in custom definition; requires standardization'
+            fixLabel: t(profile?.language, 'auditFixNeedsReview'),
+            reason: t(profile?.language, 'auditFixNeedsReviewReason')
           }
         });
       }

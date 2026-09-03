@@ -23,6 +23,7 @@ import { parseMenuNutritionPaste, parseMenuNutritionBulkPaste, cleanDescriptionT
 import { ComprehensiveNutrientsTable } from './chat-cards/ComprehensiveNutrientsTable';
 import { defaultServingSizeFor } from '../utils/servingSizeDefaults';
 import { translations } from '../utils/translations';
+import { interpolate } from '../utils/i18n';
 
 const renderNutrientSummaryLine = (nutrients: any) => {
   if (!nutrients || typeof nutrients !== 'object') return 'kcal —';
@@ -200,7 +201,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
 
   const saveChainSource = async () => {
     if (!editChainForm.display_name.trim() || !editChainForm.url.trim()) {
-      alert('Restaurant name and URL are required.');
+      alert(t.browserAlertChainRequired);
       return;
     }
     setBusy(true);
@@ -222,7 +223,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
       setEditingChainId(null);
       await load();
     } catch (e: any) {
-      alert(e?.message || 'Failed to save chain');
+      alert(e?.message || t.browserAlertSaveChain);
     } finally {
       setBusy(false);
     }
@@ -230,7 +231,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
 
   const saveNewChainSource = async () => {
     if (!addChainForm.chain_key.trim() || !addChainForm.url.trim()) {
-      alert('Chain key and URL are required.');
+      alert(t.browserAlertChainKeyRequired);
       return;
     }
     setBusy(true);
@@ -252,7 +253,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
       setShowAddChain(false);
       await load();
     } catch (e: any) {
-      alert(e?.message || 'Failed to add chain');
+      alert(e?.message || t.browserAlertAddChain);
     } finally {
       setBusy(false);
     }
@@ -328,7 +329,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
         await runGlobalSearch(globalSearch);
       }
     } catch (e: any) {
-      alert(e?.message || 'Save failed');
+      alert(e?.message || t.browserAlertSaveFailed);
     } finally {
       setBusy(false);
     }
@@ -377,7 +378,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
         await runGlobalSearch(globalSearch);
       }
     } catch (e: any) {
-      alert(e?.message || 'Delete failed');
+      alert(e?.message || t.browserAlertDeleteFailed);
       if (item.chain_key) {
         await loadChainItems(item.chain_key);
       }
@@ -427,7 +428,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
         await runGlobalSearch(globalSearch);
       }
     } catch (e: any) {
-      alert(e?.message || 'Failed to delete brand');
+      alert(e?.message || t.browserAlertDeleteBrand);
       await load();
     } finally {
       setDeletingChainId(null);
@@ -561,7 +562,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
   const pasteAndSave = async (chain_key: string) => {
     const text = (pasteDrafts[chain_key] || '').trim();
     if (!text) {
-      alert('Paste a menu nutrition panel first (title + Nutrition values).');
+      alert(t.browserAlertPastePanel);
       return;
     }
     const local = parseMenuNutritionPaste(text);
@@ -575,7 +576,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        alert(json.error || `Paste save failed (HTTP ${res.status})`);
+        alert(json.error || interpolate(t.browserAlertPasteSaveFailed, { status: res.status }));
         return;
       }
       setPasteDrafts((prev) => ({ ...prev, [chain_key]: '' }));
@@ -586,17 +587,19 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
       });
       const warn = (json.parsed?.warnings || []).join('; ');
       alert(
-        `Added: ${json.item?.dish_name || local.dish_name}\n` +
-          `kcal ${json.item?.nutrients?.calories ?? local.nutrients.calories} · ` +
-          `P ${json.item?.nutrients?.protein ?? local.nutrients.protein} · ` +
-          `C ${json.item?.nutrients?.carbohydrates ?? local.nutrients.carbohydrates} · ` +
-          `F ${json.item?.nutrients?.totalFat ?? local.nutrients.totalFat}` +
-          (warn ? `\nNote: ${warn}` : '')
+        interpolate(t.browserAlertPasteAdded, {
+          dish: json.item?.dish_name || local.dish_name,
+          kcal: json.item?.nutrients?.calories ?? local.nutrients.calories,
+          p: json.item?.nutrients?.protein ?? local.nutrients.protein,
+          c: json.item?.nutrients?.carbohydrates ?? local.nutrients.carbohydrates,
+          f: json.item?.nutrients?.totalFat ?? local.nutrients.totalFat,
+          warn: warn ? interpolate(t.browserAlertPasteNote, { warn }) : ''
+        })
       );
       await load();
       await loadChainItems(chain_key);
     } catch (e: any) {
-      alert(e?.message || 'Paste failed');
+      alert(e?.message || t.browserAlertPasteFailed);
     } finally {
       setBusy(false);
     }
@@ -605,7 +608,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
   const bulkPasteAndSave = async (chain_key: string) => {
     const text = (bulkDrafts[chain_key] || '').trim();
     if (!text) {
-      alert('Paste a menu section first (multiple dishes, one per line-group).');
+      alert(t.browserAlertPasteSection);
       return;
     }
     setBusy(true);
@@ -617,7 +620,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        alert(json.error || `Bulk save failed (HTTP ${res.status})`);
+        alert(json.error || interpolate(t.browserAlertBulkSaveFailed, { status: res.status }));
         return;
       }
       setBulkResults((prev) => ({ ...prev, [chain_key]: json }));
@@ -630,7 +633,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
       await load();
       await loadChainItems(chain_key);
     } catch (e: any) {
-      alert(e?.message || 'Bulk paste failed');
+      alert(e?.message || t.browserAlertBulkFailed);
     } finally {
       setBusy(false);
     }
@@ -889,8 +892,8 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                                 value={editForm.basis_type}
                                 onChange={(e) => setEditForm({ ...editForm, basis_type: e.target.value })}
                               >
-                                <option value="per_dish">Per Dish / Portion</option>
-                                <option value="per_100g">Per 100g / 100ml</option>
+                                <option value="per_dish">{t.browserOptPerDish}</option>
+                                <option value="per_100g">{t.browserOptPer100}</option>
                               </select>
                             </div>
                             <div className="space-y-1">
@@ -898,7 +901,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                               <input
                                 type="number"
                                 className="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-[10px] text-white font-mono"
-                                placeholder="Optional"
+                                placeholder={t.browserServingOptional}
                                 value={editForm.serving_grams}
                                 onChange={(e) => setEditForm({ ...editForm, serving_grams: e.target.value })}
                               />
@@ -1125,7 +1128,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                           </div>
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[9px] text-white/50 block font-bold">MENU URL / SOURCE LINK</label>
+<label className="text-[9px] text-white/50 block font-bold">{t.browserMenuUrl}</label>
                           <input
                             type="text"
                             className="w-full bg-slate-900 border border-white/10 rounded px-2.5 py-1.5 text-xs text-white"
@@ -1523,11 +1526,11 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
 
                         <div className="rounded-xl border border-emerald-400/40 bg-emerald-950/30 p-2.5 space-y-2">
                           <p className={`text-[11px] font-bold flex items-center gap-1 ${textPrimary}`}>
-                            <ClipboardPaste className="w-3.5 h-3.5" /> Paste menu nutrition
+                            <ClipboardPaste className="w-3.5 h-3.5" /> {t.browserPasteTitle}
                           </p>
                           <textarea
                             className={`${inputCls} w-full min-h-[120px] font-mono text-[10px]`}
-                            placeholder={`Paste menu text here...\n\nExample:\nBang-Bang Shroom (ve)\n\nFreshly-roasted mushrooms...\n\nNutrition\nEnergy (kcal)\n620\nFats\n31.3g\n...`}
+                            placeholder={t.browserPastePlaceholder}
                             value={pasteDrafts[key] || ''}
                             onChange={(e) =>
                               setPasteDrafts((prev) => ({ ...prev, [key]: e.target.value }))
@@ -1536,8 +1539,8 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                           {pastePreview[key] && (
                             <div className={`text-[10px] rounded-lg bg-black/30 p-2.5 space-y-1.5 ${textSecondary}`}>
                               <div>
-                                <span className="font-bold text-emerald-300">Preview: </span>
-                                <span className="font-semibold text-white">{pastePreview[key].dish_name || '(No dish name parsed)'}</span>
+                                <span className="font-bold text-emerald-300">{t.browserPreviewLabel}</span>
+                                <span className="font-semibold text-white">{pastePreview[key].dish_name || t.browserNoDishName}</span>
                                 {pastePreview[key].description && (
                                   <span className="text-white/60"> — {pastePreview[key].description}</span>
                                 )}
@@ -1555,7 +1558,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                               {pastePreview[key].warnings?.length > 0 && (
                                 <div className="text-amber-300 text-[9px] flex items-start gap-1">
                                   <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
-                                  <span>Warnings: {pastePreview[key].warnings.join(', ')}</span>
+                                  <span>{t.browserWarningsLabel}{pastePreview[key].warnings.join(', ')}</span>
                                 </div>
                               )}
                             </div>
@@ -1570,7 +1573,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                               }}
                               className="text-[10px] font-bold px-3 py-1.5 rounded-lg border border-white/25 text-white disabled:opacity-40"
                             >
-                              Preview
+                              {t.browserPreviewBtn}
                             </button>
                             <button
                               type="button"
@@ -1579,18 +1582,18 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                               className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-40 flex items-center gap-1"
                             >
                               {busy && <RefreshCw className="w-3 h-3 animate-spin shrink-0" />}
-                              {busy ? 'Saving...' : 'Paste & Add'}
+                              {busy ? t.browserSavingBtn : t.browserPasteAddBtn}
                             </button>
                           </div>
                         </div>
 
                         <div className="rounded-xl border border-sky-400/40 bg-sky-950/30 p-2.5 space-y-2">
                           <p className={`text-[11px] font-bold flex items-center gap-1 ${textPrimary}`}>
-                            <ClipboardPaste className="w-3.5 h-3.5" /> Bulk paste a whole menu section
+                            <ClipboardPaste className="w-3.5 h-3.5" /> {t.browserBulkTitle}
                           </p>
                           <textarea
                             className={`${inputCls} w-full min-h-[160px] font-mono text-[10px]`}
-                            placeholder={`Steak Frites (810 kcal)\nIngredients: Medium-rare bavette steak, peppercorn mayo...\n\nBang-Bang Shroom (ve) (620 kcal)\nIngredients: Freshly-roasted mushrooms...\nNutrient Profile: Protein: 18.6g | Carbs: 69.8g | Fats: 31.3g ...`}
+                            placeholder={t.browserBulkPlaceholder}
                             value={bulkDrafts[key] || ''}
                             onChange={(e) =>
                               setBulkDrafts((prev) => ({ ...prev, [key]: e.target.value }))
@@ -1599,12 +1602,12 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                           {bulkPreview[key] && (
                             <div className={`text-[10px] rounded-lg bg-black/30 p-2.5 space-y-1 ${textSecondary}`}>
                               <span className="font-bold text-sky-300">
-                                {bulkPreview[key].dishes.length} dish(es) detected
+                                {interpolate(t.browserBulkDetected, { n: bulkPreview[key].dishes.length })}
                               </span>
                               {bulkPreview[key].dishes.map((d: any, i: number) => (
                                 <div key={i} className="font-mono text-white/80 truncate">
                                   {d.dish_name} — {d.nutrients?.calories ?? '—'} kcal
-                                  {(!d.nutrients?.protein && !d.nutrients?.totalFat) ? ' (calories + ingredients only)' : ''}
+                                  {(!d.nutrients?.protein && !d.nutrients?.totalFat) ? t.browserBulkCalOnly : ''}
                                 </div>
                               ))}
                             </div>
@@ -1612,16 +1615,16 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                           {bulkResults[key] && (
                             <div className={`text-[10px] rounded-lg bg-black/30 p-2.5 space-y-1 ${textSecondary}`}>
                               <span className="font-bold text-emerald-300">
-                                Saved {bulkResults[key].summary.savedToSupabase + bulkResults[key].summary.savedLocalOnly}/{bulkResults[key].summary.total}
+                                  {interpolate(t.browserBulkSaved, { saved: bulkResults[key].summary.savedToSupabase + bulkResults[key].summary.savedLocalOnly, total: bulkResults[key].summary.total })}
                               </span>
                               {bulkResults[key].summary.savedLocalOnly > 0 && (
                                 <div className="text-amber-300 flex items-center gap-1">
                                   <AlertTriangle className="w-3 h-3 shrink-0" />
-                                  {bulkResults[key].summary.savedLocalOnly} saved locally only (not synced to Supabase)
+                                  {interpolate(t.browserBulkLocalOnly, { n: bulkResults[key].summary.savedLocalOnly })}
                                 </div>
                               )}
                               {bulkResults[key].summary.errors > 0 && (
-                                <div className="text-rose-300">{bulkResults[key].summary.errors} failed to parse/save</div>
+                                <div className="text-rose-300">{interpolate(t.browserBulkFailed, { n: bulkResults[key].summary.errors })}</div>
                               )}
                             </div>
                           )}
@@ -1635,7 +1638,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                               }}
                               className="text-[10px] font-bold px-3 py-1.5 rounded-lg border border-white/25 text-white disabled:opacity-40"
                             >
-                              Preview
+                              {t.browserPreviewBtn}
                             </button>
                             <button
                               type="button"
@@ -1644,7 +1647,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                               className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white disabled:opacity-40 flex items-center gap-1"
                             >
                               {busy && <RefreshCw className="w-3 h-3 animate-spin shrink-0" />}
-                              {busy ? 'Saving...' : `Add all dishes`}
+                              {busy ? t.browserSavingBtn : t.browserBulkAddAll}
                             </button>
                           </div>
                         </div>
@@ -1657,24 +1660,24 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
 
               {showAddChain && (
                 <div className="border border-indigo-500/30 rounded-xl p-3 bg-slate-950/40 space-y-3 mb-3 text-left">
-                  <h3 className="text-xs font-bold text-indigo-300">Add a new brand / restaurant source</h3>
+                  <h3 className="text-xs font-bold text-indigo-300">{t.browserAddSourceTitle}</h3>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
-                      <label className="text-[9px] text-white/50 block font-bold">BRAND / RESTAURANT NAME</label>
+                      <label className="text-[9px] text-white/50 block font-bold">{t.browserBrandName}</label>
                       <input
                         type="text"
                         className="w-full bg-slate-900 border border-white/10 rounded px-2.5 py-1.5 text-xs text-white"
-                        placeholder="e.g. Sainsbury's or Pret A Manger"
+                        placeholder={t.browserBrandNamePh}
                         value={addChainForm.display_name}
                         onChange={(e) => setAddChainForm({ ...addChainForm, display_name: e.target.value })}
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[9px] text-white/50 block font-bold">CHAIN KEY / SLUG (lowercase, no spaces)</label>
+                      <label className="text-[9px] text-white/50 block font-bold">{t.browserChainKey}</label>
                       <input
                         type="text"
                         className="w-full bg-slate-900 border border-white/10 rounded px-2.5 py-1.5 text-xs text-white"
-                        placeholder="e.g. sainsbury"
+                        placeholder={t.browserChainKeyPh}
                         value={addChainForm.chain_key}
                         onChange={(e) => setAddChainForm({ ...addChainForm, chain_key: e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '_') })}
                       />
@@ -1705,7 +1708,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                       className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-40 flex items-center gap-1"
                     >
                       {busy && <RefreshCw className="w-3 h-3 animate-spin" />}
-                      Add Source
+                      {t.browserAddSourceBtn}
                     </button>
                   </div>
                 </div>
@@ -1717,7 +1720,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                 className="w-full text-xs font-bold px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center gap-1"
               >
                 <Plus className="w-3.5 h-3.5" />
-                Add Branded Food / Restaurant
+                {t.browserAddBrandedBtn}
               </button>
             </div>
           )}
@@ -1730,18 +1733,18 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                   value={catalogType}
                   onChange={(e) => setCatalogType(e.target.value as any)}
                 >
-                  <option value="food">Food items</option>
-                  <option value="dish">Dishes</option>
+                  <option value="food">{t.browserOptFood}</option>
+                  <option value="dish">{t.browserOptDish}</option>
                 </select>
                 <select 
                   className={inputCls}
                   value={catalogStatus}
                   onChange={(e) => setCatalogStatus(e.target.value as any)}
                 >
-                  <option value="all">All statuses</option>
-                  <option value="active">Active</option>
-                  <option value="candidate">Candidate</option>
-                  <option value="quarantine">Quarantine</option>
+                  <option value="all">{t.browserOptAll}</option>
+                  <option value="active">{t.browserOptActive}</option>
+                  <option value="candidate">{t.browserOptCandidate}</option>
+                  <option value="quarantine">{t.browserOptQuarantine}</option>
                 </select>
                 <div className="flex gap-1 flex-1 min-w-[200px]">
                   <input
@@ -1760,17 +1763,17 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
               {catalogError && (
                 <div className="p-3 bg-rose-950/40 border border-rose-900/50 rounded-xl text-rose-400 text-xs">
                   {catalogError.includes('relation "food_items" does not exist') || catalogError.includes('relation "dishes" does not exist') ?
-                    'Catalog tables not available (apply Supabase migration).' : catalogError}
+                    t.browserCatalogMigrate : catalogError}
                 </div>
               )}
 
               <div className="text-xs text-white/60">
-                Saved in catalog: {catalogItems.length} {catalogType} item(s)
+                {interpolate(t.browserCatalogSaved, { n: catalogItems.length, type: catalogType === 'food' ? t.browserOptFood : t.browserOptDish })}
               </div>
 
               {catalogItems.length === 0 && !catalogLoading && !catalogError && (
                 <div className="p-4 text-center text-white/40 text-sm border border-white/5 rounded-xl border-dashed">
-                  No catalog items yet. Food Resolver writes candidates after successful resolves.
+                  {t.browserCatalogEmpty}
                 </div>
               )}
 
@@ -1836,7 +1839,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                                     if (!finalBasis || finalBasis.trim() === '') {
                                       const def = defaultServingSizeFor('catalog');
                                       finalBasis = def.basisType;
-                                      setSyncBanner(`Defaulted serving size to ${def.label}`);
+                                      setSyncBanner(interpolate(t.browserServingDefaulted, { label: def.label }));
                                       setTimeout(() => setSyncBanner(null), 5000);
                                     }
 
@@ -1874,7 +1877,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
             <div className="space-y-2">
               <p className={`text-xs mb-2 flex items-center gap-1 ${textSecondary}`}>
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                Sources registered but menu/nutrients not successfully ingested.
+                {t.browserUnfetchedDesc}
               </p>
               {(data?.chainNotFetched || []).map((s: any) => (
                 <div key={s.id} className="border border-amber-500/50 rounded-xl p-3 bg-amber-950/50 space-y-1">
@@ -1891,10 +1894,10 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
             <div className="space-y-2">
               <p className={`text-xs mb-2 flex items-center gap-1 ${textSecondary}`}>
                 <Leaf className="w-3.5 h-3.5 text-emerald-400" />
-                Optional short-TTL cache of USDA/OFF hits.
+                {t.browserBaseDesc}
               </p>
               {(data?.baseFoodCache || []).length === 0 && (
-                <p className={`text-xs ${textMuted}`}>No base foods cached. Live USDA/OFF at analysis time.</p>
+                <p className={`text-xs ${textMuted}`}>{t.browserBaseEmpty}</p>
               )}
               {(data?.baseFoodCache || []).map((f: any) => (
                 <div key={f.id} className={card}>

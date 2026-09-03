@@ -528,23 +528,23 @@ export function getDemoReport(type: DemoProfileType = 'average', lang?: unknown)
         saturatedFat: '< 20 g',
         sodium: '< 2000 mg'
       },
-      mostImportantNextStep: 'Welcome! Please log your foods and upload your biomarker lab reports to generate personalized AI clinical guidance.',
+      mostImportantNextStep: t(lang, 'seedEmptyNext'),
       actions: [],
       dailyBenefits: [],
       latestInsights: [
         { title: t(lang, 'seedEmptyWelcomeTitle'), summary: t(lang, 'seedEmptyWelcomeSummary'), link: '#' }
       ],
       healthRiskForecast: {
-        year5: 'No historical biomarkers analyzed yet.',
-        year10: 'No historical biomarkers analyzed yet.',
-        year20: 'No historical biomarkers analyzed yet.',
-        optimized5: 'A healthy lifestyle minimizes long-term risks.',
-        optimized10: 'Vibrant baseline optimization.',
-        optimized20: 'Lifespan and healthspan expansion.'
+        year5: t(lang, 'seedEmptyFc5'),
+        year10: t(lang, 'seedEmptyFc10'),
+        year20: t(lang, 'seedEmptyFc20'),
+        optimized5: t(lang, 'seedEmptyFcOpt5'),
+        optimized10: t(lang, 'seedEmptyFcOpt10'),
+        optimized20: t(lang, 'seedEmptyFcOpt20')
       },
       topNutrientTargets: ['calories', 'saturatedFat', 'sodium'],
       topWeeklyNutrientTargets: [],
-      nutrientRankingRationale: "Please input clinical test datasets or meal logs to activate personalized ranking priorities. Currently operating on standard cardiovascular guidelines."
+      nutrientRankingRationale: t(lang, 'seedEmptyRationale')
     };
   }
 
@@ -559,7 +559,7 @@ export function getDemoReport(type: DemoProfileType = 'average', lang?: unknown)
         protein: '70 - 90 g',
         solubleFibre: '> 10 g'
       },
-      mostImportantNextStep: 'Strictly limit sodium (<1500mg) and glycemic load (<130g carbs) to address Stage 2 Hypertension and Diabetic HbA1c (7.1%), safeguarding remaining kidney filtration (eGFR 64).',
+      mostImportantNextStep: t(lang, 'seedComplexNext'),
       actions: [
         { id: 'demo_action_complex_1', task: t(lang, 'seedComplexActionSodiumTask'), explanation: t(lang, 'seedComplexActionSodiumExpl'), priority: 'high', completed: false, type: 'lifestyle' },
         { id: 'demo_action_complex_2', task: t(lang, 'seedComplexActionGlycemicTask'), explanation: t(lang, 'seedComplexActionGlycemicExpl'), priority: 'high', completed: false, type: 'lifestyle' },
@@ -576,16 +576,16 @@ export function getDemoReport(type: DemoProfileType = 'average', lang?: unknown)
         { title: t(lang, 'seedComplexInsightDashTitle'), summary: t(lang, 'seedComplexInsightDashSummary'), link: '#' }
       ],
       healthRiskForecast: {
-        year5: 'High risk of diabetic microvascular progression and worsening renal filtration (potential CKD Stage 3 entry).',
-        year10: 'Elevated risk of severe diabetic neuropathy, chronic nephropathy, and major vascular events.',
-        year20: 'Severe cardiorenal morbidity if metabolic and hypertensive markers remain unchecked.',
-        optimized5: 'Stabilized renal function (eGFR > 70) and improved insulin sensitivity (HbA1c < 6.2%).',
-        optimized10: 'Vastly decreased cardiovascular risk; normal blood pressure bounds and protected glomerular vessels.',
-        optimized20: 'Protected healthspan; age-typical vascular compliance and active lifestyle retention.'
+        year5: t(lang, 'seedComplexFc5'),
+        year10: t(lang, 'seedComplexFc10'),
+        year20: t(lang, 'seedComplexFc20'),
+        optimized5: t(lang, 'seedComplexFcOpt5'),
+        optimized10: t(lang, 'seedComplexFcOpt10'),
+        optimized20: t(lang, 'seedComplexFcOpt20')
       },
       topNutrientTargets: ['sodium', 'carbohydrates', 'calories', 'saturatedFat', 'protein'],
       topWeeklyNutrientTargets: ['solubleFibre', 'magnesium', 'omega3'],
-      nutrientRankingRationale: "Sodium restriction (<1500 mg) is your absolute highest priority because reducing total blood volume directly relieves glomerular pressure in the kidneys, critical for preserving Arthur\'s glomerular filtration (eGFR of 64). Carbohydrate restriction (<130 g) holds equal importance to lower glycemic spikes and prevent high fasting glucose from causing microvascular damage to sensitive renal arterioles. Caloric restriction (1600-1800 kcal) supports gradual body fat reduction, which reduces visceral fat-induced cytokine strain, while moderate protein (70-90 g) prevents metabolic waste overload without triggering protein malnutrition."
+      nutrientRankingRationale: t(lang, 'seedComplexRationale')
     };
   }
 
@@ -600,7 +600,7 @@ export function getDemoReport(type: DemoProfileType = 'average', lang?: unknown)
       totalFibre: '> 30 g',
       vitaminD: '2000 IU'
     },
-    mostImportantNextStep: 'Optimize lipid panel by prioritizing high-fiber foods (soluble fiber) and supplement Vitamin D (2000-4000 IU daily) to address deficiency.',
+    mostImportantNextStep: t(lang, 'seedDemoNext'),
       actions: [
         { id: 'demo_action_1', task: t(lang, 'seedDemoActionVitDTask'), explanation: t(lang, 'seedDemoActionVitDExpl'), priority: 'high', completed: false, type: 'lifestyle' },
         { id: 'demo_action_2', task: t(lang, 'seedDemoActionFiberTask'), explanation: t(lang, 'seedDemoActionFiberExpl'), priority: 'medium', completed: false, type: 'lifestyle' },
@@ -616,15 +616,15 @@ export function getDemoReport(type: DemoProfileType = 'average', lang?: unknown)
         { title: t(lang, 'seedDemoInsightVitDTitle'), summary: t(lang, 'seedDemoInsightVitDSummary'), link: '#' }
       ],
     healthRiskForecast: {
-      year5: 'Slight risk of subclinical atherosclerosis if lipids remain elevated.',
-      year10: 'Moderate cardiovascular risk due to persistent hyperlipidemia.',
-      year20: 'Elevated risk of plaque accumulation if lifestyle is unmanaged.',
-      optimized5: 'Negligible risk. Arteries remain clear.',
-      optimized10: 'Excellent vascular profile.',
-      optimized20: 'Extremely low risk; comparable to an ultra-healthy baseline.'
+      year5: t(lang, 'seedDemoFc5'),
+      year10: t(lang, 'seedDemoFc10'),
+      year20: t(lang, 'seedDemoFc20'),
+      optimized5: t(lang, 'seedDemoFcOpt5'),
+      optimized10: t(lang, 'seedDemoFcOpt10'),
+      optimized20: t(lang, 'seedDemoFcOpt20')
     },
     topNutrientTargets: ['calories', 'saturatedFat', 'sodium', 'protein', 'solubleFibre', 'carbohydrates'],
     topWeeklyNutrientTargets: ['vitaminD', 'omega3', 'magnesium'],
-    nutrientRankingRationale: "Focusing on Saturated Fat restriction is your single most important clinical priority, as limiting saturated fats directly halts the overproduction of atherogenic LDL particles and vascular plaque buildup. Pairing this with increased Soluble Fibre binds intestinal cholesterol to accelerate lipid excretion and stabilize glucose spikes, creating a foundational baseline for metabolic stability. Managing overall Caloric intake, Sodium, and Protein provides essential protection for renal filtration (eGFR) and vascular pressure, but these serve as secondary supporting targets. Prioritizing saturated fat reduction and soluble fiber intake delivers the highest overall health leverage, addressing the root driver of cardiovascular risk far more effectively than isolated micronutrient adjustments."
+    nutrientRankingRationale: t(lang, 'seedDemoRationale')
   };
 }

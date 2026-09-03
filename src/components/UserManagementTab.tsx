@@ -1122,7 +1122,7 @@ export default function UserManagementTab() {
       >
         <div className="space-y-4">
           <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-            You are about to delete user account <strong className="text-slate-800 dark:text-slate-200">{confirmDeleteAuthUser?.email}</strong> from Firebase Authentication. This action is <strong>irreversible</strong>. The user will be instantly logged out and won't be able to log in or restore access.
+            {t(adminLang, 'delWarnAuthA')} <strong className="text-slate-800 dark:text-slate-200">{confirmDeleteAuthUser?.email}</strong> {t(adminLang, 'delWarnAuthB')} <strong>{t(adminLang, 'delWarnAuthC')}</strong>{t(adminLang, 'delWarnAuthD')}
           </p>
           <div className="space-y-2">
             <label className="block text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider font-bold">
@@ -1174,7 +1174,7 @@ export default function UserManagementTab() {
       >
         <div className="space-y-4">
           <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-            You are about to delete all stored Firestore document data for user <strong className="text-slate-800 dark:text-slate-200">{confirmDeleteUserData?.email}</strong>. This includes custom biomarkers, logs, configurations, and health stats. This action is <strong>irreversible</strong> and will wipe their app context cleanly.
+            {t(adminLang, 'delWarnDataA')} <strong className="text-slate-800 dark:text-slate-200">{confirmDeleteUserData?.email}</strong>{t(adminLang, 'delWarnDataB')} <strong>{t(adminLang, 'delWarnDataC')}</strong> {t(adminLang, 'delWarnDataD')}
           </p>
           <div className="space-y-2">
             <label className="block text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider font-bold">
