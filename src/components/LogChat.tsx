@@ -4509,9 +4509,9 @@ ${logsText}`);
       }
       const currentSendKey = `${agentType || 'med'}_${reviewBiomarkerKey || ''}_${effectiveAutoSend}`;
       if (lastAutoSendKeyRef.current !== currentSendKey) {
-        lastAutoSendKeyRef.current = currentSendKey;
         console.log(`[DIAG5] auto-send effect: scheduling handleSend in 250ms with key ${currentSendKey}`);
         const timer = setTimeout(() => {
+          lastAutoSendKeyRef.current = currentSendKey;
           console.log(`[DIAG5] auto-send effect: calling handleSend now`);
           handleSend(effectiveAutoSend);
         }, 250);
