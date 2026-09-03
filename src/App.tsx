@@ -6716,6 +6716,7 @@ export default function App() {
           agentType: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent7' | 'data_review' | 'health_baseline' | 'medical' | null,
           options?: { prefillMessage?: string; autoSendMessage?: string; handoffPayload?: any; updatedProfile?: any }
         ) => {
+          console.log(`[DIAG7] handleOpenAgentFromFrontDesk called: agentType=${agentType}, hasHandoffPayload=${!!options?.handoffPayload}, hasAutoSendMessage=${!!options?.autoSendMessage}`, new Error('trace').stack);
           setIsFrontDeskOpen(false);
           const target = resolveAgentDestination(agentType) as any;
           setActiveAgentType(target);
@@ -6726,6 +6727,7 @@ export default function App() {
           }
           const msgToSend = options?.autoSendMessage || options?.prefillMessage || null;
           setPrefillMessage(msgToSend);
+          console.log(`[DIAG7] handleOpenAgentFromFrontDesk: setting activeHandoffPayload to ${options?.handoffPayload ? 'REAL PAYLOAD' : 'null'}`);
           setActiveHandoffPayload(options?.handoffPayload || null);
           setActiveDataReviewBatchIdx(null);
           setActiveDataReviewBatchKeys([]);
@@ -6868,6 +6870,7 @@ export default function App() {
           setHealthSubTab('biomarker');
         }}
         onClose={() => {
+          console.log(`[DIAG7] Medical modal onClose fired - clearing activeHandoffPayload`, new Error('trace').stack);
           setIsMedicalChatOpen(false);
           setActiveAgentType(null);
           setPrefillMessage(null);
