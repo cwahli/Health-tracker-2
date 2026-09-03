@@ -4357,6 +4357,7 @@ ${logsText}`);
       });
       console.log('[DIAG2] setMessages call completed (isLive placeholder should be cleared)');
 
+      console.log(`[DIAG6] handoff check: isAgent('front_desk')=${isAgent('front_desk')}, resData.status=${resData.status}, hasHandoffPayload=${!!resData.handoffPayload}, hasOnOpenAgentFromFrontDesk=${typeof onOpenAgentFromFrontDesk === 'function'}`);
       if (isAgent('front_desk') && (resData.status === 'ready_for_handoff' || resData.handoffPayload)) {
         const handoff = resData.handoffPayload || {};
         const isMed = handoff.targetAgent === 'medical' || handoff.targetAgent === 'biomarker_review';
@@ -4366,15 +4367,22 @@ ${logsText}`);
         const prompt = summary 
           ? `${summary}${insights.length > 0 ? '\n\nKey Insights:\n' + insights.map((i: string) => `• ${i}`).join('\n') : ''}`
           : (insights.length > 0 ? insights.map((i: string) => `• ${i}`).join('\n') : 'Please create my personalized health plan based on my profile.');
+        console.log(`[DIAG6] handoff triggered: targetAgent=${targetAgent}, promptLength=${prompt.length}, willCallOnOpenAgentFromFrontDesk in 400ms`);
 
         // Directly open the coach/specialist and execute the analysis immediately without requiring confirmation
         setTimeout(() => {
-          onOpenAgentFromFrontDesk?.(targetAgent, {
-            handoffPayload: handoff,
-            prefillMessage: prompt,
-            autoSendMessage: prompt,
-            updatedProfile: handoff.collectedData || resData.updatedProfile
-          });
+          console.log(`[DIAG6] handoff: calling onOpenAgentFromFrontDesk now with targetAgent=${targetAgent}`);
+          try {
+            onOpenAgentFromFrontDesk?.(targetAgent, {
+              handoffPayload: handoff,
+              prefillMessage: prompt,
+              autoSendMessage: prompt,
+              updatedProfile: handoff.collectedData || resData.updatedProfile
+            });
+            console.log(`[DIAG6] handoff: onOpenAgentFromFrontDesk call completed without throwing`);
+          } catch (handoffErr: any) {
+            console.log(`[DIAG6] handoff: onOpenAgentFromFrontDesk threw an error:`, handoffErr?.message || handoffErr);
+          }
         }, 400);
       }
     } catch (err: any) {
