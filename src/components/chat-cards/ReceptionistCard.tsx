@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { cleanWhatShouldIDoHeader } from '../../utils/formatUtils';
 import { AgentCardProps } from './types';
+import { translations } from '../../utils/translations';
+import { interpolate } from '../../utils/i18n';
 import { 
   Sparkles, 
   UserCheck, 
@@ -24,7 +26,9 @@ export const ReceptionistCard: React.FC<AgentCardProps> = ({
   handleSend,
   onOpenAgentFromFrontDesk,
   onLogMedical,
+  language,
 }) => {
+  const t = translations[language || 'en'] || translations.en;
   const isHandedOff = Array.isArray(messages) && messages.some(m => m.data?.isHandoffNotice || (m.role === 'assistant' && (m.agentType === 'health_baseline' || m.agentType === 'medical')));
   const agentResult = msg.agentResult || msg.data?.agentResult || msg.data || {};
   const {
@@ -89,7 +93,7 @@ export const ReceptionistCard: React.FC<AgentCardProps> = ({
           <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
           <div className="flex-1 text-xs text-amber-900 dark:text-amber-200">
             <div className="font-semibold text-amber-800 dark:text-amber-300 mb-0.5">
-              Clinical Safety Note & Alignment
+              {t.recepSafetyNote}
             </div>
             <p className="leading-normal">{disambiguationContext}</p>
           </div>
@@ -102,19 +106,19 @@ export const ReceptionistCard: React.FC<AgentCardProps> = ({
           {updatedProfile?.weight && (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300 rounded-lg text-xs font-medium">
               <Scale className="w-3.5 h-3.5" />
-              Weight: {updatedProfile.weight} kg
+              {t.recepWeight} {updatedProfile.weight} kg
             </span>
           )}
           {updatedProfile?.height && (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300 rounded-lg text-xs font-medium">
               <UserCheck className="w-3.5 h-3.5" />
-              Height: {updatedProfile.height} cm
+              {t.recepHeight} {updatedProfile.height} cm
             </span>
           )}
           {updatedProfile?.age && (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300 rounded-lg text-xs font-medium">
               <UserCheck className="w-3.5 h-3.5" />
-              Age: {updatedProfile.age}
+              {t.recepAge} {updatedProfile.age}
             </span>
           )}
           {newBiomarkerLogs && newBiomarkerLogs.map((log: any, i: number) => (
@@ -135,7 +139,7 @@ export const ReceptionistCard: React.FC<AgentCardProps> = ({
           <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
             <SlidersHorizontal className="w-4 h-4 text-indigo-500" />
             <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">
-              {uiForm.title || 'Complete Missing Details'}
+              {uiForm.title || t.recepFormTitle}
             </span>
           </div>
 
@@ -161,7 +165,7 @@ export const ReceptionistCard: React.FC<AgentCardProps> = ({
                         className="text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-slate-100"
                         required={field.required}
                       >
-                        <option value="">Select...</option>
+                        <option value="">{t.recepSelect}</option>
                         {field.options.map((opt: string) => (
                           <option key={opt} value={opt}>{opt.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}</option>
                         ))}
@@ -195,7 +199,7 @@ export const ReceptionistCard: React.FC<AgentCardProps> = ({
                         step={field.type === 'number' ? 'any' : undefined}
                         value={val}
                         onChange={(e) => handleFieldChange(field.name, e.target.value)}
-                        placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
+                        placeholder={field.placeholder || interpolate(t.recepEnterField, { x: field.label.toLowerCase() })}
                         className="w-full text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-slate-100"
                         required={field.required}
                       />
@@ -215,7 +219,7 @@ export const ReceptionistCard: React.FC<AgentCardProps> = ({
             type="submit"
             className="mt-2 self-end inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer"
           >
-            <span>{uiForm.submitLabel || 'Submit Details'}</span>
+            <span>{uiForm.submitLabel || t.recepSubmit}</span>
             <Send className="w-3.5 h-3.5" />
           </button>
         </form>
@@ -224,7 +228,7 @@ export const ReceptionistCard: React.FC<AgentCardProps> = ({
       {isSubmitted && (
         <div className="mt-2 p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-300">
           <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-          <span>Details submitted successfully. Preparing your profile...</span>
+          <span>{t.recepSubmitted}</span>
         </div>
       )}
 
@@ -235,7 +239,7 @@ export const ReceptionistCard: React.FC<AgentCardProps> = ({
             <div className="flex items-center gap-2">
               <Dna className="w-4 h-4 text-indigo-500" />
               <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                Extracted Biomarker Panel ({filledRows.length} tests)
+                {interpolate(t.recepPanel, { n: filledRows.length })}
               </span>
             </div>
             {onLogMedical && (
@@ -244,7 +248,7 @@ export const ReceptionistCard: React.FC<AgentCardProps> = ({
                 onClick={() => onLogMedical(filledRows)}
                 className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
               >
-                Sync to Medical Log
+                {t.recepSyncLog}
               </button>
             )}
           </div>
@@ -253,10 +257,10 @@ export const ReceptionistCard: React.FC<AgentCardProps> = ({
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400">
-                  <th className="pb-1.5 font-medium">Test Name</th>
-                  <th className="pb-1.5 font-medium">Result</th>
-                  <th className="pb-1.5 font-medium">Reference Range</th>
-                  <th className="pb-1.5 font-medium text-right">Status</th>
+                  <th className="pb-1.5 font-medium">{t.recepColTest}</th>
+                  <th className="pb-1.5 font-medium">{t.recepColResult}</th>
+                  <th className="pb-1.5 font-medium">{t.recepColRange}</th>
+                  <th className="pb-1.5 font-medium text-right">{t.recepColStatus}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
@@ -280,7 +284,7 @@ export const ReceptionistCard: React.FC<AgentCardProps> = ({
                       </td>
                       <td className="py-2 text-right">
                         <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase ${statusColor}`}>
-                          {row.status || 'recorded'}
+                          {row.status || t.recepStatusRecorded}
                         </span>
                       </td>
                     </tr>
@@ -299,11 +303,11 @@ export const ReceptionistCard: React.FC<AgentCardProps> = ({
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
               <span className="text-xs font-bold text-indigo-950 dark:text-indigo-200 uppercase tracking-wide">
-                {handoffPayload.targetAgent === 'health_coach' ? 'Health Coach Ready' : 'Specialist Handoff Ready'}
+                {handoffPayload.targetAgent === 'health_coach' ? t.recepCoachReady : t.recepSpecialistReady}
               </span>
             </div>
             <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-full">
-              Handoff Formulated
+              {t.recepHandoffFormulated}
             </span>
           </div>
 
@@ -324,11 +328,11 @@ export const ReceptionistCard: React.FC<AgentCardProps> = ({
 
           <div className="pt-2 border-t border-indigo-100 dark:border-indigo-900/60 flex items-center justify-between">
             <span className="text-[11px] text-slate-500 dark:text-slate-400">
-              {isHandedOff ? 'Handoff complete' : 'Specialist connected — formulating personalized plan below'}
+              {isHandedOff ? t.recepHandoffDone : t.recepHandoffWorking}
             </span>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs font-semibold rounded-xl border border-emerald-200/60 dark:border-emerald-800/60">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span>{isHandedOff ? 'Connected' : (handoffPayload.targetAgent === 'medical' ? 'Medical Specialist' : 'Health Coach')}</span>
+              <span>{isHandedOff ? t.recepConnected : (handoffPayload.targetAgent === 'medical' ? t.recepMedicalSpecialist : t.recepHealthCoach)}</span>
             </span>
           </div>
         </div>

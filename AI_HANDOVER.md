@@ -13,7 +13,7 @@
 | **Q-7** | Policy in QUALITY.md §1.4. | Fold `golden_g1` later. Do not `npm test`. |
 | **Track B** | B0 Apply smoke & Modal wiring COMPLETE. | B8.2/8.3 or next open Track B. |
 | **F-1/F-2 USDA** | Parked. | Do not reopen. |
-| **Track L** Localisation | L-1–L-4 shipped (meal fallbacks, seeds/preciseCause, catalog display, admin widgets). EN/ID parity green. | Next open non-Grok ID on ROADMAP (Track B / F-10). |
+| **Track L** Localisation | L-1–L-5 + all residual EN/ID shipped (narratives, diagnostics, alerts, admin chrome). EN/ID parity green, pushed. | Track L complete for EN/ID. |
 
 **Do not:** USDA · critic LLM · LLM `calories` on create schema · `npm test` as COMPLETE · ask to approve **reads** · edit files when the user asked a question · recreate `studio/`.
 
