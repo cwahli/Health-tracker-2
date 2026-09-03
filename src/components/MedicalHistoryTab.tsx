@@ -104,10 +104,18 @@ export default function MedicalHistoryTab({
   
   const [jobs, setJobs] = useState(() => JobStore.getAllJobs().filter(j => (j.kind === 'medical' || j.kind === 'front_desk') && !isJobBlank(j)));
   useEffect(() => {
+    let mounted = true;
     const unsubscribe = JobStore.subscribe(() => {
-      setJobs(JobStore.getAllJobs().filter(j => (j.kind === 'medical' || j.kind === 'front_desk') && !isJobBlank(j)));
+      queueMicrotask(() => {
+        if (mounted) {
+          setJobs(JobStore.getAllJobs().filter(j => (j.kind === 'medical' || j.kind === 'front_desk') && !isJobBlank(j)));
+        }
+      });
     });
-    return () => { unsubscribe(); };
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
   }, []);
 
   const activeMedicalJobs = useMemo(() => {

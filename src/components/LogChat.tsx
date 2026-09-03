@@ -3115,29 +3115,27 @@ ${logsText}`);
         }
       }
     }
-    setMessages(prev => {
-      const newMsgs = [...prev, userMsg, liveMsg];
-      const targetId = currentJobId || jobId;
-      if (targetId) {
-        if (isAgent('front_desk') && !JobStore.getJob(targetId)) {
-          JobStore.createJob({
-            id: targetId,
-            kind: 'front_desk',
-            status: 'running',
-            inputSnapshot: { text: textToSend, imageRefs: [] },
-            messages: newMsgs,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            stepIndex: 1,
-            stepTotal: 1,
-            attemptByStep: {}
-          });
-        } else {
-          JobStore.updateJob(targetId, { messages: newMsgs, status: 'running' });
-        }
+    const newMsgs = [...messages, userMsg, liveMsg];
+    setMessages(prev => [...prev, userMsg, liveMsg]);
+    const targetId = currentJobId || jobId;
+    if (targetId) {
+      if (isAgent('front_desk') && !JobStore.getJob(targetId)) {
+        JobStore.createJob({
+          id: targetId,
+          kind: 'front_desk',
+          status: 'running',
+          inputSnapshot: { text: textToSend, imageRefs: [] },
+          messages: newMsgs,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          stepIndex: 1,
+          stepTotal: 1,
+          attemptByStep: {}
+        });
+      } else {
+        JobStore.updateJob(targetId, { messages: newMsgs, status: 'running' });
       }
-      return newMsgs;
-    });
+    }
     setInputText('');
     const tempImages = overrideImagesInner.length > 0 ? overrideImagesInner : [...selectedImages];
     const tempAnalysisImages = overrideImagesInner.length > 0 ? overrideImagesInner : [...selectedImagesForAnalysis];
@@ -4502,6 +4500,12 @@ ${logsText}`);
   };
   const lastAutoSendKeyRef = useRef<string | null>(null);
   useEffect(() => {
+    if (!isOpen) {
+      lastAutoSendKeyRef.current = null;
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
     const effectiveAutoSend = autoSendMessage || (isAgent('health_baseline') && handoffPayload ? (handoffPayload.summaryForAgent || 'Please create my personalized health baseline plan.') : (isAgent('health_baseline') ? 'Please create my personalized health baseline plan.' : null));
     console.log(`[DIAG5] auto-send effect fired: isOpen=${isOpen}, agentType=${agentType}, hasHandoffPayload=${!!handoffPayload}, effectiveAutoSend=${effectiveAutoSend ? JSON.stringify(effectiveAutoSend).slice(0, 120) : 'null'}`);
     if (isOpen && effectiveAutoSend && (isAgent('medical') || isAgent('daily_recommendation') || isAgent('health_baseline'))) {
@@ -4516,15 +4520,15 @@ ${logsText}`);
       }
       const currentSendKey = `${agentType || 'med'}_${reviewBiomarkerKey || ''}_${effectiveAutoSend}`;
       if (lastAutoSendKeyRef.current !== currentSendKey) {
+        lastAutoSendKeyRef.current = currentSendKey;
         console.log(`[DIAG5] auto-send effect: scheduling handleSend in 250ms with key ${currentSendKey}`);
         const timer = setTimeout(() => {
-          lastAutoSendKeyRef.current = currentSendKey;
           console.log(`[DIAG5] auto-send effect: calling handleSend now`);
           handleSend(effectiveAutoSend);
         }, 250);
         return () => clearTimeout(timer);
       } else {
-        console.log(`[DIAG5] auto-send effect: skipped, currentSendKey ${currentSendKey} already sent (lastAutoSendKeyRef matches)`);
+        console.log(`[DIAG5] auto-send effect: skipped, currentSendKey already scheduled or sent`);
       }
     }
   }, [isOpen, autoSendMessage, type, agentType, reviewBiomarkerKey, handoffPayload]);

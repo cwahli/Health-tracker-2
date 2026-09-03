@@ -523,6 +523,26 @@ export async function callReceptionistAgent(
     output.userResponse = output.userResponse || "Thank you! I have all your key details. I am now handing you over to your Health Coach to formulate your personalized plan.";
   }
 
+  // Preserve all known demographic fields into handoffPayload.consolidatedUserProfile
+  if (output.handoffPayload) {
+    const existing = payload.existingUserProfile || {};
+    const currentSnap = output.memory?.userProfileSnapshot || {};
+    if (!output.handoffPayload.consolidatedUserProfile) {
+      output.handoffPayload.consolidatedUserProfile = { ...existing, ...currentSnap };
+    } else {
+      const cup = output.handoffPayload.consolidatedUserProfile;
+      const combined = { ...existing, ...currentSnap };
+      (Object.keys(combined) as (keyof UserProfileSnapshot)[]).forEach((k) => {
+        if (combined[k] !== undefined && combined[k] !== null && (cup[k] === undefined || cup[k] === null)) {
+          (cup as any)[k] = combined[k];
+        }
+      });
+    }
+    if (!output.handoffPayload.consolidatedMemory && output.memory) {
+      output.handoffPayload.consolidatedMemory = output.memory;
+    }
+  }
+
   // Synthesize updatedProfile object for easy consumption by LogChat
   if (!output.updatedProfile && output.memory?.userProfileSnapshot) {
     const snap = output.memory.userProfileSnapshot;

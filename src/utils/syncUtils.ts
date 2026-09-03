@@ -420,7 +420,7 @@ export const upsertProfileToSupabase = async (
       } finally {
         resolve();
       }
-    }, 600);
+    }, 1500);
   });
 };
 
