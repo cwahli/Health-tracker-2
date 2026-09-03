@@ -298,44 +298,58 @@ export const ReceptionistCard: React.FC<AgentCardProps> = ({
 
       {/* 6. Handoff Card & Action Trigger */}
       {isHandoffReady && handoffPayload && (
-        <div className="mt-2 p-4 bg-gradient-to-br from-indigo-50/80 via-purple-50/40 to-slate-50 dark:from-indigo-950/40 dark:via-purple-950/20 dark:to-slate-900 border border-indigo-200/80 dark:border-indigo-800/60 rounded-2xl shadow-xs flex flex-col gap-2.5">
-          <div className="flex items-center justify-between">
+        isHandedOff ? (
+          <div className="mt-1 flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-600 dark:text-slate-300">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-              <span className="text-xs font-bold text-indigo-950 dark:text-indigo-200 uppercase tracking-wide">
-                {handoffPayload.targetAgent === 'health_coach' ? t.recepCoachReady : t.recepSpecialistReady}
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              <span className="font-medium">
+                {handoffPayload.targetAgent === 'medical' ? t.recepMedicalSpecialist : t.recepHealthCoach}: {t.recepHandoffDone}
               </span>
             </div>
-            <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-full">
-              {t.recepHandoffFormulated}
+            <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200/50 dark:border-emerald-800/50">
+              {t.recepConnected}
             </span>
           </div>
-
-          <p className="text-xs text-slate-700 dark:text-slate-300 leading-normal">
-            {handoffPayload.summaryForAgent}
-          </p>
-
-          {handoffPayload.actionableInsights && handoffPayload.actionableInsights.length > 0 && (
-            <div className="flex flex-col gap-1 mt-1">
-              {handoffPayload.actionableInsights.slice(0, 3).map((insight: string, i: number) => (
-                <div key={i} className="flex items-start gap-1.5 text-xs text-slate-600 dark:text-slate-400">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
-                  <span>{insight}</span>
-                </div>
-              ))}
+        ) : (
+          <div className="mt-2 p-4 bg-gradient-to-br from-indigo-50/80 via-purple-50/40 to-slate-50 dark:from-indigo-950/40 dark:via-purple-950/20 dark:to-slate-900 border border-indigo-200/80 dark:border-indigo-800/60 rounded-2xl shadow-xs flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <span className="text-xs font-bold text-indigo-950 dark:text-indigo-200 uppercase tracking-wide">
+                  {handoffPayload.targetAgent === 'health_coach' ? t.recepCoachReady : t.recepSpecialistReady}
+                </span>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-full">
+                {t.recepHandoffFormulated}
+              </span>
             </div>
-          )}
 
-          <div className="pt-2 border-t border-indigo-100 dark:border-indigo-900/60 flex items-center justify-between">
-            <span className="text-[11px] text-slate-500 dark:text-slate-400">
-              {isHandedOff ? t.recepHandoffDone : t.recepHandoffWorking}
-            </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs font-semibold rounded-xl border border-emerald-200/60 dark:border-emerald-800/60">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span>{isHandedOff ? t.recepConnected : (handoffPayload.targetAgent === 'medical' ? t.recepMedicalSpecialist : t.recepHealthCoach)}</span>
-            </span>
+            <p className="text-xs text-slate-700 dark:text-slate-300 leading-normal">
+              {handoffPayload.summaryForAgent}
+            </p>
+
+            {handoffPayload.actionableInsights && handoffPayload.actionableInsights.length > 0 && (
+              <div className="flex flex-col gap-1 mt-1">
+                {handoffPayload.actionableInsights.slice(0, 3).map((insight: string, i: number) => (
+                  <div key={i} className="flex items-start gap-1.5 text-xs text-slate-600 dark:text-slate-400">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                    <span>{insight}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="pt-2 border-t border-indigo-100 dark:border-indigo-900/60 flex items-center justify-between">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                {t.recepHandoffWorking}
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs font-semibold rounded-xl border border-emerald-200/60 dark:border-emerald-800/60">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>{handoffPayload.targetAgent === 'medical' ? t.recepMedicalSpecialist : t.recepHealthCoach}</span>
+              </span>
+            </div>
           </div>
-        </div>
+        )
       )}
     </div>
   );

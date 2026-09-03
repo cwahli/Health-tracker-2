@@ -137,6 +137,7 @@ foodAnalyzeRouter.post("/api/gemini/front-desk", async (req, res) => {
       images,
       existingMemory,
       existingActivitiesAndTasks,
+      specialistContainers,
     } = req.body;
     
     let targetModel = typeof engine === 'object' ? engine?.name || engine?.model || "gemini-3.5-flash-lite" : (engine || "gemini-3.5-flash-lite");
@@ -189,6 +190,7 @@ foodAnalyzeRouter.post("/api/gemini/front-desk", async (req, res) => {
       images: base64Images.length > 0 ? base64Images : null,
       systemCurrentDate,
       userTimezone,
+      specialistContainers: specialistContainers || null,
     };
 
     const sessionId = logSessionStorage.getStore() || "global";

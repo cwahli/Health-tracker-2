@@ -15,6 +15,7 @@ The **Front Desk (Receptionist)** serves as the central clinical and conversatio
 4. **Direct Concierge vs Specialist Relay**: Answers status questions directly from `<active_biomarkers>` and `<recent_food_logs>` without launching heavy external agents. Hands off deep work to specialized agents (`health_coach`, `medical`, `agent4`, `agent7`, `food_compare`).
 5. **Atomic Historical Mutations (`modificationCommand[]`)**: Resolves system date anchors (`<system_current_date: YYYY-MM-DD>`) to execute multi-field updates and deletions directly on the user's records.
 6. **Clinical Safety Guardrails**: Intercepts extreme crash diets or physiological contraindications (e.g. Stage 3 CKD + 300g protein), setting `isDisambiguationRequired: true` and re-questioning the user.
+7. **Hub-and-Spoke Informational Container Pattern (Multi-Turn Chat)**: Specialized agents run as consultative workers returning structured artifacts (`<active_specialist_containers>`) rather than hijacking the conversational session. Front Desk remains the permanent host, answering follow-up questions directly without regenerating duplicate baseline cards or looping handoffs.
 
 ---
 
@@ -22,7 +23,7 @@ The **Front Desk (Receptionist)** serves as the central clinical and conversatio
 
 | Use Case ID | Domain & Capability | Persona & Input Scenario | Target Specialist | Live Execution Score & Status |
 |:---:|:---|:---|:---:|:---:|
-| **UC-01** | **New User Weight Loss Multi-Turn Onboarding** | 18F, 40kg, 135cm; empty profile; multi-turn intake. | `health_coach` | **100/100 (PASSED)** |
+| **UC-01** | **New User Weight Loss Multi-Turn Onboarding & Container Follow-up** | 18F, 40kg, 135cm; empty profile; multi-turn intake + "What's best weight?" follow-up. | `health_coach` + `general_receptionist` | **100/100 (PASSED)** |
 | **UC-02** | **New User General Wellness & Vitality Onboarding** | 28F, 54kg; desk job; afternoon energy crashes & poor sleep. | `health_coach` | **100/100 (PASSED)** |
 | **UC-03** | **Existing User Spot Vitals & Quest Lab Relay** | 42M (Alex); logs BP/RHR inline $\to$ relays 11-marker blood panel. | `medical` | **100/100 (PASSED)** |
 | **UC-04** | **Multimodal 3-Page Lab Report Ingestion (3 Images)** | 42M; submits 3 NHS GP image scans (Renal, LFT, Bone, Lipids). | `medical` | **100/100 (PASSED)** |
@@ -39,15 +40,16 @@ The **Front Desk (Receptionist)** serves as the central clinical and conversatio
 
 ---
 
-### UC-01: New User Weight Loss Multi-Turn Onboarding
-* **Scenario:** Multi-turn onboarding for an 18yo female from Indonesia (40kg, 135cm) seeking weight loss. Front Desk gathers demographics across turns, consolidates memory, and passes the context to Health Coach.
+### UC-01: New User Weight Loss Multi-Turn Onboarding & Follow-Up Discussion
+* **Scenario:** Multi-turn onboarding for an 18yo female from Indonesia (40kg, 135cm) seeking weight loss. Front Desk gathers demographics across turns, consolidates memory, invokes Health Coach, and then retains the conversation to directly answer follow-up questions from the active container.
 * **JSON Fixture:** `prototype/receptionist/benchmark/UC-01.json`
 
 #### Live Execution Report:
-* **Model:** `gemini-3.5-flash-lite` | **Status:** **100/100 PASSED**
+* **Model:** `gemini-3.5-flash-lite` | **Status:** **100/100 PASSED (All 4 Turns)**
 * **Turn 1 (`"I want to loose weight"`):** Status: `needs_info`, Target: `health_coach` (provisional), Missing: `[gender, age, height, weight, activity_level]`. Issued interactive demographic `uiForm`.
 * **Turn 2 (`"I'm an 18-year-old woman from Indonesia, 135cm tall"`):** Consolidated `age: 18`, `gender: "female"`, `heightCm: 135`, `ethnicity: "Indonesian"`. Missing: `[weight]`.
 * **Turn 3 (`"My current weight is 40kg... student lifestyle with light daily walking"`):** Consolidated `weightKg: 40`, `activityLevel: "lightly_active"`. Set `status: ready_for_handoff`, generated `handoffPayload` for `health_coach`.
+* **Turn 4 (`"What's the best weight for me?"`):** Active Health Coach plan container provided in `<active_specialist_containers>`. Front Desk intercepts the follow-up inquiry: sets `status: needs_info`, `targetAgent: general_receptionist`, `handoffPayload: null` (zero duplicate generation). Calculates healthy BMI range (18.5–24.9 $\to$ 33.7–45.4 kg for 135cm), confirms current 40kg is healthy, and advises lean body recomposition.
 * **Downstream Health Coach Execution:** Evaluated low bodyweight (BMI 21.9), formulated recomp and maintenance energy targets, and populated all 31 macro/micronutrient keys (Calories: 1550–1750 kcal, Protein: 55g–65g).
 
 ---

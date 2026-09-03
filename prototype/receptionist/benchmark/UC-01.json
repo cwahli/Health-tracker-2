@@ -41,8 +41,7 @@
           "activity_level"
         ],
         "mustIncludeInResponse": [
-          "calorie",
-          "profile"
+          "plan"
         ],
         "memoryValidation": {
           "goalSummaryIncludes": [
@@ -96,7 +95,7 @@
         "status": "ready_for_handoff",
         "expectedMissingFields": [],
         "mustIncludeInResponse": [
-          "coach"
+          "weight"
         ],
         "memoryValidation": {
           "goalSummaryIncludes": [
@@ -114,6 +113,38 @@
         "handoffValidation": {
           "targetAgent": "health_coach",
           "hasPayload": true
+        }
+      }
+    },
+    {
+      "turnIndex": 4,
+      "userMessage": "What's the best weight for me?",
+      "specialistContainers": {
+        "healthCoachPlan": {
+          "globalSummary": "Focus on lean body recomposition, preserving skeletal muscle while establishing healthy metabolic stamina.",
+          "timelineToOptimal": "8 to 12 weeks",
+          "topNutrientTargets": [
+            { "nutrientKey": "calories", "targetValue": "1,450 - 1,550 kcal/day" },
+            { "nutrientKey": "protein", "targetValue": "60 - 70 g/day" }
+          ],
+          "dailyActivities": [
+            { "activity": "Light daily walking 6,000 - 8,000 steps" }
+          ]
+        }
+      },
+      "expectedOutput": {
+        "intent": "weight_loss",
+        "targetAgent": "general_receptionist",
+        "status": "needs_info",
+        "expectedMissingFields": [],
+        "mustIncludeInResponse": [
+          "kg"
+        ],
+        "memoryValidation": {
+          "stateEquals": "ongoing_support"
+        },
+        "handoffValidation": {
+          "hasPayload": false
         }
       }
     }

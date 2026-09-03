@@ -134,6 +134,7 @@ export async function runCase(
       existingActivitiesAndTasks:
         benchmark.userPayload.jsonPayload.existingActivitiesAndTasks || null,
       images: turn.images || benchmark.userPayload.jsonPayload.images || null,
+      specialistContainers: turn.specialistContainers || null,
     };
 
     let output: ReceptionistOutput;

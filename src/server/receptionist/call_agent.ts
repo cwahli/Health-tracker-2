@@ -385,6 +385,12 @@ export function formatReceptionistInput(input: ReceptionistInputPayload): string
     parts.push("</existing_activities_and_tasks>");
   }
 
+  if (input.specialistContainers && Object.keys(input.specialistContainers).length > 0) {
+    parts.push("\n<active_specialist_containers>");
+    parts.push(JSON.stringify(input.specialistContainers, null, 2));
+    parts.push("</active_specialist_containers>");
+  }
+
   return parts.join("\n");
 }
 
@@ -507,6 +513,7 @@ export interface HandoffRepairContext {
   detectedActivity?: string | null;
   currentUserMessage?: string;
   images?: string[];
+  specialistContainers?: Record<string, any> | null;
 }
 
 /**
@@ -526,6 +533,9 @@ function stayAtFrontDesk(output: any, missing: string[] = [], keepSpecialistTarg
   output.status = 'needs_info';
   output.handoffPayload = null;
   output.missingFields = missing;
+  if (output.memory) {
+    output.memory.conversationState = missing.length > 0 ? 'onboarding_gather_info' : 'ongoing_support';
+  }
   if (!keepSpecialistTarget) output.targetAgent = 'general_receptionist';
   return output;
 }
@@ -618,6 +628,24 @@ export function maybePromoteHandoff(output: any, ctx: HandoffRepairContext): any
     return output;
   }
 
+  const hasContainers = Boolean(
+    ctx.specialistContainers && Object.keys(ctx.specialistContainers).length > 0
+  );
+  const isFollowUpInquiry = Boolean(
+    hasContainers &&
+    !/new plan|different plan|recalculate|redo|here is (my|another) (lab|blood|photo)|uploaded/i.test(msgText) &&
+    (/what|why|how|can i|is it|should i|tell me|explain|best weight/i.test(msgText) || output.intent === 'general_inquiry')
+  );
+  if (isFollowUpInquiry) {
+    output.status = 'needs_info';
+    output.targetAgent = 'general_receptionist';
+    output.handoffPayload = null;
+    if (output.memory) {
+      output.memory.conversationState = 'ongoing_support';
+    }
+    return output;
+  }
+
   const hasSpecificLifestyleGoal = /sleep|energy|vitality|fatigue|crash|muscle|diet|plan/i.test(`${ctx.currentUserMessage || ''} ${output.memory?.goalSummary || ''}`);
   const isHealthGoal = output.intent === 'weight_loss' || output.intent === 'health_improvement' || (output.intent === 'general_wellness' && hasSpecificLifestyleGoal);
   if (output.targetAgent === 'general_receptionist' && !isHealthGoal) return output;
@@ -672,41 +700,49 @@ export function enforceReadyHandoffContract(output: any, ctx: HandoffRepairConte
     return stayAtFrontDesk(output, []);
   }
 
+  const missing: string[] = [];
+  const specialist = mapFrontDeskSpecialist(output.targetAgent, output.intent);
+  if (specialist === 'health_baseline') {
+    if (!(snap.age || existing.age)) missing.push('age');
+    if (!(snap.gender || existing.gender)) missing.push('gender');
+    if (!(snap.heightCm || existing.heightCm)) missing.push('height');
+    if (!(snap.weightKg || existing.weightKg)) missing.push('weight');
+    if (!(snap.activityLevel || existing.activityLevel || ctx.detectedActivity)) missing.push('activity_level');
+  }
+
+  if (missing.length > 0) {
+    stayAtFrontDesk(output, missing, true);
+    if (!output.userResponse || !String(output.userResponse).trim()) {
+      const msg = String(ctx.currentUserMessage || '');
+      const goal = String(output.memory?.goalSummary || '');
+      const wantsWeight = /lose weight|loose weight|weight loss|turun.*berat|berat badan/i.test(`${msg} ${goal}`);
+      output.userResponse = lang === 'id'
+        ? (wantsWeight
+          ? `Saya bisa membantu Anda menurunkan berat badan dengan aman. Agar rencananya tepat, saya masih membutuhkan: ${missing.join(', ')}. Boleh dibagikan?`
+          : `Terima kasih! Agar bisa lanjut, saya masih membutuhkan: ${missing.join(', ')}.`)
+        : (wantsWeight
+          ? `I can help you lose weight safely. To build your plan I still need: ${missing.join(', ')}. Could you share them?`
+          : `Thanks! To proceed I still need: ${missing.join(', ')}.`);
+    }
+    return output;
+  }
+
   const hp = output.handoffPayload;
   const usable = hp && typeof hp === 'object' && hp.targetAgent && hp.targetAgent !== 'general_receptionist' && (hp.summaryForAgent || hp.userContextSummary);
   if (!usable) {
-    const missing: string[] = [];
-    const specialist = mapFrontDeskSpecialist(output.targetAgent, output.intent);
-    if (specialist === 'health_baseline') {
-      if (!(snap.age || existing.age)) missing.push('age');
-      if (!(snap.gender || existing.gender)) missing.push('gender');
-      if (!(snap.heightCm || existing.heightCm)) missing.push('height');
-      if (!(snap.weightKg || existing.weightKg)) missing.push('weight');
-      if (!(snap.activityLevel || existing.activityLevel || ctx.detectedActivity)) missing.push('activity_level');
-    }
-    if (missing.length === 0 && isRoutableSpecialistIntent(output.intent, output.targetAgent)) {
-      output.handoffPayload = synthesizeReadyHandoffPayload(output, snap, existing, ctx.detectedActivity);
-      output.missingFields = [];
-      output.uiForm = null;
-    } else {
-      stayAtFrontDesk(output, missing, true);
-      if (!output.userResponse || !String(output.userResponse).trim()) {
-        const msg = String(ctx.currentUserMessage || '');
-        const goal = String(output.memory?.goalSummary || '');
-        const wantsWeight = /lose weight|loose weight|weight loss|turun.*berat|berat badan/i.test(`${msg} ${goal}`);
-        output.userResponse = lang === 'id'
-          ? (wantsWeight
-            ? `Saya bisa membantu Anda menurunkan berat badan dengan aman. Agar rencananya tepat, saya masih membutuhkan: ${missing.join(', ')}. Boleh dibagikan?`
-            : `Terima kasih! Agar bisa lanjut, saya masih membutuhkan: ${missing.join(', ')}.`)
-          : (wantsWeight
-            ? `I can help you lose weight safely. To build your plan I still need: ${missing.join(', ')}. Could you share them?`
-            : `Thanks! To proceed I still need: ${missing.join(', ')}.`);
-      }
-      return output;
-    }
-  } else {
-    output.missingFields = [];
-    output.uiForm = null;
+    output.handoffPayload = synthesizeReadyHandoffPayload(output, snap, existing, ctx.detectedActivity);
+  }
+  output.missingFields = [];
+  output.uiForm = null;
+  if (output.handoffPayload) {
+    const existingClean = { ...(existing || {}) };
+    delete (existingClean as any).agentMemory;
+    const snapClean = { ...(snap || {}) };
+    output.handoffPayload.consolidatedUserProfile = {
+      ...existingClean,
+      ...snapClean,
+      ...(output.handoffPayload.consolidatedUserProfile || {}),
+    };
   }
   if (!output.userResponse || !String(output.userResponse).trim()) {
     const specialist = mapFrontDeskSpecialist(output.targetAgent, output.intent);
@@ -958,14 +994,16 @@ export async function callReceptionistAgent(
     existingUserProfile: payload.existingUserProfile,
     detectedActivity,
     currentUserMessage: payload.currentUserMessage,
-    images: payload.images
+    images: payload.images,
+    specialistContainers: payload.specialistContainers
   });
 
   output = enforceReadyHandoffContract(output, {
     existingUserProfile: payload.existingUserProfile,
     detectedActivity,
     currentUserMessage: payload.currentUserMessage,
-    images: payload.images
+    images: payload.images,
+    specialistContainers: payload.specialistContainers
   });
 
   // Preserve all known demographic fields into handoffPayload.consolidatedUserProfile
@@ -991,18 +1029,19 @@ export async function callReceptionistAgent(
     }
   }
 
-  // Synthesize updatedProfile object for easy consumption by LogChat
+  // Synthesize updatedProfile object for easy consumption by LogChat (only genuinely new/changed fields)
   if (!output.updatedProfile && output.memory?.userProfileSnapshot) {
     const snap = output.memory.userProfileSnapshot;
+    const existing = payload.existingUserProfile || {};
     const patch: Record<string, any> = {};
-    if (snap.weightKg) patch.weight = snap.weightKg;
-    if (snap.heightCm) patch.height = snap.heightCm;
-    if (snap.age) patch.age = snap.age;
-    if (snap.gender) patch.gender = snap.gender;
-    if (snap.ethnicity) patch.ethnicity = snap.ethnicity;
-    if (snap.bloodType) patch.bloodType = snap.bloodType;
-    if (snap.activityLevel) patch.activityLevel = snap.activityLevel;
-    if (snap.targetWeightKg) patch.targetWeight = snap.targetWeightKg;
+    if (snap.weightKg && snap.weightKg !== existing.weightKg) patch.weight = snap.weightKg;
+    if (snap.heightCm && snap.heightCm !== existing.heightCm) patch.height = snap.heightCm;
+    if (snap.age && snap.age !== existing.age) patch.age = snap.age;
+    if (snap.gender && snap.gender !== existing.gender) patch.gender = snap.gender;
+    if (snap.ethnicity && snap.ethnicity !== existing.ethnicity) patch.ethnicity = snap.ethnicity;
+    if (snap.bloodType && snap.bloodType !== existing.bloodType) patch.bloodType = snap.bloodType;
+    if (snap.activityLevel && snap.activityLevel !== existing.activityLevel) patch.activityLevel = snap.activityLevel;
+    if (snap.targetWeightKg && snap.targetWeightKg !== existing.targetWeightKg) patch.targetWeight = snap.targetWeightKg;
     if (Object.keys(patch).length > 0) {
       output.updatedProfile = patch;
     }

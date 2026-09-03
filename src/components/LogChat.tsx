@@ -3497,6 +3497,25 @@ ${logsText}`);
               if (cached) bodyData.existingMemory = JSON.parse(cached);
             } catch {}
           }
+
+          // Gather active specialist containers from previous thread messages or memory
+          const activeContainers: Record<string, any> = {};
+          for (const m of messages) {
+            if (m.agentType === 'health_baseline' && m.agentResult?.report) {
+              activeContainers.healthCoachPlan = m.agentResult.report;
+            } else if (m.agentType === 'medical' && (m.agentResult?.filledRows || m.agentResult?.extractedData)) {
+              activeContainers.medicalLab = m.agentResult.filledRows || m.agentResult.extractedData;
+            }
+          }
+          if (!activeContainers.healthCoachPlan && bodyData.existingMemory?.specialistContainers?.healthCoachPlan) {
+            activeContainers.healthCoachPlan = bodyData.existingMemory.specialistContainers.healthCoachPlan;
+          }
+          if (!activeContainers.medicalLab && bodyData.existingMemory?.specialistContainers?.medicalLab) {
+            activeContainers.medicalLab = bodyData.existingMemory.specialistContainers.medicalLab;
+          }
+          if (Object.keys(activeContainers).length > 0) {
+            bodyData.specialistContainers = activeContainers;
+          }
         }
         if (reviewBiomarkerKey) {
           const rawCur = (biomarkers?.[reviewBiomarkerKey] || null) as any;
@@ -4246,12 +4265,23 @@ ${logsText}`);
                 currentMem.workHistoryLog = [currentMem.workHistoryLog[0], ...currentMem.workHistoryLog.slice(-4)];
               }
             }
+            if (!currentMem.specialistContainers) currentMem.specialistContainers = {};
+            if (resData.report) {
+              currentMem.specialistContainers.healthCoachPlan = resData.report;
+            }
+            if (resData.filledRows || resData.extractedData) {
+              currentMem.specialistContainers.medicalLab = resData.filledRows || resData.extractedData;
+            }
             localStorage.setItem('health_tracker_agent_memory', JSON.stringify(currentMem));
             if (onSaveProfile) {
               onSaveProfile({ agentMemory: currentMem });
             }
           }
         } catch {}
+      }
+      if (isHandoffContinuation) {
+        setDelegatedAgentType(null);
+        setDelegatedHandoffPayload(null);
       }
       const assistantMsg: ChatMessage = {
         id: `msg_${Date.now() + 1}`,

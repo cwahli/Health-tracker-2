@@ -119,6 +119,7 @@ export interface ReceptionistInputPayload {
   images?: string[] | null;
   systemCurrentDate?: string | null;
   userTimezone?: string | null;
+  specialistContainers?: Record<string, any> | null;
 }
 
 export interface HandoffPayload {
