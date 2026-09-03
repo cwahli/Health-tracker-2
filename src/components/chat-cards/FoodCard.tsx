@@ -3159,7 +3159,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                         if (!displayImgs || displayImgs.length === 0) return null;
                         return (
                           <div className="overflow-hidden border-y sm:border border-slate-100 dark:border-slate-700/50 shadow-sm mb-3 w-[calc(100%+2rem)] -mx-4 sm:mx-0 sm:w-full sm:rounded-2xl">
-                            <ImageSlider images={displayImgs} altText={msg.data?.pendingFoodLog?.name || (t.pendingMeal || "Pending meal")} />
+                            <ImageSlider images={displayImgs} altText={msg.data?.pendingFoodLog?.name || (t.pendingMeal || "Pending meal")} language={language} />
                           </div>
                         );
                       })()}

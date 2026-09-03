@@ -29,6 +29,7 @@ import {
   saveAuditSession
 } from '../utils/biomarkerAuditEngine';
 import { FilterPills } from './ui/FilterPills';
+import { t, interpolate, displayBiomarkerName, displayCategoryLabel } from '../utils/i18n';
 
 interface BiomarkerAuditModalProps {
   isOpen: boolean;
@@ -1053,18 +1054,18 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
                   items={[
                     {
                       id: 'all',
-                      label: `All (${corruptedUnitItems.length})`,
+                      label: interpolate(t(profile?.language, 'auditFilterAll'), { n: corruptedUnitItems.length }),
                       activeColorClass: 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-xs',
                     },
                     {
                       id: 'auto_proposals',
-                      label: `Auto-Proposals (${targetAutoUnitItems.length})`,
+                      label: interpolate(t(profile?.language, 'auditFilterAuto'), { n: targetAutoUnitItems.length }),
                       icon: <Zap className="w-3.5 h-3.5" />,
                       activeColorClass: 'bg-amber-600 text-white shadow-xs',
                     },
                     {
                       id: 'agent_review',
-                      label: `Needs Agent Review (${targetAgentUnitItems.length})`,
+                      label: interpolate(t(profile?.language, 'auditFilterAgentReview'), { n: targetAgentUnitItems.length }),
                       icon: <Bot className="w-3.5 h-3.5" />,
                       activeColorClass: 'bg-indigo-600 text-white shadow-xs',
                     },
@@ -1344,18 +1345,18 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
                   items={[
                     {
                       id: 'all',
-                      label: `All (${missingMetadataItems.length})`,
+                      label: interpolate(t(profile?.language, 'auditFilterAll'), { n: missingMetadataItems.length }),
                       activeColorClass: 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-xs',
                     },
                     {
                       id: 'catalog',
-                      label: `Catalog Matches (${targetCatalogItems.length})`,
+                      label: interpolate(t(profile?.language, 'auditFilterCatalog'), { n: targetCatalogItems.length }),
                       icon: <Zap className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" />,
                       activeColorClass: 'bg-blue-600 text-white shadow-xs',
                     },
                     {
                       id: 'custom_calibrate',
-                      label: `Needs Calibrate (${targetCustomCalibrateItems.length})`,
+                      label: interpolate(t(profile?.language, 'auditFilterCalibrate'), { n: targetCustomCalibrateItems.length }),
                       icon: <Bot className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />,
                       activeColorClass: 'bg-emerald-600 text-white shadow-xs',
                     },
@@ -1363,7 +1364,7 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
                       ? [
                           {
                             id: 'categorise' as const,
-                            label: `Needs Category (${targetCategoriseKeys.length})`,
+                            label: interpolate(t(profile?.language, 'auditFilterCategory'), { n: targetCategoriseKeys.length }),
                             icon: <Bot className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />,
                             activeColorClass: 'bg-indigo-600 text-white shadow-xs',
                           },
@@ -1452,7 +1453,7 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
                             {match.category && (
                               <div className="flex justify-between">
                                 <span className="text-slate-500">Organ Category:</span>
-                                <span className="font-semibold text-indigo-600 dark:text-indigo-400 capitalize">{match.category}</span>
+                          <span className="font-semibold text-indigo-600 dark:text-indigo-400 capitalize">{displayCategoryLabel(profile?.language, match.category)}</span>
                               </div>
                             )}
                           </div>
@@ -1843,7 +1844,7 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
                   return (
                     <div key={i.key} className="p-2 bg-white dark:bg-slate-900/80 rounded-lg border border-slate-100 dark:border-slate-800 space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-800 dark:text-slate-100 text-xs">{i.name}</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-100 text-xs">{displayBiomarkerName(profile?.language, i.key, i.name)}</span>
                         <span className="font-mono text-[10px] text-slate-400">({i.key})</span>
                       </div>
                       <div className="flex items-center justify-between text-[11px]">

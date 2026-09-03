@@ -3336,7 +3336,7 @@ export default function App() {
       } else {
         loadedBiomarkers = { fasting_glucose: 91, hba1c: 5.3, total_cholesterol: 208, ldl: 132, hdl: 46, triglycerides: 155, egfr: 94, vitamin_d: 22, wbc: 6.2, hemoglobin: 14.6, bmi: 23.4 };
       }
-      loadedReport = getDemoReport(demoType);
+      loadedReport = getDemoReport(demoType, loadedProfile?.language);
       loadedActions = loadedReport.actions || [];
       loadedBenefits = loadedReport.dailyBenefits || [];
     }
@@ -3662,7 +3662,7 @@ export default function App() {
     } else if (type === 'complex') {
       newBiomarkers = { fasting_glucose: 131, hba1c: 7.1, total_cholesterol: 228, ldl: 151, hdl: 38, triglycerides: 198, egfr: 64, vitamin_d: 19, wbc: 6.9, hemoglobin: 14.1, bmi: 30.2 };
     }
-    const newReport = getDemoReport(type);
+    const newReport = getDemoReport(type, profile?.language);
     const newActions = newReport.actions || [];
     const newBenefits = newReport.dailyBenefits || [];
 

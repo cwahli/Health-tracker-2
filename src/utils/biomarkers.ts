@@ -1,4 +1,6 @@
 
+import { t, interpolate } from './i18n';
+
 export const isAsianEthnicity = (eth?: string): boolean => {
   if (!eth) return false;
   const lower = eth.toLowerCase();
@@ -2067,7 +2069,8 @@ export function diagnoseTelemetryIssue(
   val: any,
   unit: string,
   rangeStr?: string,
-  historyEntries?: { date: string; val: any }[]
+  historyEntries?: { date: string; val: any }[],
+  lang?: unknown
 ): TelemetryDiagnosis {
   const num = typeof val === 'number' ? val : parseFloat(String(val));
   const bounds = parseNormalRangeBounds(rangeStr);
@@ -2084,7 +2087,7 @@ export function diagnoseTelemetryIssue(
       const multiple = Math.round(num / (refMax || 0.1));
       return {
         issueTitle: `Unit Scale Error: Cell Count vs 10^9/L`,
-        preciseCause: `Logged value (${val} ${displayUnit || '10^9/L'}) is ${multiple}× above reference range (${rangeStr || '0.0 - 0.1'}). This was likely entered as total cells/µL (or /mm³), where ${val} cells/µL = ${(num / 1000).toFixed(2)} 10^9/L.`,
+        preciseCause: interpolate(t(lang, 'outlierWbcCellsCause'), { val, unit: displayUnit || '10^9/L', multiple, range: rangeStr || '0.0 - 0.1', converted: (num / 1000).toFixed(2) }),
         suggestedFix: `Update value to ${(num / 1000).toFixed(2)} 10^9/L, or update biomarker unit if recording raw cells/µL.`,
         badgeLabel: `Scale: /µL vs 10^9/L`
       };
@@ -2094,7 +2097,7 @@ export function diagnoseTelemetryIssue(
       const multiple = Math.round(num / refMax);
       return {
         issueTitle: `Unit Scale Error: Percentage Differential vs Absolute Count`,
-        preciseCause: `Logged value (${val} ${displayUnit || '10^9/L'}) is ${multiple}× above reference range (${rangeStr || ''}). This was likely recorded as a differential percentage (${val}%) rather than an absolute cell count (${(num * 0.1).toFixed(2)} 10^9/L).`,
+        preciseCause: interpolate(t(lang, 'outlierWbcPctCause'), { val, unit: displayUnit || '10^9/L', multiple, range: rangeStr || '', converted: (num * 0.1).toFixed(2) }),
         suggestedFix: `If this represents ${val}%, convert to absolute count (${(num * 0.1).toFixed(2)} 10^9/L) or change unit to % differential.`,
         badgeLabel: `Scale: % vs 10^9/L`
       };
@@ -2105,7 +2108,7 @@ export function diagnoseTelemetryIssue(
   if (refMax !== undefined && refMax > 0 && refMax <= 1.0 && !isNaN(num) && num >= 10) {
     return {
       issueTitle: `Unit Scale Error: Percentage (${val}%) vs Decimal Ratio (0.xx L/L)`,
-      preciseCause: `Logged value (${val}) was entered as a percentage (${val}%) while reference range (${rangeStr}) uses decimal fraction notation (0.xx L/L).`,
+      preciseCause: interpolate(t(lang, 'outlierRatioPctCause'), { val, range: rangeStr }),
       suggestedFix: `Convert value to ${(num / 100).toFixed(2)} or change reference range to percentage (e.g. 36 - 50 %).`,
       badgeLabel: `Scale: % vs Ratio`
     };
@@ -2114,7 +2117,7 @@ export function diagnoseTelemetryIssue(
   if (bounds.min !== undefined && refMax !== undefined && refMax >= 10 && !isNaN(num) && num > 0 && num < 1.0) {
     return {
       issueTitle: `Unit Scale Error: Decimal Ratio (${val}) vs Percentage`,
-      preciseCause: `Logged value (${val}) was entered as a decimal ratio (0.xx) while reference range (${rangeStr}) uses whole percentage notation (${refMin}-${refMax}%).`,
+      preciseCause: interpolate(t(lang, 'outlierRatioDecCause'), { val, range: rangeStr, refMin, refMax }),
       suggestedFix: `Convert value to ${(num * 100).toFixed(1)}% or update reference range to decimal ratio (L/L).`,
       badgeLabel: `Scale: Ratio vs %`
     };
@@ -2124,7 +2127,7 @@ export function diagnoseTelemetryIssue(
   if (bounds.min !== undefined && bounds.max !== undefined && refMin >= 50 && !isNaN(num) && num > 0 && num < refMin * 0.45) {
     return {
       issueTitle: `Unit Multiplier Mismatch: 10× Scale Error (g/dL vs g/L)`,
-      preciseCause: `Logged value (${val}) is ~10× lower than reference range (${rangeStr}). It appears to be in g/dL (e.g. 14.5 g/dL) instead of g/L (145 g/L).`,
+      preciseCause: interpolate(t(lang, 'outlierTenXCause'), { val, range: rangeStr }),
       suggestedFix: `Convert value to ${(num * 10).toFixed(0)} g/L or change unit to g/dL with range ${(refMin / 10).toFixed(1)} - ${(bounds.max / 10).toFixed(1)} g/dL.`,
       badgeLabel: `Unit: 10× Multiplier`
     };
@@ -2135,7 +2138,7 @@ export function diagnoseTelemetryIssue(
     const ratio = Math.round(num / refMax);
     return {
       issueTitle: 'Potentially Improbable High Reading',
-      preciseCause: `Logged value (${val} ${displayUnit}) is ${ratio}× higher than the normal upper limit (${refMax} ${displayUnit}). Check for decimal point placement or unit discrepancy.`,
+      preciseCause: interpolate(t(lang, 'outlierHighCause'), { val, unit: displayUnit, ratio, refMax }),
       suggestedFix: `Verify lab report value and correct any missing decimal places.`,
       badgeLabel: `Outlier: ${ratio}× High`
     };
@@ -2145,7 +2148,7 @@ export function diagnoseTelemetryIssue(
   if (refMin !== undefined && refMin > 0 && num < refMin * 0.25) {
     return {
       issueTitle: 'Potentially Improbable Low Reading',
-      preciseCause: `Logged value (${val} ${displayUnit}) is far below the normal lower limit (${refMin} ${displayUnit}). Check for missing digits or unit discrepancy.`,
+      preciseCause: interpolate(t(lang, 'outlierLowCause'), { val, unit: displayUnit, refMin }),
       suggestedFix: `Verify lab report value and correct any missing decimal places.`,
       badgeLabel: 'Outlier: Low Value'
     };
@@ -2162,7 +2165,7 @@ export function diagnoseTelemetryIssue(
       if (minVal > 0 && maxVal / minVal >= 15) {
         return {
           issueTitle: 'Telemetry Scale Inconsistency Across History',
-          preciseCause: `Historical readings fluctuate drastically between ${minVal} and ${maxVal} (${Math.round(maxVal / minVal)}× gap). Mixed units or decimal notations detected.`,
+          preciseCause: interpolate(t(lang, 'outlierHistoryCause'), { minVal, maxVal, gap: Math.round(maxVal / minVal) }),
           suggestedFix: `Standardize all historical logs to a consistent clinical unit.`,
           badgeLabel: 'Mixed Scale History'
         };
@@ -2172,7 +2175,7 @@ export function diagnoseTelemetryIssue(
 
   return {
     issueTitle: 'Biomarker Telemetry Error',
-    preciseCause: `Value ${val} deviates significantly from normal clinical intervals (${rangeStr || 'unknown'}).`,
+    preciseCause: interpolate(t(lang, 'outlierGenericCause'), { val, range: rangeStr || 'unknown' }),
     suggestedFix: 'Standardize unit or verify lab report entry.',
     badgeLabel: 'Telemetry Error'
   };
@@ -2319,7 +2322,7 @@ function _detectFlaggedTelemetryErrors(
 
     const num = typeof val === 'number' ? val : parseFloat(String(val));
     if (!isNaN(num) && isBiomarkerValueImprobable(canonicalKey, num, range)) {
-      const diag = diagnoseTelemetryIssue(canonicalKey, name, val, unit, range);
+      const diag = diagnoseTelemetryIssue(canonicalKey, name, val, unit, range, undefined, profile?.language);
       const autoFix = buildAutoFixProposal(canonicalKey, val, range);
       flaggedMap.set(canonicalKey, {
         key: canonicalKey,
@@ -2389,7 +2392,7 @@ function _detectFlaggedTelemetryErrors(
     if (hasImprobableEntry || hasLargeShift) {
       const existing = flaggedMap.get(canonicalKey);
       const targetVal = worstEntry ? worstEntry.val : entries[0]?.val;
-      const diag = diagnoseTelemetryIssue(canonicalKey, name, targetVal, unit, range, entries);
+      const diag = diagnoseTelemetryIssue(canonicalKey, name, targetVal, unit, range, entries, profile?.language);
       const autoFix = buildAutoFixProposal(canonicalKey, targetVal, range);
 
       const prioritizedSamples = worstEntry && isBiomarkerValueImprobable(canonicalKey, typeof worstEntry.val === 'number' ? worstEntry.val : parseFloat(String(worstEntry.val)), range)

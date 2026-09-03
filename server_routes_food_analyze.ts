@@ -18,6 +18,7 @@ export const foodAnalyzeRouter = Router();
 foodAnalyzeRouter.get("/api/gemini/instruction-preview", async (req, res) => {
   try {
     const { agentType, biomarkersNeedingImprovement, remainingAllowance, activeMeal } = req.query;
+    const previewLang = typeof req.query.language === 'string' ? req.query.language : 'en';
     
     if (agentType === 'food_scout') {
       const instruction = `You are a fast visual food identification agent. Look at the image and return a short list of plain-text search keywords for the food items you see (e.g. ['fried chicken', 'white rice', 'sambal']), plus a rough estimated weight in grams for each if visually judgeable. Do not do any nutrition or clinical analysis. Also try to identify any clues on how it's cooked (e.g., oil cooked, fried, steamed) or freshness (e.g., fresh fish). Include these details in your keywords if helpful. Output only: { "items": [{ "keyword": string, "estimatedWeightGrams": number }] }`;
@@ -102,7 +103,8 @@ foodAnalyzeRouter.get("/api/gemini/instruction-preview", async (req, res) => {
       const instruction = buildFoodAnalyzeInstruction({
         biomarkersNeedingImprovement: parsedBiomarkers,
         remainingAllowance: parsedAllowance,
-        activeMeal: parsedMeal
+        activeMeal: parsedMeal,
+        userProfile: { language: previewLang },
       });
 
       return res.json({ instruction });

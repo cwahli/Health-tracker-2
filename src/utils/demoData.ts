@@ -1,4 +1,5 @@
 import { UserProfile, FoodLog, BiomarkerLog, RecommendationReport } from '../types';
+import { t } from './i18n';
 
 export type DemoProfileType = 'empty' | 'average' | 'complex';
 
@@ -518,7 +519,7 @@ export function getDemoFoodLogs(type: DemoProfileType = 'average'): FoodLog[] {
   ];
 }
 
-export function getDemoReport(type: DemoProfileType = 'average'): RecommendationReport {
+export function getDemoReport(type: DemoProfileType = 'average', lang?: unknown): RecommendationReport {
   if (type === 'empty') {
     return {
       timestamp: new Date().toISOString(),
@@ -531,7 +532,7 @@ export function getDemoReport(type: DemoProfileType = 'average'): Recommendation
       actions: [],
       dailyBenefits: [],
       latestInsights: [
-        { title: 'Welcome to your Biomarker Cockpit', summary: 'This platform integrates food composition analyses with deep clinical biomarker monitoring to provide dynamic metabolic feedback loops.', link: '#' }
+        { title: t(lang, 'seedEmptyWelcomeTitle'), summary: t(lang, 'seedEmptyWelcomeSummary'), link: '#' }
       ],
       healthRiskForecast: {
         year5: 'No historical biomarkers analyzed yet.',
@@ -560,19 +561,19 @@ export function getDemoReport(type: DemoProfileType = 'average'): Recommendation
       },
       mostImportantNextStep: 'Strictly limit sodium (<1500mg) and glycemic load (<130g carbs) to address Stage 2 Hypertension and Diabetic HbA1c (7.1%), safeguarding remaining kidney filtration (eGFR 64).',
       actions: [
-        { id: 'demo_action_complex_1', task: 'Restrict daily sodium intake to < 1500 mg', explanation: 'Strict sodium restriction is vital for managing fluid volume, lowering capillary pressure, and preserving renal function (eGFR 64).', priority: 'high', completed: false, type: 'lifestyle' },
-        { id: 'demo_action_complex_2', task: 'Limit glycemic load to < 130g carbohydrates', explanation: 'HbA1c of 7.1% confirms poorly controlled Type 2 Diabetes. Restricting refined starches reduces insulin resistance.', priority: 'high', completed: false, type: 'lifestyle' },
-        { id: 'demo_action_complex_3', task: 'Supplement high-dose Vitamin D3 (5000 IU daily)', explanation: 'Severe Vitamin D deficiency (19 ng/mL) exacerbates systemic inflammation and insulin resistance.', priority: 'high', completed: false, type: 'lifestyle' },
-        { id: 'demo_action_complex_4', task: 'Establish clinical monitoring with Nephrology & Endocrinology', explanation: 'Co-manage progressive diabetic microvascular injury and renal decline with specialized clinical oversight.', priority: 'medium', completed: false, type: 'doctor' }
+        { id: 'demo_action_complex_1', task: t(lang, 'seedComplexActionSodiumTask'), explanation: t(lang, 'seedComplexActionSodiumExpl'), priority: 'high', completed: false, type: 'lifestyle' },
+        { id: 'demo_action_complex_2', task: t(lang, 'seedComplexActionGlycemicTask'), explanation: t(lang, 'seedComplexActionGlycemicExpl'), priority: 'high', completed: false, type: 'lifestyle' },
+        { id: 'demo_action_complex_3', task: t(lang, 'seedComplexActionVitDHighTask'), explanation: t(lang, 'seedComplexActionVitDHighExpl'), priority: 'high', completed: false, type: 'lifestyle' },
+        { id: 'demo_action_complex_4', task: t(lang, 'seedComplexActionNephroTask'), explanation: t(lang, 'seedComplexActionNephroExpl'), priority: 'medium', completed: false, type: 'doctor' }
       ],
       dailyBenefits: [
-        { id: 'demo_benefit_complex_1', activity: 'Keep sodium strictly < 1500mg', target: 'Daily', completed: false },
-        { id: 'demo_benefit_complex_2', activity: 'Cap daily carbohydrates under 130g', target: 'Daily', completed: false },
-        { id: 'demo_benefit_complex_3', activity: 'Track blood pressure twice daily', target: 'Daily', completed: false }
+        { id: 'demo_benefit_complex_1', activity: t(lang, 'seedComplexBenefitSodium'), target: t(lang, 'seedBenefitTargetDaily'), completed: false },
+        { id: 'demo_benefit_complex_2', activity: t(lang, 'seedComplexBenefitCarbs'), target: t(lang, 'seedBenefitTargetDaily'), completed: false },
+        { id: 'demo_benefit_complex_3', activity: t(lang, 'seedComplexBenefitBP'), target: t(lang, 'seedBenefitTargetDaily'), completed: false }
       ],
       latestInsights: [
-        { title: 'Cardiorenal Syndrome & Metabolic Synergy', summary: 'Understanding the tightly coupled pathways linking poorly controlled Type 2 Diabetes, capillary blood pressure, and glomerular decline.', link: '#' },
-        { title: 'The Renal-Protective DASH Eating Pattern', summary: 'Practical tips to restrict sodium below 1500mg while maintaining highly nutritious protein and lipid balances.', link: '#' }
+        { title: t(lang, 'seedComplexInsightCardioTitle'), summary: t(lang, 'seedComplexInsightCardioSummary'), link: '#' },
+        { title: t(lang, 'seedComplexInsightDashTitle'), summary: t(lang, 'seedComplexInsightDashSummary'), link: '#' }
       ],
       healthRiskForecast: {
         year5: 'High risk of diabetic microvascular progression and worsening renal filtration (potential CKD Stage 3 entry).',
@@ -600,20 +601,20 @@ export function getDemoReport(type: DemoProfileType = 'average'): Recommendation
       vitaminD: '2000 IU'
     },
     mostImportantNextStep: 'Optimize lipid panel by prioritizing high-fiber foods (soluble fiber) and supplement Vitamin D (2000-4000 IU daily) to address deficiency.',
-    actions: [
-      { id: 'demo_action_1', task: 'Start daily Vitamin D3 supplement (2000 IU)', explanation: 'Your Vitamin D level is 22 ng/mL, which is below the optimal 30 ng/mL range.', priority: 'high', completed: false, type: 'lifestyle' },
-      { id: 'demo_action_2', task: 'Increase daily soluble fiber intake to 10g+', explanation: 'Soluble fiber actively binds bile acids, helping to lower elevated LDL cholesterol (currently 132 mg/dL).', priority: 'medium', completed: false, type: 'lifestyle' },
-      { id: 'demo_action_3', task: 'Schedule a lipid re-test in 3 months', explanation: 'Monitor response to lifestyle adjustments.', priority: 'medium', completed: false, type: 'doctor' }
-    ],
-    dailyBenefits: [
-      { id: 'demo_benefit_1', activity: 'Take Vitamin D3 Supplement', target: 'Daily', completed: false },
-      { id: 'demo_benefit_2', activity: 'Consume 30g+ Dietary Fiber', target: 'Daily', completed: false },
-      { id: 'demo_benefit_3', activity: 'Limit saturated fats to <15g', target: 'Daily', completed: false }
-    ],
-    latestInsights: [
-      { title: 'The Role of Soluble Fiber in Cholesterol Management', summary: 'Soluble fiber forms a gel-like substance in the digestive tract that traps cholesterol and prevents its reabsorption.', link: '#' },
-      { title: 'Vitamin D: Essential for Immunity and Bone Health', summary: 'An exploration of Vitamin D receptors, standard deficiency symptoms, and optimal recovery strategies.', link: '#' }
-    ],
+      actions: [
+        { id: 'demo_action_1', task: t(lang, 'seedDemoActionVitDTask'), explanation: t(lang, 'seedDemoActionVitDExpl'), priority: 'high', completed: false, type: 'lifestyle' },
+        { id: 'demo_action_2', task: t(lang, 'seedDemoActionFiberTask'), explanation: t(lang, 'seedDemoActionFiberExpl'), priority: 'medium', completed: false, type: 'lifestyle' },
+        { id: 'demo_action_3', task: t(lang, 'seedDemoActionLipidTask'), explanation: t(lang, 'seedDemoActionLipidExpl'), priority: 'medium', completed: false, type: 'doctor' }
+      ],
+      dailyBenefits: [
+        { id: 'demo_benefit_1', activity: t(lang, 'seedDemoBenefitVitD'), target: t(lang, 'seedBenefitTargetDaily'), completed: false },
+        { id: 'demo_benefit_2', activity: t(lang, 'seedDemoBenefitFiber'), target: t(lang, 'seedBenefitTargetDaily'), completed: false },
+        { id: 'demo_benefit_3', activity: t(lang, 'seedDemoBenefitSatFat'), target: t(lang, 'seedBenefitTargetDaily'), completed: false }
+      ],
+      latestInsights: [
+        { title: t(lang, 'seedDemoInsightFiberTitle'), summary: t(lang, 'seedDemoInsightFiberSummary'), link: '#' },
+        { title: t(lang, 'seedDemoInsightVitDTitle'), summary: t(lang, 'seedDemoInsightVitDSummary'), link: '#' }
+      ],
     healthRiskForecast: {
       year5: 'Slight risk of subclinical atherosclerosis if lipids remain elevated.',
       year10: 'Moderate cardiovascular risk due to persistent hyperlipidemia.',

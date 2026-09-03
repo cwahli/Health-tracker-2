@@ -7,6 +7,8 @@
  * - Never narrate from pre-finalize estimates or dispatch a second LLM purely for narration when draft exists.
  */
 
+import { t, interpolate } from '../utils/i18n';
+
 export interface FinalizeLedgerSummary {
   mealName: string;
   weightGrams: number;
@@ -29,21 +31,26 @@ export interface FinalizeLedgerSummary {
   }>;
 }
 
-export function formatLedgerDefaultMessage(summary: FinalizeLedgerSummary): string {
+export function formatLedgerDefaultMessage(summary: FinalizeLedgerSummary, lang?: unknown): string {
   const name = summary.mealName || 'Meal';
   const wt = summary.weightGrams ? `${summary.weightGrams}g` : '';
   const cal = `${summary.calories} kcal`;
-  const macros = `${summary.protein}g protein, ${summary.carbohydrates}g carbs, ${summary.totalFat}g fat`;
+  const macros = interpolate(t(lang, 'ledgerMacros'), {
+    p: summary.protein,
+    c: summary.carbohydrates,
+    f: summary.totalFat,
+  });
   const paren = [wt, cal, macros].filter(Boolean).join(', ');
-  return `Logged ${name} (${paren}).`;
+  return interpolate(t(lang, 'ledgerLoggedMeal'), { name, paren });
 }
 
 export function reconcileMessageWithLedger(
   draftMessage: string | null | undefined,
-  summary: FinalizeLedgerSummary
+  summary: FinalizeLedgerSummary,
+  lang?: unknown
 ): string {
   if (!draftMessage || !draftMessage.trim()) {
-    return formatLedgerDefaultMessage(summary);
+    return formatLedgerDefaultMessage(summary, lang);
   }
   let msg = draftMessage.trim();
 

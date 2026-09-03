@@ -1348,6 +1348,7 @@ export default function FoodHistoryTab({
                       singleImage={resolvedImg}
                       altText={log.name || 'Meal log'}
                       deferUntilVisible
+                      language={profile.language}
                     />
                   </div>
                 ) : null}

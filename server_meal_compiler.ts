@@ -1,4 +1,5 @@
 import { NUTRIENT_KEYS } from "./src/utils/nutrients";
+import { t, interpolate } from "./src/utils/i18n";
 import { AggregatedNutrientsResult } from "./server_nutrient_aggregation";
 import { checkIfItemIsAlreadyPrepared, applyNutrientRealityChecks, sanitizeMealWeight, sanitizeString } from "./server_pure_helpers";
 import { calculateUniversalAddedNutrients } from "./server_food_db";
@@ -109,12 +110,12 @@ export async function compileComparisonOptionSet(
   compileOptions?: CompileOptions
 ): Promise<{ success: boolean; options?: OptionCard[]; clarificationRequired?: boolean; clarificationMessage?: string }> {
   if (!optionsSet || !Array.isArray(optionsSet) || optionsSet.length === 0) {
-    return { success: false, clarificationRequired: true, clarificationMessage: "No active evaluation options found to edit." };
+    return { success: false, clarificationRequired: true, clarificationMessage: t(compileOptions?.userProfile?.language, 'compilerNoOptions') };
   }
 
   const targetCardIndex = optionsSet.findIndex(card => String(card.optionId) === String(targetOptionId));
   if (targetCardIndex === -1) {
-    return { success: false, clarificationRequired: true, clarificationMessage: `Could not find Option #${targetOptionId} in evaluation set.` };
+    return { success: false, clarificationRequired: true, clarificationMessage: interpolate(t(compileOptions?.userProfile?.language, 'compilerOptionNotFound'), { id: targetOptionId }) };
   }
 
   const targetCard = optionsSet[targetCardIndex];
@@ -284,7 +285,7 @@ export async function compileMealState(
       return {
         success: false,
         clarificationRequired: true,
-        clarificationMessage: `I found multiple items matching "${op.targetName || op.targetId}". Could you clarify which specific food item you want to edit?`
+        clarificationMessage: interpolate(t(options.userProfile?.language, 'compilerMultipleMatch'), { name: op.targetName || op.targetId })
       };
     }
     if (res.index === -1) {
@@ -292,7 +293,7 @@ export async function compileMealState(
       return {
         success: false,
         clarificationRequired: true,
-        clarificationMessage: `I couldn't find "${op.targetName || op.targetId}" in your active meal. Which food item would you like to update?`
+        clarificationMessage: interpolate(t(options.userProfile?.language, 'compilerNotFound'), { name: op.targetName || op.targetId })
       };
     }
   }

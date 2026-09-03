@@ -5,7 +5,9 @@ import {
   SUPPORTED_LOCALES,
   agentOutputLanguageBlock,
   dictionaryFor,
+  displayBiomarkerName,
   displayCategoryLabel,
+  displayConditionName,
   displayEthnicityOption,
   displayAccountType,
   displayClinicalType,
@@ -144,5 +146,30 @@ describe('display chrome helpers', () => {
     expect(displayIssueChrome('id', 'Current: 14.5 g/dL')).toBe(translations.id.currentColon + ' 14.5 g/dL');
     expect(displayIssueChrome('id', 'Outlier: 10× High')).toBe(translations.id.outlierColon + ' 10× High');
     expect(displayIssueChrome('id', 'Unit: 10× Multiplier')).toBe(translations.id.unitColon + ' 10× Multiplier');
+  });
+
+  it('translates catalog biomarker names and keeps stored keys', () => {
+    expect(displayBiomarkerName('id', 'fasting_glucose', 'Fasting Glucose')).toBe('Glukosa Puasa');
+    expect(displayBiomarkerName('id', 'hba1c', 'HbA1c')).toBe('HbA1c');
+    expect(displayBiomarkerName('id', 'weight', 'Body Weight')).toBe('Berat Badan');
+    expect(displayBiomarkerName('en', 'fasting_glucose', 'Fasting Glucose')).toBe('Fasting Glucose');
+    expect(displayBiomarkerName('id', 'custom_key', 'My Custom Marker')).toBe('My Custom Marker');
+  });
+
+  it('translates medical condition names and passes unknown strings through', () => {
+    expect(displayConditionName('id', 'Kidney Dysfunction')).toBe('Gangguan Ginjal');
+    expect(displayConditionName('id', 'Weight Management')).toBe('Pengelolaan Berat Badan');
+    expect(displayConditionName('en', 'Kidney Dysfunction')).toBe('Kidney Dysfunction');
+    expect(displayConditionName('id', 'Some Custom Condition')).toBe('Some Custom Condition');
+  });
+
+  it('localizes meal fallback and widget chrome in Indonesian', () => {
+    expect(interpolate(t('id', 'messageScaledPortion'), { grams: 350 })).toContain('350g');
+    expect(t('id', 'messageScaledPortion')).not.toBe(t('en', 'messageScaledPortion'));
+    expect(interpolate(t('id', 'ledgerMacros'), { p: 38, c: 45, f: 24 })).toContain('karbohidrat');
+    expect(interpolate(t('id', 'auditFilterAll'), { n: 3 })).toBe('Semua (3)');
+    expect(t('id', 'compilerNoOptions')).not.toBe(t('en', 'compilerNoOptions'));
+    expect(t('id', 'browserTitle')).not.toBe(t('en', 'browserTitle'));
+    expect(t('id', 'themeTitle')).not.toBe(t('en', 'themeTitle'));
   });
 });

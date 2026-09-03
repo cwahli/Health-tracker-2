@@ -6,6 +6,7 @@ import { UniversalModal } from './UniversalModal';
 import { CheckCircle, Zap, Trash2, RefreshCw, Merge } from 'lucide-react';
 import { buildDataSanitizePlan, SanitizeProposal } from '../utils/dataSanitize';
 import { UserProfile, BiomarkerLog, FoodLog } from '../types';
+import { t, interpolate } from '../utils/i18n';
 
 type Props = {
   isOpen: boolean;
@@ -77,20 +78,20 @@ export default function DataSanitizeApprovalModal({
 
   if (plan.proposals.length === 0) {
     return (
-      <UniversalModal isOpen={isOpen} onClose={onClose} title="Data Sanitize">
+      <UniversalModal isOpen={isOpen} onClose={onClose} title={t(profile.language, 'sanitizeTitle')}>
         <div className="p-6 text-center space-y-4">
           <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
             <CheckCircle className="w-6 h-6" />
           </div>
-          <h3 className="text-base font-bold text-theme-neutral">Nothing to sanitize</h3>
+          <h3 className="text-base font-bold text-theme-neutral">{t(profile.language, 'sanitizeNothing')}</h3>
           <p className="text-xs text-theme-text-secondary">
-            No unit-scale phantoms, duplicate lab logs, junk dictionary keys, or food-card duplicates were detected.
+            {t(profile.language, 'sanitizeNoPhantoms')}
           </p>
           <button
             onClick={onClose}
             className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 cursor-pointer"
           >
-            Close
+            {t(profile.language, 'close')}
           </button>
         </div>
       </UniversalModal>
@@ -100,12 +101,12 @@ export default function DataSanitizeApprovalModal({
   const { summary } = plan;
 
   return (
-    <UniversalModal isOpen={isOpen} onClose={onClose} title="Data Sanitize — Approval">
+    <UniversalModal isOpen={isOpen} onClose={onClose} title={t(profile.language, 'sanitizeApprovalTitle')}>
       <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
         <div className="bg-gradient-to-r from-amber-50 to-indigo-50 dark:from-amber-950/30 dark:to-indigo-950/30 border border-amber-200/80 dark:border-amber-800/60 rounded-xl p-3.5 flex items-start gap-3">
           <Zap className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
           <div className="text-xs space-y-1 text-slate-700 dark:text-slate-200">
-            <div className="font-bold text-amber-900 dark:text-amber-200">Review proposed cleanup</div>
+            <div className="font-bold text-amber-900 dark:text-amber-200">{t(profile.language, 'sanitizeReview')}</div>
             <p>
               Sync and multi-device merge can leave unit-scale errors (e.g. cholesterol 195 mmol/L), duplicate meals, and junk
               dictionary keys. Select what to apply — nothing changes until you approve.
@@ -122,7 +123,7 @@ export default function DataSanitizeApprovalModal({
             Proposals ({selectedIds.size} of {plan.proposals.length} selected)
           </span>
           <button type="button" onClick={toggleAll} className="text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer">
-            {selectedIds.size === plan.proposals.length ? 'Deselect All' : 'Select All'}
+            {selectedIds.size === plan.proposals.length ? t(profile.language, 'sanitizeDeselect') : t(profile.language, 'sanitizeSelect')}
           </button>
         </div>
 
@@ -175,7 +176,7 @@ export default function DataSanitizeApprovalModal({
             onClick={onClose}
             className="px-4 py-2 border border-theme-border text-theme-neutral hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-xs font-bold cursor-pointer"
           >
-            Cancel
+            {t(profile.language, 'cancel')}
           </button>
           <button
             type="button"
@@ -192,7 +193,7 @@ export default function DataSanitizeApprovalModal({
             }}
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold cursor-pointer"
           >
-            {applying ? 'Applying…' : `Apply ${selectedIds.size} selected`}
+            {applying ? t(profile.language, 'sanitizeApplying') : interpolate(t(profile.language, 'sanitizeApplyN'), { n: selectedIds.size })}
           </button>
         </div>
       </div>

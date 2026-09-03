@@ -1,4 +1,5 @@
 import React, { ReactNode } from 'react';
+import { t } from '../utils/i18n';
 import { IssueType } from '../utils/issueBacklog';
 import { FlagIssueModal, FlagIssueFormProps } from './FlagIssueModal';
 
@@ -21,6 +22,7 @@ interface UniversalModalProps {
   title: string;
   children?: ReactNode;
   actions?: ReactNode;
+  language?: unknown;
   flagContext?: UniversalModalFlagContext;
   onFlagSuccess?: (issueId: string) => void;
 }
@@ -33,6 +35,7 @@ export function UniversalModal({
   title,
   children,
   actions,
+  language,
   flagContext,
   onFlagSuccess,
 }: UniversalModalProps) {
@@ -43,7 +46,7 @@ export function UniversalModal({
       <FlagIssueModal
         isOpen={isOpen}
         onClose={onClose}
-        title={title || 'Flag food analysis issue'}
+        title={title || t(language, 'flagFoodAnalysisIssue')}
         getPayload={flagContext.getPayload}
         chainKey={flagContext.chainKey}
         dishQuery={flagContext.dishQuery}
@@ -85,15 +88,16 @@ export function UniversalModal({
 export function FlagIssueUniversalModal({
   isOpen,
   onClose,
-  title = 'Flag food analysis issue',
+  title,
+  language,
   ...formProps
-}: Omit<UniversalModalProps, 'children'> & FlagIssueFormProps) {
+}: Omit<UniversalModalProps, 'children'> & FlagIssueFormProps & { language?: unknown }) {
   if (!isOpen) return null;
   return (
     <FlagIssueModal
       isOpen={isOpen}
       onClose={onClose}
-      title={title}
+      title={title || t(language, 'flagFoodAnalysisIssue')}
       {...formProps}
       onSuccess={() => onClose()}
       onCancel={onClose}

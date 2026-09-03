@@ -5,6 +5,7 @@ import {
   nextPhotoFallbackUrl,
   photoKeyFromUrl,
 } from '../utils/foodImageSources';
+import { t, interpolate } from '../utils/i18n';
 
 interface ImageSliderProps {
   images?: string[];
@@ -12,6 +13,7 @@ interface ImageSliderProps {
   altText: string;
   /** B13: if true, do not load network src until near viewport */
   deferUntilVisible?: boolean;
+  language?: unknown;
 }
 
 export default function ImageSlider({
@@ -19,6 +21,7 @@ export default function ImageSlider({
   singleImage,
   altText,
   deferUntilVisible = true,
+  language,
 }: ImageSliderProps) {
   const rawList = (Array.isArray(images) ? [...images] : []);
   if (singleImage && typeof singleImage === 'string' && !rawList.includes(singleImage)) {
@@ -352,7 +355,7 @@ export default function ImageSlider({
     return (
       <div className="w-full h-44 bg-slate-100 dark:bg-slate-950 flex flex-col items-center justify-center text-slate-400 rounded-2xl">
         <ImageIcon className="w-8 h-8 mb-1.5 opacity-60" />
-        <span className="text-[10px] font-medium">No images available</span>
+        <span className="text-[10px] font-medium">{t(language, 'imgNoImages')}</span>
       </div>
     );
   }
@@ -396,7 +399,7 @@ export default function ImageSlider({
               {isBroken ? (
                 <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 bg-slate-50 dark:bg-slate-900/50 p-4 text-center">
                   <ImageIcon className="w-6 h-6 mb-1 text-slate-400 dark:text-slate-500 opacity-60" />
-                  <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500 leading-tight">Photo unavailable</span>
+                  <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500 leading-tight">{t(language, 'imgUnavailable')}</span>
                 </div>
               ) : src ? (
                 <img
@@ -426,7 +429,7 @@ export default function ImageSlider({
             type="button"
             onClick={slidePrev}
             className="absolute left-3 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/80 dark:bg-slate-900/80 hover:bg-white dark:hover:bg-slate-800 border border-slate-200/50 dark:border-slate-800/50 text-theme-neutral shadow-lg transition-all opacity-0 group-hover:opacity-100 cursor-pointer focus:opacity-100 z-10"
-            title="Previous image"
+            title={t(language, 'imgPrev')}
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
@@ -434,7 +437,7 @@ export default function ImageSlider({
             type="button"
             onClick={slideNext}
             className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/80 dark:bg-slate-900/80 hover:bg-white dark:hover:bg-slate-800 border border-slate-200/50 dark:border-slate-800/50 text-theme-neutral shadow-lg transition-all opacity-0 group-hover:opacity-100 cursor-pointer focus:opacity-100 z-10"
-            title="Next image"
+            title={t(language, 'imgNext')}
           >
             <ChevronRight className="w-4 h-4" />
           </button>
@@ -454,7 +457,7 @@ export default function ImageSlider({
                   ? 'w-5 bg-indigo-600 dark:bg-indigo-500' 
                   : 'w-1.5 bg-slate-300 dark:bg-slate-700 hover:bg-slate-400 dark:hover:bg-slate-600'
               }`}
-              title={`Go to image ${idx + 1}`}
+              title={interpolate(t(language, 'imgGoTo'), { n: idx + 1 })}
             />
           ))}
         </div>
@@ -474,7 +477,7 @@ export default function ImageSlider({
               type="button"
               onClick={() => setViewerIndex(null)}
               className="p-2 rounded-full bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800/80 text-white transition-colors cursor-pointer"
-              title="Close image viewer"
+              title={t(language, 'imgClose')}
             >
               <X className="w-5 h-5" />
             </button>
@@ -491,7 +494,7 @@ export default function ImageSlider({
                   handlePrev();
                 }}
                 className="absolute left-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800/80 text-white transition-colors hidden sm:flex items-center justify-center cursor-pointer z-55"
-                title="Previous image"
+                title={t(language, 'imgPrev')}
               >
                 <ChevronLeft className="w-6 h-6" />
               </button>
@@ -535,7 +538,7 @@ export default function ImageSlider({
                   handleNext();
                 }}
                 className="absolute right-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800/80 text-white transition-colors hidden sm:flex items-center justify-center cursor-pointer z-55"
-                title="Next image"
+                title={t(language, 'imgNext')}
               >
                 <ChevronRight className="w-6 h-6" />
               </button>
@@ -544,7 +547,7 @@ export default function ImageSlider({
 
           {/* Swipe indicator label on mobile */}
           <div className="w-full py-6 text-center text-[10px] text-slate-400 font-medium tracking-wide pointer-events-none bg-gradient-to-t from-slate-950/80 to-transparent">
-            {allImages.length > 1 ? 'Drag or Swipe left/right to browse images' : ''}
+            {allImages.length > 1 ? t(language, 'imgSwipeHint') : ''}
           </div>
         </div>
       )}

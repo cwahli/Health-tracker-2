@@ -5092,6 +5092,7 @@ ${logsText}`);
             return (
               <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-md space-y-4 mb-4 font-sans text-left">
                 <BatchNavigator
+                  language={profile?.language || 'en'}
                   currentIndex={currentIdx}
                   totalBatches={allBatchEntries.length}
                   itemsInCurrentBatch={batchKeys.length}
@@ -5679,7 +5680,7 @@ ${logsText}`);
                       {msg.role === 'user' && (
                         msg.imageUrls && msg.imageUrls.length > 0 ? (
                           <div className="mb-2 overflow-hidden border border-theme-border/30 w-full rounded-2xl max-h-96">
-                            <ImageSlider images={msg.imageUrls} altText="Attached meal pictures" />
+                            <ImageSlider images={msg.imageUrls} altText="Attached meal pictures" language={profile?.language || 'en'} />
                           </div>
                         ) : msg.imageUrl ? (
                           <div className="mb-2 overflow-hidden border border-theme-border/30 max-h-96 w-full rounded-2xl">
@@ -5957,7 +5958,7 @@ ${logsText}`);
                       </button>
                       {msg.imageUrls && msg.imageUrls.length > 0 ? (
                         <div className="mb-2 overflow-hidden border border-theme-border/30 w-full rounded-2xl max-h-96">
-                          <ImageSlider images={msg.imageUrls} altText="Attached meal pictures" />
+                          <ImageSlider images={msg.imageUrls} altText="Attached meal pictures" language={profile?.language || 'en'} />
                         </div>
                       ) : msg.imageUrl ? (
                         <div className="mb-2 overflow-hidden border border-white/10 max-h-96 w-full rounded-2xl">

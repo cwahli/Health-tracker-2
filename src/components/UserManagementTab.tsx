@@ -34,6 +34,7 @@ import {
 } from '../utils/userManagement';
 import { getAvailableCredits } from '../utils/creditManager';
 import { auth } from '../firebase';
+import { t, normalizeLocale } from '../utils/i18n';
 
 export function AdminTranslationsTab() {
   const [statusMsg, setStatusMsg] = useState<string>('');
@@ -69,6 +70,7 @@ export function AdminTranslationsTab() {
 }
 
 export default function UserManagementTab() {
+  const adminLang = normalizeLocale(typeof localStorage !== 'undefined' ? localStorage.getItem('preferred_language') : 'en');
   const [activeTab, setActiveTab] = useState<'credits' | 'firebase'>('credits');
 
   // --- Credits & Configuration Tab States ---
@@ -1093,7 +1095,7 @@ export default function UserManagementTab() {
           setConfirmDeleteAuthUser(null);
           setConfirmEmailInput('');
         }}
-        title="CRITICAL: Delete Auth User"
+        title={t(adminLang, 'delAuthTitle')}
         actions={
           <>
             <button
@@ -1104,7 +1106,7 @@ export default function UserManagementTab() {
               }}
               className="px-3.5 py-1.5 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors font-semibold"
             >
-              Cancel
+              {t(adminLang, 'cancel')}
             </button>
             <button
               type="button"
@@ -1113,7 +1115,7 @@ export default function UserManagementTab() {
               className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-45 disabled:cursor-not-allowed text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5"
             >
               <UserX className="w-4 h-4" />
-              <span>Confirm Delete Auth User</span>
+              <span>{t(adminLang, 'delConfirmAuth')}</span>
             </button>
           </>
         }
@@ -1124,7 +1126,7 @@ export default function UserManagementTab() {
           </p>
           <div className="space-y-2">
             <label className="block text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider font-bold">
-              Type the user's email to confirm:
+              {t(adminLang, 'delTypeEmail')}
             </label>
             <input
               type="text"
@@ -1145,7 +1147,7 @@ export default function UserManagementTab() {
           setConfirmDeleteUserData(null);
           setConfirmEmailInput('');
         }}
-        title="CRITICAL: Delete User Data"
+        title={t(adminLang, 'delDataTitle')}
         actions={
           <>
             <button
@@ -1156,7 +1158,7 @@ export default function UserManagementTab() {
               }}
               className="px-3.5 py-1.5 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors font-semibold"
             >
-              Cancel
+              {t(adminLang, 'cancel')}
             </button>
             <button
               type="button"
@@ -1165,7 +1167,7 @@ export default function UserManagementTab() {
               className="px-4 py-1.5 bg-orange-600 hover:bg-orange-700 disabled:opacity-45 disabled:cursor-not-allowed text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5"
             >
               <Trash2 className="w-4 h-4" />
-              <span>Confirm Delete User Data</span>
+              <span>{t(adminLang, 'delConfirmData')}</span>
             </button>
           </>
         }
@@ -1176,7 +1178,7 @@ export default function UserManagementTab() {
           </p>
           <div className="space-y-2">
             <label className="block text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider font-bold">
-              Type the user's email to confirm:
+              {t(adminLang, 'delTypeEmail')}
             </label>
             <input
               type="text"

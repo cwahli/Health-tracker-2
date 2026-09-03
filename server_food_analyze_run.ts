@@ -152,7 +152,7 @@ import { buildMealFromFinalizeLedgers } from './server_meal_from_finalize.js';
 import { applyMealEdits, applyModifierToItemName } from './server_meal_edit.js';
 import { matchBrandMenu, isPackagedBindItem, inferChainNameFromPackageLabel } from './server_brand_match.js';
 import { classifyDishAtomic } from './server_dish_classify.js';
-import { withScoutLanguage, t } from './src/utils/i18n.js';
+import { withScoutLanguage, t, interpolate } from './src/utils/i18n.js';
 import {
   addDebugLog,
   logSessionStorage,
@@ -2690,10 +2690,10 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       let rawParsed;
       try {
         rawParsed = await asyncParseLLMJSON(cleanJson);
-        rawParsed = validateOrFallback(RouteAgentSchema, rawParsed, cleanJson, "RouteAgent", { 
+        rawParsed = validateOrFallback(RouteAgentSchema, rawParsed, cleanJson, "RouteAgent", {
           _internalReasoning: "",
-          verdict: { label: "Supports sustained metabolic energy", level: "neutral" },
-          message: "I have analyzed your food log.",
+          verdict: { label: t(userProfile?.language, 'verdictSupportsMetabolicEnergy'), level: "neutral" },
+          message: t(userProfile?.language, 'fallbackAnalyzedLog'),
           foodData: { date: new Date().toISOString().split('T')[0], name: "Meal", itemsBreakdown: [] }
         });
         if (!rawParsed._internalReasoning && extractedScratchpad) {
@@ -2845,11 +2845,11 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
     if (canSkipDietitianForPureScale && weightRefineIntent.isRefine && weightRefineIntent.weightGrams) {
       const targetWeight = weightRefineIntent.weightGrams;
       addDebugLog(`[Refine] skip-dietitian: Scaled label-locked meal directly to ${targetWeight}g without LLM call.`);
-      sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'completed', message: `Scaled portion to ${targetWeight}g.` });
+      sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'completed', message: interpolate(t(userProfile?.language, 'statusScaledPortion'), { grams: targetWeight }) });
       textOutput = JSON.stringify({
         _internalReasoning: `[Refine] scale-only: Scaled meal directly to ${targetWeight}g`,
-        verdict: { label: "Supports portion control balance", level: "neutral" },
-        message: `Updated meal portion to ${targetWeight}g.`,
+        verdict: { label: t(userProfile?.language, 'verdictPortionControl'), level: "neutral" },
+        message: interpolate(t(userProfile?.language, 'messageScaledPortion'), { grams: targetWeight }),
         mode: "modify",
         modificationCommand: [
           {
@@ -2910,7 +2910,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         protein: Math.round(totalP * 10) / 10,
         carbohydrates: Math.round(totalC * 10) / 10,
         totalFat: Math.round(totalF * 10) / 10,
-      });
+      }, userProfile?.language);
 
       textOutput = JSON.stringify({
         _internalReasoning: scoutInternalReasoning || '[MealAgent] Single-agent create path',
@@ -2920,7 +2920,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         foodData: {
           name: mealName,
           weightGrams: String(totalGrams),
-          cookingMethod: scoutCookingMethod || 'Unknown cooking method',
+          cookingMethod: scoutCookingMethod || t(userProfile?.language, 'cookingMethodUnknown'),
           scoutConfidenceRating: scoutConfidenceRating || 'High (>90%)',
           scoutConfidenceComment: scoutConfidenceComment || '',
           diningEnvironment: diningEnvironment || 'unknown',
@@ -3047,7 +3047,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           })
         );
       }
-      const resolvedGroups = resolveComparisonGroups(comparisonData.groups, visionScoutItems);
+      const resolvedGroups = resolveComparisonGroups(comparisonData.groups, visionScoutItems, userProfile?.language);
       addDebugLog(`[Comparison Resolve] ${visionScoutItems.length} scout item(s) -> ${resolvedGroups.length} group(s), covering ${resolvedGroups.reduce((sum: number, g: any) => sum + (g.items?.length || 0), 0)} item(s).`);
       comparisonData.groups = applyServerAverageNutrients(resolvedGroups, preCalcByScoutIndex);
       comparisonData.isMenuScale = isMenuScale;
@@ -3182,7 +3182,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           level: 'neutral'
         };
       }
-      parsedData.cookingMethod = sanitizeString(rawFoodData.cookingMethod, scoutCookingMethod || "Unknown cooking method");
+      parsedData.cookingMethod = sanitizeString(rawFoodData.cookingMethod, scoutCookingMethod || t(userProfile?.language, 'cookingMethodUnknown'));
       parsedData.scoutConfidenceRating = sanitizeString(rawFoodData.scoutConfidenceRating, scoutConfidenceRating || "High (>90%)");
       parsedData.scoutConfidenceComment = rawFoodData.scoutConfidenceComment !== undefined ? sanitizeString(rawFoodData.scoutConfidenceComment, "") : (scoutConfidenceComment || "");
       // diningEnvironment is intentionally NOT re-read from the Dietitian's output.
@@ -3626,7 +3626,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           sodium: result.nutrients.sodium,
           salt: result.nutrients.salt,
         };
-        const finalMessage = reconcileMessageWithLedger(rawMessage, postEditSummary);
+        const finalMessage = reconcileMessageWithLedger(rawMessage, postEditSummary, userProfile?.language);
           
         activeMeal.message = finalMessage;
         activeMeal.healthImpact = finalMessage;

@@ -255,3 +255,99 @@ export function displayAccountType(lang: unknown, userType: string | null | unde
   if (raw === 'admin') return t(lang, 'accountTypeAdmin');
   return t(lang, 'accountTypeStandard');
 }
+
+/** Indonesian display labels for the biomarker catalog. Stored keys stay English. */
+const BIOMARKER_NAME_ID: Record<string, string> = {
+  hba1c: 'HbA1c',
+  fasting_glucose: 'Glukosa Puasa',
+  insulin: 'Insulin Puasa',
+  ldl: 'LDL-C',
+  apob: 'ApoB',
+  total_cholesterol: 'Kolesterol Total',
+  hdl: 'HDL-C',
+  triglycerides: 'Trigliserida',
+  egfr: 'eGFR',
+  bun: 'BUN (Nitrogen Urea Darah)',
+  rbc: 'Sel Darah Merah (RBC)',
+  platelets: 'Trombosit',
+  hscrp: 'hs-CRP',
+  testosterone: 'Testosteron (Total)',
+  vitamin_d: 'Vitamin D (25-OH)',
+  vitamin_b12: 'Vitamin B12',
+  bmi: 'Indeks Massa Tubuh (BMI)',
+  creatinine: 'Kreatinin',
+  hematocrit: 'Hematokrit',
+  hemoglobin: 'Hemoglobin',
+  mean_corpuscular_hemoglobin: 'Hemoglobin Korpuskular Rata-rata (MCH)',
+  mean_corpuscular_volume: 'Volume Korpuskular Rata-rata (MCV)',
+  mean_corpuscular_hemoglobin_concentration: 'Konsentrasi Hemoglobin Korpuskular Rata-rata (MCHC)',
+  rdw: 'Lebar Distribusi Sel Darah Merah (RDW)',
+  serum_albumin: 'Albumin Serum',
+  total_protein: 'Protein Total',
+  audit_total_score: 'Skor Total AUDIT',
+  wbc: 'Sel Darah Putih (WBC)',
+  neutrophil_count: 'Neutrofil',
+  lymphocyte_count: 'Limfosit',
+  monocyte_count: 'Hitung Monosit',
+  eosinophil_count: 'Eosinofil',
+  basophil_count: 'Basofil',
+  alt: 'ALT (SGPT)',
+  ast: 'AST (SGOT)',
+  steps: 'Langkah Harian',
+  weight: 'Berat Badan',
+  hemorrhoidal_symptom_score: 'Skor Gejala Penyakit Hemoroid (HDSS)',
+  gerd_symptom_score: 'Skor Gejala Refluks Gastroesofagus (GERD-SS)',
+  joint_pain_severity_score: 'Skor Keparahan Nyeri Sendi',
+  blood_pressure: 'Tekanan Darah',
+  systolic_blood_pressure: 'Tekanan Darah Sistolik',
+  diastolic_blood_pressure: 'Tekanan Darah Diastolik',
+  audit_c_total_score: 'Skor Konsumsi Alkohol AUDIT-C',
+  ideal_body_weight: 'Berat Badan Ideal (Target)',
+  apoa1: 'ApoA1',
+  gamma_gt: 'Gamma GT (GGT)',
+  mpv: 'Volume Trombosit Rata-rata (MPV)',
+  qrisk2: 'QRISK2 Risiko Kardiovaskular 10-Tahun',
+  audit_score: 'Skor AUDIT (Total)',
+  audit_score_frequency_drinking: 'Skor Frekuensi Minum AUDIT',
+  audit_binge_drinking_score: 'Skor Minum Berlebihan AUDIT',
+  audit_score_typical_day_units: 'Skor Unit Tipikal AUDIT',
+  qdiabetes: 'Skor Risiko QDiabetes 10-Tahun',
+  fast_alcohol_score: 'Skor Alkohol FAST',
+  weekly_alcohol_consumption: 'Konsumsi Alkohol Mingguan',
+};
+
+/** Indonesian display labels for medical-condition names. Stored values stay English. */
+const CONDITION_NAME_ID: Record<string, string> = {
+  Diabetes: 'Diabetes',
+  'Metabolic Syndrome': 'Sindrom Metabolik',
+  'Insulin Resistance': 'Resistensi Insulin',
+  Dyslipidemia: 'Dislipidemia',
+  'Cardiovascular Disease Risk': 'Risiko Penyakit Kardiovaskular',
+  'Liver Dysfunction': 'Gangguan Hati',
+  'Fatty Liver': 'Hati Berlemak',
+  'Kidney Dysfunction': 'Gangguan Ginjal',
+  'Chronic Kidney Disease': 'Penyakit Ginjal Kronis',
+  Anemia: 'Anemia',
+  Infection: 'Infeksi',
+  'Blood Disorder': 'Kelainan Darah',
+  'Systemic Inflammation': 'Peradangan Sistemik',
+  'Cardiovascular Risk': 'Risiko Kardiovaskular',
+  'Hormonal Imbalance': 'Ketidakseimbangan Hormon',
+  'Thyroid Dysfunction': 'Gangguan Tiroid',
+  'Vitamin Deficiency': 'Defisiensi Vitamin',
+  'Weight Management': 'Pengelolaan Berat Badan',
+};
+
+/** Translate a biomarker catalog display name. Catalog keys and custom names pass through for other locales. */
+export function displayBiomarkerName(lang: unknown, key: string | null | undefined, fallbackName?: string | null): string {
+  if (!key) return fallbackName || '';
+  if (normalizeLocale(lang) === 'id') return BIOMARKER_NAME_ID[key] || BIOMARKER_NAME_ID[String(key).trim()] || fallbackName || String(key);
+  return fallbackName || String(key);
+}
+
+/** Translate a medical-condition display name. Stored condition strings stay English. */
+export function displayConditionName(lang: unknown, name: string | null | undefined): string {
+  if (!name) return '';
+  if (normalizeLocale(lang) === 'id') return CONDITION_NAME_ID[name] || CONDITION_NAME_ID[String(name).trim()] || String(name);
+  return String(name);
+}

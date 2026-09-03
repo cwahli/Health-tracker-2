@@ -2,6 +2,7 @@ import { toYYYYMMDD } from "../utils/dateUtils";
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 
 import { biomarkerDefinitions } from '../utils/biomarkers';
+import { t, interpolate } from '../utils/i18n';
 import { formatOptimalTargetValue, evaluateRangeBracketMatch } from '../utils/agentCalibration';
 import { HealthPlanningResultView } from './HealthPlanningResultView';
 import { extractFallbackModifications, getMappedBiomarkerKey } from './chat-cards/BiomarkerReviewCard';
@@ -2601,7 +2602,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
         return isPaginatedView && (
           <div className="flex items-center justify-between px-1 pt-2 text-[10px] font-mono text-theme-text-secondary">
             <span>
-              Showing {pageStart + 1}-{Math.min(pageStart + PAGE_SIZE, sortedData.length)} / {sortedData.length}
+              {interpolate(t(profile?.language, 'tableShowing'), { a: pageStart + 1, b: Math.min(pageStart + PAGE_SIZE, sortedData.length), c: sortedData.length })}
             </span>
             <div className="flex items-center gap-2">
               <button
@@ -2610,7 +2611,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
                 onClick={() => setPageStart(Math.max(0, pageStart - PAGE_SIZE))}
                 className="px-2 py-1 rounded-lg border border-theme-border bg-theme-bg-card disabled:opacity-40 disabled:cursor-not-allowed font-bold cursor-pointer"
               >
-                Previous 50
+                {t(profile?.language, 'tablePrev50')}
               </button>
               <button
                 type="button"
@@ -2618,7 +2619,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
                 onClick={() => setPageStart(pageStart + PAGE_SIZE)}
                 className="px-2 py-1 rounded-lg border border-theme-border bg-theme-bg-card disabled:opacity-40 disabled:cursor-not-allowed font-bold cursor-pointer"
               >
-                Next 50
+                {t(profile?.language, 'tableNext50')}
               </button>
             </div>
           </div>
@@ -2633,9 +2634,9 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
         {(isMultiphaseActive || totalEstimated > 0) && (
           <div className="flex items-center gap-1.5 pb-1 border-b border-slate-200/40 dark:border-slate-800/40">
             <span className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 font-bold rounded-md text-[9px] uppercase tracking-wider font-mono">
-              {isMultiphaseActive 
-                ? `Extraction In Progress ${totalEstimated > 0 ? `(Batch ${agentResult?.currentBatch || 1} of ${Math.ceil(totalEstimated / 50)})` : ''}` 
-                : "Extraction Complete"}
+              {isMultiphaseActive
+                ? (totalEstimated > 0 ? interpolate(t(profile?.language, 'tableExtracting'), { x: agentResult?.currentBatch || 1, y: Math.ceil(totalEstimated / 50) }) : t(profile?.language, 'tableExtracting').replace(/ \(Batch.*/, ''))
+                : t(profile?.language, 'tableComplete')}
             </span>
           </div>
         )}
@@ -2679,7 +2680,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
                 onClick={() => setDiffExpanded(!diffExpanded)}
                 className="text-[10px] text-amber-600 dark:text-amber-400 hover:underline mt-1 cursor-pointer"
               >
-                {diffExpanded ? 'Show less' : 'Expand'}
+                {diffExpanded ? t(profile?.language, 'tableShowLess') : t(profile?.language, 'tableExpand')}
               </button>
             )}
           </div>
@@ -2693,15 +2694,15 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
             {isApplying || (agentResult?.status === 'processing' || agentResult?.status === 'in_progress') || isMultiphaseActive ? (
               <span className="text-xs text-indigo-600 dark:text-indigo-400 font-medium flex items-center gap-2 animate-pulse">
                 <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-                Searching for biomarkers and processing clinical records...
+                {t(profile?.language, 'tableSearching')}
               </span>
             ) : counts.isMissing > 0 || (verification.initialCount > 0 && verification.generatedCount === 0) ? (
               <span className="text-xs text-slate-500 italic text-center px-4">
-                Unmapped biomarkers detected in raw clinical records. Select checkbox on any row to approve/add as custom biomarker.
+                {t(profile?.language, 'tableUnmapped')}
               </span>
             ) : (
               <span className="text-xs text-slate-500 italic">
-                No changes to apply. All biomarker entries are already up-to-date.
+                {t(profile?.language, 'tableNoChanges')}
               </span>
             )}
             {onCancel ? (
@@ -2755,7 +2756,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
               {isApplying 
                 ? 'Applying Agent Findings...' 
                 : (agentResult?.status === 'needs_continuation' || agentResult?.needsContinuation || agentResult?.hasMore || agentResult?.hasMoreMarkers)
-                  ? 'Continue to Next Batch'
+                  ? t(profile?.language, 'tableContinueBatch')
                   : isPaginatedView && !isLastPage
                     ? 'Apply This Batch'
                     : isPaginatedView
@@ -2916,7 +2917,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
                         onClick={() => setDiffExpanded(!diffExpanded)}
                         className="text-[12px] text-amber-500 hover:underline mt-1 cursor-pointer font-bold"
                       >
-                        {diffExpanded ? 'Show less' : 'Expand'}
+                        {diffExpanded ? t(profile?.language, 'tableShowLess') : t(profile?.language, 'tableExpand')}
                       </button>
                     )}
                   </div>
@@ -2943,7 +2944,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
                     className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/10 flex items-center gap-1.5 transition-all cursor-pointer"
                   >
                     {isApplying ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
-                    {isApplying ? 'Processing...' : 'Continue to Next Step'}
+                    {isApplying ? 'Processing...' : t(profile?.language, 'tableContinueStep')}
                   </button>
                 ) : (hasAnythingToApprove && onApplyChanges) ? (
                   <button
@@ -2959,7 +2960,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
                     {isApplying 
                       ? 'Applying...' 
                       : (agentResult?.status === 'needs_continuation' || agentResult?.needsContinuation || agentResult?.hasMore || agentResult?.hasMoreMarkers)
-                        ? 'Continue to Next Batch'
+                        ? t(profile?.language, 'tableContinueBatch')
                         : 'Apply Findings & Close'}
                   </button>
                 ) : null}

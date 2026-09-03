@@ -22,6 +22,12 @@ describe('narration (F-10.4)', () => {
     expect(msg).toBe('Logged Salmon Bowl with Quinoa (420g, 560 kcal, 38g protein, 45g carbs, 24g fat).');
   });
 
+  it('formats ledger fallback narration in Indonesian for id profiles', () => {
+    const msg = formatLedgerDefaultMessage(summary, 'id');
+    expect(msg).toBe('Salmon Bowl with Quinoa dicatat (420g, 560 kcal, 38g protein, 45g karbohidrat, 24g lemak).');
+    expect(reconcileMessageWithLedger('', summary, 'id')).toBe(msg);
+  });
+
   it('reconciles empty or whitespace draft message with ledger summary', () => {
     expect(reconcileMessageWithLedger('', summary)).toBe(
       'Logged Salmon Bowl with Quinoa (420g, 560 kcal, 38g protein, 45g carbs, 24g fat).'

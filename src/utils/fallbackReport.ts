@@ -1,7 +1,9 @@
 import { UserProfile, RecommendationReport } from '../types';
+import { t } from './i18n';
 
 export function getLocalFallbackReport(profile: UserProfile | null): RecommendationReport {
   const email = profile?.email?.toLowerCase() || '';
+  const lang = profile?.language;
   const isSpecialUser = email === 'chiwah.liu@gmail.com' || email === 'cwah.liu@gmail.com';
 
   if (isSpecialUser) {
@@ -43,60 +45,60 @@ export function getLocalFallbackReport(profile: UserProfile | null): Recommendat
       actions: [
         {
           id: "act_1",
-          task: "Consult GP about Low-Dose Statin prescription (e.g. Rosuvastatin 5mg)",
-          explanation: "Given your elevated LDL-C and East Asian genetics, a low-dose statin is the most evidence-based starting point.",
+          task: t(lang, 'seedFbActionStatinTask'),
+          explanation: t(lang, 'seedFbActionStatinExpl'),
           priority: "high",
           completed: false,
           type: "doctor"
         },
         {
           id: "act_2",
-          task: "Schedule an HbA1c retest in 3 months with formal pre-diabetes assessment",
-          explanation: "Your average blood sugar over the last months is borderline. Tight monitoring is critical.",
+          task: t(lang, 'seedFbActionHba1cTask'),
+          explanation: t(lang, 'seedFbActionHba1cExpl'),
           priority: "high",
           completed: false,
           type: "test"
         },
         {
           id: "act_3",
-          task: "Establish an annual Kidney Monitoring and eGFR protection plan",
-          explanation: "Declining eGFR needs early stage tracking. Restricting saturated fat and excessive sodium is non-negotiable.",
+          task: t(lang, 'seedFbActionKidneyTask'),
+          explanation: t(lang, 'seedFbActionKidneyExpl'),
           priority: "high",
           completed: false,
           type: "test"
         },
         {
           id: "act_4",
-          task: "Test Vitamin D levels with your physician",
-          explanation: "East Asians are commonly deficient, which impacts metabolic health, blood pressure, and cardiovascular outcomes.",
+          task: t(lang, 'seedFbActionVitDTask'),
+          explanation: t(lang, 'seedFbActionVitDExpl'),
           priority: "medium",
           completed: false,
           type: "test"
         },
         {
           id: "act_5",
-          task: "Substitute butter, coconut oil, and ghee with extra virgin olive oil",
-          explanation: "Reducing saturated fat to strictly under 15g a day is essential to restore proper LDL values.",
+          task: t(lang, 'seedFbActionOilTask'),
+          explanation: t(lang, 'seedFbActionOilExpl'),
           priority: "high",
           completed: false,
           type: "lifestyle"
         }
       ],
       dailyBenefits: [
-        { id: "ben_1", activity: "Accumulate 30 minutes of brisk walking or light cardio", target: "150 mins per week", completed: false },
-        { id: "ben_2", activity: "Add 1 tablespoon of ground flaxseed to your meals", target: "Daily", completed: false },
-        { id: "ben_3", activity: "Restrict Saturated Fat intake strictly under 15g", target: "Daily", completed: false },
-        { id: "ben_4", activity: "Incorporate high soluble fibre (e.g. Oats, Psyllium husk)", target: "10-15g soluble", completed: false }
+        { id: "ben_1", activity: t(lang, 'seedFbBenefitWalk'), target: t(lang, 'seedFbTargetWeekly'), completed: false },
+        { id: "ben_2", activity: t(lang, 'seedFbBenefitFlax'), target: t(lang, 'seedBenefitTargetDaily'), completed: false },
+        { id: "ben_3", activity: t(lang, 'seedFbBenefitSatFat'), target: t(lang, 'seedBenefitTargetDaily'), completed: false },
+        { id: "ben_4", activity: t(lang, 'seedFbBenefitFibre'), target: "10-15g soluble", completed: false }
       ],
       latestInsights: [
         {
-          title: "Cardiovascular Risk Reduction in East Asian Cohorts",
-          summary: "Recent studies demonstrate that East Asian men exhibit heightened sensitivity to low-dose statin therapy, with rosuvastatin 5mg yielding similar LDL reduction as 10mg in western populations while minimizing hepatic and muscular side effects.",
+          title: t(lang, 'seedFbInsightStatinTitle'),
+          summary: t(lang, 'seedFbInsightStatinSummary'),
           link: "https://pubmed.ncbi.nlm.nih.gov/32041285/"
         },
         {
-          title: "Soluble Fibre and Bile Acid Sequestration Mechanics",
-          summary: "Clinical trials confirm that consuming 10g of soluble fibre daily (via oats, barley, or psyllium husk) triggers hepatic bile synthesis from existing LDL, lowering circulating bad cholesterol particles by 5% to 10% within 8 weeks.",
+          title: t(lang, 'seedFbInsightFibreTitle'),
+          summary: t(lang, 'seedFbInsightFibreSummary'),
           link: "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4832151/"
         }
       ],
@@ -153,29 +155,29 @@ export function getLocalFallbackReport(profile: UserProfile | null): Recommendat
     actions: [
       {
         id: "act_1",
-        task: "Consult your primary care physician for a comprehensive health screening",
-        explanation: "Based on your age and profile, regular annual biometric reviews are highly recommended.",
+        task: t(lang, 'seedFbGenActionScreeningTask'),
+        explanation: t(lang, 'seedFbGenActionScreeningExpl'),
         priority: "high",
         completed: false,
         type: "doctor"
       },
       {
         id: "act_2",
-        task: "Check your HbA1c and lipid panel every 6 months",
-        explanation: "Routine blood metrics tracking will help confirm your lifestyle changes are successfully restoring biomarkers.",
+        task: t(lang, 'seedFbGenActionHba1cTask'),
+        explanation: t(lang, 'seedFbGenActionHba1cExpl'),
         priority: "high",
         completed: false,
         type: "test"
       }
     ],
     dailyBenefits: [
-      { id: "ben_1", activity: "Walk briskly for 30 minutes daily to boost metabolic health", target: "Daily", completed: false },
-      { id: "ben_2", activity: "Substitute saturated fats with cold-pressed olive oil", target: "Daily", completed: false }
+      { id: "ben_1", activity: t(lang, 'seedFbGenBenefitWalk'), target: t(lang, 'seedBenefitTargetDaily'), completed: false },
+      { id: "ben_2", activity: t(lang, 'seedFbGenBenefitOil'), target: t(lang, 'seedBenefitTargetDaily'), completed: false }
     ],
     latestInsights: [
       {
-        title: "Dietary Fibers and Metabolic Longevity Indices",
-        summary: "A high-fiber nutritional plan is linked to enhanced short-chain fatty acid gut synthesis, which improves overall insulin response and naturally reduces vascular inflammation markers.",
+        title: t(lang, 'seedFbGenInsightFiberTitle'),
+        summary: t(lang, 'seedFbGenInsightFiberSummary'),
         link: "https://pubmed.ncbi.nlm.nih.gov/30612722/"
       }
     ],

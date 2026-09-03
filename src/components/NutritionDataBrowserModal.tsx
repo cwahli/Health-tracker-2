@@ -659,10 +659,10 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
   if (!isOpen) return null;
 
   const tabs: { id: TabId; label: string; count?: number }[] = [
-    { id: 'chains', label: 'Branded food', count: data?.chainSources?.length },
-    { id: 'base', label: 'Base food cache', count: data?.baseFoodCache?.length },
-    { id: 'catalog', label: 'Food catalog', count: catalogItems.length },
-    { id: 'unfetched', label: 'Not fetched / pending', count: data?.chainNotFetched?.length },
+    { id: 'chains', label: t.browserTabBranded, count: data?.chainSources?.length },
+    { id: 'base', label: t.browserTabBase, count: data?.baseFoodCache?.length },
+    { id: 'catalog', label: t.browserTabCatalog, count: catalogItems.length },
+    { id: 'unfetched', label: t.browserTabPending, count: data?.chainNotFetched?.length },
   ];
 
   return createPortal(
@@ -672,7 +672,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
           <div className="flex items-center gap-2 min-w-0">
             <Database className="w-5 h-5 text-indigo-300 shrink-0" />
             <div className="min-w-0">
-              <h2 className={`text-base font-bold truncate ${textPrimary}`}>Nutrition data browser</h2>
+              <h2 className={`text-base font-bold truncate ${textPrimary}`}>{t.browserTitle}</h2>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -752,7 +752,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
             <div className="mb-3 p-3 rounded-xl bg-amber-950/50 border border-amber-500/30 text-xs space-y-1.5">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-amber-300">{cleanDuplicates.length} duplicate group(s) merged</span>
-                <button type="button" onClick={() => setCleanDuplicates([])} className="text-white/40 hover:text-white text-[10px]">Dismiss</button>
+                <button type="button" onClick={() => setCleanDuplicates([])} className="text-white/40 hover:text-white text-[10px]">{t.browserDismiss}</button>
               </div>
               <div className="space-y-1 max-h-40 overflow-y-auto">
                 {cleanDuplicates.map((d, i) => (
@@ -766,7 +766,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
               </div>
             </div>
           )}
-          {loading && !data && <p className={`text-xs ${textMuted}`}>Loading…</p>}
+          {loading && !data && <p className={`text-xs ${textMuted}`}>{t.browserLoading}</p>}
 
 
 
@@ -774,7 +774,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
             <div className="space-y-2">
               <input
                 type="text"
-                placeholder="Search all menu items..."
+                placeholder={t.browserSearchMenu}
                 className={`${inputCls} w-full`}
                 value={globalSearch}
                 onChange={(e) => runGlobalSearch(e.target.value)}
@@ -782,9 +782,9 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
 
               {globalSearch.trim() && (
                 <div className="space-y-1.5 mb-3">
-                  {globalSearchLoading && <p className={`text-[10px] ${textMuted}`}>Searching…</p>}
+                  {globalSearchLoading && <p className={`text-[10px] ${textMuted}`}>{t.browserSearching}</p>}
                   {!globalSearchLoading && (globalSearchResults?.length || 0) === 0 && (
-                    <p className={`text-[10px] ${textMuted}`}>No matching menu items.</p>
+                    <p className={`text-[10px] ${textMuted}`}>{t.browserNoMatch}</p>
                   )}
                   {globalSearchResults?.map((item: any) => {
                     const itemKey = `${item.chain_key}:${item.dish_name_key}`;
@@ -804,7 +804,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                           </div>
                           <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5">
                             <div className="space-y-0.5">
-                              <label className="text-[8px] text-white/50 block">KCAL</label>
+                              <label className="text-[8px] text-white/50 block">{t.browserKcal}</label>
                               <input
                                 type="number"
                                 className="w-full bg-slate-900 border border-white/10 rounded px-1.5 py-1 text-[10px] text-white font-mono"
@@ -813,7 +813,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                               />
                             </div>
                             <div className="space-y-0.5">
-                              <label className="text-[8px] text-white/50 block">PROT (g)</label>
+                              <label className="text-[8px] text-white/50 block">{t.browserProt}</label>
                               <input
                                 type="number"
                                 className="w-full bg-slate-900 border border-white/10 rounded px-1.5 py-1 text-[10px] text-white font-mono"
@@ -822,7 +822,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                               />
                             </div>
                             <div className="space-y-0.5">
-                              <label className="text-[8px] text-white/50 block">CARB (g)</label>
+                              <label className="text-[8px] text-white/50 block">{t.browserCarb}</label>
                               <input
                                 type="number"
                                 className="w-full bg-slate-900 border border-white/10 rounded px-1.5 py-1 text-[10px] text-white font-mono"
@@ -831,7 +831,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                               />
                             </div>
                             <div className="space-y-0.5">
-                              <label className="text-[8px] text-white/50 block">FAT (g)</label>
+                              <label className="text-[8px] text-white/50 block">{t.browserFat}</label>
                               <input
                                 type="number"
                                 className="w-full bg-slate-900 border border-white/10 rounded px-1.5 py-1 text-[10px] text-white font-mono"
@@ -840,7 +840,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                               />
                             </div>
                             <div className="space-y-0.5">
-                              <label className="text-[8px] text-white/50 block">SAT FAT (g)</label>
+                              <label className="text-[8px] text-white/50 block">{t.browserSatFat}</label>
                               <input
                                 type="number"
                                 className="w-full bg-slate-900 border border-white/10 rounded px-1.5 py-1 text-[10px] text-white font-mono"
@@ -849,7 +849,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                               />
                             </div>
                             <div className="space-y-0.5">
-                              <label className="text-[8px] text-white/50 block">SUGAR (g)</label>
+                              <label className="text-[8px] text-white/50 block">{t.browserSugar}</label>
                               <input
                                 type="number"
                                 className="w-full bg-slate-900 border border-white/10 rounded px-1.5 py-1 text-[10px] text-white font-mono"
@@ -858,7 +858,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                               />
                             </div>
                             <div className="space-y-0.5">
-                              <label className="text-[8px] text-white/50 block">FIBER (g)</label>
+                              <label className="text-[8px] text-white/50 block">{t.browserFiber}</label>
                               <input
                                 type="number"
                                 className="w-full bg-slate-900 border border-white/10 rounded px-1.5 py-1 text-[10px] text-white font-mono"
@@ -867,7 +867,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                               />
                             </div>
                             <div className="space-y-0.5">
-                              <label className="text-[8px] text-white/50 block">SALT (g)</label>
+                              <label className="text-[8px] text-white/50 block">{t.browserSalt}</label>
                               <input
                                 type="number"
                                 step="0.1"
@@ -883,7 +883,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                           </div>
                                                     <div className="grid grid-cols-2 gap-1.5 mb-1.5">
                             <div className="space-y-1">
-                              <label className="text-[9px] text-white/50 block font-bold">SERVING BASIS</label>
+                              <label className="text-[9px] text-white/50 block font-bold">{t.browserServingBasis}</label>
                               <select
                                 className="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-[10px] text-white"
                                 value={editForm.basis_type}
@@ -894,7 +894,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                               </select>
                             </div>
                             <div className="space-y-1">
-                              <label className="text-[9px] text-white/50 block font-bold">SERVING SIZE (g/ml)</label>
+                              <label className="text-[9px] text-white/50 block font-bold">{t.browserServingSize}</label>
                               <input
                                 type="number"
                                 className="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-[10px] text-white font-mono"
@@ -905,7 +905,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                             </div>
                           </div>
                           <div className="space-y-1">
-                            <label className="text-[9px] text-white/50 block font-bold">DESCRIPTION / INGREDIENTS</label>
+                            <label className="text-[9px] text-white/50 block font-bold">{t.browserDescription}</label>
                             <input
                               type="text"
                               className="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-[10px] text-white"
@@ -919,7 +919,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                               onClick={() => setEditingItemId(null)}
                               className="px-2 py-1 rounded bg-white/15 hover:bg-white/25 text-[9px] font-bold text-white"
                             >
-                              Cancel
+                              {t.cancel}
                             </button>
                             <button
                               type="button"
@@ -928,7 +928,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                               className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-[9px] font-bold text-white flex items-center gap-1"
                             >
                               {busy && <RefreshCw className="w-2.5 h-2.5 animate-spin" />}
-                              Save
+                              {t.save}
                             </button>
                           </div>
                         </div>
@@ -1094,7 +1094,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                 const chainSourcesList = Array.from(uniqueSourcesMap.values());
 
                 if (chainSourcesList.length === 0) {
-                  return <p className={`text-xs ${textMuted}`}>No chain sources registered yet.</p>;
+                  return <p className={`text-xs ${textMuted}`}>{t.browserNoChains}</p>;
                 }
 
                 return <>{chainSourcesList.map((s: any) => {
@@ -1139,7 +1139,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                             onClick={() => setEditingChainId(null)}
                             className="text-[10px] px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-white"
                           >
-                            Cancel
+                            {t.cancel}
                           </button>
                           <button
                             type="button"
@@ -1148,7 +1148,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                             className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-40 flex items-center gap-1"
                           >
                             {busy && <RefreshCw className="w-3 h-3 animate-spin" />}
-                            Save
+                            {t.save}
                           </button>
                         </div>
                       </div>
@@ -1246,7 +1246,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                       <div className="mt-3 pt-3 border-t border-white/10 space-y-3 text-left">
                         <div className="space-y-1.5">
                           {(!chainItems[key] || chainItems[key].length === 0) && (
-                            <p className={`text-[10px] ${textMuted}`}>No menu items stored yet for this chain.</p>
+                            <p className={`text-[10px] ${textMuted}`}>{t.browserNoItems}</p>
                           )}
                           {(chainItems[key] || []).map((item: any) => {
                             const isEditing = editingItemId === item.dish_name_key;
@@ -1261,7 +1261,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                                         onClick={() => setEditingItemId(null)}
                                         className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[9px] font-bold text-white"
                                       >
-                                        Cancel
+                                        {t.cancel}
                                       </button>
                                       <button
                                         type="button"
@@ -1270,13 +1270,13 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                                         className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-[9px] font-bold text-white flex items-center gap-1"
                                       >
                                         {busy && <RefreshCw className="w-2.5 h-2.5 animate-spin" />}
-                                        Save
+                                        {t.save}
                                       </button>
                                     </div>
                                   </div>
 
                                   <div className="space-y-1">
-                                    <label className="text-[9px] text-white/50 block font-bold">DISH NAME</label>
+                                    <label className="text-[9px] text-white/50 block font-bold">{t.browserDishName}</label>
                                     <input
                                       type="text"
                                       className="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-[10px] text-white"
@@ -1287,7 +1287,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
 
                                   <div className="grid grid-cols-2 gap-2">
                                     <div className="space-y-0.5">
-                                      <label className="text-[8px] text-white/50 block">SERVING BASIS</label>
+                                      <label className="text-[8px] text-white/50 block">{t.browserServingBasis}</label>
                                       <select
                                         className="w-full bg-slate-900 border border-white/10 rounded px-1.5 py-1 text-[10px] text-white"
                                         value={editForm.basis_type}
@@ -1298,7 +1298,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                                       </select>
                                     </div>
                                     <div className="space-y-0.5">
-                                      <label className="text-[8px] text-white/50 block">SERVING SIZE (g/ml)</label>
+                                      <label className="text-[8px] text-white/50 block">{t.browserServingSize}</label>
                                       <input
                                         type="number"
                                         className="w-full bg-slate-900 border border-white/10 rounded px-1.5 py-1 text-[10px] text-white font-mono"
@@ -1310,7 +1310,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
 
                                   <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5">
                                     <div className="space-y-0.5">
-                                      <label className="text-[8px] text-white/50 block">KCAL</label>
+                                      <label className="text-[8px] text-white/50 block">{t.browserKcal}</label>
                                       <input
                                         type="number"
                                         className="w-full bg-slate-900 border border-white/10 rounded px-1.5 py-1 text-[10px] text-white font-mono"
@@ -1319,7 +1319,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                                       />
                                     </div>
                                     <div className="space-y-0.5">
-                                      <label className="text-[8px] text-white/50 block">PROT (g)</label>
+                                      <label className="text-[8px] text-white/50 block">{t.browserProt}</label>
                                       <input
                                         type="number"
                                         className="w-full bg-slate-900 border border-white/10 rounded px-1.5 py-1 text-[10px] text-white font-mono"
@@ -1328,7 +1328,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                                       />
                                     </div>
                                     <div className="space-y-0.5">
-                                      <label className="text-[8px] text-white/50 block">CARB (g)</label>
+                                      <label className="text-[8px] text-white/50 block">{t.browserCarb}</label>
                                       <input
                                         type="number"
                                         className="w-full bg-slate-900 border border-white/10 rounded px-1.5 py-1 text-[10px] text-white font-mono"
@@ -1337,7 +1337,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                                       />
                                     </div>
                                     <div className="space-y-0.5">
-                                      <label className="text-[8px] text-white/50 block">FAT (g)</label>
+                                      <label className="text-[8px] text-white/50 block">{t.browserFat}</label>
                                       <input
                                         type="number"
                                         className="w-full bg-slate-900 border border-white/10 rounded px-1.5 py-1 text-[10px] text-white font-mono"
@@ -1346,7 +1346,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                                       />
                                     </div>
                                     <div className="space-y-0.5">
-                                      <label className="text-[8px] text-white/50 block">SAT FAT (g)</label>
+                                      <label className="text-[8px] text-white/50 block">{t.browserSatFat}</label>
                                       <input
                                         type="number"
                                         className="w-full bg-slate-900 border border-white/10 rounded px-1.5 py-1 text-[10px] text-white font-mono"
@@ -1355,7 +1355,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                                       />
                                     </div>
                                     <div className="space-y-0.5">
-                                      <label className="text-[8px] text-white/50 block">SUGAR (g)</label>
+                                      <label className="text-[8px] text-white/50 block">{t.browserSugar}</label>
                                       <input
                                         type="number"
                                         className="w-full bg-slate-900 border border-white/10 rounded px-1.5 py-1 text-[10px] text-white font-mono"
@@ -1364,7 +1364,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                                       />
                                     </div>
                                     <div className="space-y-0.5">
-                                      <label className="text-[8px] text-white/50 block">FIBER (g)</label>
+                                      <label className="text-[8px] text-white/50 block">{t.browserFiber}</label>
                                       <input
                                         type="number"
                                         className="w-full bg-slate-900 border border-white/10 rounded px-1.5 py-1 text-[10px] text-white font-mono"
@@ -1373,7 +1373,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                                       />
                                     </div>
                                     <div className="space-y-0.5">
-                                      <label className="text-[8px] text-white/50 block">SALT (g)</label>
+                                      <label className="text-[8px] text-white/50 block">{t.browserSalt}</label>
                                       <input
                                         type="number"
                                         step="0.1"
@@ -1388,7 +1388,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                                     </div>
                                   </div>
                                   <div className="space-y-1">
-                                    <label className="text-[9px] text-white/50 block font-bold">DESCRIPTION / INGREDIENTS</label>
+                                    <label className="text-[9px] text-white/50 block font-bold">{t.browserDescription}</label>
                                     <input
                                       type="text"
                                       className="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-[10px] text-white"
@@ -1696,7 +1696,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                       onClick={() => setShowAddChain(false)}
                       className="text-[10px] px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-white"
                     >
-                      Cancel
+                      {t.cancel}
                     </button>
                     <button
                       type="button"
@@ -1747,7 +1747,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose, language }:
                   <input
                     type="text"
                     className={`${inputCls} flex-1`}
-                    placeholder="Search catalog..."
+                    placeholder={t.browserSearchCatalog}
                     value={catalogSearch}
                     onChange={(e) => {
                       setCatalogSearch(e.target.value);

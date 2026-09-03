@@ -2,7 +2,7 @@ import { toYYYYMMDD, formatToDDMMYYYY } from "../utils/dateUtils";
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { UserProfile, BiomarkerLog, ChatMessage, FoodLog } from '../types';
 import { translations } from '../utils/translations';
-import { displayStatusLabel, displayCategoryLabel } from '../utils/i18n';
+import { displayStatusLabel, displayCategoryLabel, displayBiomarkerName, displayConditionName } from '../utils/i18n';
 import { ShieldAlert, ClipboardList, Trash2, ChevronDown, ChevronUp, LineChart as LineChartIcon, BrainCircuit, AlertCircle, Clock, CheckCircle2, EyeOff } from 'lucide-react';
 import { standardizeUnit, reverseStandardizeUnit, formatNormalRange } from '../utils/unitConversion';
 import { getBiomarkerRangeSourceInfo } from '../utils/biomarkerLifecycle';
@@ -687,9 +687,9 @@ export default function MedicalHistoryTab({
       // Apply search query filter if it exists
       if (searchQuery.trim() !== '') {
         const q = searchQuery.toLowerCase();
-        const matchesName = def.name.toLowerCase().includes(q);
+        const matchesName = def.name.toLowerCase().includes(q) || displayBiomarkerName(profile.language, def.key, def.name).toLowerCase().includes(q);
         const matchesKey = def.key.toLowerCase().includes(q);
-        const matchesConditions = def.potentialMedicalConditions?.some(c => c.toLowerCase().includes(q));
+        const matchesConditions = def.potentialMedicalConditions?.some(c => c.toLowerCase().includes(q) || displayConditionName(profile.language, c).toLowerCase().includes(q));
         const matchesRisks = def.riskCategories?.some(r => r.toLowerCase().includes(q));
         const matchesGroup = def.standardMedicalGrouping?.toLowerCase().includes(q);
         if (!matchesName && !matchesKey && !matchesConditions && !matchesRisks && !matchesGroup) {
@@ -985,7 +985,7 @@ export default function MedicalHistoryTab({
                 className="flex items-center justify-between p-3.5 bg-slate-50/50 dark:bg-slate-900/60 hover:bg-slate-100/60 dark:hover:bg-slate-850/40 cursor-pointer select-none transition-colors border-b border-theme-border/30"
               >
                 <span className="text-xs font-bold text-slate-700 dark:text-slate-200 capitalize">
-  {displayCategoryLabel(profile.language, cat)} ({markers.length})
+  {viewType === 'condition' ? displayConditionName(profile.language, cat) : displayCategoryLabel(profile.language, cat)} ({markers.length})
 </span>
 
                 <div className="flex items-center gap-2">
@@ -1083,7 +1083,7 @@ export default function MedicalHistoryTab({
                             <div className="min-w-0 flex-1 pr-3">
                               <div className="flex items-center gap-1.5">
                                 <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate capitalize">
-                                  {def.name}
+                                  {displayBiomarkerName(profile.language, def.key, def.name)}
                                 </span>
                                 {def.key === 'bmi' && hasBmiAlert && (
                                   <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0 animate-pulse" />

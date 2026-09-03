@@ -2002,18 +2002,18 @@ export default function Header({
             {!themeCompactMode && (
             <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shrink-0">
               <div className="flex items-center gap-3 w-full sm:w-auto">
-                <h2 className="text-base font-bold whitespace-nowrap" style={{ color: profile.themePalette?.textDarkPrimary || 'var(--theme-text-dark-primary, rgba(255, 255, 255, 0.9))' }}>Theme</h2>
+                <h2 className="text-base font-bold whitespace-nowrap" style={{ color: profile.themePalette?.textDarkPrimary || 'var(--theme-text-dark-primary, rgba(255, 255, 255, 0.9))' }}>{t.themeTitle}</h2>
                 <select
                   value={themeActiveSection}
                   onChange={(e) => setThemeActiveSection(e.target.value as any)}
                   className="text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-250 dark:border-slate-700 rounded-full pl-3.5 pr-8 py-1.5 text-slate-900 dark:text-slate-100 focus:outline-none cursor-pointer shadow-sm w-full sm:w-auto"
                 >
-                  <option value="colors">🎨 Colours</option>
-                  <option value="fonts">🔤 Font</option>
-                  <option value="tokens">📐 Token</option>
-                  <option value="components">📦 Components</option>
-                  <option value="elements">🔗 Elements</option>
-                  <option value="presets">🔖 Presets</option>
+                  <option value="colors">{t.themeSectionColours}</option>
+                  <option value="fonts">{t.themeSectionFont}</option>
+                  <option value="tokens">{t.themeSectionToken}</option>
+                  <option value="components">{t.themeSectionComponents}</option>
+                  <option value="elements">{t.themeSectionElements}</option>
+                  <option value="presets">{t.themeSectionPresets}</option>
                 </select>
               </div>
               <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
@@ -2625,7 +2625,7 @@ export default function Header({
                             })}
                             className="px-4 py-2 bg-slate-150 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold cursor-pointer transition-all shadow-sm"
                           >
-                            Reset Theme
+                            {t.themeReset}
                           </button>
                         </div>
                       </div>
@@ -2872,10 +2872,10 @@ export default function Header({
                 <div className="space-y-4">
                   <div className="p-4 rounded-2xl space-y-4">
                     <div className="flex justify-between items-center">
-                      <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100">Saved Presets</h4>
+                      <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100">{t.themeSavedPresets}</h4>
                       <div className="flex gap-2">
                         <label className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-semibold transition-all cursor-pointer">
-                          Import JSON
+                          {t.themeImportJson}
                           <input type="file" accept=".json" className="hidden" onChange={(e) => {
                             const file = e.target.files?.[0];
                             if (!file) return;
@@ -3193,7 +3193,7 @@ export default function Header({
                                   }} className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 rounded-lg text-xs font-semibold border border-emerald-200 dark:border-emerald-800 transition-all">{justSavedKey === 'user-update-' + idx ? '✓ Saved' : 'Update'}</button>
                                   <button onClick={() => {
                                     applyPresetConfig(preset);
-                                  }} className={active ? "hidden" : "px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-semibold border border-indigo-200 dark:border-indigo-800 transition-all"}>Apply</button>
+                                  }} className={active ? "hidden" : "px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-semibold border border-indigo-200 dark:border-indigo-800 transition-all"}>{t.themeApply}</button>
                                   {active && (
                                     <span className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm">
                                       <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -3209,7 +3209,7 @@ export default function Header({
                                       initialThemeSnapshot.current = JSON.parse(JSON.stringify(updatedP));
                                     }
                                     if (onSaveProfile) onSaveProfile(updatedP);
-                                  }} className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-900/30 dark:hover:bg-rose-900/50 text-rose-700 dark:text-rose-300 rounded-lg text-xs font-semibold border border-rose-200 dark:border-rose-800 transition-all">Del</button>
+                                  }} className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-900/30 dark:hover:bg-rose-900/50 text-rose-700 dark:text-rose-300 rounded-lg text-xs font-semibold border border-rose-200 dark:border-rose-800 transition-all">{t.themeDelete}</button>
                                 </div>
                               </div>
                               );

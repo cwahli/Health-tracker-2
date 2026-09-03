@@ -363,6 +363,7 @@ import { filterHistoryForUse, enrichReviewModificationCommands, sanitizeReviewRe
 import { generateDynamicInsight } from "./src/utils/biomarkerInsights";
 import { formatOptimalTargetValue } from "./src/utils/agentCalibration";
 import { NUTRIENT_KEYS } from "./src/utils/nutrients";
+import { t, interpolate, withAgentLanguage } from "./src/utils/i18n";
 import { extractBalancedJson, sanitizeMealWeight, findItemIndexInList, getUSDANutrientValue, extractUSDANutrientsPer100g, checkIfItemIsAlreadyPrepared, applyNutrientRealityChecks, applyCommercialSodiumFloor, checkAtwaterConsistency, synchronizeNarrativeText, evaluateNutrientWarnings, build31NutrientsMarkdownServer, enforceTitlePluralParity, sanitizeVerdictLabel } from "./server_pure_helpers";
 import { cleanNutrientNumber } from "./server_nutrient_aggregation";
 import { registerIssueBacklogRoutes } from './serverIssueBacklog.js';
@@ -801,7 +802,7 @@ try {
 // full item objects using the authoritative Vision Scout data. This guarantees exact names,
 // bounding boxes, and image indices — the LLM never has to regurgitate this data, which was
 // the root cause of silent item drops and incorrect targetDbId hallucination in MODE D groups.
-export function resolveComparisonGroups(rawGroups: any[], scoutItems: any[]): any[] {
+export function resolveComparisonGroups(rawGroups: any[], scoutItems: any[], lang?: unknown): any[] {
   const usedIndices = new Set<number>();
 
   const resolvedGroups = (Array.isArray(rawGroups) ? rawGroups : []).map((g: any) => {
@@ -927,7 +928,7 @@ export function resolveComparisonGroups(rawGroups: any[], scoutItems: any[]): an
     const rawV = g.verdict;
     const sanitizedVerdict = rawV && typeof rawV === 'object' && rawV.label
       ? {
-          label: sanitizeVerdictLabel(rawV.label, rawV.level, g.averageNutrients),
+          label: sanitizeVerdictLabel(rawV.label, rawV.level, g.averageNutrients, lang),
           level: String(rawV.level || 'neutral')
         }
       : rawV;
@@ -951,9 +952,9 @@ export function resolveComparisonGroups(rawGroups: any[], scoutItems: any[]): an
       const unassignedIdxs = scoutItems.map((_, i) => i).filter(i => !usedIndices.has(i));
       console.log(`[Comparison Resolve] unassigned indices: ${unassignedIdxs.join(', ')}`);
       resolvedGroups.push({
-        groupName: "Unassigned items",
-        verdict: { label: "Supports nutritional evaluation", level: "neutral" },
-        message: "These items were detected but not placed into a comparison group by the AI.",
+        groupName: t(lang, 'comparisonUnassigned'),
+        verdict: { label: t(lang, 'comparisonSupportsEval'), level: "neutral" },
+        message: t(lang, 'comparisonUnassignedMsg'),
         averageNutrients: null,
         scoutItemIndices: unassignedIdxs,
         itemClinicalThreats: {},
@@ -980,8 +981,8 @@ export function resolveComparisonGroups(rawGroups: any[], scoutItems: any[]): an
         const itemName = sItem.name || sItem.originalName || sItem.keyword || `Option ${idx + 1}`;
         unbundledGroups.push({
           groupName: existingGroup?.groupName && resolvedGroups.length > 1 ? existingGroup.groupName : itemName,
-          verdict: existingGroup?.verdict || { label: "Supports nutritional evaluation", level: "neutral" },
-          message: existingGroup?.message || `Nutritional evaluation for ${itemName}.`,
+          verdict: existingGroup?.verdict || { label: t(lang, 'comparisonSupportsEval'), level: "neutral" },
+          message: existingGroup?.message || interpolate(t(lang, 'comparisonEvalFor'), { name: itemName }),
           averageNutrients: sItem.preCalcNutrients || null,
           scoutItemIndices: [idx],
           itemClinicalThreats: existingGroup?.itemClinicalThreats ? { [String(idx)]: existingGroup.itemClinicalThreats[String(idx)] || "" } : {},
@@ -2675,7 +2676,7 @@ Respond with a structured JSON format matching this schema exactly:
 }`;
     }
 
-    const sysInstruction = customSystemInstruction || "You are a world-class AI dietitian. Your response must be an exact JSON matching the requested schema. Never add markdown wrappers.";
+    const sysInstruction = customSystemInstruction || withAgentLanguage("You are a world-class AI dietitian. Your response must be an exact JSON matching the requested schema. Never add markdown wrappers.", userProfile?.language);
 
     const textOutput = await callUnifiedLLM({
       modelId: (typeof engine === 'object' ? engine?.name || engine?.model : engine) || "gemini-3.5-flash-lite",

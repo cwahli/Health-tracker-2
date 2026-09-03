@@ -14,6 +14,7 @@ const FullScreenLogViewer = lazyWithRetry(() => import('./FullScreenLogViewer'))
 import NotUsedBiomarkersModal from './NotUsedBiomarkersModal';
 import { BiomarkerAuditModal } from './BiomarkerAuditModal';
 import { saveAgentRequestLog } from '../utils/agentLogsTracker';
+import { t, interpolate, displayBiomarkerName } from '../utils/i18n';
 import { getDuplicateAliasGroups } from '../utils/biomarkerAuditEngine';
 
 interface BiomarkerDictionaryModalProps {
@@ -6022,20 +6023,20 @@ I can analyze these, compare them with our database keys, and find standard mapp
           <UniversalModal
             isOpen={true}
             onClose={() => setViewingLogsKey(null)}
-            title={`${name} (Key: ${key})`}
+            title={`${displayBiomarkerName(profile.language, key, name)} (${interpolate(t(profile.language, 'dictKeyLabel'), { key })})`}
             actions={
               <button
                 onClick={() => setViewingLogsKey(null)}
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-theme-neutral rounded-lg text-xs font-semibold transition-colors"
               >
-                Close Logs
+                {t(profile.language, 'dictCloseLogs')}
               </button>
             }
           >
             <div className="space-y-4">
               {itemLogs.length === 0 ? (
                 <div className="text-center py-12 text-slate-400 dark:text-slate-500 text-xs">
-                  No logs recorded for this biomarker.
+                  {t(profile.language, 'dictNoLogs')}
                 </div>
               ) : (
                 <div className="border border-theme-border/80 rounded-xl overflow-x-auto max-w-full shadow-sm">
