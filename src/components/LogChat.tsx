@@ -3,6 +3,7 @@ import {
  ErrorBoundary } from './ErrorBoundary';
 import { agentCardRegistry } from './chat-cards';
 import { decideFrontDeskHandoff } from '../utils/handoffGuard';
+import { dedupeConsecutiveAssistantMessages } from '../utils/chatMessageDedupe';
 import { AgentThoughtBox } from './chat-cards/FoodCard';
 import { trackApiCall, setActiveQueryId, generateQueryId } from '../utils/apiTracker';
 import { saveAgentRequestLog, getAgentRequestLogs } from '../utils/agentLogsTracker';
@@ -506,6 +507,10 @@ export default function LogChat({
     ? (delegatedAgentType as AgentType)
     : ((type === 'medical' && agentType) ? (agentType as AgentType) : (type as AgentType));
   const activeAgentConfig = AGENT_REGISTRY[activeAgentKey] || AGENT_REGISTRY[type as AgentType];
+  // Front Desk chrome stays Front Desk even after a seamless Health Coach
+  // handoff — Case 1 must render the specialist card in the same modal.
+  const chromeAgentKey: AgentType = type === 'front_desk' ? 'front_desk' : (activeAgentKey || (type as AgentType));
+  const chromeAgentConfig = AGENT_REGISTRY[chromeAgentKey] || activeAgentConfig;
   const isUnified = ['food', 'medical', 'food_idea', 'daily_recommendation'].includes(type) && getAgentRolloutStatus(type as AgentType) === 'unified';
   const isAgent = (targetType: AgentType | string) => {
     if (effectiveAgentType === targetType) return true;
@@ -723,6 +728,15 @@ ${logsText}`);
       messagesRef.current = newVal;
       return newVal;
     });
+  };
+  // Never call JobStore.updateJob inside a setState updater — notify()
+  // re-renders HomeTab/MedicalHistoryTab during LogChat's render and React
+  // drops the in-flight message (welcome-only Front Desk after Case 1).
+  const persistJobPatch = (targetId: string | null | undefined, patch: Record<string, any>, defer = false) => {
+    if (!targetId) return;
+    const apply = () => JobStore.updateJob(targetId, patch);
+    if (defer) queueMicrotask(apply);
+    else apply();
   };
   // Synchronized Multi-select Search Mode States for Bottom Action Bar
   const [isSelectingMode, setIsSelectingMode] = useState<boolean>(false);
@@ -1313,6 +1327,9 @@ ${logsText}`);
     if (!targetJobId) return;
     const activeJobId = targetJobId;
     const loadJobMessages = async () => {
+      // This instance is the writer. Reloading from JobStore mid-send clobbers
+      // the live Front Desk thread (handoff notice + Health Coach card).
+      if (isSendingRef.current) return;
       let job = JobStore.getJob(activeJobId);
       if (!job) {
         setIsAnalyzing(false);
@@ -1435,27 +1452,25 @@ ${logsText}`);
         } catch (err) {
           console.warn('[loadJobMessages] Failed to restore images from ImageStore for job', activeJobId, err);
         }
-        // Deduplicate consecutive assistant messages in baseMsgs to prevent duplicate meal cards
-        const dedupedBaseMsgs: ChatMessage[] = [];
-        for (let i = 0; i < baseMsgs.length; i++) {
-          const curr = baseMsgs[i];
-          const prev = dedupedBaseMsgs[dedupedBaseMsgs.length - 1];
-          if (prev && prev.role === 'assistant' && curr.role === 'assistant') {
-            dedupedBaseMsgs[dedupedBaseMsgs.length - 1] = {
-              ...prev,
-              ...curr,
-              data: {
-                ...(prev.data || {}),
-                ...(curr.data || {}),
-                agentResult: {
-                  ...(prev.data?.agentResult || {}),
-                  ...(curr.data?.agentResult || {})
-                }
-              }
-            };
-          } else {
-            dedupedBaseMsgs.push(curr);
-          }
+        // Food cards patch in place as consecutive assistants; Front Desk
+        // receptionist → handoff → Health Coach must stay three separate turns.
+        const dedupedBaseMsgs: ChatMessage[] = dedupeConsecutiveAssistantMessages(baseMsgs, {
+          enabled: type === 'food'
+        });
+        if (
+          type === 'front_desk'
+          && job.result
+          && (job.result.report || job.result.agentType === 'health_baseline')
+          && !dedupedBaseMsgs.some(m => m.agentType === 'health_baseline')
+        ) {
+          dedupedBaseMsgs.push({
+            id: `msg_health_baseline_${activeJobId}`,
+            role: 'assistant',
+            content: job.result.text || job.result.report?.globalSummary || '',
+            timestamp: job.updatedAt || new Date().toISOString(),
+            agentType: 'health_baseline',
+            data: { agentResult: job.result }
+          } as ChatMessage);
         }
         const lastMsg = dedupedBaseMsgs[dedupedBaseMsgs.length - 1];
         if (job.status === 'awaiting_user') {
@@ -1810,6 +1825,7 @@ ${logsText}`);
     };
     loadJobMessages();
     const unsubscribe = JobStore.subscribe(() => {
+      if (isSendingRef.current) return;
       loadJobMessages();
     });
     return () => {
@@ -3202,7 +3218,11 @@ ${logsText}`);
           attemptByStep: {}
         });
       } else {
-        JobStore.updateJob(targetId, { messages: newMsgs, status: 'running' });
+        JobStore.updateJob(targetId, {
+          messages: newMsgs,
+          status: 'running',
+          ...(isHandoffContinuation ? { clientSubmitPending: true } : {})
+        });
       }
     }
     setInputText('');
@@ -3936,10 +3956,7 @@ ${logsText}`);
                         ...newMsgs.slice(0, newMsgs.length - 1),
                         { ...lastMsg, data: { ...updatedData, agentResult: updatedAgentResult } }
                      ];
-                     const targetId = currentJobId || jobId;
-                     if (targetId) {
-                       JobStore.updateJob(targetId, { messages: finalArray });
-                     }
+                     persistJobPatch(currentJobId || jobId, { messages: finalArray }, true);
                      return finalArray;
                   }
                   return prev;
@@ -4165,14 +4182,17 @@ ${logsText}`);
         if (resData.scoutContentType) err.scoutContentType = resData.scoutContentType;
         throw err;
       }
-      // Deduct agent credits upon successful response
-      if (profile) {
+      // Deduct agent credits upon successful response. Do NOT await this
+      // before appending the assistant message — a hung profile sync (common
+      // on AI Studio / Firestore) left Case 1 stuck on the Front Desk welcome
+      // while Health Coach had already finished over SSE.
+      if (profile && onSaveProfile) {
         const updatedProfile = deductAgentCredits(profile, selectedModelId);
-        if (onSaveProfile) {
-          console.log('[DIAG2] Before onSaveProfile (credit deduction)');
-          await onSaveProfile(updatedProfile);
-          console.log('[DIAG2] After onSaveProfile (credit deduction)');
-        }
+        console.log('[DIAG2] Before onSaveProfile (credit deduction)');
+        void Promise.resolve(onSaveProfile(updatedProfile)).then(
+          () => console.log('[DIAG2] After onSaveProfile (credit deduction)'),
+          (err) => console.warn('[DIAG2] onSaveProfile failed', err)
+        );
       }
       if (bodyData.batchBiomarkers && !resData.batchBiomarkers) {
         resData.batchBiomarkers = bodyData.batchBiomarkers;
@@ -4239,14 +4259,8 @@ ${logsText}`);
             localStorage.setItem('agent1_original_report_text', originalReport);
           }
           }
-          if (onAgentAnalysisSaved && agentType) {
-            // B3 FIX: persist the normalized agent type (assistantMsg.agentType), not the
-            // raw server-step type (e.g. 'agent1_step1'). InsightsTab.tsx's biomarker
-            // review tables key off the normalized type ('agent1'), so saving the raw
-            // step type silently hid the review table for every biomarker agent whose
-            // raw type differs from its normalized/display type.
-            activeAnalysisIdRef.current = await onAgentAnalysisSaved(assistantMsg.agentType || activeAgentKey || agentType, resData, activeAnalysisIdRef.current || undefined);
-          }
+          // Analysis persistence runs AFTER setMessages (below) so a hung
+          // profile write cannot hide the Health Coach card in Front Desk.
         } else {
           assistantMsg.mode = resData.mode;
           assistantMsg.status = resData.status;
@@ -4311,6 +4325,16 @@ ${logsText}`);
           }
           assistantMsg.pendingProfile = mergedProfile;
         }
+      }
+      if (
+        (isHandoffContinuation && (downstreamTargetAgent === 'health_baseline' || !downstreamTargetAgent))
+        && assistantMsg.agentType !== 'health_baseline'
+      ) {
+        assistantMsg.agentType = 'health_baseline';
+        assistantMsg.data = {
+          ...(assistantMsg.data || {}),
+          agentResult: assistantMsg.data?.agentResult || resData
+        };
       }
       const migratedAssistantMsg = migrateMessages([assistantMsg])[0];
       setMessages(prev => {
@@ -4418,19 +4442,28 @@ ${logsText}`);
             migratedAssistantMsg.data.pendingFoodLog = null;
           }
           const finalArray = [...newPrev, migratedAssistantMsg];
-          const targetId = currentJobId || jobId;
-          if (targetId) {
-            JobStore.updateJob(targetId, { messages: finalArray, status: 'succeeded' });
-          }
           return finalArray;
         }
         const finalArray = [...filteredPrev, migratedAssistantMsg];
-        const targetId = currentJobId || jobId;
-        if (targetId) {
-          JobStore.updateJob(targetId, { messages: finalArray, status: 'succeeded' });
-        }
         return finalArray;
       });
+      persistJobPatch(currentJobId || jobId, {
+        messages: messagesRef.current,
+        status: 'succeeded',
+        clientSubmitPending: false,
+        ...((isHandoffContinuation || migratedAssistantMsg.agentType === 'health_baseline')
+          ? { result: resData }
+          : {})
+      });
+      const persistType = migratedAssistantMsg.agentType || delegatedAgentType || (isHandoffContinuation ? downstreamTargetAgent : null) || agentType;
+      if (onAgentAnalysisSaved && persistType && persistType !== 'front_desk') {
+        // B3 FIX: persist the normalized agent type (assistantMsg.agentType), not the
+        // raw server-step type (e.g. 'agent1_step1'). Fire-and-forget so Front Desk
+        // Case 1 can paint the Health Coach card immediately.
+        void Promise.resolve(onAgentAnalysisSaved(persistType, resData, activeAnalysisIdRef.current || undefined)).then((id) => {
+          if (id) activeAnalysisIdRef.current = id;
+        }).catch((err) => console.warn('[DIAG2] onAgentAnalysisSaved failed', err));
+      }
       console.log('[DIAG2] setMessages call completed (isLive placeholder should be cleared)');
 
       console.log(`[DIAG6] handoff check: isAgent('front_desk')=${isAgent('front_desk')}, resData.agentType=${resData.agentType}, resData.status=${resData.status}, hasHandoffPayload=${!!resData.handoffPayload}, hasOnOpenAgentFromFrontDesk=${typeof onOpenAgentFromFrontDesk === 'function'}`);
@@ -4548,16 +4581,15 @@ ${logsText}`);
             userSelectedMode: mappedMode
           }
         };
-        setMessages(prev => {
-          const finalArray = [
-            ...prev.filter(m => !m.isLive && !m.isError && !m.agentUnavailable && !/Failed to process your request|Analysis failed|Vision Scout Failed|Gemini unavailable|rate limit|quota exceeded|quota \(\d+\)|503|429|Service Unavailable/i.test(m.content || '')),
-            errMsg
-          ];
-          const targetId = currentJobId || jobId;
-          if (targetId) {
-            JobStore.updateJob(targetId, { messages: finalArray, status: 'failed', error: { class: 'transient', message: displayErr } });
-          }
-          return finalArray;
+        setMessages(prev => [
+          ...prev.filter(m => !m.isLive && !m.isError && !m.agentUnavailable && !/Failed to process your request|Analysis failed|Vision Scout Failed|Gemini unavailable|rate limit|quota exceeded|quota \(\d+\)|503|429|Service Unavailable/i.test(m.content || '')),
+          errMsg
+        ]);
+        persistJobPatch(currentJobId || jobId, {
+          messages: messagesRef.current,
+          status: 'failed',
+          clientSubmitPending: false,
+          error: { class: 'transient', message: displayErr }
         });
       }
     } finally {
@@ -5107,7 +5139,7 @@ ${logsText}`);
             </div>
             <div>
               <h2 className="text-sm font-bold text-theme-text font-display">
-                {activeAgentKey === 'data_review' ? `${dataReviewBatchIdx === 'custom' ? 'Custom Test Batch' : 'Batch ' + (dataReviewBatchIdx !== null && dataReviewBatchIdx !== undefined ? (dataReviewBatchIdx as number) + 1 : 1)}` : (activeAgentKey === 'food' ? t.agentFoodNutrition : (activeAgentConfig?.displayName || t.addMedical))}
+                {chromeAgentKey === 'data_review' ? `${dataReviewBatchIdx === 'custom' ? 'Custom Test Batch' : 'Batch ' + (dataReviewBatchIdx !== null && dataReviewBatchIdx !== undefined ? (dataReviewBatchIdx as number) + 1 : 1)}` : (chromeAgentKey === 'food' ? t.agentFoodNutrition : (chromeAgentConfig?.displayName || t.addMedical))}
               </h2>
               <button
                 type="button"

@@ -166,10 +166,15 @@ export default function HomeTab({
 
   const [jobs, setJobs] = React.useState(() => JobStore.getAllJobs().filter(j => j.kind === 'food_log' || j.kind === 'food_compare' || j.kind === 'medical' || j.kind === 'front_desk'));
   React.useEffect(() => {
+    let mounted = true;
     const unsubscribe = JobStore.subscribe(() => {
-      setJobs(JobStore.getAllJobs().filter(j => j.kind === 'food_log' || j.kind === 'food_compare' || j.kind === 'medical' || j.kind === 'front_desk'));
+      queueMicrotask(() => {
+        if (mounted) {
+          setJobs(JobStore.getAllJobs().filter(j => j.kind === 'food_log' || j.kind === 'food_compare' || j.kind === 'medical' || j.kind === 'front_desk'));
+        }
+      });
     });
-    return () => { unsubscribe(); };
+    return () => { mounted = false; unsubscribe(); };
   }, []);
 
   const [showHealthDiagnostics, setShowHealthDiagnostics] = React.useState(false);

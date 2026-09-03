@@ -6766,7 +6766,9 @@ export default function App() {
           const isPartialApply = !!(agentResult?.forceApplyNow) && !!(agentResult?.hasMoreMarkers || agentResult?.hasMore || agentResult?.needsContinuation || agentResult?.status === 'needs_continuation');
           if (!isPartialApply) {
             setIsMedicalChatOpen(false);
-            setIsFrontDeskOpen(false);
+            if (agentType !== 'health_baseline' && (agentType as string) !== 'health_coach') {
+              setIsFrontDeskOpen(false);
+            }
           }
           setCalibratingAgentType(agentType);
           const updatedProfile = { ...profile };
@@ -7525,7 +7527,6 @@ export default function App() {
             }
           } else if (agentType === 'health_baseline') {
              setIsMedicalChatOpen(false);
-             setIsFrontDeskOpen(false);
              const data = agentResult?.report || agentResult || {};
              const unselected = new Set(agentResult.unselectedRowKeys || []);
              const riskCategories = Array.isArray(data.riskCategories) ? data.riskCategories : [];
