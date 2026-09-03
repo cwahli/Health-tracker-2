@@ -4488,21 +4488,28 @@ ${logsText}`);
   const lastAutoSendKeyRef = useRef<string | null>(null);
   useEffect(() => {
     const effectiveAutoSend = autoSendMessage || (isAgent('health_baseline') && handoffPayload ? (handoffPayload.summaryForAgent || 'Please create my personalized health baseline plan.') : (isAgent('health_baseline') ? 'Please create my personalized health baseline plan.' : null));
+    console.log(`[DIAG5] auto-send effect fired: isOpen=${isOpen}, agentType=${agentType}, hasHandoffPayload=${!!handoffPayload}, effectiveAutoSend=${effectiveAutoSend ? JSON.stringify(effectiveAutoSend).slice(0, 120) : 'null'}`);
     if (isOpen && effectiveAutoSend && (isAgent('medical') || isAgent('daily_recommendation') || isAgent('health_baseline'))) {
       if (agentType === 'agent1' || agentType === 'agent2' || agentType === 'agent3' || agentType === 'agent4' || agentType === 'agent5' || agentType === 'agent7') {
+        console.log(`[DIAG5] auto-send effect: bailing out early, agentType ${agentType} is in the excluded list`);
         return;
       }
       if (agentType === 'data_review' || agentType === 'biomarker_review') {
+        console.log(`[DIAG5] auto-send effect: agentType ${agentType} just prefills input, not sending`);
         setInputText(effectiveAutoSend);
         return;
       }
       const currentSendKey = `${agentType || 'med'}_${reviewBiomarkerKey || ''}_${effectiveAutoSend}`;
       if (lastAutoSendKeyRef.current !== currentSendKey) {
         lastAutoSendKeyRef.current = currentSendKey;
+        console.log(`[DIAG5] auto-send effect: scheduling handleSend in 250ms with key ${currentSendKey}`);
         const timer = setTimeout(() => {
+          console.log(`[DIAG5] auto-send effect: calling handleSend now`);
           handleSend(effectiveAutoSend);
         }, 250);
         return () => clearTimeout(timer);
+      } else {
+        console.log(`[DIAG5] auto-send effect: skipped, currentSendKey ${currentSendKey} already sent (lastAutoSendKeyRef matches)`);
       }
     }
   }, [isOpen, autoSendMessage, type, agentType, reviewBiomarkerKey, handoffPayload]);
