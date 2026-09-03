@@ -375,15 +375,16 @@ export async function callReceptionistAgent(
   ai: GoogleGenAI,
   payload: ReceptionistInputPayload,
   modelName = "gemini-3.5-flash-lite"
-): Promise<{ output: ReceptionistOutput; raw: string; ms: number }> {
+): Promise<{ output: ReceptionistOutput; raw: string; ms: number; systemInstruction: string; userText: string }> {
   const userText = formatReceptionistInput(payload);
+  const systemInstruction = buildReceptionistInstruction((payload as any).language || (payload.existingUserProfile as any)?.language);
 
   const started = Date.now();
   const response = await ai.models.generateContent({
     model: modelName,
     contents: [{ text: userText }],
     config: {
-      systemInstruction: buildReceptionistInstruction((payload as any).language || (payload.existingUserProfile as any)?.language),
+      systemInstruction,
       responseMimeType: "application/json",
       responseSchema: receptionistOutputSchema,
       temperature: 0.1,
@@ -445,6 +446,81 @@ export async function callReceptionistAgent(
         (snap as any)[k] = existing[k];
       }
     });
+  }
+
+  // Also preserve known demographic fields from existingMemory
+  if (payload.existingMemory?.userProfileSnapshot && output.memory?.userProfileSnapshot) {
+    const prevSnap = payload.existingMemory.userProfileSnapshot;
+    const snap = output.memory.userProfileSnapshot;
+    (Object.keys(prevSnap) as (keyof UserProfileSnapshot)[]).forEach((k) => {
+      if (prevSnap[k] !== undefined && prevSnap[k] !== null && (snap[k] === undefined || snap[k] === null)) {
+        (snap as any)[k] = prevSnap[k];
+      }
+    });
+  }
+
+  // Check if currentUserMessage contains activity level or if form submitted it
+  const userMsg = String(payload.currentUserMessage || "").trim();
+  const userMsgLower = userMsg.toLowerCase();
+  let detectedActivity: string | null = null;
+  if (/sedentary/i.test(userMsgLower)) detectedActivity = 'sedentary';
+  else if (/lightly\s*active|light\s*exercise|\blight\b/i.test(userMsgLower)) detectedActivity = 'lightly_active';
+  else if (/moderately\s*active|moderate\s*exercise|\bmoderate\b/i.test(userMsgLower)) detectedActivity = 'moderately_active';
+  else if (/very\s*active|heavy\s*exercise|\bintense\b|\bvery\b/i.test(userMsgLower)) detectedActivity = 'very_active';
+  else if (/extra\s*active|\bathlete\b/i.test(userMsgLower)) detectedActivity = 'extra_active';
+
+  if (detectedActivity && output.memory?.userProfileSnapshot) {
+    output.memory.userProfileSnapshot.activityLevel = detectedActivity as any;
+    if (output.collectedData) {
+      output.collectedData.activityLevel = detectedActivity;
+    }
+    if (Array.isArray(output.missingFields)) {
+      output.missingFields = output.missingFields.filter(f => !/activity/i.test(f));
+    }
+    if (Array.isArray(output.memory?.pendingItems)) {
+      output.memory.pendingItems = output.memory.pendingItems.filter(p => !/activity/i.test(p));
+    }
+  }
+
+  // If all core demographic fields are present, trigger handoff to health coach
+  const currentSnap = output.memory?.userProfileSnapshot || {};
+  const hasCoreDemographics = Boolean(
+    (currentSnap.age || payload.existingUserProfile?.age) &&
+    (currentSnap.gender || payload.existingUserProfile?.gender) &&
+    (currentSnap.heightCm || payload.existingUserProfile?.heightCm) &&
+    (currentSnap.weightKg || payload.existingUserProfile?.weightKg) &&
+    (currentSnap.activityLevel || payload.existingUserProfile?.activityLevel || detectedActivity)
+  );
+
+  if (hasCoreDemographics && (output.status === 'needs_info' || !output.status || (output.status as string) === 'in_progress')) {
+    output.status = 'ready_for_handoff';
+    output.targetAgent = output.targetAgent === 'general_receptionist' ? 'health_coach' : (output.targetAgent || 'health_coach');
+    if (!output.handoffPayload) {
+      const age = currentSnap.age || payload.existingUserProfile?.age || 40;
+      const gender = currentSnap.gender || payload.existingUserProfile?.gender || 'unknown';
+      const height = currentSnap.heightCm || payload.existingUserProfile?.heightCm || 165;
+      const weight = currentSnap.weightKg || payload.existingUserProfile?.weightKg || 65;
+      const act = currentSnap.activityLevel || payload.existingUserProfile?.activityLevel || detectedActivity || 'lightly_active';
+      output.handoffPayload = {
+        targetAgent: output.targetAgent,
+        intent: output.intent || 'general_inquiry',
+        summaryForAgent: `User onboarding profile complete. Age: ${age}, Gender: ${gender}, Height: ${height}cm, Weight: ${weight}kg, Activity Level: ${act}. Goal: ${output.memory?.goalSummary || 'Weight management & metabolic health'}.`,
+        actionableInsights: ["Complete baseline profile collected.", "Ready for personalized caloric calculation and macro plan."],
+        consolidatedUserProfile: {
+          age: Number(age),
+          gender: String(gender),
+          heightCm: Number(height),
+          weightKg: Number(weight),
+          activityLevel: String(act),
+          ...(payload.existingUserProfile || {}),
+          ...currentSnap
+        },
+        consolidatedMemory: output.memory
+      };
+    }
+    output.missingFields = [];
+    output.uiForm = null;
+    output.userResponse = output.userResponse || "Thank you! I have all your key details. I am now handing you over to your Health Coach to formulate your personalized plan.";
   }
 
   // Synthesize updatedProfile object for easy consumption by LogChat
@@ -525,5 +601,5 @@ export async function callReceptionistAgent(
     };
   }
 
-  return { output, raw: rawText, ms: durationMs };
+  return { output, raw: rawText, ms: durationMs, systemInstruction, userText };
 }

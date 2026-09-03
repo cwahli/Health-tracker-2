@@ -4,6 +4,7 @@ import { uploadPhotoToR2, uploadPhotosToR2, uploadDebugPayloadToR2 } from '../ut
 import { upsertJobToSupabase } from './SupabaseJobSync';
 import { ImageStore } from './ImageStore';
 import { auth } from '../firebase';
+import { getSessionLog } from './sessionLog';
 
 export type JobExecutor = (job: AgentJob, abortSignal: AbortSignal) => Promise<void>;
 
@@ -151,6 +152,27 @@ class JobQueueRunnerImpl {
           }
         }
 
+        // Capture ephemeral, browser-session-only debug context (session events,
+        // console logs, network errors, breadcrumbs, conversation-so-far) while it
+        // is still live in this tab. Previously this data was only ever read at
+        // *download* time from window.__clientConsoleLogs / getSessionLog(), so a
+        // job re-opened in a later session (after a reload) produced an
+        // effectively-empty debug export even though the job itself succeeded.
+        // Persisting it here, at job-completion time, makes it durable.
+        const w = typeof window !== 'undefined' ? (window as any) : {};
+        const conversationHistory = Array.isArray(updatedJob.messages)
+          ? updatedJob.messages
+              .filter((m: any) => !m.isLive)
+              .map((m: any) => ({ role: m.role, content: String(m.content || '').slice(0, 1000) }))
+          : undefined;
+        const debugContext = {
+          sessionEvents: getSessionLog(job.id),
+          clientConsoleLogs: w.__clientConsoleLogs || [],
+          networkErrors: w.__clientNetworkErrors || [],
+          userActionBreadcrumbs: w.__userActionBreadcrumbs || [],
+          conversationHistory,
+        };
+
         if (!debugUrl && updatedJob.result && !isServerOwned) {
           const debugData = {
             jobId: job.id,
@@ -158,6 +180,7 @@ class JobQueueRunnerImpl {
             statusMessage: updatedJob.statusMessage,
             messages: updatedJob.messages,
             result: updatedJob.result,
+            ...debugContext,
           };
           debugUrl = await uploadDebugPayloadToR2(job.id, debugData);
         }
@@ -175,6 +198,10 @@ class JobQueueRunnerImpl {
           photoUrls: photoUrls.length > 0 ? photoUrls : (strippedResult.photoUrls || (photoUrl ? [photoUrl] : [])),
           debugUrl: debugUrl || strippedResult.debugUrl,
           mealBuild: strippedResult.mealBuild, // ensure mealBuild is persisted
+          // Q: same rationale as debugData above — without this, the Supabase
+          // fallback path in /api/jobs/debug (used whenever the R2 debugUrl fetch
+          // fails) has no session context to fall back to either.
+          ...(!isServerOwned ? debugContext : {}),
         } : undefined;
 
         if (cleanResult) {

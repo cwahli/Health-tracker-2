@@ -152,17 +152,40 @@ export const ReceptionistCard: React.FC<AgentCardProps> = ({
                   </label>
 
                   {field.type === 'select' && field.options ? (
-                    <select
-                      value={val}
-                      onChange={(e) => handleFieldChange(field.name, e.target.value)}
-                      className="text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-slate-100"
-                      required={field.required}
-                    >
-                      <option value="">Select...</option>
-                      {field.options.map((opt: string) => (
-                        <option key={opt} value={opt}>{opt}</option>
-                      ))}
-                    </select>
+                    <div className="flex flex-col gap-1.5">
+                      <select
+                        value={val}
+                        onChange={(e) => handleFieldChange(field.name, e.target.value)}
+                        className="text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-slate-100"
+                        required={field.required}
+                      >
+                        <option value="">Select...</option>
+                        {field.options.map((opt: string) => (
+                          <option key={opt} value={opt}>{opt.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}</option>
+                        ))}
+                      </select>
+                      {field.options.length <= 5 && (
+                        <div className="flex flex-wrap gap-1 mt-0.5">
+                          {field.options.map((opt: string) => {
+                            const isSelected = val === opt;
+                            return (
+                              <button
+                                key={opt}
+                                type="button"
+                                onClick={() => handleFieldChange(field.name, opt)}
+                                className={`px-2 py-0.5 text-[11px] rounded-md transition-all cursor-pointer font-medium ${
+                                  isSelected
+                                    ? 'bg-indigo-600 text-white shadow-xs'
+                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:text-indigo-600 dark:hover:text-indigo-400 border border-slate-200 dark:border-slate-700'
+                                }`}
+                              >
+                                {opt.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <div className="relative flex items-center">
                       <input
@@ -194,6 +217,13 @@ export const ReceptionistCard: React.FC<AgentCardProps> = ({
             <Send className="w-3.5 h-3.5" />
           </button>
         </form>
+      )}
+
+      {isSubmitted && (
+        <div className="mt-2 p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-300">
+          <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+          <span>Details submitted successfully. Preparing your profile...</span>
+        </div>
       )}
 
       {/* 5. Biomarker Extraction Table (if filledRows present) */}

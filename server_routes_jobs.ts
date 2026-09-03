@@ -325,6 +325,7 @@ jobsRouter.all('/api/jobs/debug', async (req, res) => {
         userActionBreadcrumbs: job.clean_result?.userActionBreadcrumbs || (job as any).userActionBreadcrumbs,
         clientConsoleLogs: job.clean_result?.clientConsoleLogs || (job as any).clientConsoleLogs,
         networkErrors: job.clean_result?.networkErrors || (job as any).networkErrors,
+        conversationHistory: job.clean_result?.conversationHistory || (job as any).conversationHistory,
         backendLogsUrl: job.clean_result?.backendLogsUrl || undefined,
         backendLogs: job.clean_result?.backendLogs || accumulated || '',
         createdAt: job.created_at,
@@ -414,7 +415,8 @@ jobsRouter.all('/api/jobs/debug', async (req, res) => {
         stageLedger: safePayload.result?.stageLedger,
         historyLog: safePayload.result?.historyLog,
         ingestTrace: safePayload.result?.ingestTrace,
-        report: safePayload.result?.report
+        report: safePayload.result?.report,
+        conversationHistory: safePayload.conversationHistory || safePayload.result?.conversationHistory
       });
       res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="debug-${cleanJobId}.md"`);

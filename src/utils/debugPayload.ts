@@ -101,6 +101,8 @@ export type DebugReportInput = {
   /** Prior conversation turns (role + content) that came before the turn being
    * exported, so a reader can see what led up to this point ("previous steps"). */
   conversationHistory?: { role: string; content: string }[];
+  /** Sequence of agent transfers (e.g. Front Desk -> Health Coach). */
+  handoffChain?: string[];
   /** Job session event trail (JobStore.apply / JobQueueRunner), forwarded
    * from the client-recorded job.sessionEvents so it survives into
    * server-generated exports. Falls back to the in-process sessionLog map
@@ -330,11 +332,29 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
   }
 
   if (Array.isArray(input.clientConsoleLogs) && input.clientConsoleLogs.length > 0) {
-    lines.push(`### Client Console Logs (${input.clientConsoleLogs.length})`);
-    lines.push('```');
-    input.clientConsoleLogs.slice(-25).forEach(l => lines.push(l));
-    lines.push('```');
-    lines.push('');
+    // Filter out vite connection noise and deduplicate consecutive or repeating logs
+    const cleanedConsoleLogs: string[] = [];
+    const seen = new Set<string>();
+    for (const raw of input.clientConsoleLogs) {
+      if (/(?:\[vite\]|failed to connect to websocket)/i.test(raw)) continue;
+      const normalized = raw.replace(/^\[[A-Z_\s0-9:.-]+\]\s*/, '').trim();
+      if (!normalized) continue;
+      if (!seen.has(normalized)) {
+        seen.add(normalized);
+        cleanedConsoleLogs.push(raw);
+      }
+    }
+
+    if (cleanedConsoleLogs.length > 0) {
+      lines.push(`### Client Console Logs (${cleanedConsoleLogs.length})`);
+      lines.push('```');
+      cleanedConsoleLogs.slice(-50).forEach(l => lines.push(l));
+      lines.push('```');
+      lines.push('');
+    } else {
+      lines.push(`_No client console warnings or errors recorded (Vite connection messages filtered)._`);
+      lines.push('');
+    }
   } else {
     lines.push(`_No client console warnings or errors recorded._`);
     lines.push('');
@@ -654,7 +674,7 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
     const collapsedLineIndices = new Set<number>();
 
     const instructionBlocks: string[] = [];
-    const instructionStartPattern = /(Dispatched System Instruction|Dispatched Prompt|System Instruction:|UnifiedLLM-Prompt|Instruction dispatched)/i;
+    const instructionStartPattern = /(Dispatched System Instruction|Dispatched Prompt|System Instruction:|UnifiedLLM-Prompt|Instruction dispatched|\[FrontDesk\]\s*Dispatched)/i;
     for (let i = 0; i < logLines.length; i++) {
       if (instructionStartPattern.test(logLines[i])) {
         const block: string[] = [logLines[i]];
@@ -677,6 +697,7 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
         const normalizedKey = block
           .replace(/^\[backend\]\s*\[UnifiedLLM-Prompt:[^\]]+\]\s*/i, '')
           .replace(/^System Instruction:\s*/i, '')
+          .replace(/^\[FrontDesk\]\s*/i, '')
           .trim();
         if (seenInstr.has(normalizedKey)) continue;
         seenInstr.add(normalizedKey);
@@ -697,7 +718,7 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
 
     // Agent replies: show each unique reply once, then collapse logger-echo copies.
     const replyBlocks: string[] = [];
-    const responseStartPattern = /Response received \(\d+ chars\)\.\s*Raw output:/i;
+    const responseStartPattern = /(Response received \(\d+ chars\)\.\s*Raw output:|\[FrontDesk\]\s*Response received)/i;
     for (let i = 0; i < logLines.length; i++) {
       if (responseStartPattern.test(logLines[i])) {
         const block: string[] = [logLines[i]];
@@ -728,6 +749,20 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
         shownReplies += 1;
         if (shownReplies >= 8) break;
       }
+    }
+
+    // Agent Handoff Chain:
+    const handoffChainLines = logLines.filter(l => /\[FrontDesk-HandoffChain\]|Handoff Payload Generated|handoffChain/i.test(l));
+    if (handoffChainLines.length > 0 || (input.handoffChain && input.handoffChain.length > 0)) {
+      lines.push(`## ⛓️ Agent Handoff Chain & Workflow`);
+      lines.push('');
+      if (Array.isArray(input.handoffChain) && input.handoffChain.length > 0) {
+        lines.push(`- **Workflow Sequence:** ${input.handoffChain.join(' ➔ ')}`);
+      }
+      for (const hl of handoffChainLines) {
+        lines.push(`- ${hl.replace(/^\[\d{4}-\d{2}-\d{2}[^\]]+\]\s*/, '').trim()}`);
+      }
+      lines.push('');
     }
 
     const errorLines = logLines.filter((l) =>
@@ -841,7 +876,8 @@ export function debugReportFromJobMsg(job: any, msg: any): DebugReportInput {
     historyLog: result.historyLog,
     ingestTrace: result.ingestTrace || msg?.data?.ingestTrace || msg?.data?.agentResult?.ingestTrace || job?.clean_result?.ingestTrace,
     gate: result.gate || msg?.data?.gate,
-    report: result.report || msg?.data?.report || msg?.data?.agentResult?.report || job?.clean_result?.report
+    report: result.report || msg?.data?.report || msg?.data?.agentResult?.report || job?.clean_result?.report,
+    handoffChain: result.handoffChain || msg?.data?.handoffChain || msg?.data?.agentResult?.handoffChain || job?.result?.handoffChain
   };
 }
 

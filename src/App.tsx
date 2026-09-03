@@ -1828,6 +1828,9 @@ export default function App() {
         setActiveReviewBiomarkerKey((job.inputSnapshot as any).reviewBiomarkerKey);
       }
       setIsMedicalChatOpen(true);
+    } else if (job && job.kind === 'front_desk') {
+      setActiveFrontDeskJobId(jobId);
+      setIsFrontDeskOpen(true);
     }
   };
 
@@ -1861,6 +1864,20 @@ export default function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isEditingFoodLog, setIsEditingFoodLog] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
+
+  // Preload LogChat chunk in background after initial page paint so opening Front Desk or Agents is instant
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const preload = () => {
+      import('./components/LogChat').catch(() => {});
+    };
+    if ('requestIdleCallback' in window) {
+      (window as any).requestIdleCallback(preload, { timeout: 2000 });
+    } else {
+      setTimeout(preload, 1000);
+    }
+  }, []);
+
   // Sync state with HTML5 History API to support browser back button navigation without quitting
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
@@ -4075,7 +4092,12 @@ export default function App() {
       // Sync active / ready inbox jobs so other devices get latest drafts.
       // Run in small concurrency-capped batches (not all at once) to avoid flooding
       // /api/jobs/upsert with a burst of simultaneous requests during manual sync.
-      const activeJobs = JobStore.getAllJobs().filter(j => j.status === 'succeeded' || j.status === 'awaiting_user');
+      // Exclude ephemeral front_desk jobs to prevent multi-second delays on profile sync.
+      const activeJobs = JobStore.getAllJobs().filter(j => 
+        (j.status === 'succeeded' || j.status === 'awaiting_user') &&
+        j.kind !== 'front_desk' &&
+        !j.id?.startsWith('job_frontdesk_')
+      );
       const jobUpsertChunkSize = 5;
       console.log(`[DIAG3] Job upsert loop starting - ${activeJobs.length} jobs queued to sync`);
       const jobLoopStart = Date.now();
@@ -6738,7 +6760,18 @@ export default function App() {
           setIsMedicalChatOpen(true);
         };
         return (
-          <React.Suspense fallback={null}>
+          <React.Suspense fallback={
+            isFrontDeskOpen ? (
+              <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 animation-fade-in font-sans">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col items-center gap-3 animate-pulse max-w-xs w-full">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                    <span className="w-5 h-5 border-2 border-emerald-600 dark:border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">Opening Front Desk...</p>
+                </div>
+              </div>
+            ) : null
+          }>
             <ErrorBoundary>{isFrontDeskOpen && <LogChat type="front_desk"
             jobId={activeFrontDeskJobId}
             onJobCreated={setActiveFrontDeskJobId}
@@ -6857,7 +6890,18 @@ export default function App() {
         }}
       />}</ErrorBoundary>
       </React.Suspense>
-      <React.Suspense fallback={null}>
+      <React.Suspense fallback={
+        isMedicalChatOpen ? (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 animation-fade-in font-sans">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col items-center gap-3 animate-pulse max-w-xs w-full">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                <span className="w-5 h-5 border-2 border-indigo-600 dark:border-indigo-400 border-t-transparent rounded-full animate-spin" />
+              </div>
+              <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">Opening Health Coach...</p>
+            </div>
+          </div>
+        ) : null
+      }>
         <ErrorBoundary>{isMedicalChatOpen && <LogChat key={`medical_${activeAgentType || 'general'}`}
         type="medical"
         profile={profile}

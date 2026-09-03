@@ -3138,9 +3138,7 @@ ${logsText}`);
       }
       return newMsgs;
     });
-    if (typeof overrideText !== 'string') {
-      setInputText('');
-    }
+    setInputText('');
     const tempImages = overrideImagesInner.length > 0 ? overrideImagesInner : [...selectedImages];
     const tempAnalysisImages = overrideImagesInner.length > 0 ? overrideImagesInner : [...selectedImagesForAnalysis];
     setSelectedImages([]);
@@ -3397,6 +3395,15 @@ ${logsText}`);
         bodyData.foodLogs = (foodLogs || []).map(f => ({ name: f.name, date: f.date, nutrients: f.nutrients }));
         if (dataReviewBatchKeys && dataReviewBatchKeys.length > 0) {
           bodyData.dataReviewBatchKeys = dataReviewBatchKeys;
+        }
+        if (isAgent('front_desk')) {
+          const priorFrontDeskMsg = [...messages].reverse().find(m => 
+            (m.agentResult?.memory || m.data?.agentResult?.memory || m.data?.memory) &&
+            (m.agentType === 'front_desk' || m.data?.agentType === 'front_desk' || m.agentResult?.agentType === 'front_desk')
+          );
+          if (priorFrontDeskMsg) {
+            bodyData.existingMemory = priorFrontDeskMsg.agentResult?.memory || priorFrontDeskMsg.data?.agentResult?.memory || priorFrontDeskMsg.data?.memory;
+          }
         }
         if (reviewBiomarkerKey) {
           const rawCur = (biomarkers?.[reviewBiomarkerKey] || null) as any;

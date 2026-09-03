@@ -20,6 +20,13 @@ export default function FloatingActionSheet({
   language,
 }: FloatingActionSheetProps) {
   const t = translations[language || 'en'] || translations.en;
+
+  // Preload LogChat the instant the sheet opens so clicking any button opens the modal with 0ms delay
+  React.useEffect(() => {
+    if (isOpen) {
+      import('./LogChat').catch(() => {});
+    }
+  }, [isOpen]);
   return (
     <AnimatePresence>
       {isOpen && (

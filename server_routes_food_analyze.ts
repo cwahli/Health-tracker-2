@@ -6,6 +6,9 @@ import {
   getGeminiClient,
   adminAuth,
   db,
+  logSessionStorage,
+  sessionDebugLogs,
+  globalDebugLogs,
 } from './server.js';
 import { runFoodAnalyze } from './server_food_analyze_run.js';
 
@@ -120,7 +123,19 @@ import { runBiomarkerPipeline } from './src/server/biomarkers/pipeline.js';
 // Health Preparation & Receptionist Agent
 foodAnalyzeRouter.post("/api/gemini/front-desk", async (req, res) => {
   try {
-    const { message, profile, biomarkers, foodLogs, biomarkerHistory, history, engine, image, images } = req.body;
+    const {
+      message,
+      profile,
+      biomarkers,
+      foodLogs,
+      biomarkerHistory,
+      history,
+      engine,
+      image,
+      images,
+      existingMemory,
+      existingActivitiesAndTasks,
+    } = req.body;
     
     let targetModel = typeof engine === 'object' ? engine?.name || engine?.model || "gemini-3.5-flash-lite" : (engine || "gemini-3.5-flash-lite");
     
@@ -152,18 +167,27 @@ foodAnalyzeRouter.post("/api/gemini/front-desk", async (req, res) => {
       currentUserMessage: message || "",
       chatHistory,
       existingUserProfile,
-      existingMemory: null,
-      existingActivitiesAndTasks: null,
+      existingMemory: existingMemory || null,
+      existingActivitiesAndTasks: existingActivitiesAndTasks || null,
       language: profile?.language || null,
     };
 
+    const sessionId = logSessionStorage.getStore() || "global";
+    const initialLogCount = (sessionDebugLogs[sessionId] || globalDebugLogs).length;
+
     addDebugLog(`[FrontDesk] Dispatching receptionist prompt to model: "${targetModel}".`);
 
-    const { output: recOutput } = await withGeminiRetry(() => 
+    const { output: recOutput, raw, systemInstruction, userText } = await withGeminiRetry(() => 
       callReceptionistAgent(ai, receptionistPayload, targetModel)
     );
 
+    addDebugLog(`[FrontDesk] Dispatched System Instruction:\n${systemInstruction}`);
+    addDebugLog(`[FrontDesk] Dispatched Prompt:\n${userText}`);
+    addDebugLog(`[FrontDesk] Response received (${raw.length} chars). Raw output:\n${raw}`);
     addDebugLog(`[FrontDesk-Response] Output status: ${recOutput.status}, intent: ${recOutput.intent}, targetAgent: ${recOutput.targetAgent}`);
+    if (recOutput.handoffPayload) {
+      addDebugLog(`[FrontDesk-HandoffChain] Front Desk [triage] ➔ Handoff Payload Generated ➔ Target Agent: ${recOutput.targetAgent} (${recOutput.handoffPayload.targetAgent || 'health_coach'})`);
+    }
 
     let updatedProfile = recOutput.updatedProfile ? { ...profile, ...recOutput.updatedProfile } : null;
     let newBiomarkerLogs = recOutput.newBiomarkerLogs || null;
@@ -239,6 +263,9 @@ foodAnalyzeRouter.post("/api/gemini/front-desk", async (req, res) => {
           .trim()
       : recOutput.userResponse;
 
+    const logsToUse = sessionDebugLogs[sessionId] || globalDebugLogs;
+    const backendLogs = logsToUse.slice(initialLogCount).map((l: any) => `[${l.timestamp}] ${l.message}`).join('\n');
+
     res.json({
       agentType: 'front_desk',
       text: cleanUserResponse,
@@ -253,9 +280,11 @@ foodAnalyzeRouter.post("/api/gemini/front-desk", async (req, res) => {
       disambiguationContext: recOutput.disambiguationContext,
       uiForm: recOutput.uiForm,
       handoffPayload: recOutput.handoffPayload,
+      handoffChain: recOutput.handoffPayload ? ['Front Desk (triage)', recOutput.targetAgent === 'medical' ? 'Medical Specialist' : 'Health Coach'] : undefined,
       updatedProfile,
       newBiomarkerLogs,
       filledRows,
+      backendLogs,
       type: 'front_desk'
     });
   } catch (err: any) {

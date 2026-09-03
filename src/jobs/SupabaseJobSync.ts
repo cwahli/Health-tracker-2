@@ -7,7 +7,7 @@ import { AgentJob } from './types';
 import { toPendingFoodLog } from '../mealBuild/adapters';
 
 // [FreeTier] thin clean_result
-
+let isDirectClientSupabaseDisabled = false;
 
 const backendDeleteTried = new Set<string>();
 
@@ -240,6 +240,7 @@ export function processJobRows(rows: any[], userId: string = 'anonymous'): void 
 export async function hydrateUserJobs(userId: string = 'anonymous', isFull: boolean = true): Promise<void> {
   const effectiveUserId = (userId && userId !== 'anonymous') ? userId : (auth.currentUser?.uid || 'anonymous');
   let loadedRows: any[] = [];
+  let serverHydrationSucceeded = false;
 
   // 1. Try server route /api/jobs/status
   try {
@@ -248,6 +249,7 @@ export async function hydrateUserJobs(userId: string = 'anonymous', isFull: bool
     try {
       const res = await fetch(`/api/jobs/status?userId=${encodeURIComponent(effectiveUserId)}&full=${isFull}`, { signal: controller.signal });
       if (res.ok) {
+        serverHydrationSucceeded = true;
         const contentType = res.headers.get('content-type');
         if (contentType && contentType.includes('application/json')) {
           const { jobs } = await res.json();
@@ -267,25 +269,31 @@ export async function hydrateUserJobs(userId: string = 'anonymous', isFull: bool
     console.debug('[SupabaseJobSync] Server /api/jobs/status deferred:', e?.message || e);
   }
 
-  // 2. Direct Supabase Client fallback
-  if (loadedRows.length === 0 && isSupabaseConfigured && supabase && effectiveUserId !== 'anonymous') {
+  // 2. Direct Supabase Client fallback - only when server route failed AND direct REST is not disabled
+  if (!serverHydrationSucceeded && loadedRows.length === 0 && isSupabaseConfigured && supabase && !isDirectClientSupabaseDisabled && effectiveUserId !== 'anonymous') {
     try {
-      const { data, error } = await supabase
+      const { data, error, status } = await supabase
         .from('agent_jobs')
         .select('*')
         .eq('user_id', effectiveUserId)
         .order('updated_at', { ascending: false })
         .limit(20);
-      if (!error && Array.isArray(data) && data.length > 0) {
+      if (status === 401 || (error && (error.message?.includes('401') || (error as any).code === 'PGRST301'))) {
+        isDirectClientSupabaseDisabled = true;
+        console.debug('[SupabaseJobSync] Direct Supabase REST disabled (unauthorized 401), deferring to server endpoint');
+      } else if (!error && Array.isArray(data) && data.length > 0) {
         loadedRows = data;
       }
-    } catch (sbErr) {
+    } catch (sbErr: any) {
+      if (sbErr?.status === 401 || sbErr?.message?.includes('401')) {
+        isDirectClientSupabaseDisabled = true;
+      }
       console.debug('[SupabaseJobSync] Direct Supabase hydrate error:', sbErr);
     }
   }
 
   // 3. Firebase Firestore mirror fallback (cross-network guarantee)
-  if (loadedRows.length === 0 && effectiveUserId !== 'anonymous' && db) {
+  if (!serverHydrationSucceeded && loadedRows.length === 0 && effectiveUserId !== 'anonymous' && db) {
     try {
       const snapshot = await getDocs(collection(db, 'users', effectiveUserId, 'inbox_jobs'));
       const fsRows: any[] = [];
@@ -333,6 +341,10 @@ export function initSupabaseJobSync(userId?: string): () => void {
     let hasActiveJob = false;
     
     JobStore.getAllJobs().forEach((j: any) => {
+      // Exclude front_desk jobs from triggering cloud hydration polling
+      if (j.kind === 'front_desk' || (j.id && j.id.startsWith('job_frontdesk_'))) {
+        return;
+      }
       if (j.status === 'running' || j.status === 'pending') {
         const startedAt = new Date(j.createdAt || j.updatedAt || now).getTime();
         if (now - startedAt > 10 * 60 * 1000) {
@@ -569,6 +581,10 @@ export async function upsertJobToSupabase(
   debugUrl?: string,
   cleanResult?: any
 ): Promise<void> {
+  // Do not sync ephemeral front desk triage conversations to cloud agent_jobs table
+  if (job.kind === 'front_desk' || (job.id && job.id.startsWith('job_frontdesk_'))) {
+    return;
+  }
   const effectiveUserId = (userId && userId !== 'anonymous') ? userId : (auth.currentUser?.uid || 'anonymous');
   try {
     let finalCleanResult = cleanResult || job.result || null;
@@ -635,11 +651,19 @@ export async function upsertJobToSupabase(
     }
 
     // 2. Direct Supabase Client fallback
-    if (!serverUpsertSuccess && isSupabaseConfigured && supabase) {
+    if (!serverUpsertSuccess && isSupabaseConfigured && supabase && !isDirectClientSupabaseDisabled) {
       try {
-        const { error } = await supabase.from('agent_jobs').upsert(payload);
-        if (!error) serverUpsertSuccess = true;
-      } catch (sbErr) {
+        const { error, status } = await supabase.from('agent_jobs').upsert(payload);
+        if (status === 401 || (error && (error.message?.includes('401') || (error as any).code === 'PGRST301'))) {
+          isDirectClientSupabaseDisabled = true;
+          console.debug('[SupabaseJobSync] Direct Supabase upsert disabled (unauthorized 401), deferring to server endpoint');
+        } else if (!error) {
+          serverUpsertSuccess = true;
+        }
+      } catch (sbErr: any) {
+        if (sbErr?.status === 401 || sbErr?.message?.includes('401')) {
+          isDirectClientSupabaseDisabled = true;
+        }
         console.debug('[SupabaseJobSync] Direct Supabase upsert fallback error:', sbErr);
       }
     }

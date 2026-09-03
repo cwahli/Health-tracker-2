@@ -72,13 +72,33 @@ const origWarn = console.warn;
 const origLog = console.log;
 const origInfo = console.info;
 
+const shouldIgnoreConsoleNoise = (msg: string): boolean => {
+  const lower = msg.toLowerCase();
+  return (
+    lower.includes('[vite] connecting') ||
+    lower.includes('[vite] connected') ||
+    lower.includes('[vite] failed to connect to websocket')
+  );
+};
+
+const pushClientLog = (prefix: string, rawMsg: string) => {
+  if (!window.__clientConsoleLogs) return;
+  if (shouldIgnoreConsoleNoise(rawMsg)) return;
+
+  const entry = `[${prefix} ${new Date().toISOString()}] ${rawMsg}`;
+  const last = window.__clientConsoleLogs[window.__clientConsoleLogs.length - 1];
+  if (last && last.replace(/^\[[A-Z_\s0-9:.-]+\]\s*/, '') === rawMsg) {
+    // Avoid spamming consecutive duplicates
+    return;
+  }
+  window.__clientConsoleLogs.push(entry);
+  if (window.__clientConsoleLogs.length > 500) window.__clientConsoleLogs.shift();
+};
+
 console.error = (...args: any[]) => {
   try {
     const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
-    if (window.__clientConsoleLogs) {
-      window.__clientConsoleLogs.push(`[ERROR ${new Date().toISOString()}] ${msg}`);
-      if (window.__clientConsoleLogs.length > 200) window.__clientConsoleLogs.shift();
-    }
+    pushClientLog('ERROR', msg);
   } catch (_) {}
   origError.apply(console, args);
 };
@@ -86,10 +106,7 @@ console.error = (...args: any[]) => {
 console.warn = (...args: any[]) => {
   try {
     const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
-    if (window.__clientConsoleLogs) {
-      window.__clientConsoleLogs.push(`[WARN ${new Date().toISOString()}] ${msg}`);
-      if (window.__clientConsoleLogs.length > 200) window.__clientConsoleLogs.shift();
-    }
+    pushClientLog('WARN', msg);
   } catch (_) {}
   origWarn.apply(console, args);
 };
@@ -97,10 +114,7 @@ console.warn = (...args: any[]) => {
 console.log = (...args: any[]) => {
   try {
     const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
-    if (window.__clientConsoleLogs) {
-      window.__clientConsoleLogs.push(`[LOG ${new Date().toISOString()}] ${msg}`);
-      if (window.__clientConsoleLogs.length > 200) window.__clientConsoleLogs.shift();
-    }
+    pushClientLog('LOG', msg);
   } catch (_) {}
   origLog.apply(console, args);
 };
@@ -108,19 +122,15 @@ console.log = (...args: any[]) => {
 console.info = (...args: any[]) => {
   try {
     const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
-    if (window.__clientConsoleLogs) {
-      window.__clientConsoleLogs.push(`[INFO ${new Date().toISOString()}] ${msg}`);
-      if (window.__clientConsoleLogs.length > 200) window.__clientConsoleLogs.shift();
-    }
+    pushClientLog('INFO', msg);
   } catch (_) {}
   origInfo.apply(console, args);
 };
 
 window.addEventListener('unhandledrejection', (event) => {
   try {
-    if (window.__clientConsoleLogs) {
-      window.__clientConsoleLogs.push(`[UNHANDLED PROMISE ${new Date().toISOString()}] ${event.reason?.message || event.reason}`);
-    }
+    const reason = event.reason?.message || String(event.reason || '');
+    pushClientLog('UNHANDLED PROMISE', reason);
   } catch (_) {}
 });
 
