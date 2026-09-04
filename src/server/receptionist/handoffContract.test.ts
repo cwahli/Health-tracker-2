@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import { enforceReadyHandoffContract, maybePromoteHandoff, synthesizeReadyHandoffPayload, formatReceptionistInput, compactUserMemory } from "./call_agent.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const UC02 = JSON.parse(
+  fs.readFileSync(path.join(__dirname, "../../../prototype/receptionist/benchmark/UC-02.json"), "utf-8")
+);
 
 const completeProfile = {
   age: 43,
@@ -275,5 +283,112 @@ describe("compactUserMemory & Active Consolidation", () => {
     expect(mem.workHistoryLog.length).toBe(5);
     expect(mem.workHistoryLog[0]).toBe("Milestone 2026-08: Initial setup");
     expect(mem.workHistoryLog[4]).toBe("Action 6");
+  });
+});
+
+describe("S-6 HANDOFF_I18N — UC-02 vitality turns drive the contract", () => {
+  const [ucTurn1, ucTurn2] = UC02.turns;
+
+  it("UC-02 turn 1 (vague wellness ask, new user) stays needs_info with demographic gaps", () => {
+    const t1 = ucTurn1.expectedOutput;
+    const raw = {
+      intent: t1.intent,
+      targetAgent: t1.targetAgent,
+      status: t1.status,
+      missingFields: t1.expectedMissingFields,
+      handoffPayload: null,
+      userResponse: "Happy to help with your health! What would you like to work on?",
+      memory: { goalSummary: "User wants general health", userProfileSnapshot: {} }
+    };
+    const out = runPostProcessor(raw, {
+      currentUserMessage: ucTurn1.userMessage,
+      existingUserProfile: null
+    });
+    expect(out.status).toBe("needs_info");
+    expect(out.handoffPayload).toBeNull();
+    expect(out.missingFields).toContain("age");
+    expect(out.missingFields).toContain("gender");
+  });
+
+  it("UC-02 turn 2 (complete vitality snapshot) hands off to health_coach", () => {
+    const t2 = ucTurn2.expectedOutput;
+    const snapshot = {
+      age: 28, gender: "female", heightCm: 162, weightKg: 54,
+      activityLevel: "lightly_active", language: "en"
+    };
+    const raw = {
+      intent: t2.intent,
+      targetAgent: t2.targetAgent,
+      status: "needs_info",
+      missingFields: [],
+      handoffPayload: null,
+      userResponse: "",
+      memory: { goalSummary: "Afternoon energy crashes and poor sleep; improve vitality", userProfileSnapshot: snapshot }
+    };
+    const out = runPostProcessor(raw, {
+      currentUserMessage: ucTurn2.userMessage,
+      existingUserProfile: snapshot
+    });
+    expect(out.status).toBe(t2.status);
+    expect(out.targetAgent).toBe("health_coach");
+    expect(out.handoffPayload).toBeTruthy();
+    expect(out.handoffPayload.targetAgent).toBe(t2.handoffValidation.targetAgent);
+  });
+
+  it("coach handoff ack follows profile language (en vs id)", () => {
+    const snapshot = {
+      age: 28, gender: "female", heightCm: 162, weightKg: 54,
+      activityLevel: "lightly_active"
+    };
+    const buildRaw = () => ({
+      intent: "general_wellness",
+      targetAgent: "health_coach",
+      status: "needs_info",
+      missingFields: [],
+      handoffPayload: null,
+      userResponse: "",
+      memory: { goalSummary: "energy and sleep vitality", userProfileSnapshot: snapshot }
+    });
+    const enOut = runPostProcessor(buildRaw(), {
+      currentUserMessage: UC02.turns[1].userMessage,
+      existingUserProfile: { ...snapshot, language: "en" }
+    });
+    expect(enOut.userResponse).toContain("Thank you! I have all your key details");
+    const idOut = runPostProcessor(buildRaw(), {
+      currentUserMessage: UC02.turns[1].userMessage,
+      existingUserProfile: { ...snapshot, language: "id" }
+    });
+    expect(idOut.userResponse).toContain("Terima kasih! Detail Anda sudah lengkap");
+    expect(idOut.userResponse).not.toContain("Thank you! I have all your key details");
+  });
+
+  it("meal-photo and lab-report acks follow profile language", () => {
+    const mealRaw = () => ({
+      intent: "meal_logging", targetAgent: "food", status: "needs_info",
+      missingFields: [], handoffPayload: null, userResponse: "", memory: {}
+    });
+    const mealCtx = (language: string) => ({
+      currentUserMessage: "here is my lunch bowl",
+      existingUserProfile: { language },
+      images: ["base64_meal"]
+    });
+    expect(runPostProcessor(mealRaw(), mealCtx("en")).userResponse).toContain("Food & Nutrition Agent");
+    const idMeal = runPostProcessor(mealRaw(), mealCtx("id")).userResponse;
+    expect(idMeal).toContain("Agen Makanan & Nutrisi");
+    expect(idMeal).not.toContain("Food & Nutrition Agent");
+
+    const labRaw = () => ({
+      intent: "biomarker_review", targetAgent: "medical", status: "needs_info",
+      missingFields: [], handoffPayload: null, userResponse: "", memory: {}
+    });
+    const labCtx = (language: string) => ({
+      currentUserMessage: "please parse my blood test results",
+      existingUserProfile: { language },
+      images: ["base64_lab"]
+    });
+    expect(runPostProcessor(labRaw(), labCtx("en")).userResponse).toContain("Medical Lab Parser");
+    const idLab = runPostProcessor(labRaw(), labCtx("id")).userResponse;
+    expect(idLab).toContain("Pengurai Lab Medis");
+    expect(idLab).not.toContain("Medical Lab Parser");
   });
 });

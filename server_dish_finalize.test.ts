@@ -463,4 +463,122 @@ describe("server_dish_finalize", () => {
     // Kalsium: 2% of 1100 mg = 22 mg
     expect(ledger.nutrients.calcium).toBe(22);
   });
+
+  it("F-8.12 locks printed vitamin C from the can label (absolute mg, not the 1000 mg name)", async () => {
+    const item = {
+      scoutIndex: 0,
+      originalName: "Hemaviton C1000 Orange Drink",
+      keyword: "vitamin drink",
+      chainName: "Hemaviton",
+      estimatedWeightGrams: 330,
+      nutrientBasisWeight: 330,
+      nutrients: {
+        calories: 100,
+        protein: 0,
+        totalFat: 0,
+        carbohydrates: 25,
+        sodium: 45,
+      },
+      rawNutritionLabel: {
+        servingSize: "330 ml",
+        calories: "100",
+        carbohydrates: "25 g",
+        sodium: "45 mg",
+        vitaminC: "125 mg",
+        basisType: "per_serving",
+      },
+    };
+
+    const ledger = await finalizeDishLedger({
+      item,
+      nutrientBasisWeight: 330,
+      consumedWeight: 330,
+    });
+
+    expect(ledger.dbSource).toBe("label");
+    expect(ledger.nutrients.calories).toBe(100);
+    expect(ledger.nutrients.vitaminC).toBe(125);
+    expect(ledger.lockedNutrientKeys).toContain("vitaminC");
+  });
+
+  it("F-8.12 locks printed vitamin C from % AKG without inventing the can-name dose", async () => {
+    const item = {
+      scoutIndex: 0,
+      originalName: "Hemaviton C1000 Orange Drink",
+      keyword: "vitamin drink",
+      chainName: "Hemaviton",
+      estimatedWeightGrams: 330,
+      nutrientBasisWeight: 330,
+      nutrients: {
+        calories: 100,
+        protein: 0,
+        totalFat: 0,
+        carbohydrates: 25,
+        sodium: 45,
+      },
+      rawNutritionLabel: {
+        servingSize: "330 ml",
+        calories: "100",
+        vitaminC: "139% AKG",
+        basisType: "per_serving",
+      },
+    };
+
+    const ledger = await finalizeDishLedger({
+      item,
+      nutrientBasisWeight: 330,
+      consumedWeight: 330,
+    });
+
+    expect(ledger.dbSource).toBe("label");
+    // 139% of the 90 mg vitamin C daily value = 125.1 mg — printed fact, not the 1000 mg name
+    expect(ledger.nutrients.vitaminC).toBeCloseTo(125.1, 1);
+    expect(ledger.nutrients.vitaminC).not.toBe(1000);
+  });
+
+  it("F-8.12 carries brand-lock vitamin C micros into the ledger (scaled, not invented)", async () => {
+    const item = {
+      scoutIndex: 0,
+      originalName: "Hemaviton C1000 Orange Drink",
+      keyword: "vitamin drink",
+      chainName: "Hemaviton",
+      estimatedWeightGrams: 330,
+      nutrientBasisWeight: 330,
+      nutrients: {
+        calories: 100,
+        protein: 0,
+        totalFat: 0,
+        carbohydrates: 25,
+        sodium: 45,
+      },
+    };
+    const storedBrandLock = {
+      id: "brand_hema_c1000",
+      basisType: "per_100g",
+      servingGrams: 100,
+      keys: ["calories", "protein", "totalFat", "carbohydrates", "sodium", "vitaminC"],
+      valuesAtBasis: {
+        calories: 30,
+        protein: 0,
+        totalFat: 0,
+        carbohydrates: 7.5,
+        sodium: 14,
+        vitaminC: 38,
+      },
+    };
+
+    const ledger = await finalizeDishLedger({
+      item,
+      nutrientBasisWeight: 330,
+      consumedWeight: 330,
+      storedBrandLock,
+    });
+
+    expect(ledger.dbSource).toBe("brand_official");
+    expect(ledger.bindStatus).toBe("HIT");
+    // per_100g scale: 38 mg * 3.3 = 125.4 mg from the brand row — not the 1000 mg name
+    expect(ledger.nutrients.vitaminC).toBeCloseTo(125.4, 1);
+    expect(ledger.nutrients.vitaminC).not.toBe(1000);
+    expect(ledger.lockedNutrientKeys).toContain("vitaminC");
+  });
 });

@@ -550,6 +550,7 @@ export function maybePromoteHandoff(output: any, ctx: HandoffRepairContext): any
   if (!output) return output;
 
   const msgText = String(ctx.currentUserMessage || '');
+  const lang = (ctx.existingUserProfile as any)?.language === 'id' ? 'id' : 'en';
   const medicalHistory = [
     ...(output.memory?.userProfileSnapshot?.medicalHistory || []),
     ...(ctx.existingUserProfile?.medicalHistory || [])
@@ -599,7 +600,9 @@ export function maybePromoteHandoff(output: any, ctx: HandoffRepairContext): any
     }
     output.missingFields = [];
     output.uiForm = null;
-    output.userResponse = output.userResponse || "I have received your meal photo and am handing it over to our Food & Nutrition Agent for visual analysis and logging.";
+    output.userResponse = output.userResponse || (lang === 'id'
+      ? "Saya sudah menerima foto makanan Anda dan meneruskannya ke Agen Makanan & Nutrisi kami untuk analisis visual dan pencatatan."
+      : "I have received your meal photo and am handing it over to our Food & Nutrition Agent for visual analysis and logging.");
     return output;
   }
 
@@ -625,7 +628,9 @@ export function maybePromoteHandoff(output: any, ctx: HandoffRepairContext): any
     }
     output.missingFields = [];
     output.uiForm = null;
-    output.userResponse = output.userResponse || "I have received your clinical lab report images. I am now passing them to our specialized Medical Lab Parser to extract and calibrate your biomarkers.";
+    output.userResponse = output.userResponse || (lang === 'id'
+      ? "Saya sudah menerima gambar laporan lab klinis Anda. Saya teruskan ke Pengurai Lab Medis khusus kami untuk mengekstrak dan mengkalibrasi biomarker Anda."
+      : "I have received your clinical lab report images. I am now passing them to our specialized Medical Lab Parser to extract and calibrate your biomarkers.");
     return output;
   }
 
@@ -707,7 +712,9 @@ export function maybePromoteHandoff(output: any, ctx: HandoffRepairContext): any
     }
     output.missingFields = [];
     output.uiForm = null;
-    output.userResponse = output.userResponse || "Thank you! I have all your key details. I am now handing you over to your Health Coach to formulate your personalized plan.";
+    output.userResponse = output.userResponse || (lang === 'id'
+      ? "Terima kasih! Detail Anda sudah lengkap. Saya teruskan ke Health Coach untuk menyusun rencana personal Anda."
+      : "Thank you! I have all your key details. I am now handing you over to your Health Coach to formulate your personalized plan.");
   }
   if (output.status === 'ready_for_handoff' && output.memory && !output.memory.conversationState) {
     output.memory.conversationState = 'ready_for_handoff';

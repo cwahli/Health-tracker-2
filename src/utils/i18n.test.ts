@@ -191,3 +191,40 @@ describe('display chrome helpers', () => {
     expect(t('id', 'themeTitle')).not.toBe(t('en', 'themeTitle'));
   });
 });
+
+describe('S-1 leftover chrome (LEAK_EN_CHROME)', () => {
+  // Green list: formerly hardcoded EN chrome, now keyed in en+id.
+  // (LogChat debug buttons, FoodCard preparation label.)
+  const S1_GREEN_KEYS = [
+    'downloadDebugLogsTitle',
+    'viewDiagnosticLogs',
+    'viewDiagnosticLogsTitle',
+    'preparationLabel',
+  ] as const;
+
+  it('keys the S-1 button/card chrome in en and id with differing copy', () => {
+    for (const key of S1_GREEN_KEYS) {
+      expect(translations.en[key], `en.${key}`).toBeTruthy();
+      expect(translations.id[key], `id.${key}`).toBeTruthy();
+      expect(translations.id[key], `id.${key} differs from en`).not.toBe(translations.en[key]);
+    }
+    expect(dictionaryFor('id').viewDiagnosticLogs).toBe(translations.id.viewDiagnosticLogs);
+  });
+
+  // Parked residuals under S-1: documented, not yet keyed. When a future
+  // pass keys one of these, move it to S1_GREEN_KEYS (the unkeyed assertion
+  // below forces the move instead of silently going stale).
+  it('documents parked S-1 residuals without keying them yet', () => {
+    const S1_PARKED_RESIDUALS = [
+      '1 serving', // data-token quantity default parsed by portion logic, not chrome
+      'Item Sub-Total', // server ledger internals (server_pure_helpers / portionUtils)
+      'Printed Packaging Label', // server ledger label-source marker
+      'Gender', // BiomarkerRangeBuilder admin widget has no language plumbing yet
+    ];
+    for (const s of S1_PARKED_RESIDUALS) expect(s.length).toBeGreaterThan(0);
+    const keyedValues = new Set(Object.values(translations.en));
+    for (const s of ['Item Sub-Total', 'Printed Packaging Label']) {
+      expect(keyedValues.has(s), `"${s}" still unkeyed`).toBe(false);
+    }
+  });
+});

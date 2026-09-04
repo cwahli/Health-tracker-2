@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildFoodAnalyzeInstruction } from './dietitianInstructions';
 import { buildReceptionistInstruction } from '../src/server/receptionist/instruction';
+import { buildHealthCoachSystemInstruction } from '../src/server/healthCoach/instruction';
 import { fillTemplateInstruction } from '../src/server/biomarkers/instruction';
 import { withScoutLanguage } from '../src/utils/i18n';
 
@@ -16,6 +17,14 @@ describe('agent output language', () => {
     const text = buildReceptionistInstruction('id');
     expect(text).toContain('Bahasa Indonesia');
     expect(text).toContain('userResponse');
+  });
+
+  it('health coach instruction follows ui language and keeps schema keys English', () => {
+    const text = buildHealthCoachSystemInstruction({ language: 'id' });
+    expect(text).toContain('Bahasa Indonesia');
+    expect(text).toContain('code: id');
+    expect(text).toContain('JSON keys');
+    expect(text).toContain('"agentType": "health_baseline"');
   });
 
   it('medical fill-template insight copy follows ui language', () => {

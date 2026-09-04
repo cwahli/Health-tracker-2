@@ -4,7 +4,7 @@
  */
 import { Type } from '@google/genai';
 import { z } from 'zod';
-import { formatUSDANutrients, formatOFFNutrients, extractOFFNutrientsPer100g, isFastFoodChain, buildWebSearchQuery } from './src/server/food/server_food_analyze_helpers.js';
+import { formatUSDANutrients, formatOFFNutrients, extractOFFNutrientsPer100g, isFastFoodChain, buildWebSearchQuery, loosenQuery, cleanQuery, detectChainKeyFromText } from './src/server/food/server_food_analyze_helpers.js';
 
 import { executeFoodResolverCurator } from './server_food_resolver_curator.js';
 import {
@@ -127,7 +127,6 @@ import {
   fetchAllDatabaseBrands,
   searchBrandMenuItems,
   brandHitFitsQuery,
-  normalizeChainKey,
   consolidateBrandMenuItemsAndChains,
   cleanUnbrandedFoodCatalog,
   getBrandMenuItemById,
@@ -852,64 +851,6 @@ export async function runFoodAnalyze(req: any, res: any) {
     }
     // Strip parenthetical local-language notes for cleaner USDA/OFF matching
     // e.g. "raw beef slices (daging empal and blade)" → "raw beef slices"
-    const loosenQuery = (query: string): string => {
-      if (!query) return "";
-      let q = query.toLowerCase().trim();
-      // Strip common brand adjectives and prefixes
-      q = q.replace(/\b(sainsburys?|tesco|morrisons?|asda|aldi|lidl|waitrose|marks\s*&\s*spencer|m&s|official|fresh|raw|cooked|baked|fried|roasted|steamed|boiled|grilled|organic|natural|wild|sweet|spicy|pure|premium|classic|canned|frozen|delicious|tasty|freshly)\b/g, '');
-      // Normalize plurals (simple s/es stripping for common words, especially fruits/vegetables)
-      q = q.replace(/\b(clementines|mandarins|tangerines|oranges|berries|raspberries|strawberries|blueberries|grapes|apples|pears|peaches|plums|bananas|lemons|limes|tomatoes|cucumbers|radishes|onions|carrots|potatoes|mushrooms|peas|beans)\b/g, (match) => {
-        if (match === 'berries') return 'berry';
-        if (match === 'raspberries') return 'raspberry';
-        if (match === 'strawberries') return 'strawberry';
-        if (match === 'blueberries') return 'blueberry';
-        if (match === 'tomatoes') return 'tomato';
-        if (match === 'potatoes') return 'potato';
-        if (match === 'radishes') return 'radish';
-        if (match.endsWith('es')) return match.slice(0, -2);
-        if (match.endsWith('s')) return match.slice(0, -1);
-        return match;
-      });
-      q = q.replace(/\s+/g, ' ').trim();
-      return q;
-    };
-    const cleanQuery = (raw: string) => {
-      let clean = raw.replace(/\s*\(.*?\)\s*/g, '').trim().toLowerCase();
-      clean = clean.replace(/\b(soda|can|bottle|pack|tub|slice|cubes|pieces|portion|raw|cooked|boiled|baked|grilled|steamed)\b/g, '').replace(/\s+/g, ' ').trim();
-      if (!clean) clean = raw.replace(/\s*\(.*?\)\s*/g, '').trim().toLowerCase();
-      const indonesianToEnglish: Record<string, string> = {
-        "potongan ikan": "raw fish fillet",
-        "ikan potongan": "raw fish fillet",
-        "ikan": "raw fish",
-        "daging sapi": "raw beef",
-        "daging": "raw beef",
-        "ayam": "raw chicken",
-        "sayur": "vegetables",
-        "nasi": "cooked rice",
-        "telur": "egg",
-        "tempe": "tempeh",
-        "tahu": "tofu",
-        "kentang": "potato",
-        "wortel": "carrot"
-      };
-      for (const [indo, eng] of Object.entries(indonesianToEnglish)) {
-        const regex = new RegExp(`\\b${indo}\\b`, 'g');
-        if (regex.test(clean)) {
-          clean = clean.replace(regex, eng);
-        }
-      }
-      // Automatically prepend "raw" to meats to prevent fetching salted/cooked versions, unless it's a known chain or already specified
-      const meats = ["beef", "chicken", "pork", "fish", "steak", "lamb", "mutton", "veal", "salmon", "tuna", "cod", "shrimp", "prawn", "duck"];
-      const preparedModifiers = ["raw", "cooked", "fried", "roasted", "grilled", "baked", "boiled", "smoked", "cured", "canned"];
-      const chainModifiers = ["mcdonald", "kfc", "burger king", "subway", "brand"];
-      const isMeat = meats.some(m => clean.includes(m));
-      const hasPreparation = preparedModifiers.some(p => clean.includes(p));
-      const isChain = chainModifiers.some(c => clean.includes(c));
-      if (isMeat && !hasPreparation && !isChain) {
-        clean = "raw " + clean;
-      }
-      return clean;
-    };
     const hasImage = imagePayloads && imagePayloads.length > 0;
     // Only treat this as a "big menu browse" for search-skipping purposes when the scout
     // actually recommends evaluation/browsing mode. A menu-board photo taken to log one
@@ -935,36 +876,6 @@ export async function runFoodAnalyze(req: any, res: any) {
     }
     // Clean and consolidate queries first
     const uniqueQueries = buildFoodSearchQuerySet(visionScoutItems || []);
-    const chainPatterns: [string, RegExp][] = [
-      ['sainsbury', /\bsainsbury\b/i],
-      ['yolk', /\byolk\b/i],
-      ['mcdonalds', /mcdonald|maccas|麦当劳/i],
-      ['kfc', /\bkfc\b|kentucky/i],
-      ['coco_di_mama', /coco\s*di\s*mama|cocodimama/i],
-      ['costa', /\bcosta\b/i],
-      ['wasabi', /\bwasabi\b/i],
-      ['itsu', /\bitsu\b/i],
-      ['honi_poke', /honi\s*poke|honipoke/i],
-      ['pret', /\bpret\b/i],
-      ['starbucks', /starbucks/i],
-      ['quaker', /\bquaker\b/i],
-      ['jack_daniels', /jack\s*daniel/i],
-    ];
-    const detectChainKeyFromText = (str: string): string | undefined => {
-      const s = String(str || '').toLowerCase();
-      const matched = chainPatterns.find(([, rx]) => rx.test(s));
-      if (matched) return matched[0];
-      // Dynamic database brand match
-      if (isKnownDatabaseBrandSync(s)) {
-        const words = s.split(/[^a-z0-9]+/);
-        for (const w of words) {
-          if (w.length >= 3 && isKnownDatabaseBrandSync(w)) {
-            return normalizeChainKey(w);
-          }
-        }
-      }
-      return undefined;
-    };
     const detectedChainKey =
       visionScoutItems?.map((it: any) => it.originalName || it.keyword || it.name).map(detectChainKeyFromText).find(Boolean) ||
       uniqueQueries.map(detectChainKeyFromText).find(Boolean);
