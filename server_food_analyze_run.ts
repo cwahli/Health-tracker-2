@@ -5,6 +5,8 @@
 import { Type } from '@google/genai';
 import { z } from 'zod';
 import { formatUSDANutrients, formatOFFNutrients, extractOFFNutrientsPer100g, isFastFoodChain, buildWebSearchQuery, loosenQuery, cleanQuery, detectChainKeyFromText, scoutHasCompletePrintedLabel, enrichScoutComponentsWithMatches, buildPastMealsContext } from './src/server/food/server_food_analyze_helpers.js';
+import { foodAnalyzeSchema } from './src/server/food/server_food_analyze_schema.js';
+import { buildUserContext, buildTimeContext, buildImageContext, buildHistoryContext, buildVisionScoutContext, buildDatabaseMatchesContext, buildBiomarkersContext, stitchFoodPrompt } from './src/server/food/server_food_prompt_context.js';
 
 import { executeFoodResolverCurator } from './server_food_resolver_curator.js';
 import {
@@ -1756,58 +1758,10 @@ export async function runFoodAnalyze(req: any, res: any) {
           return itemStr;
         }).join("\n") + "\n\n";
     }
-    let userCtx = "";
-    if (userProfile) {
-      userCtx = `\nUSER DIETARY PROFILE & DEMOGRAPHICS:\n` +
-        `- Age: ${userProfile.age || 'Unknown'} years old\n` +
-        `- Gender: ${userProfile.gender || 'Unknown'}\n` +
-        `- Weight: ${userProfile.weight || 'Unknown'} kg\n` +
-        `- Height: ${userProfile.height || 'Unknown'} cm\n` +
-        `- Ethnicity: ${userProfile.ethnicity || 'Unknown'}\n`;
-    }
-    const userTimezone = req.body.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-    let localDateStr;
-    try {
-      const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: userTimezone, year: 'numeric', month: '2-digit', day: '2-digit' });
-      localDateStr = formatter.format(new Date());
-    } catch(e) {
-      localDateStr = new Date().toISOString().split("T")[0];
-    }
-    const localTime = new Date().toLocaleTimeString();
-    const userMentionsDate = /\b(yesterday|tomorrow|last night|january|february|march|april|may|june|july|august|september|october|november|december|\d{4}-\d{2}-\d{2})\b/i.test(message);
-    let timeCtx = `\nCURRENT TIME CONTEXT: ${localDateStr} ${localTime}\n`;
-    if (activeMeal && activeMeal.date && !userMentionsDate && (!imageDates || imageDates.length === 0)) {
-      timeCtx += `CRITICAL INSTRUCTION: This is an edit/update to an active meal originally logged on "${activeMeal.date}". You MUST use "${activeMeal.date}" in the "date" field of "foodData" unless the user explicitly provides a different date in the chat.\n`;
-    } else {
-      timeCtx += `CRITICAL INSTRUCTION: You MUST use "${localDateStr}" in the "date" field of "foodData" unless the user explicitly provides a different date in the chat.\n`;
-    }
-    let imageCtx = "";
-    if (imagePayloads && imagePayloads.length > 0) {
-      if (imagePayloads.length > 1) {
-        imageCtx = `\n[Context: ${imagePayloads.length} images are attached above. One or more may be a close-up photo of a printed Nutrition Facts label rather than the food itself. First determine which image(s), if any, show a nutrition facts/label panel. For any such label image: read its exact printed per-serving values and stated serving size, then mathematically scale those exact numbers to the actual weight/quantity consumed as shown in the other image(s) or described by the user — do not substitute your own estimate when a label is legible. For any remaining image(s) showing the actual food, rely on visual cues for portion sizing, ingredients, and freshness as usual.]\n`;
-      } else {
-        imageCtx = `\n[Context: An image is uploaded and attached above. If it is a close-up of a printed Nutrition Facts label, read its exact printed values and stated serving size, then scale them to the actual weight/quantity consumed; otherwise rely on visual cues for portion sizing, ingredients, and freshness.]\n`;
-      }
-      if (imageDates && imageDates.length > 0) {
-        const primaryImageDate = imageDates[0];
-        imageCtx += `\n[CRITICAL DATE OVERRIDE: The uploaded image was taken on ${primaryImageDate}. You MUST use this exact date or its nearest YYYY-MM-DD representation as the "date" field in "foodData", completely overriding the CURRENT TIME CONTEXT, unless the user explicitly asks otherwise.]\n`;
-      }
-    }
-    let historyContext = "";
-    if (history && Array.isArray(history) && history.length > 0) {
-      const cleanHistory: any[] = [];
-      history.forEach((h: any) => {
-        if (!h || !h.content) return;
-        const last = cleanHistory[cleanHistory.length - 1];
-        if (!last || last.role !== h.role || String(last.content).trim() !== String(h.content).trim()) {
-          cleanHistory.push(h);
-        }
-      });
-      if (cleanHistory.length > 0) {
-        historyContext = "PAST DISCUSSIONS & MEALS CHAT HISTORY:\n" +
-          cleanHistory.slice(-10).map((h: any) => `${h.role.toUpperCase()}: ${h.content}`).join("\n") + "\n\n";
-      }
-    }
+    const userCtx = buildUserContext(userProfile);
+    const timeCtx = buildTimeContext({ timezone: req.body.timezone, activeMealDate: activeMeal?.date, hasImageDates: Boolean(imageDates && imageDates.length > 0), message });
+    const imageCtx = buildImageContext(imagePayloads, imageDates);
+    let historyContext = buildHistoryContext(history);
     const pastMealsCtx = buildPastMealsContext(foodLogs, addDebugLog);
     // 2. Prepend active state to Master System Instructions
     let effectiveActiveMeal = activeMeal;
@@ -1887,245 +1841,13 @@ export async function runFoodAnalyze(req: any, res: any) {
       });
     }
     // Suppress Scout payload during text-only edits to conserve tokens
-    let visionScoutCtx = "";
-    const isPureTextEdit = (isExplicitModify || effectiveActiveMeal !== null || activeComparisonState !== null) && (!imagePayloads || imagePayloads.length === 0);
-    if (!isPureTextEdit && visionScoutItems && visionScoutItems.length > 0) {
-      const itemsList = visionScoutItems.map((item: any, idx: number) => {
-        // Use the item's real scoutIndex (assigned earlier, and possibly non-sequential
-        // after Multi-Photo Merge removes a duplicate) instead of array position. The
-        // Dietitian is instructed to copy this Index verbatim into its own output, and a
-        // later step matches the Dietitian's items back to backend-precalculated nutrients
-        // by this exact scoutIndex — showing array position here silently mismatches items
-        // whenever a merge has created a gap (e.g. a cross-photo duplicate was removed).
-        const displayIndex = (item.scoutIndex !== undefined && item.scoutIndex !== null) ? item.scoutIndex : idx;
-        const facts = item.nutritionFacts;
-        let scaledNutrientsStr = facts ? ` | NutritionFacts: ${JSON.stringify(facts)}` : "";
-        return `- Index: ${displayIndex} | Scout Item: "${item.keyword}" | Weight: ${item.estimatedWeightGrams}g | Observed/Local Context: "${item.originalName}"${scaledNutrientsStr}`;
-      }).join('\n');
-      visionScoutCtx = `\n=== VISUAL FOOD SCOUT IDENTIFIED ITEMS ===\n${itemsList}\n` +
-        `Content Type: ${visionScoutContentType} (${visionScoutItems.length} items identified)\n` +
-        `Visual Scout Confidence Rating: ${scoutConfidenceRating}\n` +
-        (scoutConfidenceComment ? `Visual Scout Confidence Comment: ${scoutConfidenceComment}\n` : "") +
-        `Identified Cooking Method & Preparation/Seasonings: ${scoutCookingMethod}\n` +
-        (userSelectedMode === 'review' ? `diningEnvironment: ${diningEnvironment}\n` : "");
-    }
-    let databaseMatchesCtx = "";
-    if (preCalculatedCtx) {
-      databaseMatchesCtx += preCalculatedCtx;
-    }
-    if (databaseMatches) {
-      databaseMatchesCtx += `\n=== VERIFIED DATABASE MATCHES ===\n${databaseMatches}\n`;
-    }
-    const foodAnalyzeSchema = {
-      type: Type.OBJECT,
-      properties: {
-        _internalReasoning: { type: Type.STRING, description: "Silently gather clinical evidence and synthesize trade-offs before writing the final output." },
-        verdict: {
-          type: Type.OBJECT,
-          properties: {
-            label: { type: Type.STRING, description: "Strictly concise (3-6 words) biological health benefit or metric impact label, e.g., 'Within Daily Calorie Target', 'Elevated Saturated Fat Impact', or 'Supports Lean Muscle Growth'." },
-            level: { type: Type.STRING, description: "'good' | 'warning' | 'alert' | 'neutral'" }
-          },
-          required: ["label", "level"]
-        },
-        message: { type: Type.STRING, description: "Primary clinical assessment, incorporating comforting and supportive tone, next step coaching, and meal balancing suggestions. Do NOT repeat raw calorie, sat fat, or sodium numbers." },
-        modificationCommand: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              action: { type: Type.STRING, enum: ['update_weight', 'update_component_weight', 'update_modifier', 'remove_item', 'add_item', 'replace_item', 'replace_identity', 'split_item', 'set_count', 'rename_alias', 'update_cooking_method'] },
-              itemName: { type: Type.STRING },
-              newWeightGrams: { type: Type.INTEGER, nullable: true },
-              targetDbId: { type: Type.STRING, nullable: true },
-              componentName: { type: Type.STRING, nullable: true, description: "Required when action is 'update_component_weight'. The name of the specific ingredient/component inside the composite dish named by itemName (e.g. itemName='Sizzling Steak with Wedges', componentName='Beef Steak')." },
-              modifier: { type: Type.STRING, nullable: true, description: "Required when action is 'update_modifier'. The text modifier to apply (e.g. 'unsweetened', 'no sugar', 'no oil', 'no salt')." },
-              newItemName: { type: Type.STRING, nullable: true, description: "Required when action changes item identity/name (replace_identity, replace_item)." },
-              replacementItemName: { type: Type.STRING, nullable: true },
-              newCookingMethod: { type: Type.STRING, nullable: true },
-              count: { type: Type.INTEGER, nullable: true },
-              estimate: {
-                type: Type.OBJECT,
-                description: "The nutrient profile for itemName at its current or new weight. For replace_identity, replace_item, add_item, and split_item this MUST reflect the NEW identity's real nutrient composition (e.g. near-zero carbohydrates for a plain grilled fish/meat). For all other actions, echo the item's existing known values from the provided ledger context — do not invent implausible numbers.",
-                properties: {
-                  protein: { type: Type.NUMBER, description: "Grams of protein. Use 0 only if genuinely protein-free." },
-                  carbohydrates: { type: Type.NUMBER, description: "Grams of carbohydrates. Use 0 for plain unbreaded meat/fish/poultry." },
-                  totalFat: { type: Type.NUMBER },
-                  saturatedFat: { type: Type.NUMBER },
-                  sodium: { type: Type.NUMBER },
-                  transFat: { type: Type.NUMBER, nullable: true },
-                  sugar: { type: Type.NUMBER, nullable: true },
-                  totalSugar: { type: Type.NUMBER, nullable: true },
-                  addedSugar: { type: Type.NUMBER, nullable: true },
-                  totalFibre: { type: Type.NUMBER, nullable: true },
-                  cookingMethod: { type: Type.STRING, nullable: true },
-                  foodType: { type: Type.STRING, nullable: true }
-                },
-                required: ["protein", "carbohydrates", "totalFat", "saturatedFat", "sodium"]
-              },
-              into: {
-                type: Type.ARRAY,
-                nullable: true,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    name: { type: Type.STRING },
-                    grams: { type: Type.NUMBER, nullable: true },
-                    role: { type: Type.STRING, nullable: true },
-                    estimate: {
-                      type: Type.OBJECT,
-                      description: "Nutrient profile for this split-off portion. Must reflect its real composition.",
-                      properties: {
-                        protein: { type: Type.NUMBER },
-                        carbohydrates: { type: Type.NUMBER },
-                        totalFat: { type: Type.NUMBER },
-                        saturatedFat: { type: Type.NUMBER },
-                        sodium: { type: Type.NUMBER },
-                        transFat: { type: Type.NUMBER, nullable: true },
-                        sugar: { type: Type.NUMBER, nullable: true },
-                        totalSugar: { type: Type.NUMBER, nullable: true },
-                        addedSugar: { type: Type.NUMBER, nullable: true },
-                        totalFibre: { type: Type.NUMBER, nullable: true },
-                      },
-                      required: ["protein", "carbohydrates", "totalFat", "saturatedFat", "sodium"]
-                    }
-                  },
-                  required: ["name", "estimate"]
-                }
-              }
-            },
-            required: ["action", "itemName", "estimate"]
-          },
-          nullable: true
-        },
-        foodData: {
-          type: Type.OBJECT,
-          properties: {
-            date: { type: Type.STRING, description: "YYYY-MM-DD" },
-            name: { type: Type.STRING },
-            itemsBreakdown: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  scoutIndex: { type: Type.INTEGER },
-                  canonicalDbName: { type: Type.STRING, description: "Standard database or product name, extremely concise (e.g. 'Whole Rolled Oats'). Do NOT include scaling, rationale, calculations, or explanations." },
-                  weightGrams: { type: Type.INTEGER },
-                  foodType: { 
-                    type: Type.STRING, 
-                    enum: ['grain', 'protein', 'vegetable', 'fruit', 'dairy', 'fat/oil', 'beverage', 'snack', 'condiment', 'prepared dish/entree', 'other'],
-                    description: "Strictly one of: 'grain', 'protein', 'vegetable', 'fruit', 'dairy', 'fat/oil', 'beverage', 'snack', 'condiment', 'prepared dish/entree', 'other'.", 
-                    nullable: true 
-                  },
-                  cookingMethod: { type: Type.STRING, description: "Concise cooking method (e.g. 'raw', 'baked', 'grilled', 'boiled', 'fried').", nullable: true },
-                  correctedNutrients: {
-                    type: Type.OBJECT,
-                    properties: {
-                      calories: { type: Type.NUMBER, nullable: true },
-                      protein: { type: Type.NUMBER, nullable: true },
-                      carbohydrates: { type: Type.NUMBER, nullable: true },
-                      totalFat: { type: Type.NUMBER, nullable: true },
-                      saturatedFat: { type: Type.NUMBER, nullable: true },
-                      sodium: { type: Type.NUMBER, nullable: true },
-                      addedSugar: { type: Type.NUMBER, nullable: true },
-                      totalFibre: { type: Type.NUMBER, nullable: true },
-                    },
-                    nullable: true,
-                    description: "Optional. If you identify an inaccurate or underestimated estimate (e.g. deep-fried oil absorption undercounted), output corrected values for this portion."
-                  },
-                  clinicalCorrectionNote: { type: Type.STRING, nullable: true, description: "If any nutrient was corrected, state the clinical reason (e.g. 'Adjusted fat +6g to account for deep-fried wonton oil absorption')." }
-                },
-                required: ["scoutIndex", "canonicalDbName", "weightGrams"]
-              }
-            }
-          },
-          required: ["date", "name"],
-          nullable: true
-        },
-        comparison: {
-          type: Type.OBJECT,
-          properties: {
-            comparisonTitle: { type: Type.STRING, nullable: true },
-            auditChecklist: { type: Type.STRING, nullable: true },
-            groups: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  groupName: { type: Type.STRING, description: "Descriptive name or option title e.g. 'Quaker Oats So Simple' or 'Tier 1 - Safest Choice'" },
-                  scoutItemIndices: {
-                    type: Type.ARRAY,
-                    items: { type: Type.INTEGER },
-                    description: "0-based indices of scout items placed in this group"
-                  },
-                  itemNames: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING },
-                    nullable: true,
-                    description: "Item names for text-only comparisons"
-                  },
-                  verdict: {
-                    type: Type.OBJECT,
-                    properties: {
-                      label: { type: Type.STRING },
-                      level: { type: Type.STRING }
-                    },
-                    required: ["label", "level"]
-                  },
-                  message: { type: Type.STRING, description: "Clinical advice comparing this option against patient biomarkers" },
-                  averageNutrients: {
-                    type: Type.OBJECT,
-                    properties: {
-                      calories: { type: Type.NUMBER, nullable: true },
-                      protein: { type: Type.NUMBER, nullable: true },
-                      totalFat: { type: Type.NUMBER, nullable: true },
-                      saturatedFat: { type: Type.NUMBER, nullable: true },
-                      sodium: { type: Type.NUMBER, nullable: true },
-                      carbohydrates: { type: Type.NUMBER, nullable: true },
-                      addedSugar: { type: Type.NUMBER, nullable: true },
-                      totalFibre: { type: Type.NUMBER, nullable: true }
-                    },
-                    nullable: true
-                  }
-                },
-                required: ["groupName", "scoutItemIndices", "verdict", "message"]
-              }
-            }
-          },
-          nullable: true
-        }
-      },
-      propertyOrdering: ["_internalReasoning", "verdict", "message", "modificationCommand", "foodData", "comparison"],
-      required: ["_internalReasoning", "verdict", "message"]
-    };
-    let biomarkersCtx = "";
-    if (biomarkersNeedingImprovement && biomarkersNeedingImprovement.length > 0) {
-      biomarkersCtx = `\nCRITICAL PATIENT BIOMARKER WARNINGS:\n` +
-        biomarkersNeedingImprovement.map((b: any) => {
-          if (typeof b === "string") return `• ${b}`;
-          if (b && typeof b === "object" && b.name) {
-            const statusStr = b.status ? ` is ${String(b.status).toUpperCase()}` : "";
-            const valStr = b.value !== undefined ? ` (${b.value} ${b.unit || ""}, normal range: ${b.normalRange || ""})` : "";
-            return `• ${b.name}${statusStr}${valStr}`;
-          }
-          return `• ${String(b)}`;
-        }).join("\n") + "\n";
-    }
-    const finalSystemInstruction = customSystemInstruction || systemInstruction;
-    const modeDPromptSuffix = (userSelectedMode === 'compare') 
-      ? `\n\nIf MODE D (evaluation/comparison) applies: reference every item ONLY by its Index number from the Scout list above inside "scoutItemIndices". Every Index must be assigned to at least one group — including duplicate-named items, which are still separate indices. You are allowed to map the same Scout Index to multiple groups if a physical shelf contains items belonging to both categories. Do not restate names, bounding boxes, or database IDs.`
-      : ``;
-    let promptText = (customVariableData 
-      ? `${customVariableData}\n${biomarkersCtx}\n${visionScoutCtx}\n${databaseMatchesCtx}\nCurrent User Input: "${message}"`
-      : `${historyContext}${pastMealsCtx}Analyze this current food request.
-${userCtx}
-${biomarkersCtx}
-${timeCtx}
-${imageCtx}
-${visionScoutCtx}
-${databaseMatchesCtx}
-Current User Input: "${message}"`) + modeDPromptSuffix;
-    fullPromptSent = `System Instruction:\n${finalSystemInstruction}\n\n${promptText}`;
+    const visionScoutCtx = buildVisionScoutContext({ visionScoutItems, visionScoutContentType, scoutConfidenceRating, scoutConfidenceComment, scoutCookingMethod, diningEnvironment, userSelectedMode, isExplicitModify, hasActiveMeal: effectiveActiveMeal !== null, hasComparison: activeComparisonState !== null, hasImages: Boolean(imagePayloads && imagePayloads.length) });
+    const databaseMatchesCtx = buildDatabaseMatchesContext(preCalculatedCtx, databaseMatches);
+    const biomarkersCtx = buildBiomarkersContext(biomarkersNeedingImprovement);
+    const stitchedPrompt = stitchFoodPrompt({ customSystemInstruction, systemInstruction, userSelectedMode, customVariableData, biomarkersCtx, visionScoutCtx, databaseMatchesCtx, historyContext, pastMealsCtx, userCtx, timeCtx, imageCtx, message });
+    const finalSystemInstruction = stitchedPrompt.finalSystemInstruction;
+    let promptText = stitchedPrompt.promptText;
+    fullPromptSent = stitchedPrompt.fullPromptSent;
     addDebugLog(`[Dietitian Coach] Sending nutrition analysis request to Gemini...`);
     async function callAndParseFoodAnalysis(callArgs: any): Promise<{ textOutput: string; rawParsed: any }> {
       if (isStream) {
