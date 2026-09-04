@@ -122,7 +122,7 @@ export default function MedicalHistoryTab({
     return jobs.filter(job => {
       if (job.status === 'draft' || isJobBlank(job)) return false;
       const hasText = !!job.inputSnapshot?.text?.trim();
-      const hasPayload = hasText || !!(job.inputSnapshot as any)?.extractedData || !!(job.inputSnapshot as any)?.remainingText || !!(job.inputSnapshot as any)?.hasImage || !!(job.result?.biomarkers && Object.keys(job.result.biomarkers).length > 0);
+      const hasPayload = hasText || !!(job.inputSnapshot as any)?.extractedData || !!(job.inputSnapshot as any)?.hasImage || !!(job.result?.biomarkers && Object.keys(job.result.biomarkers).length > 0);
       if (!hasPayload && (job.status === 'queued' || job.status === 'succeeded')) return false;
       return true;
     });

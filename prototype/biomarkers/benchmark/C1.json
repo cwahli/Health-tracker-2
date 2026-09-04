@@ -12,37 +12,37 @@
         "r01",
         "r02"
       ],
-      "ms": 1809,
+      "ms": 1758,
       "n": 2,
-      "raw": "{\"rows\":[{\"id\":\"r01\",\"medicalInsight\":\"For a 43-year-old Chinese male, an HbA1c of 40 mmol/mol falls into the prediabetes risk zone, as Chinese populations show elevated cardiometabolic risk at lower glycemic thresholds (>=39 mmol/mol). Lifestyle and dietary modifications are recommended.\",\"optimalValue\":\"33 mmol/mol\",\"editReason\":\"\",\"logs\":[{\"date\":\"2026-06-05\",\"value\":40,\"unit\":\"mmol/mol\",\"comment\":\"Initial result provided\"}],\"customRangeOverlay\":\"[Chinese Ethnicity] Elevated (Prediabetes Risk): >=39; Optimal: <39; [Standard Clinical] Normal: 20-41\",\"dictionaryCorrection\":null},{\"id\":\"r02\",\"medicalInsight\":\"Your LDL cholesterol is elevated at 4.3 mmol/L, which increases cardiovascular risk. For optimal health, particularly with concurrent prediabetes risk, this should be reduced below 2.6 mmol/L.\",\"optimalValue\":\"2.0 mmol/L\",\"editReason\":\"\",\"logs\":[{\"date\":\"2026-06-05\",\"value\":4.3,\"unit\":\"mmol/L\",\"comment\":\"Initial result provided\"}],\"customRangeOverlay\":\"\",\"dictionaryCorrection\":null}]}",
+      "raw": "{\"rows\":[{\"id\":\"r01\",\"medicalInsight\":\"For a 43-year-old Chinese male, an HbA1c of 40 mmol/mol falls into the prediabetes risk category (>=39 mmol/mol threshold for Chinese populations), indicating early impaired glucose tolerance.\",\"optimalValue\":\"34 mmol/mol\",\"editReason\":\"Applied specific prediabetes risk threshold for Chinese ethnicity.\",\"logs\":[{\"date\":\"2026-06-05\",\"value\":40,\"unit\":\"mmol/mol\",\"comment\":\"Initial result\"}],\"customRangeOverlay\":\"[Chinese Ethnicity] Elevated (Prediabetes): >=39; Optimal: <39; [Western Standard] Normal: 20-41; High: >41\",\"dictionaryCorrection\":null},{\"id\":\"r02\",\"medicalInsight\":\"Your LDL cholesterol is 4.3 mmol/L, which is significantly elevated and indicates a higher risk for cardiovascular disease. Targeted lifestyle modifications or discussion on lipid-lowering therapy is recommended.\",\"optimalValue\":\"2.0 mmol/L\",\"editReason\":\"Set optimal target for primary cardiovascular risk reduction.\",\"logs\":[{\"date\":\"2026-06-05\",\"value\":4.3,\"unit\":\"mmol/L\",\"comment\":\"Initial result\"}],\"customRangeOverlay\":\"\",\"dictionaryCorrection\":null}]}",
       "rows": [
         {
           "id": "r01",
-          "medicalInsight": "For a 43-year-old Chinese male, an HbA1c of 40 mmol/mol falls into the prediabetes risk zone, as Chinese populations show elevated cardiometabolic risk at lower glycemic thresholds (>=39 mmol/mol). Lifestyle and dietary modifications are recommended.",
-          "optimalValue": "33 mmol/mol",
-          "editReason": "",
+          "medicalInsight": "For a 43-year-old Chinese male, an HbA1c of 40 mmol/mol falls into the prediabetes risk category (>=39 mmol/mol threshold for Chinese populations), indicating early impaired glucose tolerance.",
+          "optimalValue": "34 mmol/mol",
+          "editReason": "Applied specific prediabetes risk threshold for Chinese ethnicity.",
           "logs": [
             {
               "date": "2026-06-05",
               "value": 40,
               "unit": "mmol/mol",
-              "comment": "Initial result provided"
+              "comment": "Initial result"
             }
           ],
-          "customRangeOverlay": "[Chinese Ethnicity] Elevated (Prediabetes Risk): >=39; Optimal: <39; [Standard Clinical] Normal: 20-41",
+          "customRangeOverlay": "[Chinese Ethnicity] Elevated (Prediabetes): >=39; Optimal: <39; [Western Standard] Normal: 20-41; High: >41",
           "dictionaryCorrection": null
         },
         {
           "id": "r02",
-          "medicalInsight": "Your LDL cholesterol is elevated at 4.3 mmol/L, which increases cardiovascular risk. For optimal health, particularly with concurrent prediabetes risk, this should be reduced below 2.6 mmol/L.",
+          "medicalInsight": "Your LDL cholesterol is 4.3 mmol/L, which is significantly elevated and indicates a higher risk for cardiovascular disease. Targeted lifestyle modifications or discussion on lipid-lowering therapy is recommended.",
           "optimalValue": "2.0 mmol/L",
-          "editReason": "",
+          "editReason": "Set optimal target for primary cardiovascular risk reduction.",
           "logs": [
             {
               "date": "2026-06-05",
               "value": 4.3,
               "unit": "mmol/L",
-              "comment": "Initial result provided"
+              "comment": "Initial result"
             }
           ],
           "customRangeOverlay": "",
@@ -129,18 +129,18 @@
       "customRangePopulation": "[All patients] Elevated (Diabetes): >= 48; Elevated: >= 39; Normal: >= 20; Elevated (Diabetes): >= 6.5; Elevated: >= 5.7",
       "printedRange": "20 - 41 mmol/mol",
       "assignedRange": "20 - 41 mmol/mol",
-      "optimalValue": "33 mmol/mol",
+      "optimalValue": "34 mmol/mol",
       "existingInsight": null,
       "existingCustomRange": null,
-      "editReason": null,
-      "customRangeOverlay": "[Chinese Ethnicity] Elevated (Prediabetes Risk): >=39; Optimal: <39; [Standard Clinical] Normal: 20-41",
-      "medicalInsight": "For a 43-year-old Chinese male, an HbA1c of 40 mmol/mol falls into the prediabetes risk zone, as Chinese populations show elevated cardiometabolic risk at lower glycemic thresholds (>=39 mmol/mol). Lifestyle and dietary modifications are recommended.",
+      "editReason": "Applied specific prediabetes risk threshold for Chinese ethnicity.",
+      "customRangeOverlay": "[Chinese Ethnicity] Elevated (Prediabetes): >=39; Optimal: <39; [Western Standard] Normal: 20-41; High: >41",
+      "medicalInsight": "For a 43-year-old Chinese male, an HbA1c of 40 mmol/mol falls into the prediabetes risk category (>=39 mmol/mol threshold for Chinese populations), indicating early impaired glucose tolerance.",
       "historicalLogs": [
         {
           "date": "2026-06-05",
           "value": 40,
           "unit": "mmol/mol",
-          "comment": "Initial result provided"
+          "comment": "Initial result"
         }
       ],
       "currentEvaluationStatus": "Elevated",
@@ -174,15 +174,15 @@
       "optimalValue": "2.0 mmol/L",
       "existingInsight": null,
       "existingCustomRange": null,
-      "editReason": null,
+      "editReason": "Set optimal target for primary cardiovascular risk reduction.",
       "customRangeOverlay": null,
-      "medicalInsight": "Your LDL cholesterol is elevated at 4.3 mmol/L, which increases cardiovascular risk. For optimal health, particularly with concurrent prediabetes risk, this should be reduced below 2.6 mmol/L.",
+      "medicalInsight": "Your LDL cholesterol is 4.3 mmol/L, which is significantly elevated and indicates a higher risk for cardiovascular disease. Targeted lifestyle modifications or discussion on lipid-lowering therapy is recommended.",
       "historicalLogs": [
         {
           "date": "2026-06-05",
           "value": 4.3,
           "unit": "mmol/L",
-          "comment": "Initial result provided"
+          "comment": "Initial result"
         }
       ],
       "currentEvaluationStatus": "Very High",
@@ -199,19 +199,19 @@
       "date": "2026-06-05",
       "printedRange": "20 - 41 mmol/mol",
       "assignedRange": "20 - 41 mmol/mol",
-      "optimalValue": "33 mmol/mol",
-      "editReason": null,
+      "optimalValue": "34 mmol/mol",
+      "editReason": "Applied specific prediabetes risk threshold for Chinese ethnicity.",
       "match": "alias",
       "key": "hba1c",
       "writeTarget": "observation",
-      "medicalInsight": "For a 43-year-old Chinese male, an HbA1c of 40 mmol/mol falls into the prediabetes risk zone, as Chinese populations show elevated cardiometabolic risk at lower glycemic thresholds (>=39 mmol/mol). Lifestyle and dietary modifications are recommended.",
-      "customRangeOverlay": "[Chinese Ethnicity] Elevated (Prediabetes Risk): >=39; Optimal: <39; [Standard Clinical] Normal: 20-41",
+      "medicalInsight": "For a 43-year-old Chinese male, an HbA1c of 40 mmol/mol falls into the prediabetes risk category (>=39 mmol/mol threshold for Chinese populations), indicating early impaired glucose tolerance.",
+      "customRangeOverlay": "[Chinese Ethnicity] Elevated (Prediabetes): >=39; Optimal: <39; [Western Standard] Normal: 20-41; High: >41",
       "logs": [
         {
           "date": "2026-06-05",
           "value": 40,
           "unit": "mmol/mol",
-          "comment": "Initial result provided"
+          "comment": "Initial result"
         }
       ],
       "newCatalogDraft": null
@@ -226,18 +226,18 @@
       "printedRange": "1.5 - 3.0 mmol/L",
       "assignedRange": "[All patients] Very High: >3.4; Elevated: >2.6; Optimal: <=2.6",
       "optimalValue": "2.0 mmol/L",
-      "editReason": null,
+      "editReason": "Set optimal target for primary cardiovascular risk reduction.",
       "match": "alias",
       "key": "ldl",
       "writeTarget": "observation",
-      "medicalInsight": "Your LDL cholesterol is elevated at 4.3 mmol/L, which increases cardiovascular risk. For optimal health, particularly with concurrent prediabetes risk, this should be reduced below 2.6 mmol/L.",
+      "medicalInsight": "Your LDL cholesterol is 4.3 mmol/L, which is significantly elevated and indicates a higher risk for cardiovascular disease. Targeted lifestyle modifications or discussion on lipid-lowering therapy is recommended.",
       "customRangeOverlay": null,
       "logs": [
         {
           "date": "2026-06-05",
           "value": 4.3,
           "unit": "mmol/L",
-          "comment": "Initial result provided"
+          "comment": "Initial result"
         }
       ],
       "newCatalogDraft": null

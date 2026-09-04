@@ -117,7 +117,7 @@ import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, getDocFromServer, 
 import { sanitizeForFirestore, checkQuotaFlag, handleRetryQuota } from './utils/firestoreUtils';
 import { getCurrentDateInTimezone, toYYYYMMDD, normalizeBiomarkerHistory } from './utils/dateUtils';
 import { biomarkerDefinitions, isAsianEthnicity, hasBmiPendingAlert, getProfileFingerprint, isValEmpty, getMappedBiomarkerKey, selfHealCustomBiomarkerDefinitions } from './utils/biomarkers';
-import { applyModificationCommands, overlayFingerprint, resolveAgentDestination, shouldRunCalibrator, attachObservationMeta, enrichReviewModificationCommands, collectCatalogUnitMap, cleanupInventedBiomarkerCatalog, type ModificationCommand } from './utils/biomarkerLifecycle';
+import { applyModificationCommands, overlayFingerprint, resolveAgentDestination, shouldRunCalibrator, attachObservationMeta, enrichReviewModificationCommands, collectCatalogUnitMap, cleanupInventedBiomarkerCatalog, routeExtractedObservations, type ModificationCommand } from './utils/biomarkerLifecycle';
 import { extractFallbackModifications } from './components/chat-cards/BiomarkerReviewCard';
 import { formatOptimalTargetValue } from './utils/agentCalibration';
 import { standardizeUnit, CONVERSION_FACTORS } from './utils/unitConversion';
@@ -1349,7 +1349,6 @@ export default function App() {
                     // reads agentResult.extractedData — had nothing to render.
                     extractedData: cleanResult.extractedData,
                     hasMoreMarkers: cleanResult.hasMoreMarkers,
-                    remainingText: cleanResult.remainingText || '',
                     estimatedTotalMarkers: cleanResult.estimatedTotalMarkers,
                     unmappedTests: cleanResult.unmappedTests,
                     ...(cleanResult.agentResult || {}),
@@ -1844,7 +1843,6 @@ export default function App() {
   const [activeReviewBiomarkerKey, setActiveReviewBiomarkerKey] = useState<string | undefined>(undefined);
   const [activeDataReviewBatchIdx, setActiveDataReviewBatchIdx] = useState<number | string | null>(null);
   const [activeDataReviewBatchKeys, setActiveDataReviewBatchKeys] = useState<string[]>([]);
-  const [activeDataReviewRemainingText, setActiveDataReviewRemainingText] = useState<string>('');
   const [activeDataReviewExtractedYaml, setActiveDataReviewExtractedYaml] = useState<any[]>([]);
   const [activeDataReviewCurrentBatch, setActiveDataReviewCurrentBatch] = useState<number>(1);
   const [activeDataReviewEstimatedTotalMarkers, setActiveDataReviewEstimatedTotalMarkers] = useState<number | null>(null);
@@ -2305,12 +2303,15 @@ export default function App() {
         }
 
         const computedBiomarkers: { [key: string]: number | string } = {};
+        const _authTombstoned = authProfile?.deletedCustomBiomarkerKeys || {};
         [...mergedBioHistory]
           .filter(b => b.sync_state !== 'delete' && !(delBios[b.id] && delBios[b.id] >= (b.updated_at || 0)))
           .sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date)) || ((a.updated_at || 0) - (b.updated_at || 0)))
           .forEach(log => {
             Object.entries(log.biomarkers || {}).forEach(([k, v]) => {
-              computedBiomarkers[k] = v as string | number;
+              if (!_authTombstoned[k]) {
+                computedBiomarkers[k] = v as string | number;
+              }
             });
           });
 
@@ -4723,37 +4724,21 @@ export default function App() {
         entriesToProcess.length = 0; // Skip
       }
     }
+    const newPendingItems: any[] = [];
     entriesToProcess.forEach(entry => {
-      // Standardize extracted keys
-      const mappedExtracted: { [key: string]: number | string } = {};
-      const rawKeyToMappedKey: { [key: string]: string } = {};
-      const resolveKey = (rk: string) => {
-        if (!rk || rk === 'weight' || rk === 'height' || rk === 'age') return rk;
-        if (biomarkerDefinitions.some(d => d.key === rk)) return rk;
-        if (keyMapping[rk]) return keyMapping[rk];
-        const cleaned = cleanName(rk.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '));
-        const stdMatch = biomarkerDefinitions.find(d => d.name.toLowerCase() === cleaned.toLowerCase() || cleanName(d.name).toLowerCase() === cleaned.toLowerCase());
-        if (stdMatch) return stdMatch.key;
-        const customs = profile?.customBiomarkers || {};
-        const custMatch = Object.keys(customs).find(k => cleanName(customs[k]?.name || '').toLowerCase() === cleaned.toLowerCase());
-        return custMatch || (cleaned.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || rk);
-      };
+      const recordDate = entry.date || getCurrentDateInTimezone(profile?.timezone);
+      const routed = routeExtractedObservations(entry.biomarkers || {}, entry.tests || [], currentProfile, recordDate);
 
-      Object.entries(entry.biomarkers || {}).forEach(([rawKey, val]) => {
-        if (rawKey === 'weight' || rawKey === 'height' || rawKey === 'age') return;
-        const finalKey = resolveKey(rawKey);
-        mappedExtracted[finalKey] = val;
-        rawKeyToMappedKey[rawKey] = finalKey;
-      });
+      if (routed.pendingObservations.length > 0) {
+        newPendingItems.push(...routed.pendingObservations);
+      }
+
+      const mappedExtracted = routed.approvedObservations;
+      const entryTests = routed.approvedTests;
 
       if (Object.keys(mappedExtracted).length > 0) {
         hasNewBiomarkers = true;
-        const recordDate = entry.date || getCurrentDateInTimezone(profile?.timezone);
         const existingLogIndex = updatedHistory.findIndex(h => toYYYYMMDD(h.date) === toYYYYMMDD(recordDate));
-
-        const entryTests = (entry.tests && Array.isArray(entry.tests))
-          ? entry.tests.map((t: any) => ({ ...t, key: rawKeyToMappedKey[t.key] || resolveKey(t.key) }))
-          : [];
 
         if (existingLogIndex >= 0) {
           // Merge with existing log for this date
@@ -4823,14 +4808,30 @@ export default function App() {
         }
       }
     });
-    // Self-healing: Ensure every newly extracted or updated custom biomarker has complete structural metadata
+
+    if (newPendingItems.length > 0) {
+      const existingPending = Array.isArray(currentProfile?.pendingObservations) ? [...currentProfile.pendingObservations] : [];
+      newPendingItems.forEach(np => {
+        const dup = existingPending.some(p => p.printedName?.toLowerCase() === np.printedName?.toLowerCase() && p.date === np.date && String(p.rawValue) === String(np.rawValue));
+        if (!dup) existingPending.push(np);
+      });
+      currentProfile = { ...currentProfile, pendingObservations: existingPending } as UserProfile;
+      setProfile(currentProfile);
+    }
+
+    // Self-healing: Ensure every known catalog or already-approved custom biomarker has complete structural metadata
+    // Unknown names NEVER become catalog keys! (B7.4 Real Pending store)
     const itemsToSelfHeal: any[] = [];
     entriesToProcess.forEach(entry => {
       const tests = entry.tests || [];
       Object.keys(entry.biomarkers || {}).forEach(rawKey => {
-        const testInfo = Array.isArray(tests) ? tests.find((t: any) => t && (t.key === rawKey || t.key === getMappedBiomarkerKey(rawKey))) : null;
+        const mapped = getMappedBiomarkerKey(rawKey) || rawKey;
+        const isBuiltIn = biomarkerDefinitions.some(d => d.key === mapped || d.key === rawKey);
+        const isCustom = !!currentProfile?.customBiomarkers?.[rawKey] || !!currentProfile?.customBiomarkers?.[mapped];
+        if (!isBuiltIn && !isCustom) return; // Unknown names NEVER become catalog keys
+        const testInfo = Array.isArray(tests) ? tests.find((t: any) => t && (t.key === rawKey || t.key === mapped)) : null;
         itemsToSelfHeal.push({
-          key: rawKey,
+          key: mapped,
           name: testInfo?.name,
           unit: testInfo?.unit,
           normalRange: testInfo?.normalRange,
@@ -6293,7 +6294,13 @@ export default function App() {
           });
         }}
         onSaveProfile={async (p) => {
-          const updatedProfile = { ...p };
+          let updatedProfile = { ...p };
+          if (profile?.age !== updatedProfile.age || profile?.gender !== updatedProfile.gender || profile?.ethnicity !== updatedProfile.ethnicity) {
+            const { updatedCustomBiomarkers, recalibratedCount } = recalibrateProfileOverlays(updatedProfile);
+            if (recalibratedCount > 0) {
+              updatedProfile.customBiomarkers = updatedCustomBiomarkers;
+            }
+          }
           const { updatedHistory, updatedBiomarkers, changed } = logBmiIfProfileWeightHeightChanged(profile, updatedProfile, biomarkerHistory, biomarkers);
           setProfile(updatedProfile);
           if (changed) {
@@ -6627,7 +6634,6 @@ export default function App() {
                   prefillMessage?: string; 
                   dataReviewBatchIdx?: number | string; 
                   dataReviewBatchKeys?: string[];
-                  remainingText?: string;
                   extractedData?: any[];
                   currentBatch?: number;
                   estimatedTotalMarkers?: number | null;
@@ -6637,7 +6643,6 @@ export default function App() {
                   setActiveReviewBiomarkerKey(options?.biomarkerKey);
                   setActiveDataReviewBatchIdx(options?.dataReviewBatchIdx !== undefined ? options.dataReviewBatchIdx : null);
                   setActiveDataReviewBatchKeys(options?.dataReviewBatchKeys || []);
-                  setActiveDataReviewRemainingText(options?.remainingText || '');
                   setActiveDataReviewExtractedYaml(options?.extractedData || []);
                   setActiveDataReviewCurrentBatch(options?.currentBatch || 1);
                   setActiveDataReviewEstimatedTotalMarkers(options?.estimatedTotalMarkers !== undefined ? options.estimatedTotalMarkers : null);
@@ -6756,7 +6761,6 @@ export default function App() {
           setActiveHandoffPayload(options?.handoffPayload || null);
           setActiveDataReviewBatchIdx(null);
           setActiveDataReviewBatchKeys([]);
-          setActiveDataReviewRemainingText('');
           setActiveDataReviewExtractedYaml([]);
           setActiveDataReviewCurrentBatch(1);
           setActiveDataReviewEstimatedTotalMarkers(null);
@@ -7937,7 +7941,6 @@ export default function App() {
         reviewBiomarkerKey={activeReviewBiomarkerKey}
         dataReviewBatchIdx={activeDataReviewBatchIdx}
         dataReviewBatchKeys={activeDataReviewBatchKeys}
-        remainingText={activeDataReviewRemainingText}
         extractedData={activeDataReviewExtractedYaml}
         currentBatch={activeDataReviewCurrentBatch}
         estimatedTotalMarkers={activeDataReviewEstimatedTotalMarkers}

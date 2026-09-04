@@ -28,6 +28,9 @@ import {
   parseResultCell,
   parsePrintedDate,
   resolveKnownBiomarkerKey,
+  routeExtractedObservations,
+  approvePendingObservation,
+  dismissPendingObservation,
 } from './biomarkerLifecycle';
 import { isValEmpty, sanitizeBiomarkerHistoryOnLoad } from './biomarkers';
 
@@ -453,6 +456,43 @@ describe('cleanupInventedBiomarkerCatalog (7.1 Profile Data Cleanup)', () => {
     expect(res.profile.pendingObservations).toHaveLength(1);
     expect(res.profile.pendingObservations[0].printedName).toBe('Unknown Marker');
   });
+
+  it('B7.6 Name Deduper: remaps metric_N with recognized analyte name, tombstones old key, and migrates history in-place', () => {
+    const profile = {
+      customBiomarkers: {
+        metric_12: { name: 'Total Cholesterol', unit: 'mmol/L' },
+        metric_15: { printedName: 'eGFR', unit: 'mL/min' },
+      },
+      deletedCustomBiomarkerKeys: {},
+    };
+
+    const history: Array<{ id: string; date: string; biomarkers: Record<string, any>; observationMeta: Record<string, any> }> = [
+      {
+        id: 'log_1',
+        date: '2026-08-14',
+        biomarkers: { metric_12: 5.2, metric_15: 90 },
+        observationMeta: {
+          metric_12: { rawValue: 5.2 },
+        },
+      },
+    ];
+
+    const res = cleanupInventedBiomarkerCatalog(profile, history);
+
+    expect(res.remappedKeys['metric_12']).toBe('total_cholesterol');
+    expect(res.remappedKeys['metric_15']).toBe('egfr');
+    expect(res.profile.customBiomarkers['metric_12']).toBeUndefined();
+    expect(res.profile.customBiomarkers['metric_15']).toBeUndefined();
+    expect(res.profile.deletedCustomBiomarkerKeys['metric_12']).toBeDefined();
+    expect(res.profile.deletedCustomBiomarkerKeys['metric_15']).toBeDefined();
+
+    // History migrated in-place
+    expect(history[0].biomarkers.metric_12).toBeUndefined();
+    expect(history[0].biomarkers.total_cholesterol).toBe(5.2);
+    expect(history[0].biomarkers.egfr).toBe(90);
+    expect(history[0].observationMeta.metric_12).toBeUndefined();
+    expect(history[0].observationMeta.total_cholesterol?.rawValue).toBe(5.2);
+  });
 });
 
 describe('Pending Store Isolation (7.4 Home Dashboard / Coach Query Guard)', () => {
@@ -504,6 +544,13 @@ describe('recalibrateProfileOverlays (7.5 Silent Calibrator)', () => {
     const res = recalibrateProfileOverlays(profile, ['creatinine']);
     expect(res.recalibratedCount).toBe(1);
     expect(res.updatedCustomBiomarkers.creatinine.overlayFingerprint).toBe('40-49|f|asian');
+
+    // Idempotency: re-running with matching fingerprint results in 0 recalibrated
+    const res2 = recalibrateProfileOverlays(
+      { ...profile, customBiomarkers: res.updatedCustomBiomarkers },
+      ['creatinine']
+    );
+    expect(res2.recalibratedCount).toBe(0);
   });
 });
 
@@ -612,5 +659,137 @@ describe('Layer-1 double-escaped EMIS table ingest (spreadsheet round-trip)', ()
     expect(hba1c?.rawValue).toBe(40);
   });
 });
+
+describe('B7.4 Real Pending Store: unknown printed names never become catalog keys', () => {
+  it('routeExtractedObservations routes unknown printed names to pendingObservations, not approvedObservations', () => {
+    const extracted = {
+      hdl: 1.5,
+      unknown_novel_analyte: 42,
+    };
+    const tests = [
+      { key: 'hdl', name: 'HDL Cholesterol', unit: 'mmol/L', normalRange: '1.0 - 2.0' },
+      { key: 'unknown_novel_analyte', name: 'Novel Experimental Analyte', unit: 'pg/mL', normalRange: '10 - 50' },
+    ];
+    const profile = { customBiomarkers: {} };
+
+    const result = routeExtractedObservations(extracted, tests, profile, '2026-06-05');
+
+    // Canonical HDL goes to approved
+    expect(result.approvedObservations['hdl']).toBe(1.5);
+    expect(result.approvedTests.some((t: any) => t.key === 'hdl')).toBe(true);
+
+    // Unknown analyte NEVER goes to approved
+    expect(result.approvedObservations['unknown_novel_analyte']).toBeUndefined();
+    expect(result.approvedTests.some((t: any) => t.key === 'unknown_novel_analyte')).toBe(false);
+
+    // It is routed to pending store
+    expect(result.pendingObservations).toHaveLength(1);
+    expect(result.pendingObservations[0].printedName).toBe('Novel Experimental Analyte');
+    expect(result.pendingObservations[0].rawValue).toBe(42);
+    expect(result.pendingObservations[0].rawUnit).toBe('pg/mL');
+    expect(result.pendingObservations[0].printedRange).toBe('10 - 50');
+  });
+
+  it('routeExtractedObservations accepts approved custom biomarkers into approvedObservations', () => {
+    const extracted = {
+      my_custom_marker: 88,
+    };
+    const profile = {
+      customBiomarkers: {
+        my_custom_marker: {
+          name: 'My Custom Marker',
+          catalogApproved: true,
+        },
+      },
+    };
+
+    const result = routeExtractedObservations(extracted, [], profile, '2026-06-05');
+    expect(result.approvedObservations['my_custom_marker']).toBe(88);
+    expect(result.pendingObservations).toHaveLength(0);
+  });
+
+  it('cleanupInventedBiomarkerCatalog purges needsApproval from customBiomarkers bag and moves unapproved to pendingObservations', () => {
+    const profile: any = {
+      customBiomarkers: {
+        unapproved_marker: {
+          name: 'Unapproved Novel Marker',
+          unit: 'ng/mL',
+          normalRange: '1 - 5',
+          needsApproval: true,
+        },
+        legit_approved: {
+          name: 'Legit Approved Marker',
+          catalogApproved: true,
+        },
+      },
+      customRanges: {},
+      deletedCustomBiomarkerKeys: {},
+      pendingObservations: [],
+    };
+
+    const cleaned = cleanupInventedBiomarkerCatalog(profile);
+
+    // unapproved_marker is stripped from customBiomarkers bag
+    expect(cleaned.profile.customBiomarkers['unapproved_marker']).toBeUndefined();
+    expect(cleaned.profile.deletedCustomBiomarkerKeys['unapproved_marker']).toBeTruthy();
+
+    // Migrated into pendingObservations
+    expect(cleaned.profile.pendingObservations.some((p: any) => p.suggestedKey === 'unapproved_marker')).toBe(true);
+
+    // legit_approved remains untouched
+    expect(cleaned.profile.customBiomarkers['legit_approved']).toBeDefined();
+  });
+
+  it('approvePendingObservation promotes pending item to customBiomarkers with catalogApproved=true and writes to history', () => {
+    const profile = {
+      customBiomarkers: {},
+      pendingObservations: [
+        {
+          id: 'pending_123',
+          printedName: 'Galectin-3',
+          suggestedKey: 'galectin_3',
+          date: '2026-06-05',
+          rawValue: 14.2,
+          rawUnit: 'ng/mL',
+          printedRange: '< 17.8',
+          createdAt: Date.now(),
+        },
+      ],
+    };
+    const history: any[] = [];
+
+    const res = approvePendingObservation(profile, history, 'pending_123', {
+      name: 'Galectin-3',
+      unit: 'ng/mL',
+      normalRange: '< 17.8',
+      standardMedicalGrouping: 'Cardiovascular',
+    });
+
+    // Removed from pending
+    expect(res.profile.pendingObservations).toHaveLength(0);
+
+    // Added to customBiomarkers as catalogApproved
+    expect(res.profile.customBiomarkers['galectin_3']).toBeDefined();
+    expect(res.profile.customBiomarkers['galectin_3'].catalogApproved).toBe(true);
+    expect(res.profile.customBiomarkers['galectin_3'].needsApproval).toBeUndefined();
+
+    // Logged to history
+    expect(res.history).toHaveLength(1);
+    expect(res.history[0].biomarkers['galectin_3']).toBe(14.2);
+    expect(res.history[0].observationMeta['galectin_3']?.rawUnit).toBe('ng/mL');
+  });
+
+  it('dismissPendingObservation discards observation from pending store', () => {
+    const profile = {
+      pendingObservations: [
+        { id: 'pending_abc', printedName: 'Junk Noise', suggestedKey: 'junk_noise' },
+      ],
+    };
+
+    const res = dismissPendingObservation(profile, 'pending_abc');
+    expect(res.pendingObservations).toHaveLength(0);
+  });
+});
+
 
 

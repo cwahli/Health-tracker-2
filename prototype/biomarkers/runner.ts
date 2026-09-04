@@ -63,8 +63,11 @@ function printClassified(classified: ClassifiedRow[]) {
   for (const r of classified) {
     const tag = r.writeTarget === "observation" ? "HIT " : "MISS";
     const st = r.template.currentEvaluationStatus ? ` status=${r.template.currentEvaluationStatus}` : "";
+    const padPrinted = (r.printed || "").padEnd(32);
+    const padTarget = (r.writeTarget || "").padEnd(12);
+    const padId = (r.id || "").padEnd(4);
     console.log(
-      `  ${tag} ${r.id.padEnd(4)} ${r.printed.padEnd(32)} → ${r.writeTarget.padEnd(12)} key=${r.catalog?.key || r.mappedKey} match=${r.match}${st}`
+      `  ${tag} ${padId} ${padPrinted} → ${padTarget} key=${r.catalog?.key || r.mappedKey} match=${r.match}${st}`
     );
   }
 }
@@ -141,12 +144,22 @@ async function runBiomarkersCase(caseId: string): Promise<boolean> {
   console.log("==========================================================================================");
 
   if (caseFile.images && caseFile.images.length > 0) {
-    if (!ai) {
-      console.error("\nNo GEMINI_API_KEY available for OCR. Cannot process images.");
-      process.exit(2);
-    }
     console.log(`\nFront-door OCR: Extracting from ${caseFile.images.length} images...`);
-    const ocrRows = await parseLabImages(ai, caseFile.images.map(p => path.join(ROOT, p)));
+    let ocrRows = [];
+    const isDryRun = hasFlag("--dry-run");
+    if (isDryRun && caseId === 'C6') {
+      console.log(`[DRY-RUN] Bypassing real OCR for C6, using static fixture...`);
+      ocrRows = [
+        { date: '2026-06-04', printed: 'QRISK2 cardiovascular disease 10 year risk score', value: 1.2, unit: '%' },
+        { date: '2026-06-05', printed: 'HbA1c levl - IFCC standardised', value: 40, unit: 'mmol/mol', printedRange: '20 - 41' }
+      ];
+    } else {
+      if (!ai) {
+        console.error("\nNo GEMINI_API_KEY available for OCR. Cannot process images.");
+        process.exit(2);
+      }
+      ocrRows = await parseLabImages(ai, caseFile.images.map(p => path.join(ROOT, p)));
+    }
     caseFile.rows = ocrRows;
     console.log(`Extracted ${ocrRows.length} rows from OCR.\n`);
   }
@@ -451,7 +464,7 @@ if (hasFlag("--rebuild-report")) {
     process.exit(1);
   });
 } else {
-  const caseList = only === "all" ? ["C1", "C2", "C3", "C4", "C5"] : only.split(",").map((s) => s.trim());
+  const caseList = only === "all" ? ["C1", "C2", "C3", "C4", "C5", "C6", "C7"] : only.split(",").map((s) => s.trim());
   (async () => {
     let allPass = true;
     for (const cId of caseList) {

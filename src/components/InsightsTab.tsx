@@ -40,7 +40,6 @@ interface InsightsTabProps {
       prefillMessage?: string; 
       dataReviewBatchIdx?: number | string; 
       dataReviewBatchKeys?: string[];
-      remainingText?: string;
       extractedData?: any[];
       currentBatch?: number;
       estimatedTotalMarkers?: number | null;
@@ -270,7 +269,7 @@ export default function InsightsTab({
     }
     
     if (step.agentType === 'agent1') {
-      const jsonText = latestAnalysis.result.extractedData || latestAnalysis.result;
+      const jsonText = latestAnalysis.result.filledRows || latestAnalysis.result.extractedData || latestAnalysis.result;
       let parsedRows: any[] = [];
       if (Array.isArray(jsonText)) {
         parsedRows = jsonText;
@@ -399,8 +398,6 @@ export default function InsightsTab({
     }
   });
   
-  const [agent1RemainingText, setAgent1RemainingText] = useState<string>('');
-
   const [expandedAgent1Batches, setExpandedAgent1Batches] = useState<Record<string, boolean>>({});
 
   const handleResetBatches = () => {
@@ -829,7 +826,7 @@ export default function InsightsTab({
     setIsApplying(true);
     try {
       // Parse the cleaned YAML
-      const jsonText = result ? (result.extractedData || result) : '';
+      const jsonText = result ? (result.filledRows || result.extractedData || result) : '';
     let parsedRows: any[] = [];
     if (typeof jsonText === 'string' && jsonText.trim() !== '') {
       try {
@@ -1085,7 +1082,7 @@ export default function InsightsTab({
     setIsApplying(true);
     try {
       const res = analysis.result || {};
-      const extractedRows = Array.isArray(res.extractedData) ? res.extractedData : (Array.isArray(res.biomarkers) ? res.biomarkers : []);
+      const extractedRows = Array.isArray(res.filledRows) ? res.filledRows : (Array.isArray(res.extractedData) ? res.extractedData : (Array.isArray(res.biomarkers) ? res.biomarkers : []));
       
       const selectedRows = extractedRows.filter((row: any) => {
         const key = row.standard_key || row.key || row.biomarker || row.name;
@@ -2001,7 +1998,7 @@ export default function InsightsTab({
                                 const hasMore = !!(res.hasMoreMarkers || res.hasMore || res.needsContinuation || res.status === 'needs_continuation');
                                 const currentBatch = res.currentBatch || 1;
                                 const estimatedTotal = res.estimatedTotalMarkers || null;
-                                const extractedCount = Array.isArray(res.extractedData) ? res.extractedData.length : (Array.isArray(res.biomarkers) ? res.biomarkers.length : 0);
+                                const extractedCount = Array.isArray(res.filledRows) ? res.filledRows.length : (Array.isArray(res.extractedData) ? res.extractedData.length : (Array.isArray(res.biomarkers) ? res.biomarkers.length : 0));
 
                                 // Check if user has approved this analysis
                                 const isApproved = approvedSteps['agent1'] || approvedAnalysisIds['agent1'] === latestExtraction.id;
@@ -2052,7 +2049,7 @@ export default function InsightsTab({
                                           </span>
                                         </div>
 
-                                        {(Array.isArray(res.extractedData) && res.extractedData.length > 0) || res.agentResult ? (
+                                        {(Array.isArray(res.filledRows) && res.filledRows.length > 0) || (Array.isArray(res.extractedData) && res.extractedData.length > 0) || res.agentResult ? (
                                           <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
                                             <AgentResultTable
                                               agentType="agent1"
@@ -2075,8 +2072,7 @@ export default function InsightsTab({
                                             e.stopPropagation();
                                             if (hasMore) {
                                               onOpenAgentChat?.('agent1', {
-                                                remainingText: res.remainingText || '',
-                                                extractedData: res.extractedData || [],
+                                                extractedData: res.filledRows || res.extractedData || [],
                                                 currentBatch: currentBatch + 1,
                                                 estimatedTotalMarkers: estimatedTotal,
                                                 prefillMessage: 'continue'

@@ -438,7 +438,6 @@ interface LogChatProps {
   autoSendMessage?: string | null;
   dataReviewBatchIdx?: number | string | null;
   dataReviewBatchKeys?: string[];
-  remainingText?: string;
   lastProcessedIndex?: number | null;
   extractedData?: any[];
   currentBatch?: number;
@@ -488,7 +487,6 @@ export default function LogChat({
   autoSendMessage = null,
   dataReviewBatchIdx = null,
   dataReviewBatchKeys = [],
-  remainingText = '',
   lastProcessedIndex = null,
   extractedData = [],
   currentBatch = 1,
@@ -2975,7 +2973,6 @@ ${logsText}`);
           agentType: agentType || 'agent1_step1',
           numberOfBatches,
           extractedData,
-          remainingText,
           lastProcessedIndex,
           bucketMapping: bucketMappingStr,
           estimatedTotalMarkers,
@@ -3702,8 +3699,6 @@ ${logsText}`);
             }
             if (lastProcessedIndex !== null && lastProcessedIndex !== undefined) {
               bodyData.lastProcessedIndex = lastProcessedIndex;
-            } else if (remainingText) {
-              bodyData.remainingText = remainingText;
             }
             if (currentBatch > 1) {
               bodyData.currentBatch = currentBatch;
@@ -4390,7 +4385,14 @@ ${logsText}`);
               }
             };
           }
-          assistantMsg.pendingBiomarkerEntries = resData.entries || resData.extractedData || [];
+          assistantMsg.pendingBiomarkerEntries = resData.filledRows || resData.entries || resData.extractedData || [];
+          
+          assistantMsg.data = {
+            ...(assistantMsg.data || {}),
+            pendingBiomarkerEntries: assistantMsg.pendingBiomarkerEntries,
+            pendingBiomarkers: resData.biomarkers || {}
+          };
+          
           // Legacy fallback
           assistantMsg.pendingBiomarkers = resData.biomarkers;
           assistantMsg.pendingDate = resData.date;
@@ -4878,7 +4880,6 @@ ${logsText}`);
         originalReportText: allUserText,
         currentBatch: nextBatch,
         extractedData: msg.data?.agentResult?.extractedData || msg.extractedData,
-        remainingText: msg.data?.agentResult?.remainingText || '',
         lastProcessedIndex: msg.data?.agentResult?.lastProcessedIndex ?? null,
         estimatedTotalMarkers: msg.data?.agentResult?.estimatedTotalMarkers,
         numberOfBatches: numberOfBatches,
@@ -5038,7 +5039,6 @@ ${logsText}`);
                 text: resData.text || m.data?.agentResult?.text,
                 extractedData: combinedJsonStr,
                 hasMoreMarkers: resData.hasMoreMarkers,
-                remainingText: resData.remainingText || '',
                 lastProcessedIndex: resData.lastProcessedIndex ?? null,
                 currentBatch: resData.currentBatch || nextBatch,
                 unmappedTests: combinedUnmappedTests,

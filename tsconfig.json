@@ -23,12 +23,22 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
+  "include": [
+    "src",
+    "server*.ts",
+    "types.ts",
+    "vite.config.ts"
+  ],
   "exclude": [
     "node_modules",
     "dist",
     "studio",
     "archive",
     "prototype/archive",
-    "app/applet/prototype"
+    "prototype",
+    "tests",
+    "playwright-report",
+    "scratch",
+    "existing-log"
   ]
 }

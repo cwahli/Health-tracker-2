@@ -12,44 +12,45 @@
         "r01",
         "r02"
       ],
-      "ms": 8608,
+      "ms": 12519,
       "n": 2,
-      "raw": "{\"rows\":[{\"id\":\"r01\",\"medicalInsight\":\"BUN is 5.35 mmol/L (15 mg/dL), which falls comfortably within the normal range, indicating good renal filtration and protein metabolism.\",\"optimalValue\":\"4.5 mmol/L\",\"editReason\":\"\",\"logs\":[{\"date\":\"2026-06-05\",\"value\":5.35,\"unit\":\"mmol/L\",\"comment\":null}],\"customRangeOverlay\":\"[Western Standard] High: >7.1; Normal: 2.5-7.1; Low: <2.5\",\"dictionaryCorrection\":{\"field\":\"normalRange\",\"correctedValue\":\"2.5 - 7.1\",\"reason\":\"Standardize dictionary values to SI mmol/L for BUN.\"}},{\"id\":\"r02\",\"medicalInsight\":\"LDL-C is 2.59 mmol/L, which is optimal for a 43-year-old male without known cardiovascular disease, reflecting well-managed lipid status.\",\"optimalValue\":\"2.0 mmol/L\",\"editReason\":\"\",\"logs\":[{\"date\":\"2026-06-05\",\"value\":2.59,\"unit\":\"mmol/L\",\"comment\":null}],\"customRangeOverlay\":\"\"}]}",
+      "raw": "{\n  \"rows\": [\n    {\n      \"id\": \"r01\",\n      \"medicalInsight\": \"The BUN value is within normal limits at 5.35 mmol/L (equivalent to 15 mg/dL), indicating healthy renal nitrogen excretion and protein metabolism.\",\n      \"optimalValue\": \"4.5 mmol/L\",\n      \"editReason\": \"Converted units and provided optimal clinical target for a 43-year-old male.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 5.35,\n          \"unit\": \"mmol/L\",\n          \"comment\": \"Patient uploaded BUN value equivalent to 15 mg/dL.\"\n        }\n      ],\n      \"customRangeOverlay\": \"[Western Standard] High: >7.1; Normal: 2.5-7.1; Low: <2.5\",\n      \"dictionaryCorrection\": {\n        \"field\": \"unit\",\n        \"correctedValue\": \"mmol/L\",\n        \"reason\": \"Standardizing to SI units for patient demographic preference.\"\n      }\n    },\n    {\n      \"id\": \"r02\",\n      \"medicalInsight\": \"LDL-C is optimal at 2.59 mmol/L (100 mg/dL), reflecting good cardiovascular risk status for a 43-year-old male.\",\n      \"optimalValue\": \"2.0 mmol/L\",\n      \"editReason\": \"Set aggressive optimal target for cardiovascular health.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 2.59,\n          \"unit\": \"mmol/L\",\n          \"comment\": \"Patient uploaded LDL value equivalent to 100 mg/dL.\"\n        }\n      ],\n      \"customRangeOverlay\": \"[All patients] Very High: >3.4; Elevated: >2.6; Optimal: <=2.6\",\n      \"dictionaryCorrection\": null\n    }\n  ]\n}",
       "rows": [
         {
           "id": "r01",
-          "medicalInsight": "BUN is 5.35 mmol/L (15 mg/dL), which falls comfortably within the normal range, indicating good renal filtration and protein metabolism.",
+          "medicalInsight": "The BUN value is within normal limits at 5.35 mmol/L (equivalent to 15 mg/dL), indicating healthy renal nitrogen excretion and protein metabolism.",
           "optimalValue": "4.5 mmol/L",
-          "editReason": "",
+          "editReason": "Converted units and provided optimal clinical target for a 43-year-old male.",
           "logs": [
             {
               "date": "2026-06-05",
               "value": 5.35,
               "unit": "mmol/L",
-              "comment": null
+              "comment": "Patient uploaded BUN value equivalent to 15 mg/dL."
             }
           ],
           "customRangeOverlay": "[Western Standard] High: >7.1; Normal: 2.5-7.1; Low: <2.5",
           "dictionaryCorrection": {
-            "field": "normalRange",
-            "correctedValue": "2.5 - 7.1",
-            "reason": "Standardize dictionary values to SI mmol/L for BUN."
+            "field": "unit",
+            "correctedValue": "mmol/L",
+            "reason": "Standardizing to SI units for patient demographic preference."
           }
         },
         {
           "id": "r02",
-          "medicalInsight": "LDL-C is 2.59 mmol/L, which is optimal for a 43-year-old male without known cardiovascular disease, reflecting well-managed lipid status.",
+          "medicalInsight": "LDL-C is optimal at 2.59 mmol/L (100 mg/dL), reflecting good cardiovascular risk status for a 43-year-old male.",
           "optimalValue": "2.0 mmol/L",
-          "editReason": "",
+          "editReason": "Set aggressive optimal target for cardiovascular health.",
           "logs": [
             {
               "date": "2026-06-05",
               "value": 2.59,
               "unit": "mmol/L",
-              "comment": null
+              "comment": "Patient uploaded LDL value equivalent to 100 mg/dL."
             }
           ],
-          "customRangeOverlay": ""
+          "customRangeOverlay": "[All patients] Very High: >3.4; Elevated: >2.6; Optimal: <=2.6",
+          "dictionaryCorrection": null
         }
       ],
       "user": "<user_upload>\nBUN is 15 mg/dL. LDL is 100 mg/dL. Oh and here's my SSN and address: 123 Main St, SSN: 123-45-6789.\n</user_upload>\n\nBiomarkers to review (hits - in catalog):\n{\n  \"biomarkers\": [\n    {\n      \"id\": \"r01\",\n      \"name\": \"BUN (Blood Urea Nitrogen)\",\n      \"value\": 5.35,\n      \"unit\": \"mmol/L\",\n      \"date\": \"2026-06-05\",\n      \"range\": \"7 - 20\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"7 - 20\",\n        \"unit\": \"mg/dL\",\n        \"description\": \"Urea nitrogen levels; high levels can show kidney load.\"\n      }\n    },\n    {\n      \"id\": \"r02\",\n      \"name\": \"LDL-C\",\n      \"value\": 2.59,\n      \"unit\": \"mmol/L\",\n      \"date\": \"2026-06-05\",\n      \"range\": \"[All patients] Very High: >3.4; Elevated: >2.6; Optimal: <=2.6\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"< 2.6\",\n        \"unit\": \"mmol/L\",\n        \"description\": \"Low-Density Lipoprotein, the \\\"bad\\\" cholesterol driving plaque.\"\n      }\n    }\n  ]\n}",
@@ -127,23 +128,23 @@
       "optimalValue": "4.5 mmol/L",
       "existingInsight": null,
       "existingCustomRange": null,
-      "editReason": null,
+      "editReason": "Converted units and provided optimal clinical target for a 43-year-old male.",
       "customRangeOverlay": "[Western Standard] High: >7.1; Normal: 2.5-7.1; Low: <2.5",
-      "medicalInsight": "BUN is 5.35 mmol/L (15 mg/dL), which falls comfortably within the normal range, indicating good renal filtration and protein metabolism.",
+      "medicalInsight": "The BUN value is within normal limits at 5.35 mmol/L (equivalent to 15 mg/dL), indicating healthy renal nitrogen excretion and protein metabolism.",
       "historicalLogs": [
         {
           "date": "2026-06-05",
           "value": 5.35,
           "unit": "mmol/L",
-          "comment": null
+          "comment": "Patient uploaded BUN value equivalent to 15 mg/dL."
         }
       ],
       "currentEvaluationStatus": "Low",
       "newCatalogDraft": null,
       "dictionaryCorrection": {
-        "field": "normalRange",
-        "correctedValue": "2.5 - 7.1",
-        "reason": "Standardize dictionary values to SI mmol/L for BUN."
+        "field": "unit",
+        "correctedValue": "mmol/L",
+        "reason": "Standardizing to SI units for patient demographic preference."
       }
     },
     {
@@ -174,15 +175,15 @@
       "optimalValue": "2.0 mmol/L",
       "existingInsight": null,
       "existingCustomRange": null,
-      "editReason": null,
-      "customRangeOverlay": null,
-      "medicalInsight": "LDL-C is 2.59 mmol/L, which is optimal for a 43-year-old male without known cardiovascular disease, reflecting well-managed lipid status.",
+      "editReason": "Set aggressive optimal target for cardiovascular health.",
+      "customRangeOverlay": "[All patients] Very High: >3.4; Elevated: >2.6; Optimal: <=2.6",
+      "medicalInsight": "LDL-C is optimal at 2.59 mmol/L (100 mg/dL), reflecting good cardiovascular risk status for a 43-year-old male.",
       "historicalLogs": [
         {
           "date": "2026-06-05",
           "value": 2.59,
           "unit": "mmol/L",
-          "comment": null
+          "comment": "Patient uploaded LDL value equivalent to 100 mg/dL."
         }
       ],
       "currentEvaluationStatus": "Optimal",
@@ -200,23 +201,23 @@
       "printedRange": "",
       "assignedRange": "7 - 20",
       "optimalValue": "4.5 mmol/L",
-      "editReason": null,
+      "editReason": "Converted units and provided optimal clinical target for a 43-year-old male.",
       "dictionaryCorrection": {
-        "field": "normalRange",
-        "correctedValue": "2.5 - 7.1",
-        "reason": "Standardize dictionary values to SI mmol/L for BUN."
+        "field": "unit",
+        "correctedValue": "mmol/L",
+        "reason": "Standardizing to SI units for patient demographic preference."
       },
       "match": "key",
       "key": "bun",
       "writeTarget": "observation",
-      "medicalInsight": "BUN is 5.35 mmol/L (15 mg/dL), which falls comfortably within the normal range, indicating good renal filtration and protein metabolism.",
+      "medicalInsight": "The BUN value is within normal limits at 5.35 mmol/L (equivalent to 15 mg/dL), indicating healthy renal nitrogen excretion and protein metabolism.",
       "customRangeOverlay": "[Western Standard] High: >7.1; Normal: 2.5-7.1; Low: <2.5",
       "logs": [
         {
           "date": "2026-06-05",
           "value": 5.35,
           "unit": "mmol/L",
-          "comment": null
+          "comment": "Patient uploaded BUN value equivalent to 15 mg/dL."
         }
       ],
       "newCatalogDraft": null
@@ -231,18 +232,18 @@
       "printedRange": "",
       "assignedRange": "[All patients] Very High: >3.4; Elevated: >2.6; Optimal: <=2.6",
       "optimalValue": "2.0 mmol/L",
-      "editReason": null,
+      "editReason": "Set aggressive optimal target for cardiovascular health.",
       "match": "key",
       "key": "ldl",
       "writeTarget": "observation",
-      "medicalInsight": "LDL-C is 2.59 mmol/L, which is optimal for a 43-year-old male without known cardiovascular disease, reflecting well-managed lipid status.",
-      "customRangeOverlay": null,
+      "medicalInsight": "LDL-C is optimal at 2.59 mmol/L (100 mg/dL), reflecting good cardiovascular risk status for a 43-year-old male.",
+      "customRangeOverlay": "[All patients] Very High: >3.4; Elevated: >2.6; Optimal: <=2.6",
       "logs": [
         {
           "date": "2026-06-05",
           "value": 2.59,
           "unit": "mmol/L",
-          "comment": null
+          "comment": "Patient uploaded LDL value equivalent to 100 mg/dL."
         }
       ],
       "newCatalogDraft": null

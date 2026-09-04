@@ -11,10 +11,10 @@
 | **F-10** Meal Agent | F-10.2 verified (`calculateDerivedNutrients` + Atwater law). F-10.1–F-10.5 & F-10.7 shipped. | F-10.6 (Grok constants) / F-10.8 Soak (Grok reviews). |
 | **F-9.5** | PR1–PR4 bulk shipped. App poller still `updateJob`. | Grok only. |
 | **Q-7** | Policy in QUALITY.md §1.4. | Fold `golden_g1` later. Do not `npm test`. |
-| **Track B** | B0 Apply smoke & Modal wiring COMPLETE. | B8.2/8.3 or next open Track B. |
+| **Track B** | B0 Apply smoke, Modal wiring, and C1–C7 unified pipeline cutover COMPLETE. B7.4–B7.6 verified. | G-B1 green or next open Track B. |
 | **F-1/F-2 USDA** | Parked. | Do not reopen. |
 | **Track L** Localisation | L-1–L-5 + all residual EN/ID shipped (narratives, diagnostics, alerts, admin chrome). EN/ID parity green, pushed. | Track L complete for EN/ID. |
-| **Agent Consolidation** | Front Desk full-spectrum (UC-01–UC-10, O(1) memory, Hub-and-Spoke specialist containers, multi-turn follow-ups, demographic preservation) COMPLETE & verified (35/35 tests, 100/100 cases). | Unified Biomarker Agent (C1–C7) cutover to production `medical` endpoint. |
+| **Agent Consolidation** | Front Desk (UC-01–UC-10, Hub-and-Spoke multi-turn follow-ups) + Unified Biomarker Agent (C1–C7 single-dispatch pipeline cutover to `/api/gemini/medical-analyze`) COMPLETE & verified (C1–C7 baseline PASS, M31 lifecycle PASS, tsc clean). | Shipped. |
 
 **Do not:** USDA · critic LLM · LLM `calories` on create schema · `npm test` as COMPLETE · ask to approve **reads** · edit files when the user asked a question · recreate `studio/`.
 

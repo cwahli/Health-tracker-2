@@ -69,7 +69,7 @@ Homocysteine  10.2 umol/L
 
 ## Agent turns (full payload sent + model output)
 
-### Turn 1 (miss) — r01, r02, r03, r04, r05, r06, r07, r08, r09, r10 (10 rows, 8688ms)
+### Turn 1 (miss) — r01, r02, r03, r04, r05, r06, r07, r08, r09, r10 (10 rows, 10604ms)
 
 **User contents sent to the model** (system instruction is above; this is the user turn):
 
@@ -180,9 +180,9 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
 [
   {
     "id": "r01",
-    "medicalInsight": "Prostate-specific antigen is within normal limits at 1.41 ug/L, indicating a low risk of prostate pathology for this 43-year-old male.",
+    "medicalInsight": "Prostate-specific antigen (PSA) level is 1.41 ug/L, which is within the normal reference range. For a 43-year-old male, this is a reassuring baseline.",
     "optimalValue": "1.0 ug/L",
-    "editReason": "",
+    "editReason": "Provides an optimal target below the upper reference limit for early detection awareness.",
     "logs": [
       {
         "date": "2026-06-05",
@@ -202,19 +202,19 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
         "PSA",
         "Prostate Specific Antigen"
       ],
-      "normalRange": "[Standard] Normal: <=2.49; High: >2.49",
-      "description": "Prostate-specific antigen blood test used to screen for prostate conditions.",
+      "normalRange": "[Standard] Normal: <=2.49; Elevated: >2.49",
+      "description": "Prostate-specific antigen blood test used primarily to screen for prostate cancer.",
       "riskCategories": [
         "Prostate Health"
       ]
     },
-    "customRangeOverlay": "[Standard] Normal: <=2.49; High: >2.49"
+    "customRangeOverlay": "[Standard] Normal: <=2.49; Elevated: >2.49"
   },
   {
     "id": "r02",
-    "medicalInsight": "Serum sodium is well-balanced at 143 mmol/L, reflecting proper fluid and electrolyte homeostasis.",
+    "medicalInsight": "Serum sodium is 143 mmol/L, well within the normal physiological range, indicating normal body hydration and electrolyte balance.",
     "optimalValue": "140 mmol/L",
-    "editReason": "",
+    "editReason": "Target midpoint of normal sodium balance.",
     "logs": [
       {
         "date": "2026-06-05",
@@ -235,7 +235,7 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
         "Na"
       ],
       "normalRange": "[Standard] High: >146; Normal: 133-146; Low: <133",
-      "description": "Measures sodium level in blood to evaluate hydration and electrolyte status.",
+      "description": "Measurement of sodium concentration in the blood, essential for fluid balance and nerve function.",
       "riskCategories": [
         "Electrolytes"
       ]
@@ -244,9 +244,9 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
   },
   {
     "id": "r03",
-    "medicalInsight": "Serum potassium is optimal at 4.3 mmol/L, supporting healthy cardiac and neuromuscular function.",
+    "medicalInsight": "Serum potassium is 4.3 mmol/L, perfectly optimal and indicative of healthy cellular function and cardiac electrophysiology.",
     "optimalValue": "4.2 mmol/L",
-    "editReason": "",
+    "editReason": "Target median optimal potassium level.",
     "logs": [
       {
         "date": "2026-06-05",
@@ -267,7 +267,7 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
         "K"
       ],
       "normalRange": "[Standard] High: >5.3; Normal: 3.5-5.3; Low: <3.5",
-      "description": "Measures potassium concentration in blood crucial for heart and muscle cell function.",
+      "description": "Measurement of potassium in blood, critical for heart and skeletal muscle function.",
       "riskCategories": [
         "Electrolytes"
       ]
@@ -276,9 +276,9 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
   },
   {
     "id": "r04",
-    "medicalInsight": "Serum alkaline phosphatase is normal at 39 U/L, indicating healthy liver and bone metabolism.",
+    "medicalInsight": "Serum alkaline phosphatase is 39 U/L, situated safely within the normal range, reflecting healthy liver and bone metabolism.",
     "optimalValue": "70 U/L",
-    "editReason": "",
+    "editReason": "Target middle of standard reference interval.",
     "logs": [
       {
         "date": "2026-06-05",
@@ -299,7 +299,7 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
         "Alkaline Phosphatase"
       ],
       "normalRange": "[Standard] High: >130; Normal: 30-130; Low: <30",
-      "description": "Enzyme found in liver, bones, and other tissues.",
+      "description": "Enzyme found in several tissues throughout the body, most notably the liver, bones, kidneys, and digestive tract.",
       "riskCategories": [
         "Liver Function",
         "Bone Health"
@@ -309,9 +309,9 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
   },
   {
     "id": "r05",
-    "medicalInsight": "Serum total bilirubin level is within the normal range at 16 umol/L, confirming normal red blood cell breakdown and hepatic excretion.",
+    "medicalInsight": "Serum total bilirubin level is 16 umol/L, well within normal limits, indicating normal hepatic processing and clearance of red blood cell breakdown products.",
     "optimalValue": "10 umol/L",
-    "editReason": "",
+    "editReason": "Optimal target for healthy hepatic clearance.",
     "logs": [
       {
         "date": "2026-06-05",
@@ -331,19 +331,19 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
         "Total Bilirubin",
         "Bilirubin"
       ],
-      "normalRange": "[Standard] Normal: <=21; High: >21",
-      "description": "Measures total bilirubin concentration to assess liver function and hemolytic conditions.",
+      "normalRange": "[Standard] High: >21; Normal: 0-21",
+      "description": "Yellowish pigment found in bile, produced by the liver.",
       "riskCategories": [
         "Liver Function"
       ]
     },
-    "customRangeOverlay": "[Standard] Normal: <=21; High: >21"
+    "customRangeOverlay": "[Standard] High: >21; Normal: 0-21"
   },
   {
     "id": "r06",
-    "medicalInsight": "Serum globulin is normal at 35 g/L, supporting healthy immune function and protein status.",
+    "medicalInsight": "Serum globulin is 35 g/L, falling comfortably within the expected reference interval, representing normal immune protein and carrier protein synthesis.",
     "optimalValue": "30 g/L",
-    "editReason": "",
+    "editReason": "Target mid-range for optimal globulin balance.",
     "logs": [
       {
         "date": "2026-06-05",
@@ -363,18 +363,19 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
         "Globulin"
       ],
       "normalRange": "[Standard] High: >38; Normal: 22-38; Low: <22",
-      "description": "Measures blood globulin proteins involved in immune response and liver function.",
+      "description": "Major group of plasma proteins in the blood acting as immunoglobulins and carrier proteins.",
       "riskCategories": [
-        "Protein Panel"
+        "Protein Status",
+        "Liver Function"
       ]
     },
     "customRangeOverlay": "[Standard] High: >38; Normal: 22-38; Low: <22"
   },
   {
     "id": "r07",
-    "medicalInsight": "Serum calcium is 2.47 mmol/L, representing adequate calcium levels for cellular and skeletal health.",
+    "medicalInsight": "Serum calcium is 2.47 mmol/L, indicating normal total systemic calcium availability.",
     "optimalValue": "2.35 mmol/L",
-    "editReason": "",
+    "editReason": "Target optimal mid-point for systemic calcium homeostasis.",
     "logs": [
       {
         "date": "2026-06-05",
@@ -394,26 +395,26 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
         "Calcium",
         "Ca"
       ],
-      "normalRange": "[Standard] Normal: 2.10-2.55; High: >2.55; Low: <2.10",
-      "description": "Total calcium level in blood circulation.",
+      "normalRange": "[Standard] Normal: 2.10-2.60; High: >2.60; Low: <2.10",
+      "description": "Total amount of calcium circulating in the blood stream.",
       "riskCategories": [
         "Bone Health",
         "Electrolytes"
       ]
     },
-    "customRangeOverlay": "[Standard] Normal: 2.10-2.55; High: >2.55; Low: <2.10"
+    "customRangeOverlay": "[Standard] Normal: 2.10-2.60; High: >2.60; Low: <2.10"
   },
   {
     "id": "r08",
-    "medicalInsight": "Serum adjusted calcium concentration is 2.37 mmol/L, falling comfortably within the modern Abbott Alinity reference interval.",
+    "medicalInsight": "Serum adjusted calcium concentration is 2.37 mmol/L, well within the laboratory's updated reference range, indicating proper calcium correction relative to albumin.",
     "optimalValue": "2.28 mmol/L",
-    "editReason": "",
+    "editReason": "Target optimal midpoint for adjusted calcium.",
     "logs": [
       {
         "date": "2026-06-05",
         "value": 2.37,
         "unit": "mmol/L",
-        "comment": "Please note new adjusted calcium equation and new adjusted calcium Abbott Alinity reference ranges in use from 22/09/25."
+        "comment": "New adjusted calcium equation and new adjusted calcium Abbott Alinity reference ranges in use from 22/09/25."
       }
     ],
     "match": "none",
@@ -428,7 +429,7 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
         "Corrected Calcium"
       ],
       "normalRange": "[Standard] High: >2.48; Normal: 2.08-2.48; Low: <2.08",
-      "description": "Calcium concentration adjusted for changes in serum albumin levels.",
+      "description": "Calcium level adjusted for variations in serum albumin concentration.",
       "riskCategories": [
         "Bone Health",
         "Electrolytes"
@@ -438,9 +439,9 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
   },
   {
     "id": "r09",
-    "medicalInsight": "Serum inorganic phosphate is 1.12 mmol/L, indicating normal phosphate metabolism and renal handling.",
-    "optimalValue": "1.10 mmol/L",
-    "editReason": "",
+    "medicalInsight": "Serum inorganic phosphate is 1.12 mmol/L, well inside the reference limits, supporting normal bone mineralization and cellular energy metabolism.",
+    "optimalValue": "1.15 mmol/L",
+    "editReason": "Target stable physiological midpoint for phosphate.",
     "logs": [
       {
         "date": "2026-06-05",
@@ -461,19 +462,19 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
         "Phosphorus"
       ],
       "normalRange": "[Standard] High: >1.50; Normal: 0.80-1.50; Low: <0.80",
-      "description": "Measures inorganic phosphorus in blood essential for energy transfer and bone mineralization.",
+      "description": "Measurement of inorganic phosphorus compounds in the blood crucial for energy transfer and bone structure.",
       "riskCategories": [
         "Bone Health",
-        "Electrolytes"
+        "Metabolic Health"
       ]
     },
     "customRangeOverlay": "[Standard] High: >1.50; Normal: 0.80-1.50; Low: <0.80"
   },
   {
     "id": "r10",
-    "medicalInsight": "Homocysteine is 10.2 umol/L, below the 15.0 umol/L threshold, indicating favorable cardiovascular and methylation risk profiles.",
+    "medicalInsight": "Homocysteine is 10.2 umol/L, which is within the safe reference range (< 15.0 umol/L), suggesting adequate B-vitamin status and low cardiovascular metabolic risk.",
     "optimalValue": "8.0 umol/L",
-    "editReason": "",
+    "editReason": "Target optimal lower homocysteine level for optimal vascular health.",
     "logs": [
       {
         "date": "2026-06-05",
@@ -490,13 +491,12 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
       "name": "Homocysteine",
       "unit": "umol/L",
       "aliases": [
-        "Total Homocysteine",
-        "Hcy"
+        "Homocysteine Level"
       ],
       "normalRange": "[Standard] Normal: <15.0; High: >=15.0",
-      "description": "Amino acid in blood associated with cardiovascular risk when elevated.",
+      "description": "An amino acid in the body whose high levels are linked to heart disease and stroke.",
       "riskCategories": [
-        "Cardiovascular Risk",
+        "Cardiovascular Health",
         "Methylation"
       ]
     },

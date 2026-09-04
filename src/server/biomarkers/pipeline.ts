@@ -2,7 +2,7 @@ import { classifyRows, batchRows } from "./backoffice.js";
 import { parseLabImages } from "./vision_parser.js";
 import { fillBatch } from "./call_agent.js";
 import type { ProfileFixture, FillRow } from "./schema.js";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 
 export async function runBiomarkerPipeline(
   ai: GoogleGenAI,
@@ -28,18 +28,18 @@ export async function runBiomarkerPipeline(
   if (rows.length === 0 && message && message.trim()) {
       if (onProgress) onProgress(`Extracting from text...`);
       const schema = {
-        type: require('@google/genai').Type.OBJECT,
+        type: Type.OBJECT,
         properties: {
           rows: {
-            type: require('@google/genai').Type.ARRAY,
+            type: Type.ARRAY,
             items: {
-              type: require('@google/genai').Type.OBJECT,
+              type: Type.OBJECT,
               properties: {
-                printed: { type: require('@google/genai').Type.STRING },
-                value: { type: require('@google/genai').Type.NUMBER },
-                unit: { type: require('@google/genai').Type.STRING },
-                date: { type: require('@google/genai').Type.STRING },
-                printedRange: { type: require('@google/genai').Type.STRING }
+                printed: { type: Type.STRING },
+                value: { type: Type.NUMBER },
+                unit: { type: Type.STRING },
+                date: { type: Type.STRING },
+                printedRange: { type: Type.STRING }
               },
               required: ["printed", "value", "unit", "date"]
             }

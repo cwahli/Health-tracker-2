@@ -44,7 +44,7 @@ LDL  100 mg/dL
 
 ## Agent turns (full payload sent + model output)
 
-### Turn 1 (hit) — r01, r02 (2 rows, 8608ms)
+### Turn 1 (hit) — r01, r02 (2 rows, 12519ms)
 
 **User contents sent to the model** (system instruction is above; this is the user turn):
 
@@ -98,38 +98,39 @@ Biomarkers to review (hits - in catalog):
 [
   {
     "id": "r01",
-    "medicalInsight": "BUN is 5.35 mmol/L (15 mg/dL), which falls comfortably within the normal range, indicating good renal filtration and protein metabolism.",
+    "medicalInsight": "The BUN value is within normal limits at 5.35 mmol/L (equivalent to 15 mg/dL), indicating healthy renal nitrogen excretion and protein metabolism.",
     "optimalValue": "4.5 mmol/L",
-    "editReason": "",
+    "editReason": "Converted units and provided optimal clinical target for a 43-year-old male.",
     "logs": [
       {
         "date": "2026-06-05",
         "value": 5.35,
         "unit": "mmol/L",
-        "comment": null
+        "comment": "Patient uploaded BUN value equivalent to 15 mg/dL."
       }
     ],
     "customRangeOverlay": "[Western Standard] High: >7.1; Normal: 2.5-7.1; Low: <2.5",
     "dictionaryCorrection": {
-      "field": "normalRange",
-      "correctedValue": "2.5 - 7.1",
-      "reason": "Standardize dictionary values to SI mmol/L for BUN."
+      "field": "unit",
+      "correctedValue": "mmol/L",
+      "reason": "Standardizing to SI units for patient demographic preference."
     }
   },
   {
     "id": "r02",
-    "medicalInsight": "LDL-C is 2.59 mmol/L, which is optimal for a 43-year-old male without known cardiovascular disease, reflecting well-managed lipid status.",
+    "medicalInsight": "LDL-C is optimal at 2.59 mmol/L (100 mg/dL), reflecting good cardiovascular risk status for a 43-year-old male.",
     "optimalValue": "2.0 mmol/L",
-    "editReason": "",
+    "editReason": "Set aggressive optimal target for cardiovascular health.",
     "logs": [
       {
         "date": "2026-06-05",
         "value": 2.59,
         "unit": "mmol/L",
-        "comment": null
+        "comment": "Patient uploaded LDL value equivalent to 100 mg/dL."
       }
     ],
-    "customRangeOverlay": ""
+    "customRangeOverlay": "[All patients] Very High: >3.4; Elevated: >2.6; Optimal: <=2.6",
+    "dictionaryCorrection": null
   }
 ]
 ```

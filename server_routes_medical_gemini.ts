@@ -96,10 +96,67 @@ medicalGeminiRouter.post("/api/gemini/medical-analyze", async (req, res) => {
     
     const logsToUse = sessionDebugLogs[sessionId] || globalDebugLogs || [];
     const backendLogs = logsToUse.map((l: any) => typeof l === 'string' ? l : (l.timestamp ? `[${l.timestamp}] ${l.message}` : (l.message || JSON.stringify(l)))).join('\n');
+    
+    const customBiomarkerDefs: Record<string, any> = {};
+    const unmappedTests: any[] = [];
+    const extractedBiomarkers: Record<string, number | string> = {};
+    const entriesByDate: Record<string, { date: string | null; biomarkers: Record<string, number | string>; tests: any[] }> = {};
+    let latestDate: string | undefined;
+
+    finalRows.forEach((row: any) => {
+        if (row.writeTarget === 'observation' && row.key && row.value !== undefined && row.value !== null) {
+            extractedBiomarkers[row.key] = row.value;
+            const d = row.date || 'today';
+            if (!entriesByDate[d]) {
+                entriesByDate[d] = {
+                    date: d === 'today' ? null : d,
+                    biomarkers: {},
+                    tests: []
+                };
+            }
+            entriesByDate[d].biomarkers[row.key] = row.value;
+            entriesByDate[d].tests.push({
+                key: row.key,
+                name: row.printed || row.key,
+                value: row.value,
+                unit: row.unit,
+                normalRange: row.assignedRange || row.printedRange
+            });
+            if (row.date && (!latestDate || row.date > latestDate)) {
+                latestDate = row.date;
+            }
+        }
+    });
+
+    const pendingObservations = finalRows
+        .filter((r: any) => r.writeTarget === 'pending' || r.newCatalogDraft)
+        .map((r: any) => ({
+            id: `pending_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            printedName: r.newCatalogDraft?.name || r.printed || 'Unknown',
+            suggestedKey: r.newCatalogDraft?.suggestedKey || r.key || r.id,
+            date: r.date || new Date().toISOString().slice(0, 10),
+            rawValue: r.value,
+            rawUnit: r.unit,
+            printedRange: r.printedRange || r.assignedRange,
+            createdAt: Date.now()
+        }));
+
+    const insights = finalRows
+        .map((r: any) => r.medicalInsight)
+        .filter(Boolean);
+    const summaryText = insights.length > 0 
+        ? insights.join('\n\n')
+        : `Processed ${finalRows.length} biomarker(s).`;
 
     const result = {
         filledRows: finalRows,
-        text: `Processed ${finalRows.length} biomarker(s).`,
+        biomarkers: extractedBiomarkers,
+        date: latestDate || new Date().toISOString().slice(0, 10),
+        entries: Object.values(entriesByDate),
+        pendingObservations,
+        customBiomarkerDefs,
+        unmappedTests,
+        text: summaryText,
         backendLogs
     };
 

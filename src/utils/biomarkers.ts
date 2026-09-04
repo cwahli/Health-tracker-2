@@ -3710,6 +3710,11 @@ export function isPendingCatalogApproval(key: string, profile: any): boolean {
   if (isCatalogBuiltIn(key)) return false;
   const mapped = getMappedBiomarkerKey(key) || key.toLowerCase();
   if (mapped && mapped !== key && isCatalogBuiltIn(mapped)) return false;
+  if (Array.isArray(profile?.pendingObservations) && profile.pendingObservations.some((p: any) => p.suggestedKey === key || p.printedName === key || p.suggestedKey === mapped)) {
+    const custom = profile?.customBiomarkers?.[key] || profile?.customBiomarkers?.[mapped];
+    if (custom?.catalogApproved === true) return false;
+    return true;
+  }
   const custom = profile?.customBiomarkers?.[key] || profile?.customBiomarkers?.[mapped];
   if (!custom) return false;
   if (custom.catalogApproved === true) return false;
@@ -3732,6 +3737,9 @@ export function isBiomarkerApproved(key: string, profile: any, itemLogs?: any[])
   const custom = profile?.customBiomarkers?.[k] || profile?.customBiomarkers?.[key];
   // Built-in catalog keys stay live even if a stale extract/sync left needsApproval on the custom overlay.
   if (isCatalogBuiltIn(k) && custom?.catalogApproved !== false) return true;
+  if (Array.isArray(profile?.pendingObservations) && profile.pendingObservations.some((p: any) => p.suggestedKey === k || p.printedName === k || p.suggestedKey === key || p.printedName === key)) {
+    if (custom?.catalogApproved !== true) return false;
+  }
   if (custom?.needsApproval === true) return false;
   if (custom?.catalogApproved === true) return true;
 

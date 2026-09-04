@@ -34,6 +34,7 @@ export interface ServerJobPayload {
   batchBiomarkers?: any[];
   dataReviewBatchIdx?: number | string | null;
   extractedData?: any;
+  filledRows?: any[];
   bucketMapping?: string;
   lastProcessedIndex?: number | null;
   estimatedTotalMarkers?: number | null;
@@ -463,6 +464,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         batchBiomarkers: payload.batchBiomarkers || [],
         dataReviewBatchIdx: payload.dataReviewBatchIdx,
         extractedData: payload.extractedData,
+        filledRows: payload.filledRows,
         bucketMapping: payload.bucketMapping,
         lastProcessedIndex: payload.lastProcessedIndex,
         estimatedTotalMarkers: payload.estimatedTotalMarkers,
@@ -845,6 +847,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           // pick them up without any client-side changes.
           agentType: finalPayload?.agentType || undefined,
           extractedData: finalPayload?.extractedData || undefined,
+          filledRows: finalPayload?.filledRows || undefined,
           hasMoreMarkers: finalPayload?.hasMoreMarkers || undefined,
           estimatedTotalMarkers: finalPayload?.estimatedTotalMarkers ?? undefined,
           unmappedTests: finalPayload?.unmappedTests || undefined,
@@ -888,6 +891,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           } : undefined),
           agentResult: {
             extractedData: finalPayload?.extractedData || undefined,
+            filledRows: finalPayload?.filledRows || undefined,
             hasMoreMarkers: finalPayload?.hasMoreMarkers || undefined,
             estimatedTotalMarkers: finalPayload?.estimatedTotalMarkers ?? undefined,
             unmappedTests: finalPayload?.unmappedTests || undefined,

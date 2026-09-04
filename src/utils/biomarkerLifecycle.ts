@@ -5,7 +5,7 @@
 import { toYYYYMMDD } from './dateUtils';
 import { getMappedBiomarkerKey, isBiomarkerApproved, detectFlaggedTelemetryErrors, biomarkerDefinitions, parseNormalRangeBounds, isBiomarkerValueImprobable, getActiveStructuredRangeRule } from './biomarkers';
 import { ANALYTE_CONVERSIONS } from './analyteConversions';
-import type { BiomarkerLog } from '../types';
+import type { BiomarkerLog, PendingObservation } from '../types';
 
 export { ANALYTE_CONVERSIONS } from './analyteConversions';
 export {
@@ -1124,12 +1124,13 @@ export function overlayFingerprint(profile: {
 export function shouldRunCalibrator(
   key: string,
   profile: { age?: any; gender?: string; ethnicity?: string } | null | undefined,
-  overlay?: { fingerprint?: string; sameAsCatalog?: boolean } | null
+  overlay?: { fingerprint?: string; overlayFingerprint?: string; sameAsCatalog?: boolean } | null
 ): boolean {
   const varies = getRangeVariesBy(key);
   if (varies.length === 0) return false;
   const fp = overlayFingerprint(profile);
-  if (overlay?.fingerprint === fp) return false;
+  const existingFp = overlay?.overlayFingerprint || overlay?.fingerprint;
+  if (existingFp === fp) return false;
   return true;
 }
 
@@ -1252,7 +1253,17 @@ export function resolveAgentDestination(
   payload?: any
 ): string | AgentDestinationRoute | null {
   if (!agentType) return null;
-  const canonical = RETIRED_AGENT_REDIRECT[agentType] || agentType;
+  let canonical = RETIRED_AGENT_REDIRECT[agentType] || agentType;
+
+  // WRONG_DOOR classification: if lab_extract (agent1/medical) receives symptom text, route to symptom_diary
+  if ((canonical === 'agent1' || canonical === 'medical' || canonical === 'agent1_step1') && payload?.text) {
+    const textLower = payload.text.toLowerCase();
+    const isSymptom = /heartburn|pain|symptom|blood in stool|acid reflux|ache|cramp|dizzy|nausea/i.test(textLower);
+    const hasTable = textLower.includes('date,test name,result') || textLower.includes('date, test, result');
+    if (isSymptom && !hasTable) {
+      canonical = 'symptom_diary';
+    }
+  }
 
   if (payload !== undefined && payload !== null) {
     if (payload?.isWrongDoor === true) {
@@ -1424,6 +1435,7 @@ export interface CleanupBiomarkerCatalogResult {
   remappedKeys: Record<string, string>;
   droppedKeys: string[];
   strippedRanges: string[];
+  history?: any[];
 }
 
 /**
@@ -1451,15 +1463,18 @@ export function cleanupInventedBiomarkerCatalog(
   // 1. Remap custom keys through getMappedBiomarkerKey & tombstone alias keys
   Object.entries(nextProfile.customBiomarkers).forEach(([key, def]: [string, any]) => {
     const mappedByKey = getMappedBiomarkerKey(key);
-    const mappedByName = def?.name ? getMappedBiomarkerKey(def.name) : '';
-    const mapped =
-      mappedByKey && mappedByKey !== key && biomarkerDefinitions.some((d) => d.key === mappedByKey)
-        ? mappedByKey
-        : mappedByName && mappedByName !== key && biomarkerDefinitions.some((d) => d.key === mappedByName)
-        ? mappedByName
-        : mappedByKey && mappedByKey !== key
-        ? mappedByKey
-        : '';
+    const candidateName = def?.name || def?.printedName || def?.originalName || '';
+    const isCandidateJunk = !candidateName || /^metric[_\s-]?\d+$/i.test(candidateName);
+    const mappedByName = !isCandidateJunk ? getMappedBiomarkerKey(candidateName) : '';
+
+    let mapped = '';
+    if (mappedByKey && mappedByKey !== key && biomarkerDefinitions.some((d) => d.key === mappedByKey)) {
+      mapped = mappedByKey;
+    } else if (mappedByName && mappedByName !== key && biomarkerDefinitions.some((d) => d.key === mappedByName)) {
+      mapped = mappedByName;
+    } else if (mappedByKey && mappedByKey !== key && !/^metric[_\s-]?\d+$/i.test(mappedByKey) && !/^metric[_\s-]?\d+$/i.test(key)) {
+      mapped = mappedByKey;
+    }
 
     if (mapped && mapped !== key) {
       remappedKeys[key] = mapped;
@@ -1487,12 +1502,41 @@ export function cleanupInventedBiomarkerCatalog(
     }
   });
 
-  // 3. Delete needsApproval on catalog-mapped keys
+  // 3. Ensure needsApproval is never a lingering field on customBiomarkers bag (B7.4)
+  // Unknown names never become catalog keys; pending observations live in pendingObservations store.
+  if (!Array.isArray(nextProfile.pendingObservations)) {
+    nextProfile.pendingObservations = Array.isArray(profile?.pendingObservations) ? [...profile.pendingObservations] : [];
+  }
   Object.entries(nextProfile.customBiomarkers).forEach(([key, def]: [string, any]) => {
     const mapped = getMappedBiomarkerKey(key) || key;
     const isBuiltIn = biomarkerDefinitions.some((d: any) => d.key === mapped || d.key === key);
-    if (isBuiltIn && def?.needsApproval) {
-      delete def.needsApproval;
+    if (isBuiltIn) {
+      if (def?.needsApproval) {
+        delete def.needsApproval;
+      }
+    } else if (def?.needsApproval === true) {
+      if (def.catalogApproved !== true) {
+        const alreadyPending = nextProfile.pendingObservations.some(
+          (p: any) => p.suggestedKey === key || (def.name && p.printedName?.toLowerCase() === def.name.toLowerCase())
+        );
+        if (!alreadyPending && def.name) {
+          nextProfile.pendingObservations.push({
+            id: `pending_${Date.now()}_${key}`,
+            printedName: def.name,
+            suggestedKey: key,
+            date: toYYYYMMDD(new Date().toISOString()),
+            rawValue: 0,
+            rawUnit: def.unit || '',
+            printedRange: def.normalRange || '',
+            createdAt: Date.now(),
+          });
+        }
+        delete nextProfile.customBiomarkers[key];
+        nextProfile.deletedCustomBiomarkerKeys[key] = Date.now();
+        droppedKeys.push(key);
+      } else {
+        delete def.needsApproval;
+      }
     }
   });
 
@@ -1529,10 +1573,201 @@ export function cleanupInventedBiomarkerCatalog(
     nextProfile.pendingObservations = [...profile.pendingObservations];
   }
 
+  // 5. Migrate history in-place for any remapped keys so parallel keys don't linger in logs
+  if (Array.isArray(history) && history.length > 0 && Object.keys(remappedKeys).length > 0) {
+    history.forEach((h) => {
+      if (!h || !h.biomarkers) return;
+      Object.entries(remappedKeys).forEach(([oldK, newK]) => {
+        if (h.biomarkers[oldK] !== undefined) {
+          if (h.biomarkers[newK] === undefined) {
+            h.biomarkers[newK] = h.biomarkers[oldK];
+          }
+          delete h.biomarkers[oldK];
+          if (h.observationMeta && h.observationMeta[oldK]) {
+            if (!h.observationMeta[newK]) {
+              h.observationMeta[newK] = h.observationMeta[oldK];
+            }
+            delete h.observationMeta[oldK];
+          }
+        }
+      });
+    });
+  }
+
   return {
     profile: nextProfile,
     remappedKeys,
     droppedKeys,
     strippedRanges,
+    history,
   };
+}
+
+export interface RouteExtractedResult {
+  approvedObservations: Record<string, number | string>;
+  pendingObservations: PendingObservation[];
+  approvedTests: any[];
+}
+
+/**
+ * B7.4 Real Pending Store:
+ * Routes extracted observations so unknown printed names never become catalog keys
+ * and pending is never a field in the customBiomarkers bag.
+ */
+export function routeExtractedObservations(
+  extractedBiomarkers: Record<string, number | string>,
+  tests: any[] = [],
+  profile: any = {},
+  defaultDate?: string
+): RouteExtractedResult {
+  const approvedObservations: Record<string, number | string> = {};
+  const pendingObservations: PendingObservation[] = [];
+  const approvedTests: any[] = [];
+  const date = defaultDate || new Date().toISOString().slice(0, 10);
+  const customs = profile?.customBiomarkers || {};
+
+  Object.entries(extractedBiomarkers || {}).forEach(([rawKey, val]) => {
+    if (!rawKey || rawKey === 'weight' || rawKey === 'height' || rawKey === 'age') return;
+
+    // Find test info if available
+    const testInfo = (tests || []).find(
+      (t: any) => t && (t.key === rawKey || t.biomarker === rawKey || t.name?.toLowerCase() === rawKey.toLowerCase())
+    );
+
+    const printedName = testInfo?.name || testInfo?.display_name || rawKey.split('_').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+    // 1. Check built-in catalog
+    let canonicalKey: string | null = null;
+    if (biomarkerDefinitions.some((d) => d.key === rawKey)) {
+      canonicalKey = rawKey;
+    } else {
+      const mapped = getMappedBiomarkerKey(rawKey) || getMappedBiomarkerKey(printedName);
+      if (mapped && biomarkerDefinitions.some((d) => d.key === mapped)) {
+        canonicalKey = mapped;
+      }
+    }
+
+    // 2. Check approved custom biomarkers
+    let customKey: string | null = null;
+    if (!canonicalKey) {
+      if (customs[rawKey]?.catalogApproved === true) {
+        customKey = rawKey;
+      } else {
+        const foundKey = Object.keys(customs).find(
+          (k) => customs[k]?.catalogApproved === true && (k.toLowerCase() === rawKey.toLowerCase() || customs[k]?.name?.toLowerCase() === printedName.toLowerCase())
+        );
+        if (foundKey) customKey = foundKey;
+      }
+    }
+
+    if (canonicalKey) {
+      approvedObservations[canonicalKey] = val;
+      if (testInfo) approvedTests.push({ ...testInfo, key: canonicalKey });
+    } else if (customKey) {
+      approvedObservations[customKey] = val;
+      if (testInfo) approvedTests.push({ ...testInfo, key: customKey });
+    } else {
+      // 3. Unknown printed name! MUST NOT become a catalog key. Route to Pending store.
+      const suggestedKey = rawKey.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+      pendingObservations.push({
+        id: `pending_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        printedName,
+        suggestedKey: suggestedKey || 'unknown_marker',
+        date: testInfo?.date || date,
+        rawValue: val,
+        rawUnit: testInfo?.unit || '',
+        printedRange: testInfo?.printedRange || testInfo?.normalRange || '',
+        labFlag: testInfo?.labFlag || testInfo?.flag || '',
+        createdAt: Date.now(),
+      });
+    }
+  });
+
+  return { approvedObservations, pendingObservations, approvedTests };
+}
+
+export function approvePendingObservation(
+  profile: any,
+  history: any[] = [],
+  pendingIdOrName: string,
+  targetKeyOrDef: string | { name: string; unit?: string; normalRange?: string; standardMedicalGrouping?: string; riskCategories?: string[] }
+): { profile: any; history: any[] } {
+  const nextProfile = {
+    ...profile,
+    customBiomarkers: { ...(profile?.customBiomarkers || {}) },
+    pendingObservations: Array.isArray(profile?.pendingObservations) ? [...profile.pendingObservations] : []
+  };
+  const nextHistory = [...history];
+
+  const pendingIdx = nextProfile.pendingObservations.findIndex(
+    (p: any) => p.id === pendingIdOrName || p.printedName?.toLowerCase() === pendingIdOrName.toLowerCase() || p.suggestedKey === pendingIdOrName
+  );
+
+  if (pendingIdx === -1) {
+    return { profile: nextProfile, history: nextHistory };
+  }
+
+  const pendingItem = nextProfile.pendingObservations[pendingIdx];
+  nextProfile.pendingObservations.splice(pendingIdx, 1);
+
+  let targetKey = '';
+  if (typeof targetKeyOrDef === 'string') {
+    targetKey = targetKeyOrDef;
+  } else {
+    targetKey = targetKeyOrDef.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    nextProfile.customBiomarkers[targetKey] = {
+      name: targetKeyOrDef.name,
+      unit: targetKeyOrDef.unit || pendingItem.rawUnit || '',
+      normalRange: targetKeyOrDef.normalRange || pendingItem.printedRange || '',
+      standardMedicalGrouping: targetKeyOrDef.standardMedicalGrouping || 'Other',
+      riskCategories: targetKeyOrDef.riskCategories || [],
+      catalogApproved: true
+    };
+  }
+
+  // Write observation into history
+  const targetDate = pendingItem.date || new Date().toISOString().slice(0, 10);
+  const logIdx = nextHistory.findIndex((h) => toYYYYMMDD(h.date) === toYYYYMMDD(targetDate));
+  const numericVal = typeof pendingItem.rawValue === 'number' ? pendingItem.rawValue : (Number(pendingItem.rawValue) || pendingItem.rawValue);
+
+  if (logIdx >= 0) {
+    const existingLog = nextHistory[logIdx];
+    const updatedLog = {
+      ...existingLog,
+      biomarkers: { ...(existingLog.biomarkers || {}), [targetKey]: numericVal },
+      updated_at: Date.now()
+    };
+    attachObservationMeta(updatedLog, targetKey, {
+      unit: pendingItem.rawUnit,
+      printedRange: pendingItem.printedRange,
+      labFlag: pendingItem.labFlag,
+      rawValue: pendingItem.rawValue
+    });
+    nextHistory[logIdx] = updatedLog;
+  } else {
+    const newLog: any = {
+      id: `med_log_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      date: targetDate,
+      biomarkers: { [targetKey]: numericVal },
+      sync_state: 'new',
+      updated_at: Date.now()
+    };
+    attachObservationMeta(newLog, targetKey, {
+      unit: pendingItem.rawUnit,
+      printedRange: pendingItem.printedRange,
+      labFlag: pendingItem.labFlag,
+      rawValue: pendingItem.rawValue
+    });
+    nextHistory.push(newLog);
+  }
+
+  return { profile: nextProfile, history: nextHistory };
+}
+
+export function dismissPendingObservation(profile: any, pendingIdOrName: string): any {
+  if (!Array.isArray(profile?.pendingObservations)) return profile;
+  const filtered = profile.pendingObservations.filter(
+    (p: any) => p.id !== pendingIdOrName && p.printedName?.toLowerCase() !== pendingIdOrName.toLowerCase() && p.suggestedKey !== pendingIdOrName
+  );
+  return { ...profile, pendingObservations: filtered };
 }

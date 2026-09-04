@@ -212,7 +212,8 @@ export function AllAnalysesModal({
     try {
       if (job.kind === 'medical') {
         // Save medical biomarkers
-        const biomarkersToSave = job.result?.biomarkers || job.result?.extractedData?.biomarkers || {};
+        const filledBiomarkers = job.result?.filledRows ? Object.fromEntries(job.result.filledRows.filter((r: any) => r.key && r.value !== undefined && r.value !== null).map((r: any) => [r.key, r.value])) : {};
+        const biomarkersToSave = Object.keys(filledBiomarkers).length > 0 ? filledBiomarkers : (job.result?.biomarkers || job.result?.extractedData?.biomarkers || {});
         const summary = job.result?.summary || job.result?.doctorSummary || 'Medical record analysis';
         const date = job.result?.date || new Date().toISOString().split('T')[0];
 

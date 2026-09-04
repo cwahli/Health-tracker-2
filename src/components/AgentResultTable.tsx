@@ -379,7 +379,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
 
     if (agentType === 'agent1') {
       // Step 1: Clinical Data Parser (from YAML)
-      const jsonText = agentResult.extractedData || agentResult;
+      const jsonText = agentResult.filledRows || agentResult.extractedData || agentResult;
       let parsedRows: any[] = [];
       
       if (Array.isArray(jsonText)) {
@@ -1144,7 +1144,8 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
     // Fallback standard mapping when batchBiomarkers is not available
     if (agentType === 'medical_extract') {
       let parsedRows: any[] = [];
-      const entries = Array.isArray(agentResult) ? agentResult : [];
+      const jsonText = agentResult.filledRows || agentResult.extractedData || agentResult;
+      const entries = Array.isArray(jsonText) ? jsonText : [];
       entries.forEach(entry => {
         if (entry.tests && Array.isArray(entry.tests)) {
           entry.tests.forEach((test: any) => { 

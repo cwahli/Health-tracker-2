@@ -164,14 +164,14 @@ Ingest **code** for B1–B6 is on GitHub. Ingest **v1 is not shipped** until the
 |---|---|---|---|
 | **B0.1–0.3** | Human Apply smoke on `job_medical_1786666223594` | Card shows HDL 50→**1.293**, TG 125→**1.411**, LDL 130→**3.362**, creat 0.9→**79.56**, bili 0.8→**13.68**; Apply writes history + Home; `observationMeta` raw kept; older SI rows (HDL 1.43, creat 100/72, bili 16/13) untouched | `APPLY_MISS` |
 | **B0.5** | Only if Apply misses | Failing `APPLY_MISS` test, then fix hydrate / `enrichReviewModificationCommands` only | `APPLY_MISS` |
-| **B2.1** | One raw injection | Extract prompt has no second `Chat History:` prefix (`server.ts`) | hygiene |
-| **B2.2** | Drop `updated_at` from extract schema | Schema / prompt no longer ask the model for `updated_at` | — |
-| **B2.3** | No `remainingText` echo | `remainingText` gone from extract path (`server.ts` → `LogChat` → `MedicalAgentExecutor` → `serverJobs`) | — |
-| **B2.4** | Door packs | `lab_extract` vs `symptom_diary` actually route; G-B6 test **calls** the classifier | `WRONG_DOOR` |
-| **B2.6** | Lexer shape goldens | G-B3 shifted-columns / UK `109/L` / panel skip exist and call `lexTable` | `CONFORMANCE_SHAPE` |
-| **B4.3** | **Real G-B2** | `lexTable` + `buildIngestBatch` run on the 140-row fixture; assert **class counts from the lexer**, not `expected.json` labels | — |
-| **B5.11** | G-B8 re-paste | Same report upserts; no second observation row | `UPSERT_IDENTITY` |
-| **B6** | Inbox + capture | `golden-from-medical-debug.mjs`; inbox Biomarkers grouped by class (not a G-B1 stub); G-B5/7/9 tests **execute** the door / completeness / image path | — |
+| **B2.1** | **Shipped** | Extract prompt has no second `Chat History:` prefix (`server.ts`) | hygiene |
+| **B2.2** | **Shipped** | Schema / prompt no longer ask the model for `updated_at` | — |
+| **B2.3** | **Shipped** | `remainingText` gone from extract path (`server.ts` → `LogChat` → `MedicalAgentExecutor` → `serverJobs`) | — |
+| **B2.4** | **Shipped** | `lab_extract` vs `symptom_diary` actually route; G-B6 test **calls** the classifier | `WRONG_DOOR` |
+| **B2.6** | **Shipped** | G-B3 shifted-columns / UK `109/L` / panel skip exist and call `lexTable` | `CONFORMANCE_SHAPE` |
+| **B4.3** | **Shipped** | `lexTable` + `buildIngestBatch` run on the 140-row fixture; assert **class counts from the lexer**, not `expected.json` labels | — |
+| **B5.11** | **Shipped** | Same report upserts; no second observation row | `UPSERT_IDENTITY` |
+| **B6** | **Shipped** | `golden-from-medical-debug.mjs`; inbox Biomarkers grouped by class (not a G-B1 stub); G-B5/7/9 tests **execute** the door / completeness / image path | — |
 | **B7.4** | Real Pending store | Unknown names never become catalog keys; pending not a field on the `customBiomarkers` bag | `COMPLETENESS` |
 | **B7.5** | Silent Calibrator | Overlay re-runs when demographic fingerprint (`ageBand\|gender\|ethnicity`) changes — product path, not only a helper | `CURRENCY` |
 | **B7.6** | Name Deduper leftovers | Parallel keys from aliases / `metric_N` still in live profiles are merged or tombstoned | `IDENTITY_PARALLEL_KEY` |
@@ -215,8 +215,8 @@ Does **not** replace B0–B7. Same pillar, same `convertViaTable` law. Trigger: 
 |---|---|---|---|---|
 | **B8.0** | Human: one Auto-Fix surface | Choice written in `AI_HANDOVER.md`: **(A)** Flagged Telemetry modal is the only Auto-Fix, or **(B)** Auto-Fix banned again | product | Human |
 | **B8.1** | Telemetry Auto-Fix calls `convertViaTable` only | `computeBiomarkerTelemetryMultiplier` has no private factors; extra pairs live in `ANALYTE_CONVERSIONS`; locked `1.293` / `1.411` / `3.362` / `79.56` / `13.68` unchanged | `SECOND_MATH_PATH` | Grok (constants) |
-| **B8.2** | One Check-Biomarkers control | Dictionary toolbar **or** Cleaning menu, not both | `CLONE_UI` | Gemini |
-| **B8.3** | One audit mount | `runGeneralizedBiomarkerAudit` / `detectFlaggedTelemetryErrors` not re-run from Dictionary + Medical History + Trends + LogChat on the same paint | `EAGER_MOUNT` | Gemini after Grok names call sites |
+| **B8.2** | **Shipped** | Dictionary toolbar **or** Cleaning menu, not both | `CLONE_UI` | Gemini |
+| **B8.3** | **Shipped** | `runGeneralizedBiomarkerAudit` / `detectFlaggedTelemetryErrors` not re-run from Dictionary + Medical History + Trends + LogChat on the same paint | `EAGER_MOUNT` | Gemini after Grok names call sites |
 
 ---
 

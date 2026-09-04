@@ -278,70 +278,112 @@ export default function GoldenInboxPanel() {
 
       {domainTab === 'biomarkers' && (
         <div className="space-y-3">
-          <div className="rounded-2xl border border-indigo-500/30 bg-slate-800/90 p-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-white">G-B1 — Five Locked Unit Conversions</span>
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                  Frozen
+          {[
+            {
+              classId: 'APPLY_MISS',
+              title: 'Unit Scale & Review Apply',
+              badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+              description: 'Guards against unit conversion loss and ensures historical SI rows remain untouched without silent rewrites.',
+              cases: [
+                {
+                  id: 'G-B1',
+                  name: 'Five Locked Unit Conversions',
+                  desc: 'HDL 50→1.293, TG 125→1.411, LDL 130→3.362, Creatinine 0.9→79.56, Total Bilirubin 0.8→13.68.',
+                  frozen: true,
+                  metrics: [
+                    { label: 'HDL', val: '50 → 1.293' },
+                    { label: 'TG', val: '125 → 1.411' },
+                    { label: 'LDL', val: '130 → 3.362' },
+                    { label: 'Creatinine', val: '0.9 → 79.56' },
+                    { label: 'Bilirubin', val: '0.8 → 13.68' },
+                  ]
+                }
+              ]
+            },
+            {
+              classId: 'CONFORMANCE_SHAPE',
+              title: 'Table Shape & Format Ingestion',
+              badgeClass: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+              description: 'Validates multiline/single-line EMIS prints, shifted column tables, and non-medical vision aborts.',
+              cases: [
+                { id: 'G-B2', name: 'EMIS / NHS Print Table', desc: '140-row print table lexing & batch ingestion' },
+                { id: 'G-B3', name: 'Shifted Columns & UK Units', desc: 'Exponential units and panel header detection' },
+                { id: 'G-B9', name: 'Vision N/A Abort', desc: 'Non-medical image vision abort handling' },
+              ]
+            },
+            {
+              classId: 'IDENTITY_FALSE_FRIEND',
+              title: 'Specimen Isolation',
+              badgeClass: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+              description: 'Prevents cross-mapping urine, stool, or saliva analytes into serum/blood catalog records.',
+              cases: [
+                { id: 'G-B4', name: 'Specimen Guard', desc: 'Urine/stool specimen analyte isolation' },
+              ]
+            },
+            {
+              classId: 'WRONG_DOOR',
+              title: 'Routing & Door Classifier',
+              badgeClass: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+              description: 'Ensures dietary food entries and symptom diaries sent to medical analyze route to correct specialists.',
+              cases: [
+                { id: 'G-B5', name: 'Dietary in Medical Door', desc: 'Food logging input routed to food domain' },
+                { id: 'G-B6', name: 'Symptom Log Entry', desc: 'Symptom diary input routed to symptom domain' },
+              ]
+            },
+            {
+              classId: 'COMPLETENESS',
+              title: 'Incomplete Data Handling',
+              badgeClass: 'bg-rose-500/20 text-rose-300 border-rose-500/30',
+              description: 'Guards against fragmented readings and truncated inputs without valid numeric values.',
+              cases: [
+                { id: 'G-B7', name: 'Fragmented Reading', desc: 'Incomplete truncated table abort guard' },
+              ]
+            },
+            {
+              classId: 'UPSERT_IDENTITY',
+              title: 'Report Deduplication',
+              badgeClass: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+              description: 'Detects re-pasted identical laboratory reports and prevents duplicate observation rows.',
+              cases: [
+                { id: 'G-B8', name: 'Repaste Identity', desc: 'Identical report re-paste deduplication' },
+              ]
+            }
+          ].map((group) => (
+            <div key={group.classId} className="rounded-2xl border border-white/10 bg-slate-800/60 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white">{group.title}</span>
+                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${group.badgeClass}`}>
+                  {group.classId}
                 </span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                  APPLY_MISS
-                </span>
               </div>
-            </div>
-            <p className="text-[11px] text-white/70">
-              Pins the 5 locked unit conversions (HDL 50→1.293, TG 125→1.411, LDL 130→3.362, Creatinine 0.9→79.56, Total Bilirubin 0.8→13.68) and ensures older SI history rows remain untouched.
-            </p>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 pt-1 text-[10px]">
-              <div className="bg-black/30 p-1.5 rounded border border-white/5">
-                <div className="text-white/50">HDL (mg/dL → mmol/L)</div>
-                <div className="font-mono text-emerald-300 font-bold">50 → 1.293</div>
-              </div>
-              <div className="bg-black/30 p-1.5 rounded border border-white/5">
-                <div className="text-white/50">TG (mg/dL → mmol/L)</div>
-                <div className="font-mono text-emerald-300 font-bold">125 → 1.411</div>
-              </div>
-              <div className="bg-black/30 p-1.5 rounded border border-white/5">
-                <div className="text-white/50">LDL (mg/dL → mmol/L)</div>
-                <div className="font-mono text-emerald-300 font-bold">130 → 3.362</div>
-              </div>
-              <div className="bg-black/30 p-1.5 rounded border border-white/5">
-                <div className="text-white/50">Creatinine (mg/dL → umol/L)</div>
-                <div className="font-mono text-emerald-300 font-bold">0.9 → 79.56</div>
-              </div>
-              <div className="bg-black/30 p-1.5 rounded border border-white/5">
-                <div className="text-white/50">Bilirubin (mg/dL → umol/L)</div>
-                <div className="font-mono text-emerald-300 font-bold">0.8 → 13.68</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-slate-800/50 p-3 space-y-2">
-            <p className="text-xs font-bold text-white">Golden Biomarker Fixtures & Failure Classes</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
-              {[
-                { id: 'G-B1', class: 'APPLY_MISS', name: 'Five Locked Conversions', desc: 'HDL, TG, LDL, Creatinine, Bilirubin unit scale conversion' },
-                { id: 'G-B2', class: 'CONFORMANCE_SHAPE', name: 'EMIS / NHS Print Table', desc: '140-row print table lexing & batch ingestion' },
-                { id: 'G-B4', class: 'IDENTITY_FALSE_FRIEND', name: 'Specimen Guard', desc: 'Urine/stool specimen analyte isolation' },
-                { id: 'G-B5', class: 'WRONG_DOOR', name: 'Dietary in Medical Door', desc: 'Food logging input routed to food domain' },
-                { id: 'G-B6', class: 'WRONG_DOOR', name: 'Symptom Log Entry', desc: 'Symptom diary input routed to symptom domain' },
-                { id: 'G-B7', class: 'COMPLETENESS', name: 'Fragmented Reading', desc: 'Incomplete truncated table abort guard' },
-                { id: 'G-B8', class: 'UPSERT_IDENTITY', name: 'Repaste Identity', desc: 'Identical report re-paste deduplication' },
-                { id: 'G-B9', class: 'CONFORMANCE_SHAPE', name: 'Vision N/A Abort', desc: 'Non-medical image vision abort handling' },
-              ].map((caseItem) => (
-                <div key={caseItem.id} className="p-2 rounded-lg bg-black/30 border border-white/10 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-white font-mono">{caseItem.id} — {caseItem.name}</span>
-                    <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                      {caseItem.class}
-                    </span>
+              <p className="text-[11px] text-white/70">{group.description}</p>
+              <div className="space-y-2 pt-1">
+                {group.cases.map((c: any) => (
+                  <div key={c.id} className="p-2 rounded-lg bg-black/30 border border-white/10 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-white font-mono text-xs">{c.id} — {c.name}</span>
+                      {c.frozen && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                          Frozen
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-white/60 text-[10px]">{c.desc}</div>
+                    {c.metrics && (
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 pt-1 text-[10px]">
+                        {c.metrics.map((m: any) => (
+                          <div key={m.label} className="bg-black/40 p-1 rounded border border-white/5">
+                            <div className="text-white/50 text-[9px]">{m.label}</div>
+                            <div className="font-mono text-emerald-300 font-bold text-[10px]">{m.val}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div className="text-white/60 text-[10px]">{caseItem.desc}</div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          ))}
         </div>
       )}
 

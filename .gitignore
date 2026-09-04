@@ -13,3 +13,8 @@ prototype/compare/images/job_*
 
 # Patch files
 *.patch
+
+# Playwright artifacts and browser binaries
+pw-browsers/
+playwright-report/
+test-results/

@@ -5,6 +5,7 @@ import { getMappedBiomarkerKey, computeBiomarkerTelemetryMultiplier, detectFlagg
 import {
   convertViaTable,
   enrichReviewModificationCommands,
+  applyModificationCommands,
   buildReviewCommandsFromHistory,
   lexTable,
   buildIngestBatch,
@@ -66,6 +67,42 @@ describe('Golden Biomarker — G-B1 & Class Verification', () => {
 
     // Older SI rows remain untouched
     expect(cmds.every((c) => c.date === '14-08-2026')).toBe(true);
+  });
+
+  it('verifies B0.1-0.3 / G-B1 applyModificationCommands writes history and retains observationMeta raw while leaving older SI untouched', () => {
+    const { history: updatedHistory, applied } = applyModificationCommands(
+      caseJson.fixture.history,
+      [],
+      caseJson.fixture.targetUnits
+    );
+
+    expect(applied).toBe(5);
+
+    // Row 14-08-2026 converted
+    const nonSiRow = updatedHistory.find((h: any) => h.date === '14-08-2026');
+    expect(nonSiRow).toBeDefined();
+    expect(nonSiRow.biomarkers.hdl).toBeCloseTo(1.293, 2);
+    expect(nonSiRow.biomarkers.triglycerides).toBeCloseTo(1.411, 2);
+    expect(nonSiRow.biomarkers.ldl).toBeCloseTo(3.362, 2);
+    expect(nonSiRow.biomarkers.creatinine).toBeCloseTo(79.56, 1);
+    expect(nonSiRow.biomarkers.total_bilirubin).toBeCloseTo(13.68, 1);
+
+    // observationMeta preserved raw values
+    expect(nonSiRow.observationMeta?.hdl?.rawValue).toBe(50);
+    expect(nonSiRow.observationMeta?.triglycerides?.rawValue).toBe(125);
+    expect(nonSiRow.observationMeta?.ldl?.rawValue).toBe(130);
+    expect(nonSiRow.observationMeta?.creatinine?.rawValue).toBe(0.9);
+    expect(nonSiRow.observationMeta?.total_bilirubin?.rawValue).toBe(0.8);
+
+    // Older SI rows remain untouched
+    const row0208 = updatedHistory.find((h: any) => h.date === '02-08-2026');
+    expect(row0208.biomarkers.hdl).toBe(1.43);
+    expect(row0208.biomarkers.creatinine).toBe(100);
+    expect(row0208.biomarkers.total_bilirubin).toBe(16);
+
+    const row0304 = updatedHistory.find((h: any) => h.date === '03-04-2024');
+    expect(row0304.biomarkers.creatinine).toBe(72);
+    expect(row0304.biomarkers.total_bilirubin).toBe(13);
   });
 
   it('verifies IngestTrace type contract and ClassId enums', () => {
@@ -204,10 +241,13 @@ describe('Golden Biomarker — G-B6 Symptom Diary (WRONG_DOOR)', () => {
     expect(expectedJson.trace.sourceKind).toBe('symptom');
 
     // Execute helper: destination resolution for symptom diary
-    const route = resolveAgentDestination('symptom_diary', { text: caseJson.input?.text });
+    // Pass the standard lab extractor (agent1_step1) to prove it routes to symptom_diary
+    const route = resolveAgentDestination('agent1_step1', { text: caseJson.text });
     expect(route).toBeDefined();
     if (typeof route === 'object' && route !== null) {
       expect(route.destination).toBe('symptom_diary');
+    } else {
+      expect(route).toBe('symptom_diary');
     }
   });
 });

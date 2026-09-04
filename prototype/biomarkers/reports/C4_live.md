@@ -48,7 +48,7 @@ ALT  41 U/L
 
 ## Agent turns (full payload sent + model output)
 
-### Turn 1 (hit) — r01, r02, r03, r04 (4 rows, 3029ms)
+### Turn 1 (hit) — r01, r02, r03, r04 (4 rows, 3266ms)
 
 **User contents sent to the model** (system instruction is above; this is the user turn):
 
@@ -134,66 +134,70 @@ Biomarkers to review (hits - in catalog):
 [
   {
     "id": "r01",
-    "medicalInsight": "HbA1c of 39 mmol/mol (5.7%) is at the threshold for elevated prediabetes risk according to specific ethnic criteria for Chinese adults, warranting lifestyle modifications.",
-    "optimalValue": "34 mmol/mol",
-    "editReason": "Added optimal target and highlighted Chinese-specific prediabetes risk threshold.",
+    "medicalInsight": "HbA1c of 39 mmol/mol (5.7%) is at the threshold for prediabetes in Chinese adults (>=39 mmol/mol), warranting lifestyle modifications.",
+    "optimalValue": "33 mmol/mol",
+    "editReason": "Adjusted optimal value to target optimal glycemic control below prediabetes threshold for Chinese ethnicity.",
     "logs": [
       {
         "date": "2026-06-05",
         "value": 39,
         "unit": "mmol/mol",
-        "comment": "Converted from user entry 5.7%"
+        "comment": "User reported value converted from 5.7%"
       }
     ],
-    "customRangeOverlay": "[Chinese Ethnicity] Elevated (Prediabetes Risk): >=39; Optimal: <39; [Standard] Normal: 20-41",
+    "customRangeOverlay": "[Chinese Ethnicity] Elevated (Prediabetes): >=39; Optimal: <39; [Western Standard] Normal: 20-41",
     "dictionaryCorrection": null
   },
   {
     "id": "r02",
-    "medicalInsight": "LDL-C of 3.36 mmol/L (130 mg/dL) is elevated and increases cardiovascular risk, particularly for male adults, requiring dietary and potentially pharmacological interventions.",
-    "optimalValue": "2.0 mmol/L",
-    "editReason": "Added optimal target for cardiovascular health and accurate SI unit conversion.",
+    "medicalInsight": "LDL-C of 3.36 mmol/L (130 mg/dL) is elevated and above the optimal threshold of <=2.6 mmol/L, increasing cardiovascular risk.",
+    "optimalValue": "2.4 mmol/L",
+    "editReason": "Provided specific optimal target for cardiovascular risk reduction.",
     "logs": [
       {
         "date": "2026-06-05",
         "value": 3.36,
         "unit": "mmol/L",
-        "comment": "Converted from user entry 130 mg/dL"
+        "comment": "User reported value converted from 130 mg/dL"
       }
     ],
-    "customRangeOverlay": "[All patients] Very High: >3.4; Elevated: 2.6-3.4; Optimal: <2.6",
+    "customRangeOverlay": "[All patients] Very High: >3.4; Elevated: >2.6; Optimal: <=2.6",
     "dictionaryCorrection": null
   },
   {
     "id": "r03",
-    "medicalInsight": "eGFR of 80 mL/min/1.73m2 indicates mildly decreased renal function (CKD G2 if persistent), which should be monitored alongside metabolic and cardiovascular markers.",
+    "medicalInsight": "eGFR of 80 mL/min/1.73m2 indicates mildly decreased filtration, which requires contextual interpretation for a 43-year-old male.",
     "optimalValue": "95 mL/min/1.73m2",
-    "editReason": "Corrected naive 60 mL/min/1.73m2 threshold to reflect proper optimal physiological target.",
+    "editReason": "Corrected naive CKD G2 threshold to an optimal target reflecting peak adult renal function.",
     "logs": [
       {
         "date": "2026-06-05",
         "value": 80,
         "unit": "mL/min/1.73m2",
-        "comment": null
+        "comment": "User reported value"
       }
     ],
-    "customRangeOverlay": "[Standard] Normal: >=90; Mildly Decreased: 60-89; Low: <60",
-    "dictionaryCorrection": null
+    "customRangeOverlay": "[CKD-EPI] Normal: >=90; Mildly Decreased: 60-89; Low: <60",
+    "dictionaryCorrection": {
+      "field": "normalRange",
+      "correctedValue": ">= 90",
+      "reason": "Standardized normal range format to match clinical guidelines."
+    }
   },
   {
     "id": "r04",
-    "medicalInsight": "ALT of 41 U/L is mildly elevated above the standard upper limit of normal, suggesting possible mild hepatocellular injury or early non-alcoholic fatty liver disease (NAFLD).",
+    "medicalInsight": "ALT of 41 U/L is mildly elevated above the standard upper limit of 40 U/L, suggesting possible mild hepatocellular stress.",
     "optimalValue": "25 U/L",
-    "editReason": "Added optimal target and updated clinical insight for mild elevation.",
+    "editReason": "Set optimal target to midpoint of normal range.",
     "logs": [
       {
         "date": "2026-06-05",
         "value": 41,
         "unit": "U/L",
-        "comment": null
+        "comment": "User reported value"
       }
     ],
-    "customRangeOverlay": "[Standard] High: >40; Optimal: 10-40",
+    "customRangeOverlay": "[Standard] High: >40; Normal: 10-40",
     "dictionaryCorrection": null
   }
 ]
