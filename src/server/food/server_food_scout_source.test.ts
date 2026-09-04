@@ -3,6 +3,10 @@ import {
   inheritActiveMealScoutItems,
   mapCompareItemsToScoutItems,
   resolvePriorScoutItems,
+  applyBracketPreExtract,
+  injectExplicitFoodTags,
+  inferPackagedBindChains,
+  mapTextQueriesToScoutItems,
 } from './server_food_scout_source';
 import { visionScoutResponseSchema } from './server_food_analyze_schema';
 
@@ -61,5 +65,48 @@ describe('F-8.10 shard 9 — scout schema invariants', () => {
     expect(nutrients.required).toEqual(['protein', 'saturatedFat', 'addedSugar', 'totalFibre', 'sodium', 'carbohydrates']);
     expect(nutrients.required).not.toContain('calories');
     expect(dish.properties.foods.items.properties.rawNutritionLabel.required).toEqual(['servingSize', 'calories']);
+  });
+});
+
+describe('F-8.10 shard 10 — scout-prep seams', () => {
+  it('purges OCR duplicates of bracket items and stamps fallback nutrients', () => {
+    const logs: string[] = [];
+    const vision: any[] = [{ originalName: 'Oat Bar', keyword: 'oat bar' }];
+    const queries: string[] = [];
+    applyBracketPreExtract({
+      bracketItems: [{ originalName: 'Oat Bar', estimatedWeightGrams: 200 }],
+      visionScoutItems: vision, queriesToSearch: queries, onLog: (m) => logs.push(m),
+    });
+    expect(vision).toHaveLength(1);
+    expect(vision[0].source).toBe('bracket_pre_extracted');
+    expect(vision[0].nutrients.calories).toBeGreaterThan(0);
+    expect(vision[0].components).toHaveLength(1);
+    expect(queries).toEqual(['Oat Bar']);
+    expect(logs.some((m) => m.includes('Dropping Scout item'))).toBe(true);
+  });
+
+  it('injects catalog tags once and infers packaged chains', () => {
+    const logs: string[] = [];
+    const vision: any[] = [{ dbId: 'a', keyword: 'Oats' }];
+    injectExplicitFoodTags({
+      visionScoutItems: vision,
+      explicitFoodTags: [{ dbId: 'a', name: 'Oats' }, { dbId: 'b', name: 'Cake', weightGrams: 50 }],
+      onLog: (m) => logs.push(m),
+    });
+    expect(vision).toHaveLength(2);
+    expect(vision[1].scoutIndex).toBe(1001);
+    expect(vision[1].dbSource).toBe('internal_catalog');
+
+    const items: any[] = [{ originalName: 'Drink', packageLabelText: 'Acme Citrus | Vitamin Drink 330ml' }];
+    const logs2: string[] = [];
+    inferPackagedBindChains({ packagedBindItems: items, onLog: (m) => logs2.push(m) });
+    expect(items[0].chainName).toBe('Acme Citrus');
+  });
+
+  it('maps text queries with cooking-method sniffing', () => {
+    expect(mapTextQueriesToScoutItems(['grilled salmon', 'rice'])).toEqual([
+      { scoutIndex: 0, keyword: 'grilled salmon', originalName: 'grilled salmon', estimatedWeightGrams: 100, source: 'text_query', cookingMethod: 'grilled', visualIngredients: [] },
+      { scoutIndex: 1, keyword: 'rice', originalName: 'rice', estimatedWeightGrams: 100, source: 'text_query', cookingMethod: 'raw', visualIngredients: [] },
+    ]);
   });
 });

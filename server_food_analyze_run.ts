@@ -10,7 +10,7 @@ import { buildUserContext, buildTimeContext, buildImageContext, buildHistoryCont
 import { sanitizeLlmJsonOutput, computeDietitianSkipGates } from './src/server/food/server_food_dietitian_dispatch.js';
 import { resolveFoodAnalyzeMode, buildFoodApiCalls } from './src/server/food/server_food_mode_routing.js';
 import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput } from './src/server/food/server_food_meal_assemble.js';
-import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems } from './src/server/food/server_food_scout_source.js';
+import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, mapTextQueriesToScoutItems } from './src/server/food/server_food_scout_source.js';
 
 import { executeFoodResolverCurator } from './server_food_resolver_curator.js';
 import {
@@ -149,7 +149,7 @@ import { finalizeDishLedger } from './server_dish_finalize.js';
 import { evaluateMealGate } from './server_meal_gate.js';
 import { buildMealFromFinalizeLedgers } from './server_meal_from_finalize.js';
 import { applyMealEdits } from './server_meal_edit.js';
-import { matchBrandMenu, isPackagedBindItem, inferChainNameFromPackageLabel } from './server_brand_match.js';
+import { matchBrandMenu, isPackagedBindItem } from './server_brand_match.js';
 import { classifyDishAtomic } from './server_dish_classify.js';
 import { withScoutLanguage, t, interpolate } from './src/utils/i18n.js';
 import {
@@ -618,15 +618,7 @@ export async function runFoodAnalyze(req: any, res: any) {
           queriesToSearch.push(...extractedQueries);
           if (!isExplicitModify && !isPureWeightModification) {
             scoutRecommendedMode = "new_log";
-            visionScoutItems = extractedQueries.map((q, idx) => ({
-              scoutIndex: idx,
-              keyword: q,
-              originalName: q,
-              estimatedWeightGrams: 100,
-              source: "text_query",
-              cookingMethod: /\b(fried|deep_fried|pan_fried|roasted|grilled|baked|boiled|steamed)\b/i.exec(q)?.[0] || "raw",
-              visualIngredients: []
-            }));
+            visionScoutItems = mapTextQueriesToScoutItems(extractedQueries);
           }
         } else {
           addDebugLog(`[Text Search Extraction] Message classified as conversational or non-food query. Skipping database matches.`);
@@ -636,73 +628,7 @@ export async function runFoodAnalyze(req: any, res: any) {
     const bracketItems = parseBracketedFoodItems(message || '');
     if (bracketItems.length > 0) {
       addDebugLog(`[Bracket Pre-Extracted] Found ${bracketItems.length} pre-extracted bracket item(s) in message: ${bracketItems.map(b => `"${b.originalName}" (${b.estimatedWeightGrams}g)`).join(', ')}`);
-      bracketItems.forEach((bItem: any) => {
-        const bName = (bItem.originalName || '').toLowerCase().trim();
-        // Remove any scout items that match this bracket item (clean purge of OCR/label reference photos)
-        visionScoutItems = visionScoutItems.filter((it: any) => {
-          const itName = (it.originalName || it.keyword || '').toLowerCase().trim();
-          if (!itName) return true;
-          const match = itName === bName || itName.includes(bName) || bName.includes(itName);
-          if (match) {
-            addDebugLog(`[Bracket Pre-Extracted] Dropping Scout item "${it.originalName || it.keyword}" in favor of pre-extracted bracket item "${bItem.originalName}" (${bItem.estimatedWeightGrams}g).`);
-            return false;
-          }
-          return true;
-        });
-        // Add clean bracket pre-extracted item with standard nutrient breakdown
-        const baseNuts = getFallbackCategoryProfile(bItem.originalName || bItem.keyword || '');
-        const factor = (bItem.estimatedWeightGrams || 100) / 100;
-        const bNuts = {
-          calories: Math.round((baseNuts.calories || 389) * factor),
-          protein: Math.round((baseNuts.protein || 12.43) * factor * 10) / 10,
-          carbohydrates: Math.round((baseNuts.carbohydrates || 67.0) * factor * 10) / 10,
-          totalFat: Math.round((baseNuts.totalFat || 6.86) * factor * 10) / 10,
-          saturatedFat: Math.round((baseNuts.saturatedFat || 0.57) * factor * 10) / 10,
-          transFat: 0,
-          totalFibre: Math.round((baseNuts.totalFibre || 10.43) * factor * 10) / 10,
-          sodium: Math.round((baseNuts.sodium || 4.29) * factor),
-          addedSugar: 0,
-          sugar: Math.round((baseNuts.sugar || 1.0) * factor * 10) / 10,
-          potassium: Math.round((baseNuts.potassium || 421) * factor),
-          calcium: Math.round((baseNuts.calcium || 54) * factor),
-          iron: Math.round((baseNuts.iron || 4.7) * factor * 10) / 10,
-          magnesium: Math.round((baseNuts.magnesium || 177) * factor),
-          vitaminD: 0,
-          omega3: 0.1
-        };
-        bItem.scoutIndex = visionScoutItems.length;
-        bItem.source = 'bracket_pre_extracted';
-        bItem.isBracketPreExtracted = true;
-        bItem.nutrients = bNuts;
-        bItem.truthNutrients = { ...bNuts };
-        bItem.nutrientBasisWeight = bItem.estimatedWeightGrams;
-        bItem.components = [{
-          name: bItem.originalName,
-          searchQuery: bItem.originalName,
-          weightGrams: bItem.estimatedWeightGrams,
-          estimatedWeightGrams: bItem.estimatedWeightGrams,
-          nutrients: bNuts,
-          calories: bNuts.calories,
-          protein: bNuts.protein,
-          carbohydrates: bNuts.carbohydrates,
-          carbs: bNuts.carbohydrates,
-          totalFat: bNuts.totalFat,
-          fat: bNuts.totalFat,
-          saturatedFat: bNuts.saturatedFat,
-          sodium: bNuts.sodium,
-          dbSource: 'estimated',
-          dbId: null,
-        }];
-        bItem.componentsDetailList = bItem.components;
-        bItem.compositeSiblings = bItem.components;
-        bItem.ingredients = [bItem.originalName];
-        bItem.visualIngredients = [bItem.originalName];
-        visionScoutItems.push(bItem);
-        const q = bItem.originalName || bItem.keyword;
-        if (q && !queriesToSearch.includes(q)) {
-          queriesToSearch.push(q);
-        }
-      });
+      applyBracketPreExtract({ bracketItems, visionScoutItems, queriesToSearch, onLog: addDebugLog });
       visionScoutRanAndReturnedItems = visionScoutItems.length > 0;
     }
     // Strip parenthetical local-language notes for cleaner USDA/OFF matching
@@ -714,21 +640,7 @@ export async function runFoodAnalyze(req: any, res: any) {
     // nutrition search for that item, even though the source photo is a menu_or_poster.
     const isMenuScale = (visionScoutContentType === "menu_or_poster" || visionScoutContentType === "text") && scoutRecommendedMode !== "new_log";
     if (Array.isArray(req.body.explicitFoodTags) && req.body.explicitFoodTags.length > 0) {
-      req.body.explicitFoodTags.forEach((tag: any, idx: number) => {
-        const existing = visionScoutItems.find((vi: any) => vi.dbId === tag.dbId || vi.keyword === tag.name);
-        if (!existing) {
-          visionScoutItems.push({
-             scoutIndex: 1000 + idx, // unique offset
-             keyword: tag.name,
-             originalName: tag.name,
-             estimatedWeightGrams: tag.weightGrams,
-             source: 'catalog_tag',
-             dbId: tag.dbId,
-             dbSource: 'internal_catalog',
-          });
-        }
-      });
-      addDebugLog(`[Explicit Food Tags] Injected ${req.body.explicitFoodTags.length} catalog tags directly into vision items.`);
+      injectExplicitFoodTags({ visionScoutItems, explicitFoodTags: req.body.explicitFoodTags, onLog: addDebugLog });
     }
     // Clean and consolidate queries first
     const uniqueQueries = buildFoodSearchQuerySet(visionScoutItems || []);
@@ -750,15 +662,7 @@ export async function runFoodAnalyze(req: any, res: any) {
     if (isDishEstimateEnabled(req)) {
       if (packagedBindItems.length > 0) {
         addDebugLog(`[PackagedBind] ${packagedBindItems.length} packaged/OCR item(s) bind via finalize brand/OCR rungs; generic USDA curator still skipped.`);
-        for (const it of packagedBindItems) {
-          if (!it.chainName && it.packageLabelText) {
-            const brandGuess = inferChainNameFromPackageLabel(it.packageLabelText);
-            if (brandGuess) {
-              it.chainName = brandGuess;
-              addDebugLog(`[PackagedBind] Inferred chainName "${brandGuess}" from packageLabelText for "${it.originalName || it.keyword}".`);
-            }
-          }
-        }
+        inferPackagedBindChains({ packagedBindItems, onLog: addDebugLog });
       } else {
         addDebugLog('[CuratorSkipped] Dish estimate pipeline active, skipping hot-path database search and resolver curator.');
       }
