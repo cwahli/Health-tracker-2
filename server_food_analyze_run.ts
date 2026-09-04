@@ -13,6 +13,7 @@ import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditComm
 import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, mapTextQueriesToScoutItems, buildScoutFailureError, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries } from './src/server/food/server_food_scout_source.js';
 import { collectImagePayloads, decideWeightRefine } from './src/server/food/server_food_session_setup.js';
 import { shouldPauseForPortionClarify, filterPortionCarryCandidates, detectDominantBrand, collectFdcHintTasks, isFdcHintRelevant, mapLedgersToPrecalcItems, applyMealModifiers } from './src/server/food/server_food_precalc.js';
+import { runDatabaseSearchStage } from './src/server/food/server_food_db_search.js';
 
 import { executeFoodResolverCurator } from './server_food_resolver_curator.js';
 import {
@@ -562,395 +563,56 @@ export async function runFoodAnalyze(req: any, res: any) {
     // Task 1 cont.: DB search runs HERE — before portionClarify check — so candidates are
     // available to embed in the awaiting_user pause payload for carry-forward to turn 2.
     if (shouldRunDbSearch && uniqueQueries.length > 0) {
-      sendStreamEvent({ type: 'status', stage: 'db_search', status: 'started', message: 'Searching nutrition databases...' });
-      if (typeof (res as any).flush === 'function') (res as any).flush();
-      sendLog('db_search', 'db_search', `Querying USDA & OpenFoodFacts databases for: [${uniqueQueries.join(', ')}]`);
-      addDebugLog(`[Database Search] Performing USDA & OFF searches for queries: ${JSON.stringify(uniqueQueries)}`);
-      const searchPromises = uniqueQueries.map(async (q) => {
-        try {
-          const cleaned = cleanQuery(q);
-          const isBarcode = /^\d{6,}$/.test(cleaned);
-          let dataTypes = 'Foundation,SR Legacy,Survey (FNDDS)';
-          const isDbBrand = await isKnownDatabaseBrand(cleaned);
-          if (isBarcode || visionScoutContentType === 'text' || cleaned.toLowerCase().includes('brand') || isDbBrand) {
-            dataTypes = 'Foundation,SR Legacy,Survey (FNDDS),Branded';
-          }
-          const isGeneric = /^(mayo|mayonnaise|granola|tortilla|salad greens|mixed salad leaves|lettuce|tomato|onion|cucumber|bread|wrap|egg|boiled egg|salt|pepper|oil|butter|sugar|chicken|beef|pork|fish|tuna|salmon|rice|pasta|cheese)$/i.test(cleaned);
-          if (isGeneric && !isDbBrand && !isBarcode) {
-            dataTypes = 'Foundation,SR Legacy,Survey (FNDDS)'; // Override and lock to generics
-            addDebugLog(`[BrandGuard] Using generic USDA types for "${cleaned}" (not a brand — skip branded/OFF catalog)`);
-          }
-          let offP = Promise.resolve([]);
-          if (isBarcode || dataTypes.includes('Branded')) {
-            offP = searchOpenFoodFacts(cleaned, 3);
-          }
-          // BrandGuard: a generic token (e.g. plain "mayonnaise") should not be allowed to
-          // match a specific restaurant's branded catalog item (e.g. "Pot of Chimi Mayo")
-          // unless that chain was actually detected for this meal. Previously this guard
-          // only restricted the USDA/OFF `dataTypes`, but `searchBrandMenuItems` ran
-          // unconditionally, polluting gap-resolver candidates with irrelevant chain-specific
-          // products for ordinary generic ingredients.
-          const brandP = (isGeneric && !isDbBrand && !isBarcode && !detectedChainKey)
-            ? Promise.resolve([])
-            : searchBrandMenuItems(cleaned, detectedChainKey);
-          let [usda, off, brandHits] = await Promise.all([
-            searchUSDA(cleaned, 3, dataTypes),
-            offP,
-            brandP,
-          ]);
-          const web: any[] = [];
-          // If zero results found in main database search, retry with loosened query
-          if (usda.length === 0 && off.length === 0 && brandHits.length === 0) {
-            const loosened = loosenQuery(cleaned);
-            if (loosened && loosened !== cleaned) {
-              addDebugLog(`[Database Search Fallback] Zero results for "${cleaned}". Retrying with loosened query "${loosened}"...`);
-              let fallbackOffP = Promise.resolve([]);
-              if (isBarcode || dataTypes.includes('Branded')) {
-                fallbackOffP = searchOpenFoodFacts(loosened, 3);
-              }
-              const fallbackBrandP = (isGeneric && !isDbBrand && !isBarcode && !detectedChainKey)
-                ? Promise.resolve([])
-                : searchBrandMenuItems(loosened, detectedChainKey);
-              const [fallUSDA, fallOFF, fallBrand] = await Promise.all([
-                searchUSDA(loosened, 3, dataTypes),
-                fallbackOffP,
-                fallbackBrandP
-              ]);
-              if (fallUSDA.length > 0 || fallOFF.length > 0 || fallBrand.length > 0) {
-                addDebugLog(`[Database Search Fallback] Succeeded for "${loosened}". USDA: ${fallUSDA.length}, OFF: ${fallOFF.length}, Brand: ${fallBrand.length}`);
-                usda = fallUSDA;
-                off = fallOFF;
-                brandHits = fallBrand;
-              }
-            }
-          }
-          return { query: q, usda, off, brandHits, web };
-        } catch (err) {
-          return { query: q, usda: [], off: [], brandHits: [], web: [] };
+      databaseMatches = await runDatabaseSearchStage(
+        {
+          uniqueQueries,
+          visionScoutItems,
+          visionScoutContentType,
+          detectedChainKey,
+          explicitFoodTags: req.body.explicitFoodTags,
+          engine,
+          databaseMatchesArray,
+          dbMatchMap,
+          quarantinedIdsSet,
+        },
+        {
+          sendStreamEvent,
+          flushRes: () => { if (typeof (res as any).flush === 'function') (res as any).flush(); },
+          sendLog,
+          addDebugLog,
+          searchUSDA,
+          searchOpenFoodFacts,
+          searchBrandMenuItems,
+          isKnownDatabaseBrand,
+          isKnownDatabaseBrandSync,
+          getBrandMenuItemById,
+          isUsableWebNutritionHit,
+          brandHitFitsQuery,
+          extractUSDANutrientsPer100g,
+          extractOFFNutrientsPer100g,
+          resolveInternalFood,
+          resolveDishCache,
+          rankAndClassifyCandidates,
+          writeAliasIfHitUnique,
+          sanitizeDishTitle,
+          normalizeFoodKey,
+          fetchUSDAFoodById,
+          fetchOFFProductByBarcode,
+          getFallbackCategoryProfile,
+          recordFoodObservation,
+          upsertFoodItemCandidate,
+          upsertFoodAlias,
+          callUnifiedLLM,
+          executeFoodResolverCurator,
+          importSupabaseAdmin: async () => await import('./supabaseAdmin.js'),
+          selfCleanBrandDatabase,
         }
-      });
-      const searchResultsList = await Promise.all(searchPromises);
-      // Ensure explicit food tags from internal catalog are present in databaseMatchesArray
-      if (Array.isArray(req.body.explicitFoodTags) && req.body.explicitFoodTags.length > 0) {
-        for (const tag of req.body.explicitFoodTags) {
-          if (tag.dbId && typeof tag.dbId === 'string' && tag.dbId.startsWith('brand_menu_')) {
-            const brandItem = await getBrandMenuItemById(tag.dbId);
-            if (brandItem) {
-              searchResultsList.push({
-                query: tag.name,
-                usda: [],
-                off: [],
-                brandHits: [brandItem],
-                web: []
-              });
-              addDebugLog(`[Explicit Tag] Injected direct brand menu lookup for tag "${tag.name}" (ID: ${tag.dbId})`);
-            }
-          }
-        }
-      }
-      const list: string[] = [];
-      const seenBrandTargets = new Set<string>();
-      for (const resItem of searchResultsList) {
-        if (resItem.brandHits && Array.isArray(resItem.brandHits)) {
-          resItem.brandHits.filter((bmHit: any) => brandHitFitsQuery(resItem.query, bmHit)).forEach((bmHit: any) => {
-            const bType = bmHit.basisType || 'per_dish';
-            const bmNutrients = {
-              ...(bmHit.nutrients || {}),
-              basisType: bType,
-              calories: Number(bmHit.calories || 0),
-              protein: bmHit.protein,
-              totalFat: bmHit.fat,
-              saturatedFat: bmHit.saturatedFat,
-              carbohydrates: bmHit.carbohydrates,
-              totalFibre: bmHit.totalFibre,
-              sodium: bmHit.sodium
-            };
-            dbMatchMap.set(bmHit.id, bmNutrients);
-            databaseMatchesArray.push({
-              ...bmHit,
-              searchQuery: resItem.query,
-              basisType: bType,
-              nutrients: bmNutrients
-            });
-            const brandKey = `${String(bmHit.chainName || '').toLowerCase()}::${String(bmHit.name || '').toLowerCase()}`;
-            if (seenBrandTargets.has(brandKey)) return;
-            seenBrandTargets.add(brandKey);
-            const bmProteinStr = (bmHit.protein !== undefined && bmHit.protein !== null) ? `${bmHit.protein}g` : 'n/a';
-            const bmCarbsStr = (bmHit.carbohydrates !== undefined && bmHit.carbohydrates !== null) ? `${bmHit.carbohydrates}g` : 'n/a';
-            const bmFatStr = (bmHit.fat !== undefined && bmHit.fat !== null) ? `${bmHit.fat}g` : 'n/a';
-            list.push(`- [Brand Menu (Official)] Chain: ${bmHit.chainName} | Item: ${bmHit.name} | Calories: ${bmHit.calories} | P: ${bmProteinStr} | C: ${bmCarbsStr} | F: ${bmFatStr} | Source: brand_official`);
-            addDebugLog(`[Brand DB Match] Found official restaurant/brand menu item for "${resItem.query}" -> "${bmHit.name}" (${bmHit.chainName})`);
-          });
-        }
-        resItem.usda.forEach((food: any) => {
-          const fdcIdStr = String(food.fdcId);
-          dbMatchMap.set(fdcIdStr, extractUSDANutrientsPer100g(food));
-          const parsedNutrients = extractUSDANutrientsPer100g(food);
-          const caloriesStr = String(parsedNutrients.calories);
-          databaseMatchesArray.push({
-            id: fdcIdStr,
-            source: "usda",
-            searchQuery: resItem.query,
-            name: food.description || "",
-            servingGrams: 100,
-            ...parsedNutrients,
-            calories: caloriesStr,
-            protein: parsedNutrients.protein,
-            fat: parsedNutrients.totalFat,
-            saturatedFat: parsedNutrients.saturatedFat,
-            sodium: parsedNutrients.sodium,
-            carbohydrates: parsedNutrients.carbohydrates,
-            totalFibre: parsedNutrients.totalFibre,
-            nutrients: parsedNutrients
-          });
-          list.push(`- [USDA] ID: ${fdcIdStr} | Name: ${food.description} | Nutrients (per 100g): ${formatUSDANutrients(food.foodNutrients)}`);
-        });
-        resItem.off.forEach((product: any) => {
-          const idStr = String(product.barcode || product.id || product.code || "");
-          if (idStr) {
-            dbMatchMap.set(idStr, extractOFFNutrientsPer100g(product));
-            const parsedNutrients = extractOFFNutrientsPer100g(product);
-            const caloriesStr = String(parsedNutrients.calories);
-            databaseMatchesArray.push({
-              id: idStr,
-              source: "off",
-              searchQuery: resItem.query,
-              name: product.product_name || "",
-              servingGrams: 100,
-              ...parsedNutrients,
-              calories: caloriesStr,
-              protein: parsedNutrients.protein,
-              fat: parsedNutrients.totalFat,
-              saturatedFat: parsedNutrients.saturatedFat,
-              sodium: parsedNutrients.sodium,
-              carbohydrates: parsedNutrients.carbohydrates,
-              totalFibre: parsedNutrients.totalFibre,
-              nutrients: parsedNutrients
-            });
-            list.push(`- [OpenFoodFacts] Barcode: ${idStr} | Name: ${product.product_name} (${product.brands || 'No Brand'}) | Nutrients (per 100g): ${formatOFFNutrients(product.nutriments)}`);
-          }
-        });
-        if (resItem.web && Array.isArray(resItem.web)) {
-          resItem.web.forEach((webItem: any, wIdx: number) => {
-            if (webItem && isUsableWebNutritionHit(webItem)) {
-              const webId = `web_search_${resItem.query}_${wIdx}`;
-              const isBrandResult = Boolean(resItem.query && isKnownDatabaseBrandSync(resItem.query)) || webItem.source === 'brand_official';
-              const webCarbsRaw = webItem.carbohydrates ?? webItem.carbs;
-              const webCarbs = webCarbsRaw != null ? Number(webCarbsRaw) : null;
-              const webFibreRaw = webItem.fiber ?? webItem.totalFibre;
-              const webFibre = webFibreRaw != null ? Number(webFibreRaw) : null;
-              const webSugar = webItem.sugar != null ? Number(webItem.sugar) : null;
-              const webSalt = webItem.salt != null ? Number(webItem.salt) : null;
-              const webSodiumRaw = webItem.sodium ?? (webSalt != null ? Math.round(webSalt * 400) : null);
-              const webSodium = webSodiumRaw != null ? Number(webSodiumRaw) : null;
-              const webProt = webItem.protein != null ? Number(webItem.protein) : null;
-              const webFat = webItem.fat != null ? Number(webItem.fat) : null;
-              const webSatFat = webItem.saturatedFat != null ? Number(webItem.saturatedFat) : null;
-              const webCals = Number(webItem.calories || 0);
-              // NUTRITION BASIS FIX (Aug 2026): live web/brand search results report calories for
-              // the WHOLE named dish as sold (e.g. "YOLK Chicken Sandwich: 783 kcal" = one whole
-              // sandwich), NOT per 100g. Tag as basisType 'total' so downstream scaling does not
-              // re-multiply by weight/100 a second time. Reuses the existing 'basisType' convention
-              // already used elsewhere in this file (see the printed-label truthMatch object).
-              const nutritionBasisType = isBrandResult ? 'total' : 'per_100g';
-              const dbEntry = {
-                id: webId,
-                source: isBrandResult ? 'brand_official' : (webItem.source || "web_search"),
-                searchQuery: resItem.query,
-                name: webItem.name || resItem.query,
-                calories: String(webCals),
-                protein: webProt,
-                fat: webFat,
-                saturatedFat: webSatFat,
-                carbohydrates: webCarbs,
-                totalFibre: webFibre,
-                sugar: webSugar,
-                salt: webSalt,
-                sodium: webSodium,
-                ingredients: webItem.ingredients || webItem.ingredientsList || webItem.description || '',
-                brandPriority: isBrandResult,
-                basisType: nutritionBasisType
-              };
-              databaseMatchesArray.push(dbEntry);
-              dbMatchMap.set(webId, {
-                servingSizeGrams: 100,
-                basisType: nutritionBasisType,
-                calories: webCals,
-                protein: webProt,
-                totalFat: webFat,
-                saturatedFat: webSatFat,
-                transFat: 0,
-                carbohydrates: webCarbs,
-                addedSugar: 0,
-                sodium: webSodium,
-                salt: webSalt,
-                potassium: 0,
-                totalFibre: webFibre,
-                solubleFibre: 0
-              });
-              list.push(`- [WebSearch${isBrandResult ? ' (Brand Priority)' : ''}] Query: ${resItem.query} | Name: ${webItem.name || resItem.query} | Calories: ${webCals} | P: ${webProt}g | C: ${webCarbs}g | F: ${webFat}g | Provider: ${webItem.source || 'web_search'}`);
-            } else if (webItem) {
-              addDebugLog(`[WebSearch] Discarded unusable hit for "${resItem.query}" (calories=${webItem.calories ?? 'n/a'}).`);
-            }
-          });
-        }
-      }
-      if (list.length > 0) {
-        databaseMatches = list.slice(0, 50).join("\n");
-      } else {
-        databaseMatches = "No matches found in USDA or Open Food Facts databases for these queries.";
-      }
-      sendLog('db_search_complete', 'db_search', `Found ${databaseMatchesArray.length} database match(es) across USDA & OpenFoodFacts.`);
-      sendStreamEvent({ type: 'status', stage: 'db_search', status: 'completed', message: 'Database search completed.' });
-      // Run Food Resolver Agent only for query gaps that do NOT hit the internal catalog or dish cache
-      // and that are NOT covered by a complete printed packaging label (token save + avoid bad USDA).
-      const gapsForResolver: Array<{ query: string; candidates: Array<{ id: string; name: string; source: string }> }> = [];
-      const labelCompleteQueries = new Set<string>();
-      for (const s of visionScoutItems || []) {
-        if (!scoutHasCompletePrintedLabel(s)) continue;
-        for (const q of [s.originalName, s.keyword, s.name]) {
-          if (q && String(q).trim()) labelCompleteQueries.add(String(q).toLowerCase().trim());
-        }
-        // Parent label is dish truth — skip component gap LLM too (macros locked later from label)
-        if (Array.isArray(s.components)) {
-          for (const c of s.components) {
-            const cq = c?.searchQuery || c?.name || c?.keyword;
-            if (cq && String(cq).trim()) labelCompleteQueries.add(String(cq).toLowerCase().trim());
-          }
-        }
-      }
-      const internalHits = await Promise.all(searchResultsList.map(async (resItem) => {
-        const hit = await resolveInternalFood(resItem.query);
-        return { resItem, hit };
-      }));
-      for (const { resItem, hit } of internalHits) {
-        if (hit) {
-          const virtualId = hit.food_id || `internal_${hit.food_key}`;
-          dbMatchMap.set(virtualId, hit.nutrients_per_100g);
-          databaseMatchesArray.push({
-            id: virtualId,
-            source: 'internal_catalog',
-            searchQuery: resItem.query,
-            name: hit.display_name || resItem.query,
-            servingGrams: 100,
-            calories: String(hit.nutrients_per_100g.calories || 0),
-            protein: hit.nutrients_per_100g.protein || 0,
-            fat: hit.nutrients_per_100g.totalFat || hit.nutrients_per_100g.fat || 0,
-            saturatedFat: hit.nutrients_per_100g.saturatedFat || 0,
-            sodium: hit.nutrients_per_100g.sodium || 0,
-            carbohydrates: hit.nutrients_per_100g.carbohydrates || hit.nutrients_per_100g.carbs || 0,
-            totalFibre: hit.nutrients_per_100g.totalFibre || 0,
-            nutrients: hit.nutrients_per_100g
-          });
-          addDebugLog(`[Internal Catalog Hit] Resolved "${resItem.query}" from internal catalog without Food Resolver agent gap.`);
-          continue;
-        }
-        const qNorm = String(resItem.query || '').toLowerCase().trim();
-        if (qNorm && labelCompleteQueries.has(qNorm)) {
-          addDebugLog(`[Food Resolver Skip] Complete printed label covers "${resItem.query}" — skipping LLM resolver for this gap.`);
-          continue;
-        }
-        const compositeParentDishQueries = new Set<string>();
-        for (const s of visionScoutItems || []) {
-          if (Array.isArray(s.components) && s.components.length >= 2) {
-            for (const q of [s.originalName, s.keyword, s.name]) {
-              if (q && String(q).trim()) compositeParentDishQueries.add(String(q).toLowerCase().trim());
-            }
-          }
-        }
-        if (qNorm && compositeParentDishQueries.has(qNorm)) {
-          addDebugLog(`[Food Resolver Skip] Composite multi-component parent dish "${resItem.query}" is resolved via its sub-components — skipping monolithic LLM resolver gap.`);
-          continue;
-        }
-        const candidates: Array<{ id: string; name: string; source: string }> = [];
-        resItem.brandHits?.forEach((item: any) => {
-          candidates.push({ id: String(item.id), name: `${item.chainName || ''} ${item.name || item.dish_name || ''}`.trim(), source: "brand_official" });
-        });
-        const { resolveClass, bestMatch, survivors } = rankAndClassifyCandidates(resItem.query, resItem.usda, 85);
-        if (resolveClass === 'HIT_UNIQUE' && bestMatch) {
-            addDebugLog(`[ResolveClass] HIT_UNIQUE for "${resItem.query}" -> ${bestMatch.description}`);
-            writeAliasIfHitUnique(resolveClass, resItem.query, bestMatch).catch(e => console.error(e));
-            // Treat as auto-resolved gap
-            const virtualId = String(bestMatch.fdcId);
-            const nut = extractUSDANutrientsPer100g(bestMatch);
-            dbMatchMap.set(virtualId, nut);
-            databaseMatchesArray.push({
-              id: virtualId,
-              source: "usda",
-              searchQuery: resItem.query,
-              name: bestMatch.description || resItem.query,
-              servingGrams: 100,
-              calories: String(nut.calories || 0),
-              protein: nut.protein || 0,
-              fat: nut.totalFat || nut.fat || 0,
-              saturatedFat: nut.saturatedFat || 0,
-              sodium: nut.sodium || 0,
-              carbohydrates: nut.carbohydrates || nut.carbs || 0,
-              totalFibre: nut.totalFibre || 0,
-              nutrients: nut
-            });
-            continue; // Skip adding to gapsForResolver!
-        }
-        // For MULTI_MATCH or MISS, pass the survivors (or top N if none) to the Curator
-        const candidatesToAdd = survivors.length > 0 ? survivors.map(s => s.candidate) : resItem.usda;
-        candidatesToAdd.forEach((food: any) => {
-          candidates.push({ id: String(food.fdcId), name: food.description || "", source: "usda" });
-        });
-        resItem.off.forEach((product: any) => {
-          const idStr = String(product.barcode || product.id || product.code || "");
-          if (idStr) {
-            candidates.push({ id: idStr, name: product.product_name || "", source: "off" });
-          }
-        });
-        const cleanGapQuery = sanitizeDishTitle(resItem.query);
-        const gapKey = normalizeFoodKey(cleanGapQuery);
-        const isDuplicateGap = gapsForResolver.some(g => normalizeFoodKey(sanitizeDishTitle(g.query)) === gapKey);
-        if (!isDuplicateGap && cleanGapQuery) {
-          gapsForResolver.push({
-            query: cleanGapQuery,
-            candidates
-          });
-        }
-      }
-      if (visionScoutItems && visionScoutItems.length > 0) {
-        for (const scoutItem of visionScoutItems) {
-          const dishName = scoutItem.originalName || scoutItem.keyword || scoutItem.name;
-          if (dishName && (!scoutItem.components || scoutItem.components.length < 2)) {
-            const dishHit = await resolveDishCache(dishName);
-            if (dishHit) {
-              const virtualId = `dish_cache_${dishHit.dish_key}`;
-              dbMatchMap.set(virtualId, dishHit.core_nutrients);
-              databaseMatchesArray.push({
-                id: virtualId,
-                source: 'internal_dish_cache',
-                searchQuery: dishName,
-                name: dishHit.display_name || dishName,
-                servingGrams: dishHit.serving_grams || 100,
-                calories: String(dishHit.core_nutrients.calories || 0),
-                protein: dishHit.core_nutrients.protein || 0,
-                fat: dishHit.core_nutrients.totalFat || dishHit.core_nutrients.fat || 0,
-                saturatedFat: dishHit.core_nutrients.saturatedFat || 0,
-                sodium: dishHit.core_nutrients.sodium || 0,
-                carbohydrates: dishHit.core_nutrients.carbohydrates || dishHit.core_nutrients.carbs || 0,
-                totalFibre: dishHit.core_nutrients.totalFibre || 0,
-                nutrients: dishHit.core_nutrients
-              });
-              addDebugLog(`[Dish Cache Hit] Resolved dish "${dishName}" from dish_cache.`);
-            }
-          }
-        }
-      }
-      if (gapsForResolver.length > 0) {
-        sendLog('status', 'food_resolver', `Dispatched Food Resolver agent for ${gapsForResolver.length} gap items.`);
-        const callLLMFn = async (prompt: string, sysInst: string) => {
-          return await callUnifiedLLM({
-            modelId: engine || "gemini-3.5-flash-lite",
-            systemInstruction: sysInst,
-            promptText: prompt,
-            logStagePrefix: 'food_resolver',
-            temperature: 0.1,
-          });
-        };
+      );
+    }
+
+
+
+
         const fetchFoodDetailsForFdcId = async (fdcId: string): Promise<{ title: string, nutrients: Record<string, number> } | null> => {
           if (dbMatchMap.has(fdcId)) {
             const data = dbMatchMap.get(fdcId);
@@ -980,127 +642,8 @@ export async function runFoodAnalyze(req: any, res: any) {
           }
           return null;
         };
-        const resolvedGaps = await executeFoodResolverCurator(
-          gapsForResolver,
-          addDebugLog,
-          callLLMFn,
-          fetchNutrientsForFdcId,
-          searchUSDA,
-          fetchFoodDetailsForFdcId
-        );
-        // For each resolved item, add it to databaseMatchesArray & dbMatchMap
-        resolvedGaps.forEach(rg => {
-          if (Array.isArray(rg.quarantinedIds)) {
-            rg.quarantinedIds.forEach(id => {
-              if (id) {
-                const idStr = String(id);
-                if (idStr.startsWith('brand_menu_') || idStr.startsWith('internal_')) {
-                  addDebugLog(`[Quarantine Guard] Ignored global quarantine for catalog/brand ID ${idStr}`);
-                  return;
-                }
-                if (!quarantinedIdsSet.has(idStr)) {
-                  quarantinedIdsSet.add(idStr);
-                  addDebugLog(`[Quarantine Sync] Added FDC ID ${idStr} to quarantinedIdsSet from curator.`);
-                }
-              }
-            });
-          }
-          if (rg.nutrientsPer100g) {
-            const virtualId = rg.chosenFdcId ? String(rg.chosenFdcId) : `resolver_${normalizeFoodKey(rg.query)}`;
-            if (quarantinedIdsSet.has(virtualId)) {
-              addDebugLog(`[Quarantine Block] Refusing to inject nutrients for quarantined FDC ID ${virtualId} ("${rg.query}").`);
-              return;
-            }
-            dbMatchMap.set(virtualId, rg.nutrientsPer100g);
-            const caloriesStr = String(rg.nutrientsPer100g.calories || 0);
-            databaseMatchesArray.push({
-              id: virtualId,
-              source: rg.chosenFdcId ? (rg.chosenFdcId.match(/^\d{8,}$/) ? "off" : "usda") : "estimated",
-              searchQuery: rg.query,
-              name: rg.query,
-              servingGrams: 100,
-              calories: caloriesStr,
-              protein: rg.nutrientsPer100g.protein || 0,
-              fat: rg.nutrientsPer100g.totalFat || rg.nutrientsPer100g.fat || 0,
-              saturatedFat: rg.nutrientsPer100g.saturatedFat || 0,
-              sodium: rg.nutrientsPer100g.sodium || 0,
-              carbohydrates: rg.nutrientsPer100g.carbohydrates || rg.nutrientsPer100g.carbs || 0,
-              totalFibre: rg.nutrientsPer100g.totalFibre || rg.nutrientsPer100g.fiber || 0,
-              nutrients: rg.nutrientsPer100g
-            });
-            addDebugLog(`[Food Resolver Integration] Injected resolved nutrients for "${rg.query}" into databaseMatchesArray: ${JSON.stringify(rg.nutrientsPer100g)}`);
-          }
-        });
-        // Trigger self-cleaning pass on brand database during Food Resolver review
-        try {
-          const { supabaseAdmin } = await import('./supabaseAdmin.js');
-          if (supabaseAdmin) {
-            const cleanResult = await selfCleanBrandDatabase(supabaseAdmin, 'GB', addDebugLog);
-            if (cleanResult.removedUnofficialCount > 0 || cleanResult.deletedDuplicatesCount > 0) {
-              sendLog('status', 'food_resolver', `Self-healing database pass: Purged ${cleanResult.removedUnofficialCount} non-branded/unofficial item(s) and ${cleanResult.deletedDuplicatesCount} duplicate(s).`);
-            }
-          }
-        } catch (cleanErr: any) {
-          addDebugLog(`[Food Resolver Self-Clean] Background cleaning notice: ${cleanErr?.message || cleanErr}`);
-        }
-        // Record deferred gaps & category fallbacks for queries that couldn't be resolved from candidates
-        const resolvedQuerySet = new Set(resolvedGaps.filter(rg => rg.nutrientsPer100g).map(rg => normalizeFoodKey(rg.query)));
-        uniqueQueries.forEach(query => {
-          const normQ = normalizeFoodKey(query);
-          if (resolvedQuerySet.has(normQ)) return;
-          const qLower = String(query || '').toLowerCase().trim();
-          if (qLower && labelCompleteQueries.has(qLower)) {
-            addDebugLog(`[Food Resolver Fallback] skip category fallback; printed label covers "${query}"`);
-            return;
-          }
-          const already = databaseMatchesArray.some((m: any) =>
-            normalizeFoodKey(m.searchQuery || '') === normQ &&
-            m.source !== 'category_fallback' &&
-            !String(m.id || '').startsWith('fallback_')
-          );
-          if (already) {
-            addDebugLog(`[Food Resolver Fallback] skip category fallback; non-fallback match exists for "${query}"`);
-            return;
-          }
-          const fallbackProfile = getFallbackCategoryProfile(query);
-            const virtualId = `fallback_${normQ}`;
-            dbMatchMap.set(virtualId, fallbackProfile);
-            databaseMatchesArray.push({
-              id: virtualId,
-              source: "category_fallback",
-              searchQuery: query,
-              name: `Estimated: ${query} (category fallback)`,
-              servingGrams: 100,
-              calories: String(fallbackProfile.calories || 0),
-              protein: fallbackProfile.protein || 0,
-              fat: fallbackProfile.totalFat || 0,
-              saturatedFat: fallbackProfile.saturatedFat || 0,
-              sodium: fallbackProfile.sodium || 0,
-              carbohydrates: fallbackProfile.carbohydrates || 0,
-              totalFibre: fallbackProfile.totalFibre || 0,
-              nutrients: fallbackProfile
-            });
-            recordFoodObservation({
-              event_type: 'deferred_gap',
-              payload: { query, fallbackProfile }
-            });
-            upsertFoodItemCandidate({
-              food_id: virtualId,
-              food_key: normQ,
-              display_name: query,
-              nutrients_per_100g: fallbackProfile,
-              status: 'category_fallback',
-              provenance: 'category_fallback'
-            }).catch(err => console.warn('[FallbackPersist] Error saving fallback item:', err));
-            upsertFoodAlias({
-              alias_key: normQ,
-              food_id: virtualId,
-              source: 'category_fallback'
-            }).catch(err => console.warn('[FallbackPersist] Error saving fallback alias:', err));
-            addDebugLog(`[Food Resolver Fallback] Created category fallback for gap "${query}": ${JSON.stringify(fallbackProfile)}`);
-        });
-      }
-    }
+
+
     // Enrich scout items & sub-components with resolved brand / database matches before portion clarification
     enrichScoutComponentsWithMatches(visionScoutItems, databaseMatchesArray);
     // Task 2: portionClarify check — now placed AFTER DB search and Resolver so ALL candidates are available.
