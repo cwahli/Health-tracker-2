@@ -2643,7 +2643,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
             await new Promise(resolve => setTimeout(resolve, delay));
             addDebugLog(`[Dietitian] Retrying LLM call (Attempt ${dietitianAttempts} of ${maxDietitianAttempts})...`);
           }
-          const result = await callAndParseFoodAnalysis(llmCallArgs);
+          const result = await callAndParseFoodAnalysis(llmCallArgs, isStream, res);
           textOutput = result.textOutput;
           rawParsed = result.rawParsed;
           break;

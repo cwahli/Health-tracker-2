@@ -2,8 +2,7 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
-import { initGlobalBreadcrumbListeners } from './utils/breadcrumbTracker';
-import { initNetworkDiagnosticInterceptor } from './utils/networkDiagnosticInterceptor';
+import { initGlobalBreadcrumbListeners, initNetworkDiagnosticInterceptor } from './utils/breadcrumbTracker';
 
 // Initialize global breadcrumb and network diagnostic tracking
 initGlobalBreadcrumbListeners();
