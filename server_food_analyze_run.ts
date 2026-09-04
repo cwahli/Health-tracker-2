@@ -9,7 +9,7 @@ import { foodAnalyzeSchema } from './src/server/food/server_food_analyze_schema.
 import { buildUserContext, buildTimeContext, buildImageContext, buildHistoryContext, buildVisionScoutContext, buildDatabaseMatchesContext, buildBiomarkersContext, stitchFoodPrompt } from './src/server/food/server_food_prompt_context.js';
 import { sanitizeLlmJsonOutput, computeDietitianSkipGates } from './src/server/food/server_food_dietitian_dispatch.js';
 import { resolveFoodAnalyzeMode, buildFoodApiCalls } from './src/server/food/server_food_mode_routing.js';
-import { buildFallbackItemsBreakdown, assembleParsedMealHeader } from './src/server/food/server_food_meal_assemble.js';
+import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput } from './src/server/food/server_food_meal_assemble.js';
 
 import { executeFoodResolverCurator } from './server_food_resolver_curator.js';
 import {
@@ -96,7 +96,6 @@ import {
 } from './server_meal_orchestrator.js';
 import { toPendingFoodLog, fromEvaluationComparison } from './src/mealBuild/adapters.js';
 import { attachSseJsonResponder } from './server_sse_json.js';
-import { appendHistory } from './src/mealBuild/consolidate.js';
 import { projectDietitianInput } from './src/mealBuild/projectors.js';
 import { beginStage, endStage, formatDietitianProjectionBlock } from './src/mealBuild/stageLifecycle.js';
 import { reconcileMessageWithLedger } from './src/mealBuild/narration.js';
@@ -148,7 +147,7 @@ import { isDishEstimateEnabled } from './server_food_flags.js';
 import { finalizeDishLedger } from './server_dish_finalize.js';
 import { evaluateMealGate } from './server_meal_gate.js';
 import { buildMealFromFinalizeLedgers } from './server_meal_from_finalize.js';
-import { applyMealEdits, applyModifierToItemName } from './server_meal_edit.js';
+import { applyMealEdits } from './server_meal_edit.js';
 import { matchBrandMenu, isPackagedBindItem, inferChainNameFromPackageLabel } from './server_brand_match.js';
 import { classifyDishAtomic } from './server_dish_classify.js';
 import { withScoutLanguage, t, interpolate } from './src/utils/i18n.js';
@@ -2519,23 +2518,7 @@ export async function runFoodAnalyze(req: any, res: any) {
         });
       }
       {
-        let editCommands = rawParsed.editCommands || rawParsed.modificationCommand || rawParsed.data?.editCommands || rawParsed.data?.modificationCommand || [];
-        if (Array.isArray(editCommands) && Array.isArray(rawParsed.foodData?.itemsBreakdown)) {
-          editCommands = editCommands.map((cmd: any) => {
-            if ((cmd.action === 'replace_identity' || cmd.action === 'add_item' || cmd.action === 'replace_item') && !cmd.estimate) {
-              const targetName = String(cmd.newItemName || cmd.replacementItemName || cmd.itemName || '').trim().toLowerCase();
-              const match = rawParsed.foodData?.itemsBreakdown?.find((b: any) => {
-                const bName = String(b.canonicalDbName || b.name || '').trim().toLowerCase();
-                return (bName && bName === targetName) || (b.scoutIndex != null && b.scoutIndex === cmd.scoutIndex);
-              });
-              if (match && match.correctedNutrients) {
-                return { ...cmd, estimate: { ...match.correctedNutrients, foodType: match.foodType, cookingMethod: match.cookingMethod } };
-              }
-              throw new Error(`A ${cmd.action} command emitted without "estimate" is an invalid response. You MUST populate it with a complete, realistic nutrient profile for the NEW identity on every single ${cmd.action} command, with no exceptions.`);
-            }
-            return cmd;
-          });
-        }
+        let editCommands = backfillEditCommandEstimates(rawParsed);
         const result = await applyMealEdits({
           items: Array.isArray(activeMeal.itemsBreakdown) ? activeMeal.itemsBreakdown : [],
           commands: Array.isArray(editCommands) ? editCommands : [],
@@ -2543,28 +2526,7 @@ export async function runFoodAnalyze(req: any, res: any) {
         });
         for (const note of result.notes) addDebugLog(`[Single-Path Edit] ${note}`);
         if (result.changed) {
-          try {
-            const summarize = (arr: any[]) => (Array.isArray(arr) ? arr : []).map((it: any) => ({
-              name: it.name || it.canonicalDbName || 'Item',
-              weightGrams: it.weightGrams ?? it.estimatedWeightGrams ?? null,
-              calories: it.nutrients?.calories ?? it.calories ?? null,
-            }));
-            const historySource: any = { historyLog: Array.isArray(activeMeal.historyLog) ? activeMeal.historyLog : [] };
-            const updatedHistorySource = appendHistory(historySource, {
-              type: 'user_action',
-              timestamp: new Date().toISOString(),
-              stage: 'meal_edit',
-              message: result.notes.join('; ') || 'Meal edited',
-              details: {
-                userMessage: message || '',
-                before: summarize(result.beforeItems),
-                after: summarize(result.items),
-              },
-            } as any);
-            activeMeal.historyLog = updatedHistorySource.historyLog;
-          } catch (histErr: any) {
-            addDebugLog(`[Edit History] Failed to append history entry: ${histErr?.message || histErr}`);
-          }
+          appendEditHistoryEntry({ activeMeal, message, result, onLog: addDebugLog });
         }
         activeMeal.itemsBreakdown = result.items;
         activeMeal.nutrients = result.nutrients;
@@ -2572,39 +2534,9 @@ export async function runFoodAnalyze(req: any, res: any) {
         activeMeal.serving_grams = result.weightGrams;
         activeMeal.receiptTable = result.receiptTable;
         activeMeal.composition = result.items.map((it: any) => it.name).join(', ');
-        const formatMultiItemMealTitle = (items: any[]): string => {
-          if (!items || items.length === 0) return 'Meal';
-          const names = items.map((it: any) => it.name || it.canonicalDbName || 'Item').filter(Boolean);
-          if (names.length === 1) return names[0];
-          if (names.length === 2) return `${names[0]} and ${names[1]}`;
-          return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
-        };
-
         const incomingTitle = rawParsed.foodData?.name;
-        if (result.items.length > 1) {
-          const isMultiItemTitle = incomingTitle && (incomingTitle.includes(',') || /\b(and|with)\b/i.test(incomingTitle));
-          if (incomingTitle && isMultiItemTitle) {
-            let updatedTitle = incomingTitle;
-            // Synchronize any renamed items in incomingTitle from editCommands
-            if (Array.isArray(editCommands)) {
-              for (const cmd of editCommands) {
-                const oldName = cmd.itemName;
-                const newName = cmd.newItemName || (cmd.action === 'update_modifier' || cmd.action === 'set_modifier' ? applyModifierToItemName(oldName, cmd.modifier) : null);
-                if (oldName && newName && oldName !== newName) {
-                  const reg = new RegExp(`\\b${oldName.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\b`, 'gi');
-                  updatedTitle = updatedTitle.replace(reg, newName);
-                }
-              }
-            }
-            activeMeal.name = updatedTitle;
-          } else {
-            activeMeal.name = formatMultiItemMealTitle(result.items);
-          }
-        } else if (incomingTitle) {
-          activeMeal.name = incomingTitle;
-        } else if (result.items.length === 1) {
-          activeMeal.name = result.items[0].name || activeMeal.name;
-        }
+        const resolvedTitle = resolveEditedMealTitle({ incomingTitle, items: result.items, editCommands });
+        if (resolvedTitle) activeMeal.name = resolvedTitle;
         // Sync scoutItems (used by the "Meal composition" chips/gallery in the UI)
         // with any name changes applied to itemsBreakdown by this edit. Without this,
         // renames from set_modifier/replace_identity (e.g. "Es Teh Manis" -> "Unsweetened
@@ -2613,41 +2545,7 @@ export async function runFoodAnalyze(req: any, res: any) {
         const baseScoutItemsForEdit = (activeMeal.scoutItems && activeMeal.scoutItems.length > 0)
           ? activeMeal.scoutItems
           : (visionScoutItems || []);
-        const syncedScoutItemsForEdit = result.items.map((bItem: any) => {
-          const sItem = baseScoutItemsForEdit.find((s: any) =>
-            (bItem.scoutIndex !== undefined && bItem.scoutIndex !== null && s.scoutIndex === bItem.scoutIndex) ||
-            (s.originalName && (s.originalName === bItem.name || s.originalName === bItem.canonicalDbName)) ||
-            (s.keyword && (s.keyword === bItem.name || s.keyword === bItem.canonicalDbName))
-          );
-          const newName = bItem.canonicalDbName || bItem.name || sItem?.originalName || 'Item';
-          if (sItem) {
-            return {
-              ...sItem,
-              originalName: newName,
-              keyword: newName,
-              estimatedWeightGrams: bItem.weightGrams || sItem.estimatedWeightGrams,
-              packGrams: bItem.packGrams ?? sItem.packGrams ?? null,
-              components: bItem.components || sItem.components,
-              componentsDetailList: bItem.componentsDetailList || sItem.componentsDetailList,
-              nutrients: bItem.nutrients || sItem.nutrients,
-              sourceImageIndex: bItem.sourceImageIndex ?? sItem.sourceImageIndex,
-              boundingBox2D: bItem.boundingBox2D ?? sItem.boundingBox2D,
-            };
-          }
-          return {
-            scoutIndex: bItem.scoutIndex,
-            originalName: newName,
-            keyword: newName,
-            estimatedWeightGrams: bItem.weightGrams || 100,
-            packGrams: bItem.packGrams ?? null,
-            components: bItem.components || [],
-            componentsDetailList: bItem.componentsDetailList || [],
-            nutrients: bItem.nutrients || {},
-            sourceImageIndex: bItem.sourceImageIndex ?? null,
-            boundingBox2D: bItem.boundingBox2D ?? null,
-            cookingMethod: bItem.cookingMethod || 'raw',
-          };
-        });
+        const syncedScoutItemsForEdit = syncEditScoutItems({ baseScoutItems: baseScoutItemsForEdit, resultItems: result.items });
         activeMeal.scoutItems = syncedScoutItemsForEdit;
         addDebugLog(`[ScoutSync] edit-path renamed scoutItems -> ${JSON.stringify(syncedScoutItemsForEdit.map((s: any) => s.originalName))}`);
         
@@ -2683,32 +2581,10 @@ export async function runFoodAnalyze(req: any, res: any) {
         });
         mealBuild.staleDietitianNarrative = false;
         const finalMeal = pendingFoodLog || activeMeal;
-        const gate = evaluateMealGate({
-          mealId: finalMeal?.id || req.body.jobId,
-          name: finalMeal?.name,
-          weightGrams: finalMeal?.weightGrams,
-          calories: finalMeal?.nutrients?.calories ?? finalMeal?.calories,
-          protein: finalMeal?.nutrients?.protein ?? finalMeal?.protein,
-          carbohydrates: finalMeal?.nutrients?.carbohydrates ?? finalMeal?.carbohydrates,
-          totalFat: finalMeal?.nutrients?.totalFat ?? finalMeal?.totalFat,
-          items: (finalMeal?.itemsBreakdown || []).map((it: any) => ({
-            name: it.originalName || it.canonicalDbName || it.name || 'Item',
-            weightGrams: it.weightGrams ?? it.estimatedWeightGrams,
-            calories: it.nutrients?.calories ?? it.calories,
-            protein: it.nutrients?.protein ?? it.protein,
-            carbohydrates: it.nutrients?.carbohydrates ?? it.carbohydrates,
-            totalFat: it.nutrients?.totalFat ?? it.totalFat,
-            sourceImageIndex: it.sourceImageIndex,
-            boundingBox2D: it.boundingBox2D,
-            lockedNutrientKeys: it.lockedNutrientKeys,
-            dbSource: it.dbSource,
-          })),
-          mealHasImages: Boolean(req.body.photoUrl || (imagePayloads && imagePayloads.length > 0) || activeMeal?.imageUrl),
-          imageCount: (imagePayloads && imagePayloads.length > 0) ? imagePayloads.length : (req.body.photoUrl ? 1 : 0),
-          narrative: finalMessage,
-          previousMeal: req.body.activeMeal,
-          commands: Array.isArray(editCommands) ? editCommands : [],
-        });
+        const gate = evaluateMealGate(buildGateInput({
+          finalMeal, jobId: req.body.jobId, photoUrl: req.body.photoUrl, imagePayloads,
+          finalMessage, previousMeal: req.body.activeMeal, editCommands,
+        }));
         return res.json({
           mode: "modify",
           dietitianScratchpad: rawParsed._internalReasoning,

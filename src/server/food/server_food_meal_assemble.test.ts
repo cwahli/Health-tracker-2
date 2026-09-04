@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { buildFallbackItemsBreakdown, assembleParsedMealHeader } from './server_food_meal_assemble';
+import {
+  buildFallbackItemsBreakdown,
+  assembleParsedMealHeader,
+  backfillEditCommandEstimates,
+  formatMultiItemMealTitle,
+  resolveEditedMealTitle,
+  appendEditHistoryEntry,
+  syncEditScoutItems,
+  buildGateInput,
+} from './server_food_meal_assemble';
 
 describe('F-8.10 shard 6 — fallback breakdown', () => {
   it('builds estimated rows from scout items and logs once', () => {
@@ -93,5 +102,70 @@ describe('F-8.10 shard 6 — parsed meal header', () => {
     });
     expect(parsedData.name).toBe('Meal Log');
     expect(parsedData.message).toBe('');
+  });
+});
+
+describe('F-8.10 shard 7 — modify-path seams', () => {
+  it('backfills identity-change estimates and throws on invalid commands', () => {
+    const withFix = backfillEditCommandEstimates({
+      modificationCommand: [{ action: 'replace_identity', itemName: 'soda', newItemName: 'Tea', scoutIndex: 3 }],
+      foodData: { itemsBreakdown: [{ canonicalDbName: 'Tea', scoutIndex: 3, correctedNutrients: { calories: 2, protein: 0 }, foodType: 'beverage', cookingMethod: 'raw' }] },
+    });
+    expect(withFix[0].estimate.calories).toBe(2);
+    expect(withFix[0].estimate.foodType).toBe('beverage');
+    expect(() => backfillEditCommandEstimates({
+      modificationCommand: [{ action: 'add_item', itemName: 'cake' }],
+      foodData: { itemsBreakdown: [] },
+    })).toThrow(/invalid response/);
+    expect(backfillEditCommandEstimates({ modificationCommand: [] })).toEqual([]);
+  });
+
+  it('formats multi-item titles and syncs renames from commands', () => {
+    expect(formatMultiItemMealTitle([])).toBe('Meal');
+    expect(formatMultiItemMealTitle([{ name: 'Rice' }])).toBe('Rice');
+    expect(formatMultiItemMealTitle([{ name: 'Rice' }, { name: 'Tea' }])).toBe('Rice and Tea');
+    const renamed = resolveEditedMealTitle({
+      incomingTitle: 'Rice and Soda',
+      items: [{ name: 'Rice' }, { name: 'Unsweetened Tea' }],
+      editCommands: [{ action: 'replace_identity', itemName: 'Soda', newItemName: 'Unsweetened Tea' }],
+    });
+    expect(renamed).toBe('Rice and Unsweetened Tea');
+    expect(resolveEditedMealTitle({ incomingTitle: 'Lunch', items: [{ name: 'Rice' }], editCommands: [] })).toBe('Lunch');
+    expect(resolveEditedMealTitle({ incomingTitle: null, items: [], editCommands: [] })).toBeNull();
+  });
+
+  it('syncs scout chips with ledger renames and fabricates missing rows', () => {
+    const out = syncEditScoutItems({
+      baseScoutItems: [{ scoutIndex: 0, originalName: 'Es Teh Manis', keyword: 'Es Teh Manis' }],
+      resultItems: [{ scoutIndex: 0, canonicalDbName: 'Unsweetened Iced Tea', weightGrams: 300 }],
+    });
+    expect(out[0].originalName).toBe('Unsweetened Iced Tea');
+    expect(out[0].keyword).toBe('Unsweetened Iced Tea');
+    const fabricated = syncEditScoutItems({
+      baseScoutItems: [],
+      resultItems: [{ scoutIndex: 9, name: 'Mystery' }],
+    });
+    expect(fabricated[0].originalName).toBe('Mystery');
+    expect(fabricated[0].cookingMethod).toBe('raw');
+  });
+
+  it('appends edit history and shapes gate input', () => {
+    const meal: any = {};
+    const logs: string[] = [];
+    appendEditHistoryEntry({
+      activeMeal: meal, message: 'less rice',
+      result: { notes: [' halved rice '], beforeItems: [{ name: 'Rice', weightGrams: 200 }], items: [{ name: 'Rice', weightGrams: 100 }] },
+      onLog: (m) => logs.push(m),
+    });
+    expect(meal.historyLog.length).toBe(1);
+    expect(meal.historyLog[0].stage).toBe('meal_edit');
+    const gate = buildGateInput({
+      finalMeal: { id: 'm1', name: 'Lunch', weightGrams: 300, nutrients: { calories: 400, protein: 20, carbohydrates: 50, totalFat: 10 }, itemsBreakdown: [{ originalName: 'Rice', weightGrams: 300 }] },
+      jobId: 'j1', imagePayloads: [{}], finalMessage: 'done', previousMeal: null, editCommands: [],
+    });
+    expect(gate.mealId).toBe('m1');
+    expect(gate.calories).toBe(400);
+    expect(gate.imageCount).toBe(1);
+    expect(gate.items[0].name).toBe('Rice');
   });
 });

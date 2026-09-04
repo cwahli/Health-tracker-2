@@ -7,6 +7,8 @@ import {
 import { pickQueryScopedMatch } from '../../../server_query_scoped_match.js';
 import { extractMostRecentImageDate } from '../../utils/dateUtils.js';
 import { t } from '../../utils/i18n.js';
+import { applyModifierToItemName } from '../../../server_meal_edit.js';
+import { appendHistory } from '../../mealBuild/consolidate.js';
 
 /**
  * F-8.10 shard 6 — new_log meal assembly, extracted verbatim from
@@ -159,4 +161,193 @@ export function assembleParsedMealHeader(args: ParsedMealHeaderArgs): {
   }
   parsedData.diningEnvironment = diningEnvironment;
   return { parsedData, diningEnvironment };
+}
+
+/**
+ * F-8.10 shard 7 — modify-path seams, extracted verbatim from runFoodAnalyze.
+ */
+
+/** Backfills missing `estimate` on identity-changing commands from corrected nutrients. Throws on invalid responses. */
+export function backfillEditCommandEstimates(rawParsed: any): any[] {
+  let editCommands = rawParsed.editCommands || rawParsed.modificationCommand || rawParsed.data?.editCommands || rawParsed.data?.modificationCommand || [];
+  if (Array.isArray(editCommands) && Array.isArray(rawParsed.foodData?.itemsBreakdown)) {
+    editCommands = editCommands.map((cmd: any) => {
+      if ((cmd.action === 'replace_identity' || cmd.action === 'add_item' || cmd.action === 'replace_item') && !cmd.estimate) {
+        const targetName = String(cmd.newItemName || cmd.replacementItemName || cmd.itemName || '').trim().toLowerCase();
+        const match = rawParsed.foodData?.itemsBreakdown?.find((b: any) => {
+          const bName = String(b.canonicalDbName || b.name || '').trim().toLowerCase();
+          return (bName && bName === targetName) || (b.scoutIndex != null && b.scoutIndex === cmd.scoutIndex);
+        });
+        if (match && match.correctedNutrients) {
+          return { ...cmd, estimate: { ...match.correctedNutrients, foodType: match.foodType, cookingMethod: match.cookingMethod } };
+        }
+        throw new Error(`A ${cmd.action} command emitted without "estimate" is an invalid response. You MUST populate it with a complete, realistic nutrient profile for the NEW identity on every single ${cmd.action} command, with no exceptions.`);
+      }
+      return cmd;
+    });
+  }
+  return editCommands;
+}
+
+export function formatMultiItemMealTitle(items: any[]): string {
+  if (!items || items.length === 0) return 'Meal';
+  const names = items.map((it: any) => it.name || it.canonicalDbName || 'Item').filter(Boolean);
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
+}
+
+export interface EditedMealTitleArgs {
+  incomingTitle: any;
+  items: any[];
+  editCommands: any;
+}
+
+/** Resolves the post-edit meal title, syncing renames from edit commands. */
+export function resolveEditedMealTitle(args: EditedMealTitleArgs): string | null {
+  const { incomingTitle, items, editCommands } = args;
+  if (items.length > 1) {
+    const isMultiItemTitle = incomingTitle && (incomingTitle.includes(',') || /\b(and|with)\b/i.test(incomingTitle));
+    if (incomingTitle && isMultiItemTitle) {
+      let updatedTitle = incomingTitle;
+      // Synchronize any renamed items in incomingTitle from editCommands
+      if (Array.isArray(editCommands)) {
+        for (const cmd of editCommands) {
+          const oldName = cmd.itemName;
+          const newName = cmd.newItemName || (cmd.action === 'update_modifier' || cmd.action === 'set_modifier' ? applyModifierToItemName(oldName, cmd.modifier) : null);
+          if (oldName && newName && oldName !== newName) {
+            const reg = new RegExp(`\\b${oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+            updatedTitle = updatedTitle.replace(reg, newName);
+          }
+        }
+      }
+      return updatedTitle;
+    }
+    return formatMultiItemMealTitle(items);
+  }
+  if (incomingTitle) return incomingTitle;
+  if (items.length === 1) return items[0].name || null;
+  return null;
+}
+
+/** Appends the edit summary to the meal history log (mutates activeMeal, as inline). */
+export function appendEditHistoryEntry(args: {
+  activeMeal: any;
+  message?: string;
+  result: { notes: string[]; beforeItems?: any[]; items: any[] };
+  onLog: (msg: string) => void;
+}): void {
+  const { activeMeal, message, result, onLog } = args;
+  try {
+    const summarize = (arr: any[]) => (Array.isArray(arr) ? arr : []).map((it: any) => ({
+      name: it.name || it.canonicalDbName || 'Item',
+      weightGrams: it.weightGrams ?? it.estimatedWeightGrams ?? null,
+      calories: it.nutrients?.calories ?? it.calories ?? null,
+    }));
+    const historySource: any = { historyLog: Array.isArray(activeMeal.historyLog) ? activeMeal.historyLog : [] };
+    const updatedHistorySource = appendHistory(historySource, {
+      type: 'user_action',
+      timestamp: new Date().toISOString(),
+      stage: 'meal_edit',
+      message: result.notes.join('; ') || 'Meal edited',
+      details: {
+        userMessage: message || '',
+        before: summarize(result.beforeItems),
+        after: summarize(result.items),
+      },
+    } as any);
+    activeMeal.historyLog = updatedHistorySource.historyLog;
+  } catch (histErr: any) {
+    onLog(`[Edit History] Failed to append history entry: ${histErr?.message || histErr}`);
+  }
+}
+
+export interface EditScoutSyncArgs {
+  baseScoutItems: any[];
+  resultItems: any[];
+}
+
+/**
+ * Syncs scoutItems (UI chips/gallery) with edit-path renames. Without this,
+ * renames update the ledger but chip labels stay on the old name forever,
+ * because chips read scoutItems.originalName/keyword, not itemsBreakdown.
+ */
+export function syncEditScoutItems(args: EditScoutSyncArgs): any[] {
+  const { baseScoutItems, resultItems } = args;
+  return resultItems.map((bItem: any) => {
+    const sItem = baseScoutItems.find((s: any) =>
+      (bItem.scoutIndex !== undefined && bItem.scoutIndex !== null && s.scoutIndex === bItem.scoutIndex) ||
+      (s.originalName && (s.originalName === bItem.name || s.originalName === bItem.canonicalDbName)) ||
+      (s.keyword && (s.keyword === bItem.name || s.keyword === bItem.canonicalDbName))
+    );
+    const newName = bItem.canonicalDbName || bItem.name || sItem?.originalName || 'Item';
+    if (sItem) {
+      return {
+        ...sItem,
+        originalName: newName,
+        keyword: newName,
+        estimatedWeightGrams: bItem.weightGrams || sItem.estimatedWeightGrams,
+        packGrams: bItem.packGrams ?? sItem.packGrams ?? null,
+        components: bItem.components || sItem.components,
+        componentsDetailList: bItem.componentsDetailList || sItem.componentsDetailList,
+        nutrients: bItem.nutrients || sItem.nutrients,
+        sourceImageIndex: bItem.sourceImageIndex ?? sItem.sourceImageIndex,
+        boundingBox2D: bItem.boundingBox2D ?? sItem.boundingBox2D,
+      };
+    }
+    return {
+      scoutIndex: bItem.scoutIndex,
+      originalName: newName,
+      keyword: newName,
+      estimatedWeightGrams: bItem.weightGrams || 100,
+      packGrams: bItem.packGrams ?? null,
+      components: bItem.components || [],
+      componentsDetailList: bItem.componentsDetailList || [],
+      nutrients: bItem.nutrients || {},
+      sourceImageIndex: bItem.sourceImageIndex ?? null,
+      boundingBox2D: bItem.boundingBox2D ?? null,
+      cookingMethod: bItem.cookingMethod || 'raw',
+    };
+  });
+}
+
+export interface GateInputArgs {
+  finalMeal: any;
+  jobId?: string;
+  photoUrl?: string;
+  imagePayloads: any;
+  finalMessage: string;
+  previousMeal: any;
+  editCommands: any;
+}
+
+/** Shapes the evaluateMealGate input from the edited meal. */
+export function buildGateInput(args: GateInputArgs): any {
+  const { finalMeal, jobId, photoUrl, imagePayloads, finalMessage, previousMeal, editCommands } = args;
+  return {
+    mealId: finalMeal?.id || jobId,
+    name: finalMeal?.name,
+    weightGrams: finalMeal?.weightGrams,
+    calories: finalMeal?.nutrients?.calories ?? finalMeal?.calories,
+    protein: finalMeal?.nutrients?.protein ?? finalMeal?.protein,
+    carbohydrates: finalMeal?.nutrients?.carbohydrates ?? finalMeal?.carbohydrates,
+    totalFat: finalMeal?.nutrients?.totalFat ?? finalMeal?.totalFat,
+    items: (finalMeal?.itemsBreakdown || []).map((it: any) => ({
+      name: it.originalName || it.canonicalDbName || it.name || 'Item',
+      weightGrams: it.weightGrams ?? it.estimatedWeightGrams,
+      calories: it.nutrients?.calories ?? it.calories,
+      protein: it.nutrients?.protein ?? it.protein,
+      carbohydrates: it.nutrients?.carbohydrates ?? it.carbohydrates,
+      totalFat: it.nutrients?.totalFat ?? it.totalFat,
+      sourceImageIndex: it.sourceImageIndex,
+      boundingBox2D: it.boundingBox2D,
+      lockedNutrientKeys: it.lockedNutrientKeys,
+      dbSource: it.dbSource,
+    })),
+    mealHasImages: Boolean(photoUrl || (imagePayloads && imagePayloads.length > 0) || finalMeal?.imageUrl),
+    imageCount: (imagePayloads && imagePayloads.length > 0) ? imagePayloads.length : (photoUrl ? 1 : 0),
+    narrative: finalMessage,
+    previousMeal,
+    commands: Array.isArray(editCommands) ? editCommands : [],
+  };
 }
