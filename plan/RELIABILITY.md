@@ -318,10 +318,12 @@ To prevent test fragmentation, avoid API quota exhaustion, and ensure the entire
 │ TIER 1: INNER LOOP (Every code change — 95% of runs)                         │
 │ • Fast, deterministic vitest + tsc (< 2 seconds, 0 Gemini API calls)        │
 │ • Scope: Schemas, parsers, state reducers, unit conversions, i18n parity     │
+│ • Golden Fixtures: Official ground-truth datasets (G1-G7 meals, G-B1 labs)   │
 │ • Commands:                                                                 │
 │   npm run test:receptionist                                                 │
 │   npm run test:bio                                                          │
 │   npm run test:food                                                         │
+│   npm run test:golden (runs tests/golden_meals.ts + tests/golden_biomarker.ts)│
 │   npm run test:prepush (runs domain tests + tsc --noEmit)                   │
 └──────────────────────────────────────┬──────────────────────────────────────┘
                                        │ Green (exit 0)
@@ -331,6 +333,8 @@ To prevent test fragmentation, avoid API quota exhaustion, and ensure the entire
 │ • Playwright browser automation (prototype/tests/*.spec.ts, ~10-20 seconds)  │
 │ • Scope: Real DOM interactions, modal dialog mounting, UI forms, language    │
 │   toggling, demo account switching, chat card rendering                      │
+│ • Golden Journeys: Key user critical path (prototype/tests/key-journeys.spec.ts)
+│   ensuring boot, tab navigation, quick action logging, and health cards work│
 │ • Environment: Local server (localhost:3000) with deterministic mocks        │
 │ • Command: npx playwright test (or npm run test:e2e)                         │
 └──────────────────────────────────────┬──────────────────────────────────────┘
@@ -349,8 +353,32 @@ To prevent test fragmentation, avoid API quota exhaustion, and ensure the entire
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
+#### How the Golden Tests and Journeys Fit:
+
+1. **Golden Fixtures (Ground-Truth Invariants in Tier 1):**
+   - **Files:** `tests/Golden_meal/G1..G7` and `tests/Golden_biomarker/examples/G-B1`.
+   - **Test runner:** `npm run test:golden` (runs `tests/golden_meals.test.ts` and `tests/golden_biomarker.test.ts`).
+   - **Role:** They act as immutable ground-truth anchors. They freeze the input (photos, text, lab panels) and lock in the exact expected catalog matches, gram weights, macronutrient derivation, and lab unit conversions (e.g. HDL mg/dL → mmol/L). They run completely offline in Vitest in <1 second with zero Gemini API calls.
+   - **When to run:** Whenever modifying calculation logic, food catalog databases, portion clarify, or biomarker telemetry math.
+
+2. **Golden Journeys (User Critical Path in Tier 2):**
+   - **Files:** `prototype/tests/key-journeys.spec.ts`.
+   - **Test runner:** `npm run test:e2e` (or `npx playwright test prototype/tests/key-journeys.spec.ts`).
+   - **Role:** Tests the "Golden Path" of user interaction in the real browser. Covers:
+     - Journey 1: App Initial Load & Navigation Shell.
+     - Journey 2: Tab Switching & Sub-tab Navigation.
+     - Journey 3: Quick Action & Chat Logging Sheet interaction.
+     - Journey 4: Health Portal & Biomarker Inspection.
+   - **When to run:** Before submitting a PR or whenever altering navigation, modals, or React layout chrome.
+
+3. **Golden Promotion Lifecycle (Bug → Fixture):**
+   - When an edge case or regression occurs in production or prototype runs, the scenario is captured as an `issue_tag` / bug card.
+   - The root-cause class is fixed via a dedicated unit test.
+   - Once confirmed green, the case is **Promoted** into an official Golden (`tests/Golden_meal/G*` or `tests/Golden_biomarker/G-B*`), permanently protecting that scenario from regressing in Tier 1.
+
 #### How the Three Tiers Work Together:
 1. **Tier 1 (Vitest) protects code invariants:** Guarantees that business logic, math calculations (Mifflin-St Jeor, Atwater), storage tombstones, and data contracts cannot regress.
 2. **Tier 2 (Playwright) protects the user experience:** Verifies that the client compiles, buttons click, modals mount without crashing, and Indonesian/English strings toggle smoothly across mobile and desktop viewports.
 3. **Tier 3 (Live Benchmark) protects AI clinical quality:** Validates that live Gemini interprets the prompt accurately, returns valid JSON, avoids hallucinations, and provides sound health guidance before production deployment.
+
 
