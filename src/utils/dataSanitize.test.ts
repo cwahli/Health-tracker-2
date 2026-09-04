@@ -40,7 +40,9 @@ describe('cleanupInventedBiomarkerCatalog (P2)', () => {
     expect(result.droppedKeys).toContain('pending_ghost');
     expect(result.profile.customBiomarkers['metric_1']).toBeUndefined();
     expect(result.profile.customBiomarkers['pending_ghost']).toBeUndefined();
-    expect(result.profile.customBiomarkers['pending_with_unit']).toBeDefined();
+    // B7.4: pending_with_unit moved to pendingObservations, stripped from customBiomarkers catalog
+    expect(result.profile.customBiomarkers['pending_with_unit']).toBeUndefined();
+    expect(result.profile.pendingObservations.some((p: any) => p.printedName === 'Valid Marker')).toBe(true);
 
     // 3. NeedsApproval deleted on built-ins
     expect(result.profile.customBiomarkers['hdl']?.needsApproval).toBeUndefined();

@@ -303,8 +303,54 @@ If it is a feature or update: name which slices in 10.2 you must not regress, an
 
 ### 10.5 Playwright (R-3)
 
-After S-1 has a leftover-string list: thin smoke only (Kosong, empty Front Desk, no listed English chrome). Not a meal-analyze soak.
+After S-1 has a leftover-string list: thin smoke only (Kosong, empty Front Desk, no listed English chrome). Not a meal-analyze soak. Uses `playwright.config.ts` and `prototype/tests/*.spec.ts`.
 
 ### 10.6 Chat and demo (S-5)
 
 Empty-demo reseed must wipe chat keys and jobs (landed 155a49a). New stale-thread bugs extend storageUtils.test.ts; they do not start as a live Kosong click-through.
+
+### 10.7 Unified Testing Pyramid (Vitest + Playwright + Live Model Benchmark)
+
+To prevent test fragmentation, avoid API quota exhaustion, and ensure the entire platform remains robust, all testing operates across three distinct tiers that work together harmoniously:
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TIER 1: INNER LOOP (Every code change — 95% of runs)                         │
+│ • Fast, deterministic vitest + tsc (< 2 seconds, 0 Gemini API calls)        │
+│ • Scope: Schemas, parsers, state reducers, unit conversions, i18n parity     │
+│ • Commands:                                                                 │
+│   npm run test:receptionist                                                 │
+│   npm run test:bio                                                          │
+│   npm run test:food                                                         │
+│   npm run test:prepush (runs domain tests + tsc --noEmit)                   │
+└──────────────────────────────────────┬──────────────────────────────────────┘
+                                       │ Green (exit 0)
+                                       ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TIER 2: BROWSER JOURNEY E2E (Pre-PR / Pre-commit verification)               │
+│ • Playwright browser automation (prototype/tests/*.spec.ts, ~10-20 seconds)  │
+│ • Scope: Real DOM interactions, modal dialog mounting, UI forms, language    │
+│   toggling, demo account switching, chat card rendering                      │
+│ • Environment: Local server (localhost:3000) with deterministic mocks        │
+│ • Command: npx playwright test (or npm run test:e2e)                         │
+└──────────────────────────────────────┬──────────────────────────────────────┘
+                                       │ Green (exit 0)
+                                       ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TIER 3: LIVE BENCHMARK ACCEPTANCE AUDIT (End of milestone / Final sign-off)  │
+│ • Real model execution against live Gemini 3.5 Flash Lite                   │
+│ • Scope: Clinical reasoning, vision OCR, anti-hallucination checks, and      │
+│   multi-turn Hub-and-Spoke container follow-up verification                 │
+│ • Cases:                                                                    │
+│   npm run test:benchmark:receptionist (runner.ts --case UC-01)               │
+│   npm run test:benchmark:biomarkers   (runner.ts --case C1)                  │
+│ • Rule: Run ONCE at the end of a milestone to confirm real model readiness; │
+│   never as an inner loop debugging tool or automated PR blocker.            │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### How the Three Tiers Work Together:
+1. **Tier 1 (Vitest) protects code invariants:** Guarantees that business logic, math calculations (Mifflin-St Jeor, Atwater), storage tombstones, and data contracts cannot regress.
+2. **Tier 2 (Playwright) protects the user experience:** Verifies that the client compiles, buttons click, modals mount without crashing, and Indonesian/English strings toggle smoothly across mobile and desktop viewports.
+3. **Tier 3 (Live Benchmark) protects AI clinical quality:** Validates that live Gemini interprets the prompt accurately, returns valid JSON, avoids hallucinations, and provides sound health guidance before production deployment.
+
