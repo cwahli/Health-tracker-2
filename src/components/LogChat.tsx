@@ -1048,6 +1048,10 @@ ${logsText}`);
       }
     } catch (err: any) {
       console.log("Error loading conversations from local index:", err?.message || err);
+      // Corrupt index must not leave a stale/empty chat: reset to a fresh session.
+      const welcome = getWelcomeMessage();
+      setMessages([welcome], false);
+      setLastSentPayload(null);
     } finally {
       setIsLoadingConversations(false);
     }

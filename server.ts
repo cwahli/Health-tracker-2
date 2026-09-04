@@ -5,7 +5,6 @@ try {
   dns.setDefaultResultOrder('ipv4first');
 } catch (e) {}
 
-import { executeFoodResolverCurator } from './server_food_resolver_curator.js';
 import {
   checkCategoryAndStateCompatibility,
   applyServerAverageNutrients,
