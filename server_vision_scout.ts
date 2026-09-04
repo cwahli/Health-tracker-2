@@ -916,7 +916,21 @@ export function parseAndHealVisionScout(
           return;
         }
 
+        const isPlaceholderDish = /^(empty(\s+context)?|none|no\s*food(\s*detected)?|empty\s*plate)$/i.test(dName);
+        if (isPlaceholderDish) {
+          addDebugLog(`[Vision Scout Dish Exclusion] Skipping placeholder/hallucinated dish "${d.dishName}".`);
+          return;
+        }
+
         const dishFoods = Array.isArray(d.foods) ? d.foods : [];
+        const hasOnlyPlaceholderFoods = dishFoods.length > 0 && dishFoods.every((f: any) => {
+          const fn = String(f?.foodName || '').toLowerCase().trim();
+          return /^(none|empty(\s+context)?|no\s*food(\s*detected)?)$/i.test(fn);
+        });
+        if (hasOnlyPlaceholderFoods) {
+          addDebugLog(`[Vision Scout Dish Exclusion] Skipping dish "${d.dishName}" containing only placeholder food(s).`);
+          return;
+        }
         let sumP = 0, sumC = 0, sumSatFat = 0, sumAddedSugar = 0, sumFibre = 0, sumNa = 0;
         const components: any[] = [];
         dishFoods.forEach((f: any) => {
@@ -1097,17 +1111,21 @@ export function parseAndHealVisionScout(
       diningEnvironment = parsedScout.diningEnvironment;
     }
     if (Array.isArray(parsedScout.items)) {
-      if (bracketNames.length > 0) {
-        parsedScout.items = parsedScout.items.filter((it: any) => {
-          const itName = String(it?.originalName || it?.keyword || it?.name || '').toLowerCase().trim();
+      parsedScout.items = parsedScout.items.filter((it: any) => {
+        const itName = String(it?.originalName || it?.keyword || it?.name || '').toLowerCase().trim();
+        if (/^(empty(\s+context)?|none|no\s*food(\s*detected)?|empty\s*plate)$/i.test(itName)) {
+          addDebugLog(`[Vision Scout Item Exclusion] Skipping placeholder scout item "${itName}".`);
+          return false;
+        }
+        if (bracketNames.length > 0) {
           const isMatch = bracketNames.some(b => b && (itName === b || itName.includes(b) || b.includes(itName)));
           if (isMatch) {
             addDebugLog(`[Vision Scout Item Exclusion] Skipping scout item "${itName}" matching bracketed reference item.`);
             return false;
           }
-          return true;
-        });
-      }
+        }
+        return true;
+      });
       for (const it of parsedScout.items) {
         if (it.itemConfidence && it.itemConfidence.toLowerCase().includes("low")) {
           lowestConfidence = "Low (<50%)";

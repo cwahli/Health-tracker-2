@@ -1749,6 +1749,53 @@ async function callUnifiedLLMInternal({
       assertModelNotInQuotaCooldown(rawModelStr);
     }
 
+  // Normalize image payloads defensively: callers may pass { mimeType, data } objects,
+  // { inlineData: { mimeType, data } }, raw data URL strings ("data:image/jpeg;base64,..."), or raw base64 strings.
+  const normalizedImagePayloads: { mimeType: string; data: string }[] = [];
+  const parseImageItem = (item: any): { mimeType: string; data: string } | null => {
+    if (!item) return null;
+    if (typeof item === 'object') {
+      if (item.data && item.mimeType) {
+        return { mimeType: String(item.mimeType), data: String(item.data) };
+      }
+      if (item.inlineData && item.inlineData.data && item.inlineData.mimeType) {
+        return { mimeType: String(item.inlineData.mimeType), data: String(item.inlineData.data) };
+      }
+    }
+    if (typeof item === 'string') {
+      if (item.startsWith('data:')) {
+        const match = item.match(/^data:([^;]+);base64,(.+)$/);
+        if (match) {
+          return { mimeType: match[1], data: match[2] };
+        }
+        const commaIdx = item.indexOf(',');
+        if (commaIdx > -1) {
+          const header = item.slice(0, commaIdx);
+          const data = item.slice(commaIdx + 1);
+          const mimeMatch = header.match(/:(.*?);/);
+          return { mimeType: mimeMatch ? mimeMatch[1] : 'image/jpeg', data };
+        }
+      } else if (!item.startsWith('http://') && !item.startsWith('https://') && item.length > 50) {
+        return { mimeType: 'image/jpeg', data: item };
+      }
+    }
+    return null;
+  };
+
+  if (imagePayloads && Array.isArray(imagePayloads) && imagePayloads.length > 0) {
+    for (const img of imagePayloads) {
+      const parsed = parseImageItem(img);
+      if (parsed && parsed.data && parsed.data.length > 0) {
+        normalizedImagePayloads.push(parsed);
+      }
+    }
+  } else if (imagePayload) {
+    const parsed = parseImageItem(imagePayload);
+    if (parsed && parsed.data && parsed.data.length > 0) {
+      normalizedImagePayloads.push(parsed);
+    }
+  }
+
   // 1. Anthropic Claude Models
   if (normalizedModelId.includes("claude-")) {
     const anthropicKey = process.env.ANTHROPIC_API_KEY;
@@ -1757,8 +1804,8 @@ async function callUnifiedLLMInternal({
       try {
         const messages: any[] = [];
         const contentParts: any[] = [];
-        if (imagePayloads && imagePayloads.length > 0) {
-          for (const img of imagePayloads) {
+        if (normalizedImagePayloads.length > 0) {
+          for (const img of normalizedImagePayloads) {
             contentParts.push({
               type: "image",
               source: {
@@ -1768,15 +1815,6 @@ async function callUnifiedLLMInternal({
               }
             });
           }
-        } else if (imagePayload) {
-          contentParts.push({
-            type: "image",
-            source: {
-              type: "base64",
-              media_type: imagePayload.mimeType,
-              data: imagePayload.data
-            }
-          });
         }
         contentParts.push({
           type: "text",
@@ -1792,13 +1830,13 @@ async function callUnifiedLLMInternal({
           headers: {
             "x-api-key": anthropicKey,
             "anthropic-version": "2023-06-01",
-            "content-type": "application/json"
+            "Content-Type": "application/json"
           },
           body: JSON.stringify({
             model: normalizedModelId,
-            max_tokens: 4096,
-            system: systemInstruction + (isJson ? " Respond strictly in valid JSON format." : ""),
-            messages
+            system: systemInstruction,
+            messages,
+            max_tokens: maxOutputTokens || 4096
           })
         });
 
@@ -1807,16 +1845,16 @@ async function callUnifiedLLMInternal({
           return body.content?.[0]?.text || "{}";
         } else {
           const errMsg = await res.text();
-          console.warn(`Anthropic API call returned non-200 status (${res.status}): ${errMsg}. Falling back to Gemini...`);
+          throw new Error(`Anthropic API call returned non-200 status (${res.status}): ${errMsg}. Please try another model.`);
         }
-      } catch (err) {
-        console.warn(`Error connecting to Anthropic:`, err, `. Falling back to Gemini...`);
+      } catch (err: any) {
+        throw new Error(`Error connecting to Anthropic: ${err.message || err}. Please try another model.`);
       }
     }
   }
 
-  // 2. OpenAI GPT Models
-  if (normalizedModelId.includes("gpt-")) {
+  // 2. OpenAI Models (or compatible endpoints)
+  if (normalizedModelId.includes("gpt-") || normalizedModelId.includes("o1") || normalizedModelId.includes("o3")) {
     const openaiKey = process.env.OPENAI_API_KEY;
     if (openaiKey) {
       console.log(`[UnifiedLLM] Calling official OpenAI API: ${normalizedModelId}`);
@@ -1827,8 +1865,8 @@ async function callUnifiedLLMInternal({
         ];
 
         const userContent: any[] = [{ type: "text", text: promptText }];
-        if (imagePayloads && imagePayloads.length > 0) {
-          for (const img of imagePayloads) {
+        if (normalizedImagePayloads.length > 0) {
+          for (const img of normalizedImagePayloads) {
             userContent.push({
               type: "image_url",
               image_url: {
@@ -1836,13 +1874,6 @@ async function callUnifiedLLMInternal({
               }
             });
           }
-        } else if (imagePayload) {
-          userContent.push({
-            type: "image_url",
-            image_url: {
-              url: `data:${imagePayload.mimeType};base64,${imagePayload.data}`
-            }
-          });
         }
         messages[1].content = userContent;
 
@@ -1873,7 +1904,7 @@ async function callUnifiedLLMInternal({
   }
 
   // 3. DeepSeek Models
-  if (normalizedModelId.includes("deepseek-")) {
+  if (normalizedModelId.includes("deepseek")) {
     const deepseekKey = process.env.DEEPSEEK_API_KEY;
     if (deepseekKey) {
       console.log(`[UnifiedLLM] Calling official DeepSeek API: ${normalizedModelId}`);
@@ -1883,7 +1914,7 @@ async function callUnifiedLLMInternal({
           { role: "user", content: promptText }
         ];
 
-        const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
+        const res = await fetch("https://api.deepseek.com/chat/completions", {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${deepseekKey}`,
@@ -1926,24 +1957,15 @@ async function callUnifiedLLMInternal({
   }
 
   const initialParts: any[] = [];
-  if (imagePayloads && imagePayloads.length > 0) {
-    for (const img of imagePayloads) {
-      if (img.data && img.data.length > 0) {
-        initialParts.push({
-          inlineData: {
-            mimeType: img.mimeType,
-            data: img.data
-          }
-        });
-      }
+  if (normalizedImagePayloads.length > 0) {
+    for (const img of normalizedImagePayloads) {
+      initialParts.push({
+        inlineData: {
+          mimeType: img.mimeType,
+          data: img.data
+        }
+      });
     }
-  } else if (imagePayload && imagePayload.data && imagePayload.data.length > 0) {
-    initialParts.push({
-      inlineData: {
-        mimeType: imagePayload.mimeType,
-        data: imagePayload.data
-      }
-    });
   }
 
   let resolvedInstruction = systemInstruction;
@@ -2032,7 +2054,7 @@ async function callUnifiedLLMInternal({
   let finalResponseText = "{}";
   const stageTag = logStagePrefix ? `:${logStagePrefix}` : '';
   _localAddDebugLog(`[UnifiedLLM${stageTag}] Dispatching prompt to model: "${targetGeminiModel}". Contents turns: ${contents.length}.`);
-  _localAddDebugLog(`[UnifiedLLM${stageTag}] Attaching ${imagePayloads?.length || (imagePayload ? 1 : 0)} image part(s) to model "${targetGeminiModel}".`);
+  _localAddDebugLog(`[UnifiedLLM${stageTag}] Attaching ${normalizedImagePayloads.length} image part(s) to model "${targetGeminiModel}".`);
   _localAddDebugLog(`[UnifiedLLM-Prompt${stageTag}] System Instruction:\n${resolvedInstruction}`);
   _localAddDebugLog(`[UnifiedLLM-Prompt${stageTag}] User Prompt:\n${promptText}`);
 

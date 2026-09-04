@@ -742,6 +742,25 @@ describe("server_vision_scout", () => {
       expect(result.items.some((it: any) => it.originalName === "Mr Oat Rolled Oats")).toBe(false);
       expect(result.items.some((it: any) => it.originalName === "Seafood Soup Pot")).toBe(true);
     });
+
+    it("should filter out hallucinated/placeholder dishes like 'Empty Context' or 'None'", async () => {
+      const { parseAndHealVisionScout } = await import("./server_vision_scout");
+      const mockScoutEmptyContext = {
+        dishes: [
+          {
+            dishName: "Empty Context",
+            estimatedWeightGrams: 250,
+            cookingMethod: "raw",
+            foods: [
+              { foodName: "None", weightGrams: 1, nutrients: { calories: 0, protein: 0, saturatedFat: 0, addedSugar: 0, totalFibre: 0, sodium: 0, carbohydrates: 0 } }
+            ]
+          }
+        ]
+      };
+      const result = parseAndHealVisionScout(mockScoutEmptyContext, () => {});
+      expect(result.items.length).toBe(0);
+      expect(result.visionScoutRanAndReturnedItems).toBe(false);
+    });
   });
 });
 
