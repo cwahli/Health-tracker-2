@@ -1,5 +1,6 @@
 import { getUSDANutrientValue } from '../../../server_pure_helpers.js';
 import { isKnownDatabaseBrandSync, normalizeChainKey } from '../../../serverBrandMenu.js';
+import { parseLabelCalories } from '../../../server_budget_reconcile.js';
 
 export const formatUSDANutrients = (nutrients: any[]): string => {
   if (!nutrients || !Array.isArray(nutrients)) return "No nutrients available";
@@ -216,3 +217,153 @@ export const detectChainKeyFromText = (str: string): string | undefined => {
   }
   return undefined;
 };
+
+/**
+ * F-8.10 shard 2 — resolver skip gate, extracted verbatim from runFoodAnalyze.
+ * A printed label covering calories + several panel fields means the LLM
+ * resolver gap is skipped for that query (token save + avoid bad USDA).
+ */
+export const scoutHasCompletePrintedLabel = (item: any): boolean => {
+  const raw = item?.rawNutritionLabel;
+  if (!raw || typeof raw !== 'object') return false;
+  const cal = parseLabelCalories(raw);
+  if (cal == null || !(cal > 0)) return false;
+  let filled = 0;
+  for (const [k, v] of Object.entries(raw)) {
+    const ck = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (ck === 'servingsize' || ck === 'weight' || ck === 'servingspercontainer') continue;
+    if (v === undefined || v === null || v === '' || v === '-' || v === '--') continue;
+    filled++;
+  }
+  // calories + several panel fields (protein/fat/carbs/salt etc.)
+  return filled >= 4;
+};
+
+/**
+ * F-8.10 shard 2 — component/match enrichment, extracted verbatim from
+ * runFoodAnalyze. Mutates scout items in place (same as the inline block).
+ */
+export function enrichScoutComponentsWithMatches(visionScoutItems: any[], databaseMatchesArray: any[]): void {
+  if (Array.isArray(visionScoutItems) && Array.isArray(databaseMatchesArray) && databaseMatchesArray.length > 0) {
+    visionScoutItems.forEach((item: any) => {
+      if (Array.isArray(item.components)) {
+        item.components.forEach((c: any) => {
+          const cQuery = String(c.searchQuery || c.name || c.keyword || '').toLowerCase().trim();
+          if (!cQuery) return;
+          const match = databaseMatchesArray.find((m: any) => {
+            const mQuery = String(m.searchQuery || m.query || m.name || '').toLowerCase().trim();
+            if (!mQuery) return false;
+            const isParentDishMatch = item.originalName && mQuery === String(item.originalName).toLowerCase().trim();
+            if (isParentDishMatch && cQuery !== mQuery) return false;
+            return mQuery === cQuery || (m.name && m.name.toLowerCase().trim() === cQuery);
+          });
+          if (match) {
+            const isBrandMatch = Boolean(match.chainName) || match.source === 'brand_official' || match.dbSource === 'brand_official';
+            const matchChain = String(match.chainName || match.brand || '').toLowerCase().trim();
+            const queryHasBrand = isBrandMatch && Boolean(matchChain) && (
+              cQuery.includes(matchChain) ||
+              (c.brand && String(c.brand).toLowerCase().includes(matchChain))
+            );
+            if (isBrandMatch && Boolean(matchChain) && !queryHasBrand) {
+              c.dbSource = (match.source && match.source !== 'brand_official') ? match.source : 'category_fallback';
+              c.chainName = null;
+              c.brand = null;
+            } else {
+              c.dbSource = (match.source || match.dbSource) || (isBrandMatch ? 'brand_official' : 'usda');
+              c.primaryBaseMatchName = match.name || c.primaryBaseMatchName;
+              if (queryHasBrand) {
+                c.chainName = match.chainName || c.chainName;
+                c.brand = match.chainName || match.brand || c.brand;
+              }
+            }
+            if (match.rawNutritionLabel) {
+              c.rawNutritionLabel = match.rawNutritionLabel;
+            }
+          } else {
+            if (c.packageLabelText) {
+              c.dbSource = 'brand_official';
+            } else if (item.components.length === 1 && (item.dbSource === 'brand_official' || item.chainName)) {
+              c.dbSource = 'brand_official';
+            } else {
+              c.dbSource = 'estimated';
+            }
+          }
+        });
+      }
+    });
+  }
+}
+
+/**
+ * F-8.10 shard 2 — client past-meals prompt context, extracted verbatim from
+ * runFoodAnalyze (including its try/catch). Returns the context string;
+ * logging flows through the injected onLog callback.
+ */
+export function buildPastMealsContext(foodLogs: any, onLog: (msg: string) => void): string {
+  let pastMealsCtx = "";
+  if (foodLogs && Array.isArray(foodLogs) && foodLogs.length > 0) {
+    try {
+      const pastMeals: any[] = [];
+      foodLogs.forEach((f: any) => {
+        if (f) {
+          pastMeals.push({
+            name: f.name,
+            date: f.date || "",
+            calories: f.nutrients?.calories || f.calories || 0,
+            protein: f.nutrients?.protein || f.protein || 0,
+            saturatedFat: f.nutrients?.saturatedFat || f.saturatedFat || 0,
+            sodium: f.nutrients?.sodium || f.sodium || 0,
+            carbohydrates: f.nutrients?.carbohydrates || f.carbohydrates || 0
+          });
+        }
+      });
+      if (pastMeals.length > 0) {
+        pastMeals.sort((a: any, b: any) => b.date.localeCompare(a.date));
+        const recent = pastMeals.slice(0, 10);
+        pastMealsCtx = "PATIENT'S RECENT LOGGED MEALS HISTORY (from client state):\n" +
+          recent.map((m, idx) => `- Meal ${idx + 1}: "${m.name}" on ${m.date}`).join("\n") + "\n\n";
+        onLog(`[Client Context] Successfully loaded ${pastMeals.length} past meal(s) from client payload, included recent ${recent.length} meals in prompt context.`);
+        // Rolling average of DAILY TOTALS, counting only days with 2+ meals
+        // logged (a single snack logged alone would otherwise skew the
+        // "daily average" misleadingly low).
+        const dayTotals: { [date: string]: { count: number; calories: number; protein: number; saturatedFat: number; sodium: number; carbohydrates: number } } = {};
+        pastMeals.forEach((m: any) => {
+          if (!m.date) return;
+          if (!dayTotals[m.date]) {
+            dayTotals[m.date] = { count: 0, calories: 0, protein: 0, saturatedFat: 0, sodium: 0, carbohydrates: 0 };
+          }
+          dayTotals[m.date].count += 1;
+          dayTotals[m.date].calories += Number(m.calories) || 0;
+          dayTotals[m.date].protein += Number(m.protein) || 0;
+          dayTotals[m.date].saturatedFat += Number(m.saturatedFat) || 0;
+          dayTotals[m.date].sodium += Number(m.sodium) || 0;
+          dayTotals[m.date].carbohydrates += Number(m.carbohydrates) || 0;
+        });
+        const qualifyingDays = Object.keys(dayTotals)
+          .filter((d) => dayTotals[d].count >= 2)
+          .sort((a, b) => b.localeCompare(a))
+          .slice(0, 10);
+        if (qualifyingDays.length > 0) {
+          const sum = qualifyingDays.reduce((acc, d) => {
+            acc.calories += dayTotals[d].calories;
+            acc.protein += dayTotals[d].protein;
+            acc.saturatedFat += dayTotals[d].saturatedFat;
+            acc.sodium += dayTotals[d].sodium;
+            acc.carbohydrates += dayTotals[d].carbohydrates;
+            return acc;
+          }, { calories: 0, protein: 0, saturatedFat: 0, sodium: 0, carbohydrates: 0 });
+          const n = qualifyingDays.length;
+          const avgCal = Math.round(sum.calories / n);
+          const avgProtein = Math.round((sum.protein / n) * 10) / 10;
+          const avgSatFat = Math.round((sum.saturatedFat / n) * 10) / 10;
+          const avgSodium = Math.round(sum.sodium / n);
+          const avgCarbs = Math.round((sum.carbohydrates / n) * 10) / 10;
+          onLog(`[Client Context] Computed ${n}-day rolling average from qualifying days (>=2 meals/day).`);
+        }
+      }
+    } catch (err: any) {
+      onLog(`[Client Context Error] Failed to process client foodLogs: ${err.message}`);
+    }
+  }
+  return pastMealsCtx;
+}
