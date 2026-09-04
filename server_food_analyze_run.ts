@@ -9,6 +9,7 @@ import { foodAnalyzeSchema } from './src/server/food/server_food_analyze_schema.
 import { buildUserContext, buildTimeContext, buildImageContext, buildHistoryContext, buildVisionScoutContext, buildDatabaseMatchesContext, buildBiomarkersContext, stitchFoodPrompt } from './src/server/food/server_food_prompt_context.js';
 import { sanitizeLlmJsonOutput, computeDietitianSkipGates } from './src/server/food/server_food_dietitian_dispatch.js';
 import { resolveFoodAnalyzeMode, buildFoodApiCalls } from './src/server/food/server_food_mode_routing.js';
+import { buildFallbackItemsBreakdown, assembleParsedMealHeader } from './src/server/food/server_food_meal_assemble.js';
 
 import { executeFoodResolverCurator } from './server_food_resolver_curator.js';
 import {
@@ -18,7 +19,6 @@ import {
   checkArchetypeMacroBounds,
   applySatFatAndAddedSugarFloor,
   backfillSparseMicronutrients,
-  sanitizeMealWeight,
   findItemIndexInList,
   getUSDANutrientValue,
   extractUSDANutrientsPer100g,
@@ -27,13 +27,9 @@ import {
   applyCommercialSodiumFloor,
   checkAtwaterConsistency,
   synchronizeNarrativeText,
-  sanitizeVerdictLabel,
-  evaluateNutrientWarnings,
   build31NutrientsMarkdownServer,
-  enforceTitlePluralParity,
   formatMealReceiptTable,
 } from './server_pure_helpers.js';
-import { filterMatchesForQuery, pickQueryScopedMatch } from './server_query_scoped_match.js';
 import {
   namesReferToSameFood,
   matchBreakdownItemToScout,
@@ -81,7 +77,6 @@ import {
   buildPortionClarifyPayload,
   applyPortionChoices,
 } from './server_portion_clarify.js';
-import { extractMostRecentImageDate } from './src/utils/dateUtils.js';
 import {
   buildFoodAnalyzeInstruction,
   buildModeAReviewInstruction,
@@ -2231,105 +2226,12 @@ export async function runFoodAnalyze(req: any, res: any) {
       const rawFoodData = rawParsed.foodData || {};
       if (!rawFoodData.itemsBreakdown || rawFoodData.itemsBreakdown.length === 0) {
         // Build itemsBreakdown from Vision Scout output + best DB match per item
-        if (visionScoutItems && visionScoutItems.length > 0) {
-                    rawFoodData.itemsBreakdown = visionScoutItems.map((item: any) => {
-            const bestMatch = pickQueryScopedMatch(item.keyword || item.originalName || '', databaseMatchesArray, [], quarantinedIdsSet);
-            // nutritionFacts is a general-purpose estimate field, never evidence of a
-            // real printed label — do not let it set dbSource:'label'. Only item.source
-            // === 'label' (scout OCR) or a brand_official match may do that.
-            let labelNutrients = null;
-            if (item.source === 'label' && item.nutritionFacts && Object.keys(item.nutritionFacts).length > 0) {
-              labelNutrients = {
-                servingSizeGrams: 100,
-                calories: Number(item.nutritionFacts.caloriesPer100g) || 0,
-                protein: Number(item.nutritionFacts.proteinPer100g) || 0,
-                totalFat: Number(item.nutritionFacts.fatPer100g) || 0,
-                saturatedFat: Number(item.nutritionFacts.saturatedFatPer100g) || 0,
-                transFat: Number(item.nutritionFacts.transFatPer100g) || 0,
-                carbohydrates: Number(item.nutritionFacts.carbsPer100g) || 0,
-                addedSugar: Number(item.nutritionFacts.addedSugarPer100g) || 0,
-                sodium: Number(item.nutritionFacts.sodiumPer100g) || 0,
-                potassium: Number(item.nutritionFacts.potassiumPer100g) || 0,
-                totalFibre: Number(item.nutritionFacts.totalFibrePer100g) || 0,
-                solubleFibre: Number(item.nutritionFacts.solubleFibrePer100g) || 0
-              };
-            }
-            return {
-              canonicalDbName: item.keyword,
-              weightGrams: String(sanitizeMealWeight(item.estimatedWeightGrams, 100)),
-              dbSource: labelNutrients ? 'label' : (bestMatch ? (bestMatch.source === 'usda' ? 'usda' : 'off') : 'estimated'),
-              dbId: bestMatch ? bestMatch.id : null,
-              labelNutrientsPerServing: labelNutrients,
-              warnings: evaluateNutrientWarnings(labelNutrients),
-              foodType: 'unknown'
-            };
-          });
-          addDebugLog(`[Fallback] Built itemsBreakdown from Vision Scout output (LLM truncated)`);
-        }
+        const fallback = buildFallbackItemsBreakdown({ visionScoutItems, databaseMatchesArray, quarantinedIdsSet, onLog: addDebugLog });
+        if (fallback) rawFoodData.itemsBreakdown = fallback;
       }
-      const parsedData: any = {};
-      const sanitizeString = (val: any, fallback: string) => {
-        if (val === null || val === undefined || String(val).toLowerCase() === "undefined" || String(val).trim() === "") {
-          return fallback;
-        }
-        return String(val);
-      };
-      parsedData.name = sanitizeString(rawFoodData.name, "Meal Log");
-      // Enforce singular/plural parity between the composite title and each item's own
-      // canonicalDbName in itemsBreakdown (the LLM is only asked to do this via prompt
-      // instruction, with no code-level enforcement — see agents/dietitianInstructions.ts).
-      if (Array.isArray(rawFoodData.itemsBreakdown) && rawFoodData.itemsBreakdown.length > 0) {
-        parsedData.name = enforceTitlePluralParity(parsedData.name, rawFoodData.itemsBreakdown);
-      }
-      const mostRecentImageDate = extractMostRecentImageDate(imageDates);
-      parsedData.date = sanitizeString(rawFoodData.date, mostRecentImageDate || new Date().toISOString().split("T")[0]);
-      if (mostRecentImageDate && (!rawFoodData.date || rawFoodData.date === 'undefined' || String(rawFoodData.date).trim() === '')) {
-        parsedData.date = mostRecentImageDate;
-      }
-      if (originalModeIsModify && activeMeal && activeMeal.date && (!imageDates || imageDates.length === 0)) {
-        const userMentionsDate = /\b(yesterday|tomorrow|last night|january|february|march|april|may|june|july|august|september|october|november|december|\d{4}-\d{2}-\d{2})\b/i.test(message);
-        if (!userMentionsDate) {
-          parsedData.date = activeMeal.date;
-        }
-      }
-      parsedData.composition = sanitizeString(rawFoodData.composition, "Unspecified ingredients");
-      const itemsWeightSum = Array.isArray(rawFoodData.itemsBreakdown)
-        ? rawFoodData.itemsBreakdown.reduce((sum: number, it: any) => sum + (Number(it.weightGrams) || 0), 0)
-        : 0;
-      const weightFallback = itemsWeightSum > 0 ? itemsWeightSum : 150;
-      const totalWeightGrams = sanitizeMealWeight(rawFoodData.weightGrams, weightFallback);
-      parsedData.weightGrams = totalWeightGrams;
-      parsedData.basis_type = 'total';
-      parsedData.serving_grams = totalWeightGrams;
-      parsedData.quantity = sanitizeString(rawFoodData.quantity, "1 serving");
-      parsedData.benefits = sanitizeString(rawFoodData.benefits, "");
-      parsedData.risks = sanitizeString(rawFoodData.risks, "");
-      parsedData.healthImpact = sanitizeString(rawFoodData.healthImpact, "");
-      parsedData.recommendation = sanitizeString(rawFoodData.recommendation, "");
-      parsedData.message = sanitizeString(rawParsed.message || rawFoodData.message || "", "");
-      const rawVerdict = rawParsed.verdict || rawFoodData.verdict;
-      if (rawVerdict && typeof rawVerdict === 'object') {
-        const sanitizedLabel = sanitizeVerdictLabel(rawVerdict.label || t(userProfile?.language, 'verdictSupportsMetabolicEnergy'), rawVerdict.level, parsedData.nutrients, userProfile?.language);
-        parsedData.verdict = {
-          label: sanitizedLabel,
-          level: String(rawVerdict.level || 'neutral')
-        };
-      } else if (rawFoodData.recommendation && typeof rawFoodData.recommendation === 'string' && rawFoodData.recommendation.trim().length > 0) {
-        const sanitizedLabel = sanitizeVerdictLabel(rawFoodData.recommendation, 'neutral', parsedData.nutrients, userProfile?.language);
-        parsedData.verdict = {
-          label: sanitizedLabel,
-          level: 'neutral'
-        };
-      }
-      parsedData.cookingMethod = sanitizeString(rawFoodData.cookingMethod, scoutCookingMethod || t(userProfile?.language, 'cookingMethodUnknown'));
-      parsedData.scoutConfidenceRating = sanitizeString(rawFoodData.scoutConfidenceRating, scoutConfidenceRating || "High (>90%)");
-      parsedData.scoutConfidenceComment = rawFoodData.scoutConfidenceComment !== undefined ? sanitizeString(rawFoodData.scoutConfidenceComment, "") : (scoutConfidenceComment || "");
-      // diningEnvironment is intentionally NOT re-read from the Dietitian's output.
-      // The Vision Scout is the sole source of truth for this classification (server.ts:2528).
-      if ((!diningEnvironment || diningEnvironment === 'unknown') && activeMeal?.diningEnvironment) {
-        diningEnvironment = activeMeal.diningEnvironment;
-      }
-      parsedData.diningEnvironment = diningEnvironment;
+      const header = assembleParsedMealHeader({ rawFoodData, rawParsed, imageDates, message, originalModeIsModify, activeMeal, scoutCookingMethod, scoutConfidenceRating, scoutConfidenceComment, diningEnvironment, language: userProfile?.language });
+      const parsedData: any = header.parsedData;
+      diningEnvironment = header.diningEnvironment;
       const useFinalizeDirectMap = Array.isArray(preCalculatedItems) && preCalculatedItems.length > 0;
       if (useFinalizeDirectMap) {
         addDebugLog('[Single-Path] Meal items = finalizeDishLedger.');
