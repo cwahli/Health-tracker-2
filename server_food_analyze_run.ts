@@ -5,12 +5,12 @@
 import { Type } from '@google/genai';
 import { z } from 'zod';
 import { formatUSDANutrients, formatOFFNutrients, extractOFFNutrientsPer100g, isFastFoodChain, buildWebSearchQuery, loosenQuery, cleanQuery, detectChainKeyFromText, scoutHasCompletePrintedLabel, enrichScoutComponentsWithMatches, buildPastMealsContext } from './src/server/food/server_food_analyze_helpers.js';
-import { foodAnalyzeSchema, visionScoutResponseSchema } from './src/server/food/server_food_analyze_schema.js';
+import { visionScoutResponseSchema } from './src/server/food/server_food_analyze_schema.js';
 import { buildUserContext, buildTimeContext, buildImageContext, buildHistoryContext, buildVisionScoutContext, buildDatabaseMatchesContext, buildBiomarkersContext, stitchFoodPrompt, selectSystemInstruction } from './src/server/food/server_food_prompt_context.js';
-import { sanitizeLlmJsonOutput, computeDietitianSkipGates, decideScoutVerdict, decideScoutAdvice } from './src/server/food/server_food_dietitian_dispatch.js';
+import { sanitizeLlmJsonOutput, computeDietitianSkipGates, decideScoutVerdict, decideScoutAdvice, buildDietitianCallArgs } from './src/server/food/server_food_dietitian_dispatch.js';
 import { resolveFoodAnalyzeMode, buildFoodApiCalls } from './src/server/food/server_food_mode_routing.js';
 import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput } from './src/server/food/server_food_meal_assemble.js';
-import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, mapTextQueriesToScoutItems, buildScoutFailureError, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries, applyWeightModShortcut, restoreTurnOneCandidates, computeScoutRetryDelay } from './src/server/food/server_food_scout_source.js';
+import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, mapTextQueriesToScoutItems, buildScoutFailureError, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries, applyWeightModShortcut, restoreTurnOneCandidates, computeScoutRetryDelay, applySkipScoutShortcut } from './src/server/food/server_food_scout_source.js';
 import { collectImagePayloads, decideWeightRefine } from './src/server/food/server_food_session_setup.js';
 import { shouldPauseForPortionClarify, filterPortionCarryCandidates, detectDominantBrand, collectFdcHintTasks, isFdcHintRelevant, mapLedgersToPrecalcItems, applyMealModifiers } from './src/server/food/server_food_precalc.js';
 import { runDatabaseSearchStage } from './src/server/food/server_food_db_search.js';
@@ -79,7 +79,6 @@ import {
 } from './server_budget_reconcile.js';
 import {
   buildPortionClarifyPayload,
-  applyPortionChoices,
 } from './server_portion_clarify.js';
 import {
   rebalanceNutrientProfile,
@@ -375,23 +374,11 @@ export async function runFoodAnalyze(req: any, res: any) {
       visionScoutContentType = shortcut.visionScoutContentType;
       visionScoutRanAndReturnedItems = shortcut.ran;
     } else if (req.body.skipScout || req.body.portionChoices) {
-      let priorScout = resolvePriorScoutItems({ body: req.body, history, activeMeal });
-      if (priorScout.length > 0) {
-        addDebugLog(`[Shortcut] skipScout or portionChoices is true. Inheriting ${priorScout.length} scout items from previous run.`);
-        visionScoutItems = applyPortionChoices(
-          priorScout,
-          req.body.portionChoices
-        );
-        visionScoutContentType = req.body.scoutContentType || 'visual';
-        if (req.body.diningEnvironment && req.body.diningEnvironment !== 'unknown') {
-          diningEnvironment = req.body.diningEnvironment;
-        } else if (priorScout?.[0]?.diningEnvironment && priorScout[0].diningEnvironment !== 'unknown') {
-          diningEnvironment = priorScout[0].diningEnvironment;
-        }
-        visionScoutRanAndReturnedItems = true;
-      } else {
-        addDebugLog(`[PortionChoices] portionChoices provided but priorScout is empty; proceeding with standard pipeline.`);
-      }
+      const shortcut = applySkipScoutShortcut({ body: req.body, history, activeMeal, onLog: addDebugLog });
+      visionScoutItems = shortcut.visionScoutItems;
+      visionScoutContentType = shortcut.visionScoutContentType;
+      if (shortcut.diningEnvironment) diningEnvironment = shortcut.diningEnvironment;
+      if (shortcut.ran) visionScoutRanAndReturnedItems = true;
       // Task 3: Restore pre-resolved DB candidates from turn-1 portionClarify payload.
       // This prevents the DB search from re-running from scratch and avoids cross-match bugs.
       restoreTurnOneCandidates({ resolvedDbCandidates: req.body.resolvedDbCandidates, databaseMatchesArray, dbMatchMap, onLog: addDebugLog });
@@ -998,21 +985,7 @@ export async function runFoodAnalyze(req: any, res: any) {
     addDebugLog('[MealBuild] projector dietitian applied');
     promptText = `${promptText}\n\n${precalcBlock}`;
     fullPromptSent = `${fullPromptSent}\n\n${precalcBlock}`;
-    const llmCallArgs = {
-      modelId: (typeof engine === 'object' ? engine?.name || engine?.model : engine) || "gemini-3.5-flash-lite", // Updating to flash-lite as recommended
-      systemInstruction: finalSystemInstruction,
-      promptText,
-      imagePayloads: undefined, // Strip redundant image payloads: Dietitian Coach consumes structured JSON nutrition summary
-      responseMimeType: "application/json" as const,
-      responseSchema: foodAnalyzeSchema,
-      maxOutputTokens: 8192, // Boosted to ensure all items fit
-      skipThinking: true, // Scout already sets this; dietitian's schema also puts
-      logStagePrefix: 'dietitian',
-      // _internalReasoning first, which is where the live _internalReasoning text actually
-      // comes from — so this does not remove the _internalReasoning. It removes the
-      // separate native-thinking output stream, which combined with responseSchema
-      // was suspected of causing the model to batch output instead of streaming it.
-    };
+    const llmCallArgs = buildDietitianCallArgs({ engine, finalSystemInstruction, promptText });
     sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'started', message: 'Analyzing nutrition payload...' });
     sendLog('dietitian_instruction', 'dietitian', `Dietitian System Instruction & Patient Biomarkers payload dispatched (model: ${engine || 'gemini-3.5-flash-lite'}).`);
     let textOutput: string = "";

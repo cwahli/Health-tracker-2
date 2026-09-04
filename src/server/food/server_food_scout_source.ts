@@ -503,3 +503,45 @@ export function restoreTurnOneCandidates(args: TurnOneRestoreArgs): number {
 export function computeScoutRetryDelay(lastScoutErr: any): number {
   return lastScoutErr?.message?.includes('503') || lastScoutErr?.message?.includes('UNAVAILABLE') ? 2000 : 1000;
 }
+
+export interface SkipScoutShortcutArgs {
+  body: any;
+  history: any;
+  activeMeal: any;
+  onLog: (msg: string) => void;
+}
+
+/**
+ * F-8.10 shard 17 — skipScout/portionChoices branch: inherits prior scout,
+ * applies portion choices, resolves dining environment.
+ */
+export function applySkipScoutShortcut(args: SkipScoutShortcutArgs): {
+  visionScoutItems: any[];
+  visionScoutContentType: string;
+  diningEnvironment?: string;
+  ran: boolean;
+} {
+  const { body, history, activeMeal, onLog } = args;
+  const priorScout = resolvePriorScoutItems({ body, history, activeMeal });
+  let visionScoutItems: any[] = [];
+  let visionScoutContentType = 'visual';
+  let diningEnvironment: string | undefined;
+  let ran = false;
+  if (priorScout.length > 0) {
+    onLog(`[Shortcut] skipScout or portionChoices is true. Inheriting ${priorScout.length} scout items from previous run.`);
+    visionScoutItems = applyPortionChoices(
+      priorScout,
+      body.portionChoices
+    );
+    visionScoutContentType = body.scoutContentType || 'visual';
+    if (body.diningEnvironment && body.diningEnvironment !== 'unknown') {
+      diningEnvironment = body.diningEnvironment;
+    } else if (priorScout?.[0]?.diningEnvironment && priorScout[0].diningEnvironment !== 'unknown') {
+      diningEnvironment = priorScout[0].diningEnvironment;
+    }
+    ran = true;
+  } else {
+    onLog(`[PortionChoices] portionChoices provided but priorScout is empty; proceeding with standard pipeline.`);
+  }
+  return { visionScoutItems, visionScoutContentType, diningEnvironment, ran };
+}

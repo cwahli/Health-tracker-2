@@ -14,6 +14,7 @@ import {
   applyWeightModShortcut,
   restoreTurnOneCandidates,
   computeScoutRetryDelay,
+  applySkipScoutShortcut,
 } from './server_food_scout_source';
 import { visionScoutResponseSchema } from './server_food_analyze_schema';
 
@@ -220,5 +221,28 @@ describe('F-8.10 shard 16 — shortcut chain seams', () => {
     expect(computeScoutRetryDelay({ message: '503 UNAVAILABLE' })).toBe(2000);
     expect(computeScoutRetryDelay({ message: 'boom' })).toBe(1000);
     expect(computeScoutRetryDelay(null)).toBe(1000);
+  });
+});
+
+describe('F-8.10 shard 17 — skipScout shortcut', () => {
+  it('inherits prior scout with portion choices and dining env', () => {
+    const logs: string[] = [];
+    const out = applySkipScoutShortcut({
+      body: { portionChoices: [{ scoutIndex: 0 }], scoutContentType: 'label', diningEnvironment: 'id' },
+      history: [], activeMeal: null, onLog: (m) => logs.push(m),
+    });
+    expect(out.ran).toBe(false);
+    expect(logs.some((m) => m.includes('priorScout is empty'))).toBe(true);
+  });
+
+  it('falls back to prior-scout dining when the body has none', () => {
+    const out = applySkipScoutShortcut({
+      body: { portionChoices: [{ scoutIndex: 0 }] },
+      history: [{ data: { scoutItems: [{ keyword: 'rice', diningEnvironment: 'home_cooked' }] } }],
+      activeMeal: null, onLog: () => {},
+    });
+    expect(out.ran).toBe(true);
+    expect(out.visionScoutContentType).toBe('visual');
+    expect(out.diningEnvironment).toBe('home_cooked');
   });
 });

@@ -1,6 +1,7 @@
 import { extractBalancedJson } from '../../../server_pure_helpers.js';
 import { shouldExpandMealAgent } from '../../mealBuild/shouldExpandMealAgent.js';
 import { t } from '../../utils/i18n.js';
+import { foodAnalyzeSchema } from './server_food_analyze_schema.js';
 
 /**
  * F-8.10 shard 4 — dietitian dispatch seams, extracted verbatim from
@@ -163,4 +164,35 @@ export function decideScoutAdvice(args: {
     }
   }
   return rawAdvice;
+}
+
+export interface DietitianCallArgs {
+  engine: any;
+  finalSystemInstruction: string;
+  promptText: string;
+}
+
+/**
+ * F-8.10 shard 17 — dietitian LLM call args, extracted verbatim from
+ * runFoodAnalyze. Images are stripped: the coach consumes the structured
+ * JSON nutrition summary. Schema responses are non-thinking so output
+ * streams instead of batching.
+ */
+export function buildDietitianCallArgs(args: DietitianCallArgs): Record<string, any> {
+  const { engine, finalSystemInstruction, promptText } = args;
+  return {
+    modelId: (typeof engine === 'object' ? engine?.name || engine?.model : engine) || "gemini-3.5-flash-lite", // Updating to flash-lite as recommended
+    systemInstruction: finalSystemInstruction,
+    promptText,
+    imagePayloads: undefined, // Strip redundant image payloads: Dietitian Coach consumes structured JSON nutrition summary
+    responseMimeType: "application/json" as const,
+    responseSchema: foodAnalyzeSchema,
+    maxOutputTokens: 8192, // Boosted to ensure all items fit
+    skipThinking: true, // Scout already sets this; dietitian's schema also puts
+    logStagePrefix: 'dietitian',
+    // _internalReasoning first, which is where the live _internalReasoning text actually
+    // comes from — so this does not remove the _internalReasoning. It removes the
+    // separate native-thinking output stream, which combined with responseSchema
+    // was suspected of causing the model to batch output instead of streaming it.
+  };
 }

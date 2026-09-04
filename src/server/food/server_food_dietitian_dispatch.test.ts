@@ -4,6 +4,7 @@ import {
   computeDietitianSkipGates,
   decideScoutVerdict,
   decideScoutAdvice,
+  buildDietitianCallArgs,
 } from './server_food_dietitian_dispatch';
 
 describe('F-8.10 shard 4 — LLM JSON repair', () => {
@@ -105,5 +106,16 @@ describe('F-8.10 shard 15 — scout verdict and advice ladders', () => {
     expect(t({ totalSugar: 40, totalSatFat: 0, totalP: 0 })).toContain('40');
     expect(t({ totalSugar: 0, totalSatFat: 0, totalP: 0 }, 'Rice')).toContain('Rice');
     expect(t({ totalSugar: 0, totalSatFat: 0, totalP: 0 }, 'Rice', 'Custom note')).toBe('Custom note');
+  });
+});
+
+describe('F-8.10 shard 17 — dietitian call args', () => {
+  it('strips images, pins flash-lite, and attaches the schema', () => {
+    const args = buildDietitianCallArgs({ engine: 'gemini-x', finalSystemInstruction: 'SYS', promptText: 'P' });
+    expect(args.modelId).toBe('gemini-x');
+    expect(args.imagePayloads).toBeUndefined();
+    expect(args.responseMimeType).toBe('application/json');
+    expect(args.responseSchema.required).toContain('message');
+    expect(args.maxOutputTokens).toBe(8192);
   });
 });
