@@ -8,6 +8,7 @@ import { formatUSDANutrients, formatOFFNutrients, extractOFFNutrientsPer100g, is
 import { foodAnalyzeSchema } from './src/server/food/server_food_analyze_schema.js';
 import { buildUserContext, buildTimeContext, buildImageContext, buildHistoryContext, buildVisionScoutContext, buildDatabaseMatchesContext, buildBiomarkersContext, stitchFoodPrompt } from './src/server/food/server_food_prompt_context.js';
 import { sanitizeLlmJsonOutput, computeDietitianSkipGates } from './src/server/food/server_food_dietitian_dispatch.js';
+import { resolveFoodAnalyzeMode, buildFoodApiCalls } from './src/server/food/server_food_mode_routing.js';
 
 import { executeFoodResolverCurator } from './server_food_resolver_curator.js';
 import {
@@ -2150,19 +2151,23 @@ export async function runFoodAnalyze(req: any, res: any) {
       userExplicitlySelectedEditMode ||
       (activeMeal && (!imagePayloads || imagePayloads.length === 0))
     );
-    let mode = rawParsed.mode || (originalModeIsModify ? "modify" : "new_log");
-    if (userSelectedMode !== 'compare' && visionScoutItems && visionScoutItems.length <= 1 && mode === "evaluation") {
-      addDebugLog(`[Mode Override] Overriding mode from 'evaluation' to 'new_log' because only 1 item was identified.`);
-      mode = "new_log";
-    }
-    if (originalModeIsModify && mode !== "discussion" && mode !== "evaluation") {
-      mode = "modify";
-    }
-    apiCalls = [
-      ...(hasImage ? [{ type: 'gemini', label: 'Food nutrition agent - Visual Scout (gemini-3.5-flash-lite)' }] : []),
-      ...(queriesToSearch && queriesToSearch.length > 0 ? [{ type: 'usda', label: `Food nutrition agent - USDA (${queriesToSearch.length})` }] : []),
-      ...((canSkipDietitianForCreate || canSkipDietitianForPureScale) ? [] : [{ type: 'gemini', label: `Food nutrition agent - Dietitian (${(typeof engine === 'object' ? engine?.name || engine?.model : engine) || 'gemini-3.5-flash-lite'})` }])
-    ];
+    let mode = resolveFoodAnalyzeMode({
+      rawMode: rawParsed.mode,
+      originalModeIsModify,
+      userSelectedMode,
+      visionScoutItemCount: visionScoutItems?.length,
+      hasActiveMealDocument,
+      editCommandCount: (Array.isArray(rawParsed.editCommands) ? rawParsed.editCommands.length : 0) +
+        (Array.isArray(rawParsed.modificationCommand) ? rawParsed.modificationCommand.length : 0),
+      onLog: addDebugLog,
+    });
+    apiCalls = buildFoodApiCalls({
+      hasImage,
+      queriesToSearch,
+      canSkipDietitianForCreate,
+      canSkipDietitianForPureScale,
+      engine,
+    });
     // CASE F: food origin lookup mode
     // CASE B: discussion mode
     if (mode === "discussion") {
@@ -2220,21 +2225,6 @@ export async function runFoodAnalyze(req: any, res: any) {
         apiCalls
       };
       return res.json(responsePayload);
-    }
-    {
-      const hasExplicitEditCommands = Array.isArray(rawParsed.editCommands) && rawParsed.editCommands.length > 0;
-      const hasLegacyEditCommands = Array.isArray(rawParsed.modificationCommand) && rawParsed.modificationCommand.length > 0;
-      if (hasExplicitEditCommands || hasLegacyEditCommands) {
-        mode = "modify";
-      }
-      if (originalModeIsModify && hasActiveMealDocument) {
-        mode = "modify";
-        if (!hasExplicitEditCommands && !hasLegacyEditCommands) {
-          addDebugLog(`[Single-Path] Same meal, empty modificationCommand — Q&A (card unchanged). Not a new meal.`);
-        } else {
-          addDebugLog(`[Single-Path] Same meal, ${hasExplicitEditCommands ? rawParsed.editCommands.length : rawParsed.modificationCommand.length} edit command(s).`);
-        }
-      }
     }
     // CASE A: NEW FOOD LOGGING
     if (mode === "new_log") {
