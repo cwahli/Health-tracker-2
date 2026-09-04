@@ -12,6 +12,7 @@
 | [domains/biomarkers.md](./domains/biomarkers.md) | Catalog / pending / overlay / logs; named agents; write map |
 | [plan/BIOMARKER_LIFECYCLE.md](../../plan/BIOMARKER_LIFECYCLE.md) | Biomarker architecture |
 | [domains/sync.md](./domains/sync.md) | Firebase / Supabase / R2 multi-device |
+| [domains/debug-contract.md](./domains/debug-contract.md) | Debug download as contract report (reliability pillar). F-8.13 / Q-8. **Durable truth** if ROADMAP/RELIABILITY §11 are shortened. |
 
 ## Document roles
 

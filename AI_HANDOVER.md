@@ -8,7 +8,8 @@
 
 | Track | State | Next |
 |-------|--------|------|
-| **Live food** | Pass 6 `STALL_NO_FALLBACK`: 90s scout hang failed the job; same-job hop to `gemini-3.1-flash-lite`. | **You:** one Log Meal. Stall/503 should retry on 3.1 without a Retry button. |
+| **Live food** | Pass 6 `STALL_NO_FALLBACK` in tree. Process method parked as **Q-8**. | One website Log Meal **after Q-8.2** (Tier 3 once). Do not re-upload between process-row fixes. |
+| **Q-8** Process goldens | **Truth:** `docs/agent/domains/debug-contract.md`. Execute: RELIABILITY §11 / F-8.13 / Q-8.1–8.6. | **Next (Grok):** Q-8.1 + F-8.13 against debug-contract.md §12 A–F. Then 8.2, 8.3. |
 
 ### Soto/matcha display bug — actual passes (1-pass dump loop failed)
 
@@ -27,6 +28,7 @@ Lesson: dump oracles must include **DISPLAY_LAG**, **COMPLETE_ONCE**, and **STAL
 | **F-10** Meal Agent | F-10.2 verified (`calculateDerivedNutrients` + Atwater law). F-10.1–F-10.5 & F-10.7 shipped. | F-10.6 (Grok constants) / F-10.8 Soak (Grok reviews). |
 | **F-9.5** | PR1–PR4 bulk shipped. App poller still `updateJob`. | Grok only. |
 | **Q-7** | Policy in QUALITY.md §1.4. | Fold `golden_g1` later. Do not `npm test`. |
+| **Q-9 / Q-10** | Later steps only. Website file/patch consolidation; then dependency audit. | Do not start until Q-8.2 green. Serialize Q-9 vs F-9.5 `App.tsx`. |
 | **Track B** | B0 Apply smoke, Modal wiring, and C1–C7 unified pipeline cutover COMPLETE. B7.4–B7.6 verified. | G-B1 green or next open Track B. |
 | **F-1/F-2 USDA** | Parked. | Do not reopen. |
 | **Track L** Localisation | L-1–L-5 + all residual EN/ID shipped (narratives, diagnostics, alerts, admin chrome). EN/ID parity green, pushed. | Track L complete for EN/ID. |

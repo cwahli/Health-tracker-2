@@ -92,15 +92,66 @@ Weiskopf & Weng / Kahn DQ from lifecycle §1, plus the auto-bugs from §9 and to
 | `HALLUCINATED_KEY` | Parser no new Home keys | leftover may propose; Dictionary owns approve | pending |
 | `CURRENCY` | Overlay fingerprint | Calibrator **not** on extract path | later overlay-only |
 
-A live job may trip several classes. **Only one class is in scope per session.** Other reds are listed “out of session.”
+A live job may trip several classes. **Fix one class per agent turn** (L14). **Audit every exit** onto the process board in the same Q-8 pass so the next live meal is not a new unnamed class. Other reds stay listed until they have a row.
 
-### 1.3 Job session (not a golden)
+### 1.3 Job process goldens (not meal-green)
 
-| Class id | Law | Inner test (no Gemini) | Honest residual |
-|---|---|---|---|
-| `STALE_TURN` | Preview/chat shows the **current** job turn | `JobSession.contract.test.ts`: edit submit → label `/Updating meal/` while prior meal still on the job → same-meal succeeded echo ignored → new snapshot → “Analysis completed”; one food card | If debug already has the new numbers and the card does not, do not patch food-calc |
+Content goldens (G1–G7, G-B*, UC fixtures) score **identity/math/handoff JSON**. They stayed green for the 2026-09-04 Soto card bugs. **Process goldens** score the job worker and the card: did it finish, hop models, and flip the UI.
 
-Execute IDs: [ROADMAP.md](./ROADMAP.md) F-9 leftover is F-9.5 only (Grok). F-10 is Current work on that file.
+Three boards, one schema, dummy fixtures (recorded SSE/status/debug — **no Gemini** in the inner loop). Execute: [ROADMAP.md](./ROADMAP.md) **Q-8**.
+
+**Run artifact:** the debug download is the contract report. **Durable law:** [docs/agent/domains/debug-contract.md](../docs/agent/domains/debug-contract.md) (reliability pillar). Execute summary: [RELIABILITY.md](./RELIABILITY.md) §11. Canonical form is the **JSON run tree**; markdown is a view. Packs differ. Durable: console, network, last actions, dialog **inventory** (not a screenshot), each agent’s received/instruction/output **once** (handoff + multi-edit), `jobId` on every line, per-dispatch latency/model. `test-from-debug` scores the JSON. Builder duplicates ≠ process duplicates. Gaps: `debug-contract.md` §12.
+
+| Board | Dummy fixture | Does not replace |
+|---|---|---|
+| Food process | `dumpContract` + recorded food-analyze SSE/status | `golden_meals.test.ts` Layer B |
+| Biomarker process | recorded medical-analyze stream + Apply | `golden_biomarker.test.ts` / lexer |
+| Receptionist process | UC JSON + handoff, then the specialist board | `handoffContract.test.ts` content |
+
+`STALE_TURN` folds into the food process board (`JobSession.contract.test.ts` stays until that row exists).
+
+**Pyramid (three budgets — not four live meals):**
+
+| Budget | When | Gemini? |
+|---|---|---|
+| **1** Named vitest + content + process goldens | Every code change | No |
+| **2** Playwright **stubs** (card vs fake job status; R-3 chrome smoke) | Job/UI wiring or shell changed | No |
+| **3** **One** live Gemini confirm | After the class’s process rows are green | Yes, once. **Either** the website **or** API submit — not both. Human or a script. Not Grok in the wait loop. |
+
+Website live subsumes API live for that job. API-only is only when the class cannot be a card/poller bug and nobody is watching the UI.
+
+Do **not** promote a process bug to G8 (wrong kind). Do **not** `POST /loop`. Historical dumps stay classified red; dummy replay / code probes go green.
+
+### 1.3.1 Audit (required when creating or extending a board)
+
+A dump only contains the branch that ran. **Walk every exit** of that domain’s worker and write a row (failing dummy test) even if this dump did not take it. That is how we avoid six live confirms for six exits.
+
+**Food process — walk `serverJobs.ts`, submit route, `JobQueueRunner`, `JobStore.getQueue`, food-analyze SSE, Log Meal card:**
+
+| Exit / law | Class id (seed) |
+|---|---|
+| Submit JSON is `running` once the worker started | `QUEUE_LIE` |
+| Food SSE `res.json` is `{final:true,result}` (same as medical) | `DEGRADE_NOT_TERMINAL` |
+| Ledger exists + dietitian/scout dead → job **terminal** (salvage ok) | `DEGRADE_NOT_TERMINAL` |
+| `pendingFoodLog` → in-memory `succeeded` **before** R2/upsert | `DISPLAY_LAG` / persist |
+| `getQueue` includes `running` with no meal | `DISPLAY_LAG` / poller |
+| Empty prior meal key is not a stale-edit echo | `STALE_TURN` |
+| `AnalyzeFinished` at most once; one runner loop (Strict Mode) | `COMPLETE_ONCE` |
+| 90s scout stall / 503 / quota → hop `gemini-3.1-flash-lite` on the **same** job; do not `failed` + user Retry | `STALL_NO_FALLBACK` |
+| Cooldown on 3.5 hops to 3.1; do not throw “switch models” | `STALL_NO_FALLBACK` |
+| Card is not “Attempt 1 of 3” / Retry when status is `succeeded` or logs already have kcal | `DISPLAY_LAG` (Tier 2 mock) |
+| `awaiting_user` (portion) is a pause, not a fail | (row) |
+| Realtime `failed` echo must not clobber an in-flight retry | (row) |
+
+Wrong existing tests get **rewritten** (example: `JobQueueRunner` must not treat stall ⇒ `failed` as the law).
+
+**Biomarker process — walk medical-analyze, Apply, ingest abort:** medical SSE wrap; salvage terminal; Apply writes (`APPLY_MISS`); leftover vs table abort; DIAG5 auto-send does **not** fire on a lab chat.
+
+**Receptionist process — walk Front Desk handoff + who owns the next job:** empty-demo wipe (`CHAT_STALE`); UC handoff reaches the specialist; that job then obeys the food or bio **process** board. Front Desk is not a second meal analyzer.
+
+New live bug: add a **row + dummy fixture** from the dump. Do not replay until the meal is all-green. Honest residual is a valid terminal.
+
+Execute IDs: [ROADMAP.md](./ROADMAP.md) **Q-8**. F-9 leftover is F-9.5 only (Grok). F-10 is Current work on that file.
 
 ### 1.4 What to run (every edit is not `npm test`)
 
@@ -109,7 +160,7 @@ Execute IDs: [ROADMAP.md](./ROADMAP.md) F-9 leftover is F-9.5 only (Grok). F-10 
 | You touched… | Run | Do not |
 |---|---|---|
 | One food-calc file | That row’s named vitest | `npm test`; Track B asserts; M23–M28 |
-| Job session / preview | `JobSession.contract.test.ts` + `assert-f9-pr1` / `assert-dev-serves-vite` if those files | Food goldens; `golden:inbox` |
+| Job session / preview / process golden | `dumpContract.test.ts` + `JobSession.contract.test.ts` + `server_gemini_retry.test.ts` (until Q-8 named files exist) | Food content goldens; `golden:inbox`; live Gemini |
 | Biomarker ingest | Track B named tests + `assert-biomarker-lifecycle-m31.mjs` | Food-calc smoke |
 | Docs / plan only | nothing (or `assert-agent-governance.mjs` if AGENTS/docs/agent changed) | Full vitest |
 | Prompt budget / god-file size | `assert-budgets.mjs` | Replay G1 |
@@ -135,7 +186,7 @@ What changes:
 
 Tape scoreboard still parses live jobs. After F-10 cutover, journey steps are Meal Agent → finalize → substitute. Auto-spot must not treat a missing Dietitian stage as a fail.
 
-Execute: [ROADMAP.md](./ROADMAP.md) **Q-7** (hygiene) + **F-10.2** (schema) + **F-10.8** (soak uses Meal Agent fixtures).
+Execute: [ROADMAP.md](./ROADMAP.md) **Q-7** (hygiene) + **Q-8** (process goldens) + **F-10.2** (schema) + **F-10.8** (soak uses Meal Agent fixtures; that is Tier 3 **once**, not the inner loop).
 
 ---
 

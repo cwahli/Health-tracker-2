@@ -283,13 +283,17 @@ If it is a feature or update: name which slices in 10.2 you must not regress, an
 | Front Desk or specialist handoff | UC fixture contract | src/server/receptionist/handoffContract.test.ts |
 | Biomarker ingest or units | Class golden, not paint a 140-row NHS file green | tests/golden_biomarker.test.ts |
 | Sync, jobs, or row size | One writer; no fat JSONB or base64 in rows | existing M23 to M28 asserts |
+| `serverJobs` / submit / poller / Log Meal card / food-analyze SSE | Add or extend a **food process** row (dummy fixture, no Gemini). Walk every worker exit in QUALITY.md §1.3.1 — do not only test the dump’s branch | `src/utils/dumpContract.test.ts` + `server_gemini_retry.test.ts` + `src/jobs/__tests__/JobStore.test.ts` until Q-8 named files exist |
+| medical-analyze / Apply / ingest job terminal | Biomarker **process** row (share stall/persist/SSE laws with food) | process-bio named vitest (Q-8.4) |
+| Front Desk handoff / auto-send | Receptionist **process** row; specialist job then uses food or bio process board | `handoffContract.test.ts` + process-desk (Q-8.5) |
 
 ### 10.3 Order of work
 
-1. Named vitest first.
+1. Named vitest first (content **and** process rows for that domain).
 2. Smallest change that makes that gate green.
-3. One frozen example only if the golden cannot see the UI.
+3. One frozen dummy fixture (recorded SSE/status) if the golden cannot see the UI. Not a new live meal.
 4. No live case matrix as the inner loop.
+5. **One** Tier 3 confirm after those rows are green: website live **or** API live, not both. Human or a script. Grok Bot does not sit in the wait loop.
 
 ### 10.4 Who runs new work
 
@@ -301,9 +305,14 @@ If it is a feature or update: name which slices in 10.2 you must not regress, an
 | Grok Bot | Triage a red golden or review a short diff | Click remaining live cases |
 | Aider or Lingma or Qwen Code | Do not use | — |
 
-### 10.5 Playwright (R-3)
+### 10.5 Playwright (two jobs — do not mix)
 
-After S-1 has a leftover-string list: thin smoke only (Kosong, empty Front Desk, no listed English chrome). Not a meal-analyze soak. Uses `playwright.config.ts` and `prototype/tests/*.spec.ts`.
+| Job | ID | Gemini? | What |
+|---|---|---|---|
+| Chrome smoke | **R-3** | No | Leftover-English crawl + Kosong empty Front Desk after S-1 list is green. `prototype/tests/*.spec.ts`. Not a meal-analyze soak. |
+| Job card vs status | **Q-8.3** | No | Stub `/api/jobs/*` (and SSE). Card is not “Attempt 1 of 3” / Retry when the stub is `succeeded` with kcal; stays in-flight when `running` with no meal. |
+
+Live Playwright that clicks Log Meal and waits on Gemini is **Tier 3**, not R-3 or Q-8.3. Do not use Grok Bot for that.
 
 ### 10.6 Chat and demo (S-5)
 
@@ -311,55 +320,31 @@ Empty-demo reseed must wipe chat keys and jobs (landed 155a49a). New stale-threa
 
 ### 10.7 Unified Testing Pyramid (Vitest + Playwright + Live Model Benchmark)
 
-To prevent test fragmentation, avoid API quota exhaustion, and ensure the entire platform remains robust, all testing operates across three distinct tiers that work together harmoniously:
+Three **budgets** (not four live meals). Four surfaces: units, stubbed UI, live worker, live site. An agent on the live site is the same slot as the human.
 
 ```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ TIER 1: INNER LOOP (Every code change — 95% of runs)                         │
-│ • Fast, deterministic vitest + tsc (< 2 seconds, 0 Gemini API calls)        │
-│ • Scope: Schemas, parsers, state reducers, unit conversions, i18n parity     │
-│ • Golden Fixtures: Official ground-truth datasets (G1-G7 meals, G-B1 labs)   │
-│ • Commands:                                                                 │
-│   npm run test:receptionist                                                 │
-│   npm run test:bio                                                          │
-│   npm run test:food                                                         │
-│   npm run test:golden (runs tests/golden_meals.ts + tests/golden_biomarker.ts)│
-│   npm run test:prepush (runs domain tests + tsc --noEmit)                   │
-└──────────────────────────────────────┬──────────────────────────────────────┘
-                                       │ Green (exit 0)
-                                       ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ TIER 2: BROWSER JOURNEY E2E (Pre-PR / Pre-commit verification)               │
-│ • Playwright browser automation (prototype/tests/*.spec.ts, ~10-20 seconds)  │
-│ • Scope: Real DOM interactions, modal dialog mounting, UI forms, language    │
-│   toggling, demo account switching, chat card rendering                      │
-│ • Golden Journeys: Key user critical path (prototype/tests/key-journeys.spec.ts)
-│   ensuring boot, tab navigation, quick action logging, and health cards work│
-│ • Environment: Local server (localhost:3000) with deterministic mocks        │
-│ • Command: npx playwright test (or npm run test:e2e)                         │
-└──────────────────────────────────────┬──────────────────────────────────────┘
-                                       │ Green (exit 0)
-                                       ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ TIER 3: LIVE BENCHMARK ACCEPTANCE AUDIT (End of milestone / Final sign-off)  │
-│ • Real model execution against live Gemini 3.5 Flash Lite                   │
-│ • Scope: Clinical reasoning, vision OCR, anti-hallucination checks, and      │
-│   multi-turn Hub-and-Spoke container follow-up verification                 │
-│ • Cases:                                                                    │
-│   npm run test:benchmark:receptionist (runner.ts --case UC-01)               │
-│   npm run test:benchmark:biomarkers   (runner.ts --case C1)                  │
-│ • Rule: Run ONCE at the end of a milestone to confirm real model readiness; │
-│   never as an inner loop debugging tool or automated PR blocker.            │
-└─────────────────────────────────────────────────────────────────────────────┘
+TIER 1  Every code change. Named vitest + tsc. 0 Gemini.
+        Content goldens (G*, G-B, UC) + process goldens (Q-8).
+        COMPLETE = matching regression-map row, not npm test.
+
+TIER 2  When UI shell or job-card wiring changed. 0 Gemini.
+        R-3 chrome/Kosong. Q-8.3 card vs stubbed job status.
+
+TIER 3  Once per class/milestone. Real Gemini. Pick ONE shape:
+        website (card+worker) OR API submit (worker only).
+        Website subsumes API. Human or a script — not Grok in the wait loop.
+        New class on that dump → add a process row, stop. Do not re-upload.
 ```
+
+Also: `npm run test:benchmark:receptionist` / `test:benchmark:biomarkers` stay as optional Tier 3 shapes for those domains — still **once**, never inner loop.
 
 #### How the Golden Tests and Journeys Fit:
 
 1. **Golden Fixtures (Ground-Truth Invariants in Tier 1):**
    - **Files:** `tests/Golden_meal/G1..G7` and `tests/Golden_biomarker/examples/G-B1`.
    - **Test runner:** `npm run test:golden` (runs `tests/golden_meals.test.ts` and `tests/golden_biomarker.test.ts`).
-   - **Role:** They act as immutable ground-truth anchors. They freeze the input (photos, text, lab panels) and lock in the exact expected catalog matches, gram weights, macronutrient derivation, and lab unit conversions (e.g. HDL mg/dL → mmol/L). They run completely offline in Vitest in <1 second with zero Gemini API calls.
-   - **When to run:** Whenever modifying calculation logic, food catalog databases, portion clarify, or biomarker telemetry math.
+   - **Role:** Immutable **content** anchors (identity, grams, Atwater, lab units). Process goldens (Q-8) sit beside them and score job exits. Do not collapse into one all_green tape.
+   - **When to run:** Content — calc/catalog/portion/lab math. Process — `serverJobs`, submit, poller, card, SSE.
 
 2. **Golden Journeys (User Critical Path in Tier 2):**
    - **Files:** `prototype/tests/key-journeys.spec.ts`.
@@ -369,16 +354,265 @@ To prevent test fragmentation, avoid API quota exhaustion, and ensure the entire
      - Journey 2: Tab Switching & Sub-tab Navigation.
      - Journey 3: Quick Action & Chat Logging Sheet interaction.
      - Journey 4: Health Portal & Biomarker Inspection.
-   - **When to run:** Before submitting a PR or whenever altering navigation, modals, or React layout chrome.
+   - **When to run:** Shell/nav/modals (R-3) or job-card wiring (Q-8.3). Stubbed. Not live Log Meal.
 
 3. **Golden Promotion Lifecycle (Bug → Fixture):**
-   - When an edge case or regression occurs in production or prototype runs, the scenario is captured as an `issue_tag` / bug card.
-   - The root-cause class is fixed via a dedicated unit test.
-   - Once confirmed green, the case is **Promoted** into an official Golden (`tests/Golden_meal/G*` or `tests/Golden_biomarker/G-B*`), permanently protecting that scenario from regressing in Tier 1.
+   - Capture the debug.md (one live job).
+   - Classify **all** process oracles on that dump (`test-from-debug`). Content bugs still promote to G* / G-B*.
+   - Process bugs promote to a **process-board row + dummy fixture**, not G8.
+   - Historical dump stays red. Dummy replay / code probe goes green.
+   - Walk remaining worker exits (QUALITY.md §1.3.1) in the same pass so the next meal is not an unnamed class.
 
 #### How the Three Tiers Work Together:
-1. **Tier 1 (Vitest) protects code invariants:** Guarantees that business logic, math calculations (Mifflin-St Jeor, Atwater), storage tombstones, and data contracts cannot regress.
-2. **Tier 2 (Playwright) protects the user experience:** Verifies that the client compiles, buttons click, modals mount without crashing, and Indonesian/English strings toggle smoothly across mobile and desktop viewports.
-3. **Tier 3 (Live Benchmark) protects AI clinical quality:** Validates that live Gemini interprets the prompt accurately, returns valid JSON, avoids hallucinations, and provides sound health guidance before production deployment.
+1. **Tier 1** protects laws (math, identity, job exits, tombstones). Process green + FALSE_FRIEND is still a bug — do not delete content goldens.
+2. **Tier 2** protects stubbed UX (chrome, card vs status). Not live Analyze.
+3. **Tier 3** is one live confirm that the **this build’s** worker (and card, if website) still work with real Gemini. Never a PR blocker; never Grok watching screenshots for four minutes.
+
+The download from that run is the **debug file** (§11). Inner loop after the download is `test-from-debug`, not another meal.
+
+---
+
+## 11. Debug file — contract report (the run artifact)
+
+**Canonical truth (do not strip):** [docs/agent/domains/debug-contract.md](../docs/agent/domains/debug-contract.md). If this section and that file disagree, **the domain file wins**. ROADMAP F-8.13 / Q-8 are execute IDs only.
+
+**Why this section exists:** Soto dumps were long, duplicated, and still missing the card. The pipeline matrix looked like a scoreboard and **lied** (calc Standby while logs had a finalized ledger). Agents then guessed. This is the execute-facing summary; the domain file is the full law.
+
+**Code:** `src/utils/debugPayload.ts` (one writer) · `src/utils/dumpContract.ts` (scorer) · `scripts/test-from-debug.ts`  
+**Execute:** [ROADMAP.md](./ROADMAP.md) **F-8.13** (file shape) + **Q-8** (process/UI laws). Do not add a sixth `plan/` file.
+
+### 11.1 Job of the file
+
+One download per job. Same bytes for a human and for vitest.
+
+It must answer: **did this run complete the contract?**  
+PASS/FAIL per law, with a **shape fault** (MISSING / DUPLICATE / WRONG_PLACE / WRONG_TIME / WRONG_COUNT) and a **layer** (ui / content / process).
+
+It is **not** a second copy of `server_food_analyze_run` logs, not a meal-green tape, and not G8.
+
+**Invariants (do not drop when adding packs / handoff / edits):**
+
+1. **One writer** — `buildDebugMarkdownReport` only (§11.3.1).
+2. **Contract table first** (after identity) — every applicable law PASS/FAIL with MISSING / DUPLICATE / WRONG_PLACE / WRONG_TIME / WRONG_COUNT (§11.3.10, §11.7).
+3. **Snapshot at Download** — **dialog inventory** (structured tree of the open modal), not a screenshot and not innerHTML. Card chrome + displayed macros + control counts. Optional PNG on R2 for humans only (§11.3.9, §11.12).
+4. **Fixed section order, one heading each** — later sections **point**, they do not reprint kcal (§11.3.2–3, §11.4).
+5. **Prompts once per dispatch that ran** — received + instruction + user + output once; not again in the log excerpt (F-8.13, §11.3.4, §11.5).
+6. **Matrix must match logs** — Finalized ledger ⇒ calc Connected, never Standby (`DEBUG_MISS`, §11.3.8).
+7. **Same scorer at download and in vitest** — `classifyDump` / `dumpContract` / `test-from-debug`. Do not fork a second classifier (§11.7, §11.9).
+
+### 11.2 Two kinds of duplicate and missing (do not mix)
+
+| | **Malformed file** (builder bug — always FAIL the debug tests) | **Real job fault** (contract FAIL — keep in the file, do not “clean up”) |
+|--|--|--|
+| **DUPLICATE** | Same `##` heading twice; same breadcrumb row pasted twice; scout instruction in “Agent prompts” **and** pasted again in backend logs; matrix + body restating the same totals as three tables | `AnalyzeFinished` ×4; user clicked Retry twice because the job failed; two runner loops; two dishes that both ran |
+| **MISSING** | No session trail; no contract table; no card snapshot; matrix Standby while `[Budget] Finalized ledger` is in the log (`DEBUG_MISS`) | No `{final,result}`; no 3.1 hop after stall; dish dropped; Retry showing while succeeded |
+
+**Law:** Dedupe **serialization** (builder). Never dedupe **process** (session events, AnalyzeFinished, real Retry clicks). If the job did it twice, the file shows it twice **and** the Contract table says DUPLICATE. Pretty dumps that hide storms are a defect.
+
+### 11.3 Builder laws (`buildDebugMarkdownReport`)
+
+1. **One writer.** All markdown downloads go through this function. No second formatter in the debug route.
+2. **One section per topic, one heading.** `headingCount === 1` for each `##`. Tested.
+3. **Each fact once.** Later sections **point** (“ledger: see Contract / Calc”) instead of reprinting kcal tables.
+4. **Prompts once per dispatch that actually ran** (F-8.13): lead, each worker, edit. Schema/instruction not pasted into the log excerpt.
+5. **Breadcrumbs:** unique by `timestamp + action + target + details`. A real second click at a new timestamp stays (process DUPLICATE). Copy-paste of the same row is malformed.
+6. **Logs:** keep status, error, ledger, stall, hop, stage lines. Strip inlined system/user prompts that already have a Dispatch section.
+7. **No base64.** Photos = https URLs only (`stripHeavyImages`).
+8. **Matrix is derived from the body, not a separate guess.** If logs have Finalized ledger, stage 5 is Connected. Matrix vs body mismatch = contract FAIL (`DEBUG_MISS`), not a green Standby.
+9. **Snapshot at Download click** — **dialog inventory**, not a screenshot as source of truth, not the whole modal HTML (that reprints kcal and is unscorable).
+   - Job: `status`, `inFlightTurnAt`, `pendingFoodLog?`, AnalyzeFinished count
+   - Open dialog (if any): `pack`, title, `on_card` macros `{kcal,P,C,F}` (must match ledger or WRONG_TIME)
+   - `visible` / `hidden` control ids: Retry, Attempt 1 of 3, View Analysis, Download Debug, Log Meal CTA
+   - Composer: Take picture / Add image / paste / send present? counts === 1
+   - Expand: worker/tiles open if `shouldExpandMealAgent` was true this turn (WRONG_COUNT if not)
+   - Optional: one dialog screenshot URL on R2 for the human when a UI contract row is FAIL. Contract scores the inventory, never the PNG.
+10. **Contract table is the first body section** (after identity: job id, status, mode, photos, exportedAt).
+11. **Exhaustive ≠ long.** Score **every** law for this pack (QUALITY.md §1.3.1 + §11.7). Include evidence **only** to prove a FAIL or to make a PASS auditable (one ledger line, one stall line).
+12. **Surface pack** (the file is **not** one layout). Pack = `food` | `receptionist` | `medical` | `health_coach`. Wrong pack’s sections = WRONG_PLACE. See §11.4.
+13. **Durable capture.** Console errors, network/activity errors, last user actions, breadcrumbs, session trail, and **every agent I/O that ran** are first-class. Dropping them in a later refactor is a builder FAIL (`debugPayload.test.ts` fixtures per pack must still contain those headings). Do not “simplify” the download by omitting them.
+14. **Agent I/O once.** For each dispatch that ran: **received** (payload) + **instruction** + **user text/answers** + **output**. Exactly one block. Not also inside backend logs, not also as a second “prompts” appendix. Multi-edit and handoff = **one block per turn / per agent**, keyed, not a concatenated blob.
+15. **JSON tree is canonical; markdown is a view.** `classifyDump` scores the structured run (cold debug JSON). Markdown is printed from that tree. Do not keep regex-on-`.md` as the only scorer (§11.12).
+16. **Correlation id.** `jobId` (and turn/dispatch id) on console lines, network errors, and server log lines so the file can join them. Handoff carries the same id.
+17. **Per-dispatch signals.** Each dispatch block also records `model`, `latency_ms` (time-to-first-token if streamed — Soto stall), `tokens` if the API returned them, `error` / finish. Missing on a dispatch that ran = malformed.
+
+### 11.4 Packs and required sections
+
+Omit a section only when that pack **did not run** it. If it ran and the section is absent → malformed file. Shared chrome (0–5, 12–13) is on **every** pack.
+
+**Shared (all packs)**
+
+| # | Section | Once | Must not lose |
+|---|---------|------|----------------|
+| 0 | Identity | yes | jobId, status, mode, pack, exportedAt, photo URLs |
+| 1 | **Contract** | yes | Scoreboard for **this pack’s** laws |
+| 2 | Last user action | yes | The click/prompt that triggered this download or last send. Explicit empty if none |
+| 3 | Breadcrumbs | yes | Last actions (cap e.g. 80 **distinct** rows). Dedupe identical copies; keep real re-clicks |
+| 4 | Session trail | yes | Do **not** collapse real repeated events |
+| 5 | Console errors | yes | `error` / `warn` from the client. Explicit “none” if empty. Do not drop because the job succeeded |
+| 6 | Network / activity errors | yes | Failed fetches, 4xx/5xx, latency warnings (`network_slow`). Explicit “none” if empty |
+| 7 | Pipeline matrix | yes | Stages for **this pack** only; must match body |
+
+**Pack `food`** (Log Meal, including **multiple edits** on the same job)
+
+| # | Section | Once per | Must not lose |
+|---|---------|----------|----------------|
+| 8 | Dialog inventory | job | Structured tree: title, on_card macros, visible/hidden, composer counts, expand. Not a screenshot |
+| 9 | Gate + ledger | job | One totals table |
+| 10 | Scout | each **create** turn that ran scout | Item table once |
+| 11 | Calc / breakdown | each turn that finalized | One table; kcal = ledger |
+| 12 | Turns (edit log) | **each user send** | See §11.5. Turn 1 create, turn 2+ edits. Do not flatten into one dietitian blob |
+| 13 | Backend log excerpt | job | No prompt reprint |
+
+**Pack `receptionist`** (Front Desk, including **transfer to another agent**)
+
+| # | Section | Once per | Must not lose |
+|---|---------|----------|----------------|
+| 8 | Handoff chain | job | Ordered agents: Front Desk → Health Coach / Medical / Food … |
+| 9 | Front Desk turn | that agent | Received + instruction + user utterance + output **once** |
+| 10 | Downstream job | each transfer | Pointer + the specialist pack’s sections (food or medical or coach), not a second Front Desk prompt |
+| 11 | UC / intent | if classified | Door / target agent once |
+
+**Pack `medical` / `health_coach`:** ingest/Apply or clinical report instead of scout/ledger; same agent-I/O rule; no meal scout tape.
+
+Contract rows **differ by pack** (food: stall hop, card Retry; receptionist: handoff reached specialist, DIAG5 allowed here; medical: Apply wrote). Do not score food laws on a Front Desk-only dump (`n/a`).
+
+### 11.5 Agent I/O (handoff + multi-edit) — shown once
+
+This is the part that currently explodes (instruction in “Agent prompts” **and** again in `[UnifiedLLM-Prompt]` logs).
+
+**One dispatch key:** `{turn, agent, role}` e.g. `t1/scout`, `t1/dietitian`, `t2/dietitian` (edit), `fd/front_desk`, `fd→medical`.
+
+For **each** key that ran, **exactly one** block:
+
+```text
+### Dispatch t2/dietitian
+- **User:** (verbatim send / portion choice / edit text)
+- **Received:** (payload the agent got: activeMeal, scout items, userProfile, photos count — not base64)
+- **Instruction:** (system instruction once; schema once)
+- **Output:** (model reply once)
+- **Signals:** model, latency_ms (TTFT if stream), tokens, error/finish
+- **Parent:** t1/scout | fd/front_desk | …
+```
+
+**Laws:**
+
+- If Front Desk transfers: Front Desk block **and** specialist block. Both present. Instruction for Front Desk is **not** copied under the specialist. Also emit a **handoff record**: `from`, `to`, received snapshot, **keys dropped** (silent context loss is a named industry failure). Same `jobId`.
+- If the user edits the food log three times: `t1`, `t2`, `t3` — three user lines, three received snapshots (activeMeal must show what that turn saw), three outputs. Do not only keep the last turn.
+- Backend log excerpt **must not** repeat those instruction/output bodies (`[UnifiedLLM-Prompt:*]` / `Complete response` stripped or replaced with `see Dispatch t1/scout`).
+- `conversationHistory` is the user/agent chat once; do not also dump it inside Received.
+- Missing Received / Instruction / Output for a dispatch that ran = malformed MISSING. A second copy = malformed DUPLICATE.
+
+### 11.6 Durable capture (do not lose as the app grows)
+
+These inputs already exist on `DebugReportInput` (`lastUserAction`, `userActionBreadcrumbs`, `clientConsoleLogs`, `networkErrors`, `sessionEvents`, `conversationHistory`, `agentInstructions`, `agentPayload`, `handoffChain`, `handoffPayload`). **Keeping them in the markdown is a gate**, not a nicety.
+
+| Field | Builder must | Test |
+|-------|----------------|------|
+| `lastUserAction` | Always a section; “none” if empty | Heading present on every fixture pack |
+| Breadcrumbs | Distinct last actions; cap after dedupe, not before | Soto-style duplicate Log Meal row does not appear twice |
+| Console | All error/warn for the session slice; do not strip `[error]` because GATE PASS | Fixture with a console error still shows it |
+| Network / activity | Failures + `network_slow`; 503/4xx of `/api/jobs/*` and `/api/gemini/*` | Fixture with NET LATENCY / 503 still shows it |
+| Session trail | Full enough to see fail→retry→succeed (raise cap; skip poll heartbeats if needed, **keep** status changes) | Fail + Retry + succeeded all visible |
+| Agent I/O | §11.5 one block per dispatch | Same scout instruction not in logs + Dispatches |
+| Handoff | Chain + each agent block | Front Desk dump without specialist after transfer = MISSING |
+| Edits | One turn block per user send | Two edits → two `t2`/`t3` blocks, not one |
+
+Refactors of `LogChat` / `serverJobs` / debug route that stop forwarding these fields = FAIL the named debug tests. That is how this does not rot.
+
+### 11.7 Contract table (how the file finds bugs)
+
+At export, run the same classifiers as `classifyDump` (do not fork a second scorer). Print:
+
+```text
+## Contract
+| Law | Layer | Fault | Result |
+| SSE {final,result} | process | MISSING | FAIL / PASS |
+| AnalyzeFinished count = 1 | process | DUPLICATE | FAIL xN / PASS |
+| Stall/503/quota → 3.1 hop, same job | process | MISSING | FAIL / PASS / n/a |
+| Submit JSON status = running | process | WRONG_TIME | FAIL / PASS |
+| pendingFoodLog → succeeded before R2 | process | WRONG_TIME | FAIL / PASS |
+| Card Retry hidden if succeeded or kcal in logs | ui | WRONG_TIME | FAIL / PASS |
+| Attempt 1/3 hidden if succeeded | ui | WRONG_TIME | FAIL / PASS |
+| Dialog on_card kcal = ledger | ui | WRONG_TIME | FAIL / PASS / n/a |
+| Composer controls count = 1 each | ui | DUPLICATE / MISSING | FAIL / PASS |
+| Each dispatch has model + latency_ms | process | MISSING | FAIL / PASS |
+| Handoff from/to + same jobId if transfer | process | MISSING | FAIL / PASS / n/a |
+| DIAG5 off on food chat | process | WRONG_PLACE | FAIL / PASS |
+| Matrix calc matches ledger | content | MISSING | FAIL / PASS |
+| Composer Take picture + Add image + paste | ui | MISSING | FAIL / PASS |
+| Heading / breadcrumb unique | ui | DUPLICATE | FAIL / PASS |
+```
+
+Plus every QUALITY.md §1.3.1 exit that applies to this **pack**. Unused = `n/a`, not FAIL.
+
+**Also always score (shared):** last user action present or explicit none; breadcrumbs heading; console section; network/activity section; each ran dispatch has Received+Instruction+Output **once**; handoff chain complete if transfer happened; food edits have one turn block each.
+
+**Pack extras (examples):** food — card Retry vs kcal, stall hop, submit `running`. Receptionist — transfer target ran; no food ledger required. Medical — Apply/salvage terminal; no meal scout.
+
+**Shape faults** (same five on ui, content, process):
+
+| Fault | Detector |
+|-------|----------|
+| MISSING | expected count 1, actual 0 |
+| DUPLICATE | expected 1, actual > 1 **in the job** (not in the markdown serializer) |
+| WRONG_PLACE | present on a surface that must_hide it |
+| WRONG_TIME | right object, wrong status/order (kcal in logs, card still in-flight) |
+| WRONG_COUNT | expand/N items off |
+
+Content **value** bugs (wrong dish, wrong grams) stay G* / G-B. This table does not replace Layer B.
+
+### 11.8 What this file can and cannot catch
+
+**Can (this run):** SSE wrap, queue lie, poller/card lag, persist order, stall with no hop, AnalyzeFinished storms, DIAG5 on food, matrix vs ledger, duplicate chrome **if snapshotted**, dish drop vs scout table, Apply missing on a lab job, console/network failures, last user actions, **which agent ran and what they saw**, **edit turns**, **Front Desk → specialist** gaps.
+
+**Cannot:** a worker exit this job never took (stall on a happy path). Those stay dummy rows on the process board (Q-8.1). One debug file is the alarm for **this** branch, not the whole suite.
+
+**Malformed file** is itself a bug class (`DEBUG_DUP` / `DEBUG_MISS`). Inner test: `debugPayload.test.ts` + dumpContract HEADING_ONCE / DEBUG_MATCHES_LOG. Do not wait for a live meal to notice two “Log Meal” crumb rows from the builder.
+
+### 11.9 Inner loop
+
+```bash
+npx tsx scripts/test-from-debug.ts path/to/debug.md
+# named vitest: dumpContract.test.ts debugPayload.test.ts
+```
+
+- Historical captures stay **red** if that run was broken or the builder was malformed.
+- Code probes / dummy fixtures must go **green** without a new photo.
+- If a new live dump’s FAIL is already a Contract row: the inner loop failed; do not re-upload.
+
+### 11.10 Do not
+
+- `POST /loop` / meal-green / promote Soto to G8  
+- Hash-only prompts or hide schema (F-8.13)  
+- Green matrix that disagrees with logs  
+- Strip real process duplicates to look clean  
+- Second debug formatter  
+- Biomarker history on a food dump (WRONG_PLACE)  
+- Grok reading a 600-line prompt reprint as the classifier — that is the Contract table’s job  
+- Dropping console, network, breadcrumbs, or last action because “the meal succeeded”  
+- Flattening multi-edit or handoff into a single dietitian prompt  
+- A second copy of instruction/output in the log excerpt  
+- Screenshot or innerHTML of the whole modal as the contract source  
+- LangSmith / Phoenix / LLM-as-judge inside `dumpContract`  
+- Regex-on-markdown as the **only** scorer once the JSON tree exists  
+- A metrics product; stall/503 belong as a one-line count later, not a dashboard
+
+### 11.12 Gaps to close (from Soto + 2025–26 agent observability)
+
+Industry (OTel GenAI SIG, LangSmith/Phoenix evals, SRE golden signals) splits **trace** (what happened) from **eval** (was it good). §11 is the eval + forensic **view**. These gaps are in **F-8.13 / Q-8.1**, not a new pillar and not a SaaS buy.
+
+| Gap | Why Soto / literature | Do in |
+|-----|------------------------|-------|
+| **A. Canonical JSON run tree** | Markdown regex will rot; cold debug JSON on R2 should be the tree (`dispatches[]` with `id, parent, agent, user, received, instruction, output, model, latency_ms, error`). Markdown **prints** it. `classifyDump` scores JSON. | F-8.13 |
+| **B. Correlation id** | Debug looked done, card still Attempt 1/3 — client and worker did not join. Stamp `jobId` (+ turn) on console, network, server. Handoff carries it (`traceparent` in spirit). | F-8.13 |
+| **C. Dialog inventory** | Flags-only snapshot cannot prove “everything in the modal is shown.” Structured tree of the open dialog; optional PNG for humans; never HTML dump. | F-8.13 + Q-8.3 |
+| **D. Per-dispatch latency / model / tokens** | 90s stall was “no tokens” with no first-class TTFT field. SRE: latency, errors (traffic/saturation later). | F-8.13 |
+| **E. Handoff as its own record** | Failure and symptom often live in different agents. `from`, `to`, received, **dropped keys**. | F-8.13 + Q-8.5 |
+| **F. Same scorer download + vitest** | Already invariant 7; must run on the JSON tree, not a second classifier. | F-8.13 |
+| **G. Dummy rows for exits this dump did not take** | One file ≠ whole suite. Q-8.1 audit. | Q-8.1 |
+| **H. Stall/503 one-line rate** | M28 retries; no SLO. Optional later — a count in handover, **not** a metrics product. | Later (not F-8.13) |
+| **I. No LLM-judge / no Phoenix inner loop** | Burns the quota we refused to spend on Grok-in-the-spinner. Code evals only. | Standing |
+
+Do **not** import LangSmith. Do **not** add a fourth live-testing tier.
 
 

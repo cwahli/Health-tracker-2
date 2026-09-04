@@ -34,6 +34,7 @@ AGENTS + docs/agent = process (protected to EDIT)
 | Food create / F-10 | `plan/FOOD.md` **Process** (stop at the module table) + `docs/agent/domains/food-calc.md` §1–1d |
 | Food identity / catalog | `plan/FOOD.md` Part A + `FALSE_FRIEND` playbook — **not** F-1/F-2 USDA |
 | Job session / preview vs debug (`STALE_TURN`) | `docs/agent/domains/sync.md` jobs + ROADMAP F-9.5 |
+| Debug download / contract report | `docs/agent/domains/debug-contract.md` (reliability pillar truth). Execute F-8.13 / Q-8. Do not load QUALITY.md whole file. |
 | Biomarkers | `docs/agent/domains/biomarkers.md` + ROADMAP Track B |
 | Which tests | `docs/agent/DOMAIN_REGRESSION_MAP.md` **matching row** |
 | What to implement | `plan/ROADMAP.md` **Current work** |

@@ -8,7 +8,7 @@
 | [BIOMARKER_LIFECYCLE.md](./BIOMARKER_LIFECYCLE.md) | Pillar 1 architecture |
 | [FOOD.md](./FOOD.md) | Pillar 2 — Process (stop at the module table) |
 | [RELIABILITY.md](./RELIABILITY.md) | Pillar 3 — infra / quotas + how we fix the site (working process) |
-| [QUALITY.md](./QUALITY.md) | Pillar 4 — how we test (§1.4 only unless Q-6/Q-7) |
+| [QUALITY.md](./QUALITY.md) | Pillar 4 — how we test (§1.4; process goldens §1.3 / **Q-8**) |
 
 Laws: `docs/agent/domains/{biomarkers,food-calc,sync}.md`  
 WIP: `AI_HANDOVER.md` (header only) · Completed: `archive/` · `plan/archive/`
@@ -252,7 +252,7 @@ Q-1 (`assert-budgets.mjs`) is **green**. They do **not** rebuild the curator (M3
 | **F-8.10** | Goldilocks-split the pipeline owner | `server_food_analyze_run.ts` (~3560, ceiling 3800) split into 400–600 owners (**Meal Agent dispatch**, optional workers, DB search, prompt assembly). Delete leftover `STANDARD_FOOD_FACTORS` mock table if unused. HTTP adapter stays ≤700. Do this **with** F-10, not as a scout-vs-dietitian file split | 40-line shards; a second kcal writer |
 | **F-8.11** | **Superseded by F-10.8** | Do not soak the old always-dietitian create path. Evidence job still required on the F-10 pipeline | Replay scout+dietitian as “done” |
 | **F-8.12** | Packaged catalog residual | Hemaviton-class drink: vitamin C / labelled kcal from **brand or printed OCR** when those facts exist. Bind-attempt + `BIND_MISS` is already honest. F-10 does not replace catalog bind | Invent 1000 mg vitamin C |
-| **F-8.13** | Debug download vs sample | A real job download: instruction + reply **once per dispatch that ran** (lead, each worker, edit). Errors = gate, no logger-echo. Shorter because create is one role | Hash-only prompts; hide schema |
+| **F-8.13** | Debug file = contract report | Matches [RELIABILITY.md](./RELIABILITY.md) **§11** including **§11.12 A–F**: JSON run tree canonical (markdown is a view); `jobId` on console/network/server; **dialog inventory** (not screenshot/HTML); per-dispatch model+latency_ms+tokens; handoff from/to/dropped keys; Contract first; prompts once; matrix matches logs; process dupes scored not stripped. `debugPayload.test.ts` + `dumpContract` on **JSON**. | Hash-only prompts; hide schema; PNG as contract; LangSmith/LLM-judge; regex-md as only scorer |
 
 Execute **one class** per session. Inner = named vitest. Outer = one frozen example, not meal-green.
 
@@ -320,6 +320,7 @@ Same pattern as biomarkers: one Review for n=1–5; TypeScript decides batch/exp
 | **R-9** | Defer `startGoldenIngestWatcher` + full `hydrateUserJobs` past first paint | Not in the first `App` mount turn; `requestIdleCallback` or ≥1.5s | After R-8 baseline |
 | **R-10** | Header code-split | `themeRegistry` audit, Drive backup, `FoodCatalogAdminTab`, quota checkers lazy; Header line count may not grow | After R-9 |
 | **R-11** | `HomeTab` / `LogChat` stay out of other tabs’ first paint | Already lazy-tabbed; do not eagerly import them from Insights / History | Regression after R-10 |
+| **R-12** | One-line stall/503 count (free-tier hang rate) | After F-8.13 JSON tree has `latency_ms` / error on dispatches. A number in `AI_HANDOVER.md`, **not** a metrics product. RELIABILITY.md §11.12 **H** | LangSmith; Grafana; inner-loop Gemini |
 
 R-7 knip / `getBiomarkerStatus` memo as a reliability gate is **abandoned**.  
 R-8–R-11 are **client speed**, not a free-tier redo. Do not re-migrate images or re-kill Firestore writes.  
@@ -343,10 +344,24 @@ Rules unchanged: work item = class · inner = vitest · outer = one example · h
 | **Q-5** Delete one-shot patch scripts | Root `patch_*.ts` / `fix-*.ts` residue gone after the last class they served. F-9 `patch_*.mjs` already removed |
 | **Q-6** Unified bug queue | Snap + auto + golden tape are **one `#n`**. Inbox is not a second list. Named bug first; extra tape reds = series remaining (or sibling `#n`). Promote (photos + class test) → official `G*` / G-B fail-safe. No `/loop`. See `QUALITY.md` §14–14.4 |
 | **Q-7** Test + golden hygiene | COMPLETE = `tsc` + matching regression-map rows, not `npm test`. Ghost `assert-*.mjs` citations gone. G1 asserted once (`golden_meals.test.ts`). Frozen create fixture is Meal Agent JSON (no kcal), not scout→dietitian `scout.json`. Inbox / `golden:loop` not on every food PR. See `QUALITY.md` §1.4–1.5 |
+| **Q-8** Process goldens | Three boards (food / biomarker / receptionist). Dummy SSE/status, no Gemini inner loop. Audit every worker exit (§1.3.1) so a dump is an alarm, not the whole suite. See table below. **Grok** (jobs / LogChat / `serverJobs`) |
+| **Q-9** Website consolidation | Later **step**, not now. Too many files, `patch_*`, god `LogChat` / `App` / `Header`. Split/fold only with a named gate. Serialize vs F-9.5 / B0 / R-9 (`App.tsx`). **Grok**. Do not start as a rewrite binge |
+| **Q-10** Dependency consolidation | Later **step**, after Q-9. Audit `package.json` / unused imports; remove what we can. **Not** R-7 knip-as-reliability-gate (abandoned). Hygiene only |
 
-Session replay: **abandoned**.  
+**Q-8 execute order** (do not skip the audit):
+
+| ID | Do | Done when | Do not |
+|---|---|---|---|
+| **Q-8.1** | Food process **audit**: walk QUALITY.md §1.3.1 exits. Dummy row per exit (including ones this dump did not take). Debug follows RELIABILITY.md **§11** + **§11.12** (JSON tree, dialog inventory, correlation id, dispatch signals, handoff record) | Checklist lists every §1.3.1 row + 11.12 A–F; dummy fixture or named residual; Contract emitted from JSON | Live Gemini; one dump = whole suite; screenshot as scorer; Phoenix/LangSmith |
+| **Q-8.2** | Make Soto classes green on dummy data: `QUEUE_LIE`, `DEGRADE_NOT_TERMINAL`, `DISPLAY_LAG`, `COMPLETE_ONCE`, `STALL_NO_FALLBACK`, `STALE_TURN`. Rewrite tests that encoded the bug (stall ⇒ failed) | Named vitest green; historical dumps still classify red via `test-from-debug` | G8 photos; `POST /loop` |
+| **Q-8.3** | Tier 2 Playwright: stub `/api/jobs/*`. Assert **dialog inventory**: card ≠ Attempt 1/3 / Retry when stub succeeded with kcal; in-flight when running with no meal; composer counts; on_card kcal matches stub ledger | One spec, mocked, that file only. Optional screenshot on FAIL, not the oracle | Live Log Meal; mix with R-3; innerHTML dump |
+| **Q-8.4** | Biomarker process board. Share stall/persist/SSE laws with food. Add Apply/salvage/DIAG5-not-on-lab. **Audit §1.3.1 bio exits first** | Dummy medical stream + Apply row; named vitest | Paint G-B1 all_green |
+| **Q-8.5** | Receptionist process board. Handoff + who owns the next job; specialist then uses food or bio process. **Audit §1.3.1 desk exits first** | Dummy UC + handoff; empty-demo already S-5 | 10 live UC click-through |
+| **Q-8.6** | Tier 3 protocol: one website live **or** API live after 8.2 (food) / 8.4 / 8.5. Script preferred. Grok not in the wait loop | Written soak command + “if dump class already a row, inner failed” | API **and** website for the same meal; Grok bot 3-case loop |
+
+Session replay: **abandoned** (Q-8 is dummy SSE/status, not replaying a browser session).  
 Golden-execution Q work is usually **inside** B2/B4/B6 or F-3.  
-File-collision rule: B0 and R-9 both touch `App.tsx` → serialize those two only. F-9.5 also touches `App.tsx` — serialize with B0/R-9.
+File-collision rule: B0 and R-9 both touch `App.tsx` → serialize those two only. F-9.5 also touches `App.tsx` — serialize with B0/R-9. **Q-9** serializes with those too. **Q-8.3** must not collide with R-3 (different specs).
 
 ### Platform program order (not a fifth pillar)
 
@@ -358,18 +373,22 @@ F-10.2 then 10.3–10.5, 10.7  ← Gemini from this file (Current work)
 F-9.5 App poller             ← Grok (serialize vs B0/R-9)
 F-10.6 fat/Na TS             ← Grok constants
 F-8.10 + F-8.12 + F-8.13     ← with F-10, not old dietitian
-F-10.8 soak                  ← after 10.7
+Q-8.1 → 8.2 → 8.3            ← Grok; food process board + stubbed card
+F-10.8 soak                  ← after 10.7; that soak is Q-8.6 Tier 3 **once**
+Q-8.4 / Q-8.5                ← bio / receptionist process boards
 B0 / fill-template C1–C7     ← Track B
+Q-9 website consolidation    ← later step (Grok; serialize App.tsx)
+Q-10 dependency audit        ← later step after Q-9
 ```
 
-Do **not** open Q-4 or a Dictionary/FoodCard/`App.tsx` breakup unless Q-1 is red on that file.
+Do **not** open Q-4 or a Dictionary/FoodCard/`App.tsx` breakup unless Q-1 is red on that file. Do **not** open Q-9/Q-10 until Q-8.2 is green (process board exists). Do **not** skip Q-8.1 audit.
 
 ### Who does which
 
 | | **Gemini** (AI Studio — this ROADMAP) | **Grok** |
 |---|---|---|
-| Prefer | F-10.2–10.5, 10.7; B8.2/8.3; R-9 FIND/REPLACE; F-6 net-zero in existing cards | F-9.5 `App.tsx`; F-10.6 constants; Q-4; any split of `App.tsx` / `LogChat.tsx` / `Header.tsx` |
-| Do not | `App.tsx` poller; `npm test`; critic LLM; USDA; invent a pack file | Mix F-10 into an open F-9.5 edit |
+| Prefer | F-10.2–10.5, 10.7; B8.2/8.3; R-9 FIND/REPLACE; F-6 net-zero in existing cards | F-9.5 `App.tsx`; F-10.6 constants; **Q-8** process goldens; Q-4; Q-9 later; any split of `App.tsx` / `LogChat.tsx` / `Header.tsx` |
+| Do not | `App.tsx` poller; `npm test`; critic LLM; USDA; invent a pack file; live Gemini as inner loop | Mix F-10 into an open F-9.5 edit; Grok Bot clicking remaining live cases |
 
 ---
 

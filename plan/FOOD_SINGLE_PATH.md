@@ -392,7 +392,7 @@ Execute IDs **F-8.1–F-8.9 are shipped**. These four are leftover reliability, 
 | **F-8.10** | Split `server_food_analyze_run.ts` (~3772) into 400–600 owners: scout dispatch, DB search, prompt assembly. Delete unused `STANDARD_FOOD_FACTORS` if it is a leftover mock table. Keep `server_routes_food_analyze.ts` ≤700 | Catalog ceilings honest; no second kcal writer | 40-line shards; move math back into the HTTP file |
 | **F-8.11** | One live Gemini soak of the evidence job (or a new 6-photo plate of the same class). Inner TS fixture already asserts 1635 g / 85 g count=2 / sauce remainder | Same meal id; 7–8 FoodItem tiles; no inherit `cal=0`; narrative = table | `POST /loop` / catalog paint / meal-green |
 | **F-8.12** | Packaged drink facts when brand/OCR exist (Hemaviton-class). Bind-attempt + `BIND_MISS` already honest | Labelled kcal / vitamin C from brand or printed facts when present | Invent 1000 mg vitamin C |
-| **F-8.13** | Real debug download vs [after-F-8 sample](./samples/debug-job_1788115766430_v2z5q9hpz.after-f8.md) | Instruction + reply once per dispatch; Errors = gate; process duplicates only if they ran | Hash-only prompts; hide schema |
+| **F-8.13** | Real debug download vs [after-F-8 sample](./samples/debug-job_1788115766430_v2z5q9hpz.after-f8.md) **and** [RELIABILITY.md](./RELIABILITY.md) **§11 + §11.12 A–F** | JSON tree canonical; dialog inventory; jobId on lines; dispatch latency; handoff dropped keys; Contract first; I/O once; process dupes scored | Hash-only prompts; PNG as contract; LLM-judge |
 
 **Also not F-8** (Track F, already on ROADMAP): F-1…F-4 identity/catalog; F-6 FoodCard ceiling; F-7 scout prompt net-zero. Q-1 is green so F-6/F-7 are unblocked.
 
