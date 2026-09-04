@@ -5,11 +5,12 @@
 import { Type } from '@google/genai';
 import { z } from 'zod';
 import { formatUSDANutrients, formatOFFNutrients, extractOFFNutrientsPer100g, isFastFoodChain, buildWebSearchQuery, loosenQuery, cleanQuery, detectChainKeyFromText, scoutHasCompletePrintedLabel, enrichScoutComponentsWithMatches, buildPastMealsContext } from './src/server/food/server_food_analyze_helpers.js';
-import { foodAnalyzeSchema } from './src/server/food/server_food_analyze_schema.js';
+import { foodAnalyzeSchema, visionScoutResponseSchema } from './src/server/food/server_food_analyze_schema.js';
 import { buildUserContext, buildTimeContext, buildImageContext, buildHistoryContext, buildVisionScoutContext, buildDatabaseMatchesContext, buildBiomarkersContext, stitchFoodPrompt } from './src/server/food/server_food_prompt_context.js';
 import { sanitizeLlmJsonOutput, computeDietitianSkipGates } from './src/server/food/server_food_dietitian_dispatch.js';
 import { resolveFoodAnalyzeMode, buildFoodApiCalls } from './src/server/food/server_food_mode_routing.js';
 import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput } from './src/server/food/server_food_meal_assemble.js';
+import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems } from './src/server/food/server_food_scout_source.js';
 
 import { executeFoodResolverCurator } from './server_food_resolver_curator.js';
 import {
@@ -384,40 +385,9 @@ export async function runFoodAnalyze(req: any, res: any) {
     // Only inherit activeScoutItems if this is an explicit modification command on the active meal
     visionScoutItems = (isPureWeightModification || isExplicitModify || refineDecision.skip) ? (req.body.activeScoutItems || []) : [];
     if (isModifySession && visionScoutItems.length === 0 && activeMeal) {
-      const activeList = Array.isArray(activeMeal.itemsBreakdown) && activeMeal.itemsBreakdown.length > 0
-        ? activeMeal.itemsBreakdown
-        : (Array.isArray(activeMeal.items) ? activeMeal.items : []);
-      if (activeList.length > 0) {
-        visionScoutItems = activeList.map((it: any, idx: number) => {
-          const sIdx = it.scoutIndex !== undefined && it.scoutIndex !== null ? it.scoutIndex : idx;
-          it.scoutIndex = sIdx; // Mutate the original activeMeal item to ensure it matches by scoutIndex during consolidation
-          return {
-            itemId: it.itemId || it.id || undefined,
-            scoutIndex: sIdx,
-            originalName: it.originalName || it.canonicalDbName || it.name || "Food Item",
-            keyword: it.keyword || it.canonicalDbName || it.originalName || it.name,
-            estimatedWeightGrams: Number(it.weightGrams) || 100,
-            nutrientBasisWeight: Number(it.weightGrams) || 100,
-            nutrients: it.nutrients || it.truthNutrients || null,
-            lockedNutrientKeys: it.lockedNutrientKeys || [],
-            _alreadyFinalized: Boolean(it.nutrients && (it.lockedNutrientKeys?.length || it.dbSource === 'label' || it.dbSource === 'usda_direct_hint')),
-            cookingMethod: it.cookingMethod || 'raw',
-            ingredients: it.ingredients || (it.ingredientsList ? String(it.ingredientsList).split(',').map((s: string) => s.trim()) : []),
-            visualIngredients: it.visualIngredients || [],
-            rawNutritionLabel: it.rawNutritionLabel || null,
-            chainName: it.chainName || null,
-            dbSource: it.dbSource || 'estimated',
-            dbId: it.dbId || null,
-            boundingBox2D: it.boundingBox2D || null,
-            sourceImageIndex: it.sourceImageIndex ?? 0,
-            componentsDetailList: it.componentsDetailList || [],
-            components: it.components || [],
-            hasComponents: it.hasComponents || false,
-          };
-        });
-        visionScoutRanAndReturnedItems = true;
-        addDebugLog(`[Edit Continuity] Inherited ${visionScoutItems.length} items from activeMeal into visionScoutItems for edit.`);
-      }
+      const inherited = inheritActiveMealScoutItems({ isModifySession, visionScoutItems, activeMeal, onLog: addDebugLog });
+      visionScoutItems = inherited.items;
+      if (inherited.ran) visionScoutRanAndReturnedItems = true;
     }
     let scoutScratchpad: string | undefined;
     let scoutInternalReasoning: string | null = null;
@@ -434,13 +404,7 @@ export async function runFoodAnalyze(req: any, res: any) {
     if (compareOnly) {
       addDebugLog(`[Shortcut] Compare mode detected. Skipping Vision Scout and DB Search.`);
       if (compareItems && compareItems.length > 0) {
-        visionScoutItems = compareItems.map((name: string, index: number) => ({
-          scoutIndex: index,
-          keyword: name,
-          originalName: name,
-          estimatedWeightGrams: 100,
-          source: "compare_request"
-        }));
+        visionScoutItems = mapCompareItemsToScoutItems(compareItems);
       }
     } else if (isWeightModification || refineDecision.skip) {
       // B5 scale-only: re-use prior scout, apply portionChoices and/or parsed refine grams
@@ -457,26 +421,7 @@ export async function runFoodAnalyze(req: any, res: any) {
       visionScoutContentType = req.body.scoutContentType || 'visual';
       visionScoutRanAndReturnedItems = visionScoutItems.length > 0;
     } else if (req.body.skipScout || req.body.portionChoices) {
-      let priorScout = (Array.isArray(req.body.activeScoutItems) && req.body.activeScoutItems.length > 0)
-        ? req.body.activeScoutItems
-        : ((Array.isArray(req.body.scoutItems) && req.body.scoutItems.length > 0)
-          ? req.body.scoutItems
-          : (Array.isArray(activeMeal?.scoutItems) && activeMeal.scoutItems.length > 0 ? activeMeal.scoutItems : []));
-      if (priorScout.length === 0 && Array.isArray(history) && history.length > 0) {
-        // Fallback: search history messages for scoutItems or portionClarify items
-        const clarifyMsg = [...history].reverse().find((m: any) => 
-          (m.data?.scoutItems && m.data.scoutItems.length > 0) || 
-          (m.data?.portionClarify?.scoutItems && m.data.portionClarify.scoutItems.length > 0) ||
-          (m.data?.portionClarify?.items && m.data.portionClarify.items.length > 0) ||
-          (m.data?.agentResult?.scoutItems && m.data.agentResult.scoutItems.length > 0)
-        );
-        if (clarifyMsg?.data) {
-          priorScout = clarifyMsg.data.scoutItems || 
-            clarifyMsg.data.portionClarify?.scoutItems || 
-            clarifyMsg.data.portionClarify?.items || 
-            clarifyMsg.data.agentResult?.scoutItems || [];
-        }
-      }
+      let priorScout = resolvePriorScoutItems({ body: req.body, history, activeMeal });
       if (priorScout.length > 0) {
         addDebugLog(`[Shortcut] skipScout or portionChoices is true. Inheriting ${priorScout.length} scout items from previous run.`);
         visionScoutItems = applyPortionChoices(
@@ -544,91 +489,7 @@ export async function runFoodAnalyze(req: any, res: any) {
                   } catch (e) {}
                 }
               },
-              responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                  _internalReasoning: { type: Type.STRING },
-                  contentType: { type: Type.STRING, enum: ["visual", "menu_or_poster", "label", "text"] },
-                  diningEnvironment: { type: Type.STRING, enum: ["home_cooked", "casual_restaurant", "fast_food_chain", "fine_dining", "airline", "unknown"] },
-                  dishes: {
-                    type: Type.ARRAY,
-                    items: {
-                      type: Type.OBJECT,
-                      properties: {
-                        dishName: { type: Type.STRING },
-                        chainName: { type: Type.STRING, nullable: true },
-                        packageLabelText: { type: Type.STRING, nullable: true },
-                        estimatedWeightGrams: { type: Type.NUMBER },
-                        packGrams: { type: Type.NUMBER, nullable: true },
-                        cookingMethod: { type: Type.STRING, enum: ["raw", "baked", "grilled", "boiled", "steamed", "deep_fried", "pan_fried", "stir_fried"] },
-                        sourceImageIndex: { type: Type.INTEGER },
-                        boundingBox2D: {
-                          type: Type.ARRAY,
-                          items: { type: Type.INTEGER },
-                        },
-                        isStandaloneCondimentPacket: { type: Type.BOOLEAN, nullable: true },
-                        foods: {
-                          type: Type.ARRAY,
-                          items: {
-                            type: Type.OBJECT,
-                            properties: {
-                              foodName: { type: Type.STRING },
-                              packageLabelText: { type: Type.STRING, nullable: true },
-                              weightGrams: { type: Type.NUMBER },
-                              packGrams: { type: Type.NUMBER, nullable: true },
-                              sourceImageIndex: { type: Type.INTEGER, nullable: true },
-                              rawNutritionLabel: {
-                                type: Type.OBJECT,
-                                nullable: true,
-                                properties: {
-                                  servingSize: { type: Type.STRING },
-                                  calories: { type: Type.STRING },
-                                  protein: { type: Type.STRING },
-                                  totalFat: { type: Type.STRING },
-                                  saturatedFat: { type: Type.STRING },
-                                  transFat: { type: Type.STRING },
-                                  totalCarbohydrate: { type: Type.STRING },
-                                  sugar: { type: Type.STRING },
-                                  addedSugar: { type: Type.STRING },
-                                  sodium: { type: Type.STRING },
-                                  salt: { type: Type.STRING },
-                                  potassium: { type: Type.STRING },
-                                  totalFibre: { type: Type.STRING },
-                                },
-                                required: ["servingSize", "calories"],
-                              },
-                              nutrients: {
-                                type: Type.OBJECT,
-                                properties: {
-                                  protein: { type: Type.NUMBER },
-                                  saturatedFat: { type: Type.NUMBER },
-                                  addedSugar: { type: Type.NUMBER },
-                                  totalFibre: { type: Type.NUMBER },
-                                  sodium: { type: Type.NUMBER },
-                                  carbohydrates: { type: Type.NUMBER },
-                                },
-                                required: ["protein", "saturatedFat", "addedSugar", "totalFibre", "sodium", "carbohydrates"],
-                              },
-                            },
-                            required: ["foodName", "weightGrams", "nutrients"],
-                          },
-                        },
-                        dishNutrients: {
-                          type: Type.OBJECT,
-                          properties: {
-                            saturatedFat: { type: Type.NUMBER },
-                            totalFat: { type: Type.NUMBER },
-                            totalSugar: { type: Type.NUMBER },
-                          },
-                          required: ["saturatedFat", "totalFat", "totalSugar"],
-                        },
-                      },
-                      required: ["dishName", "estimatedWeightGrams", "cookingMethod", "boundingBox2D", "foods", "dishNutrients"],
-                    },
-                  },
-                },
-                required: ["contentType", "diningEnvironment", "dishes"],
-              }
+              responseSchema: visionScoutResponseSchema,
             });
             // Yield to the event loop before heavy synchronous parsing
             await new Promise(resolve => setImmediate(resolve));

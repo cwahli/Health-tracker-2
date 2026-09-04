@@ -187,3 +187,94 @@ export const foodAnalyzeSchema = {
       propertyOrdering: ["_internalReasoning", "verdict", "message", "modificationCommand", "foodData", "comparison"],
       required: ["_internalReasoning", "verdict", "message"]
     };
+
+/**
+ * F-8.10 shard 9 — vision scout response schema, extracted verbatim from
+ * runFoodAnalyze. Static literal; dish nutrients required are the P/C/F
+ * estimate core (saturatedFat/totalFat/totalSugar at dish level).
+ */
+export const visionScoutResponseSchema = {
+                type: Type.OBJECT,
+                properties: {
+                  _internalReasoning: { type: Type.STRING },
+                  contentType: { type: Type.STRING, enum: ["visual", "menu_or_poster", "label", "text"] },
+                  diningEnvironment: { type: Type.STRING, enum: ["home_cooked", "casual_restaurant", "fast_food_chain", "fine_dining", "airline", "unknown"] },
+                  dishes: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        dishName: { type: Type.STRING },
+                        chainName: { type: Type.STRING, nullable: true },
+                        packageLabelText: { type: Type.STRING, nullable: true },
+                        estimatedWeightGrams: { type: Type.NUMBER },
+                        packGrams: { type: Type.NUMBER, nullable: true },
+                        cookingMethod: { type: Type.STRING, enum: ["raw", "baked", "grilled", "boiled", "steamed", "deep_fried", "pan_fried", "stir_fried"] },
+                        sourceImageIndex: { type: Type.INTEGER },
+                        boundingBox2D: {
+                          type: Type.ARRAY,
+                          items: { type: Type.INTEGER },
+                        },
+                        isStandaloneCondimentPacket: { type: Type.BOOLEAN, nullable: true },
+                        foods: {
+                          type: Type.ARRAY,
+                          items: {
+                            type: Type.OBJECT,
+                            properties: {
+                              foodName: { type: Type.STRING },
+                              packageLabelText: { type: Type.STRING, nullable: true },
+                              weightGrams: { type: Type.NUMBER },
+                              packGrams: { type: Type.NUMBER, nullable: true },
+                              sourceImageIndex: { type: Type.INTEGER, nullable: true },
+                              rawNutritionLabel: {
+                                type: Type.OBJECT,
+                                nullable: true,
+                                properties: {
+                                  servingSize: { type: Type.STRING },
+                                  calories: { type: Type.STRING },
+                                  protein: { type: Type.STRING },
+                                  totalFat: { type: Type.STRING },
+                                  saturatedFat: { type: Type.STRING },
+                                  transFat: { type: Type.STRING },
+                                  totalCarbohydrate: { type: Type.STRING },
+                                  sugar: { type: Type.STRING },
+                                  addedSugar: { type: Type.STRING },
+                                  sodium: { type: Type.STRING },
+                                  salt: { type: Type.STRING },
+                                  potassium: { type: Type.STRING },
+                                  totalFibre: { type: Type.STRING },
+                                },
+                                required: ["servingSize", "calories"],
+                              },
+                              nutrients: {
+                                type: Type.OBJECT,
+                                properties: {
+                                  protein: { type: Type.NUMBER },
+                                  saturatedFat: { type: Type.NUMBER },
+                                  addedSugar: { type: Type.NUMBER },
+                                  totalFibre: { type: Type.NUMBER },
+                                  sodium: { type: Type.NUMBER },
+                                  carbohydrates: { type: Type.NUMBER },
+                                },
+                                required: ["protein", "saturatedFat", "addedSugar", "totalFibre", "sodium", "carbohydrates"],
+                              },
+                            },
+                            required: ["foodName", "weightGrams", "nutrients"],
+                          },
+                        },
+                        dishNutrients: {
+                          type: Type.OBJECT,
+                          properties: {
+                            saturatedFat: { type: Type.NUMBER },
+                            totalFat: { type: Type.NUMBER },
+                            totalSugar: { type: Type.NUMBER },
+                          },
+                          required: ["saturatedFat", "totalFat", "totalSugar"],
+                        },
+                      },
+                      required: ["dishName", "estimatedWeightGrams", "cookingMethod", "boundingBox2D", "foods", "dishNutrients"],
+                    },
+                  },
+                },
+                required: ["contentType", "diningEnvironment", "dishes"],
+              };
