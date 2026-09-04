@@ -8,6 +8,7 @@ import {
   buildDatabaseMatchesContext,
   buildBiomarkersContext,
   stitchFoodPrompt,
+  selectSystemInstruction,
 } from './server_food_prompt_context';
 import { foodAnalyzeSchema } from './server_food_analyze_schema';
 
@@ -111,5 +112,25 @@ describe('F-8.10 shard 3 — dietitian schema grammar invariants (food-calc §1b
       schema.properties.modificationCommand.items.properties.into.items.properties.estimate;
     expect(splitEstimate.required).toEqual(['protein', 'carbohydrates', 'totalFat', 'saturatedFat', 'sodium']);
     expect(splitEstimate.required).not.toContain('calories');
+  });
+});
+
+describe('F-8.10 shard 15 — system instruction router', () => {
+  const base = {
+    isExplicitModify: false,
+    effectiveActiveMeal: null,
+    activeComparisonState: null,
+    biomarkersNeedingImprovement: [],
+    remainingAllowance: null,
+    foodLogs: [],
+    userProfile: { language: 'en' },
+    visionScoutItems: [],
+  };
+
+  it('routes review/edit/compare to their instruction packs', () => {
+    expect(selectSystemInstruction({ ...base, userSelectedMode: 'review' })).toContain('NARRATE');
+    expect(selectSystemInstruction({ ...base, userSelectedMode: 'edit', isExplicitModify: true })).toContain('EDIT OR Q&A');
+    expect(selectSystemInstruction({ ...base, userSelectedMode: 'compare' })).toContain('PRODUCT EVALUATION');
+    expect(selectSystemInstruction({ ...base, userSelectedMode: 'compare', activeComparisonState: { id: 'c' } })).toContain('REFINEMENT');
   });
 });

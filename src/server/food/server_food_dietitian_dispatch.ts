@@ -1,5 +1,6 @@
 import { extractBalancedJson } from '../../../server_pure_helpers.js';
 import { shouldExpandMealAgent } from '../../mealBuild/shouldExpandMealAgent.js';
+import { t } from '../../utils/i18n.js';
 
 /**
  * F-8.10 shard 4 — dietitian dispatch seams, extracted verbatim from
@@ -102,4 +103,64 @@ export function computeDietitianSkipGates(args: DietitianSkipArgs): {
     })
   );
   return { canSkipDietitianForPureScale, isCreateSession, hasBarcode, hasReceipt, canSkipDietitianForCreate };
+}
+
+export interface ScoutTotals {
+  totalSugar: number;
+  totalSatFat: number;
+  totalP: number;
+}
+
+/**
+ * F-8.10 shard 15 — single-agent-create verdict ladder, extracted verbatim
+ * from runFoodAnalyze. Existing scout verdicts pass through untouched.
+ */
+export function decideScoutVerdict(args: {
+  scoutVerdict: any;
+  totals: ScoutTotals;
+  mealName?: string;
+  language?: unknown;
+}): any {
+  const { totals, mealName, language } = args;
+  let scoutVerdict = args.scoutVerdict;
+  if (!scoutVerdict || typeof scoutVerdict !== 'object' || !scoutVerdict.label) {
+    if (totals.totalSugar >= 30) {
+      scoutVerdict = { label: t(language, 'verdictHighGlycemicSugar'), level: 'warning' };
+    } else if (totals.totalSatFat >= 15) {
+      scoutVerdict = { label: t(language, 'verdictElevatedSatFat'), level: 'warning' };
+    } else if (totals.totalP >= 25) {
+      scoutVerdict = { label: t(language, 'verdictLeanMuscle'), level: 'good' };
+    } else if (/probiotic|fermented|yogurt|kefir|yakult/i.test(mealName || '')) {
+      scoutVerdict = { label: t(language, 'verdictGutMicrobiome'), level: totals.totalSugar >= 25 ? 'neutral' : 'good' };
+    } else {
+      scoutVerdict = { label: t(language, 'verdictSupportsMetabolicEnergy'), level: 'neutral' };
+    }
+  }
+  return scoutVerdict;
+}
+
+/**
+ * F-8.10 shard 15 — single-agent-create advice ladder, extracted verbatim
+ * from runFoodAnalyze. Existing scout advice passes through untouched.
+ */
+export function decideScoutAdvice(args: {
+  rawAdvice: any;
+  totals: ScoutTotals;
+  mealName?: string;
+  language?: unknown;
+}): string {
+  const { totals, mealName, language } = args;
+  let rawAdvice = args.rawAdvice;
+  if (!rawAdvice || String(rawAdvice).trim().length === 0) {
+    if (/probiotic|yakult|kefir|yogurt/i.test(mealName || '')) {
+      rawAdvice = t(language, 'adviceProbioticSugar').replace('{grams}', String(Math.round(totals.totalSugar)));
+    } else if (totals.totalP >= 20) {
+      rawAdvice = t(language, 'adviceSolidProtein').replace('{grams}', String(Math.round(totals.totalP)));
+    } else if (totals.totalSugar >= 30) {
+      rawAdvice = t(language, 'adviceHighSugar').replace('{grams}', String(Math.round(totals.totalSugar)));
+    } else {
+      rawAdvice = t(language, 'adviceLoggedBalanced').replace('{name}', String(mealName));
+    }
+  }
+  return rawAdvice;
 }

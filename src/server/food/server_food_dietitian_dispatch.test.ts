@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeLlmJsonOutput, computeDietitianSkipGates } from './server_food_dietitian_dispatch';
+import {
+  sanitizeLlmJsonOutput,
+  computeDietitianSkipGates,
+  decideScoutVerdict,
+  decideScoutAdvice,
+} from './server_food_dietitian_dispatch';
 
 describe('F-8.10 shard 4 — LLM JSON repair', () => {
   it('collapses runaway decimals and trims repeating foodType', () => {
@@ -77,5 +82,28 @@ describe('F-8.10 shard 4 — dietitian skip gates (F-10 adaptive law)', () => {
       message: 'remove the oats',
     });
     expect(withVerb.canSkipDietitianForPureScale).toBe(false);
+  });
+});
+
+describe('F-8.10 shard 15 — scout verdict and advice ladders', () => {
+  it('walks the verdict ladder and passes existing verdicts through', () => {
+    const t = (totals: any, mealName = 'Bowl', scoutVerdict: any = null) =>
+      decideScoutVerdict({ scoutVerdict, totals, mealName, language: 'en' });
+    expect(t({ totalSugar: 40, totalSatFat: 0, totalP: 0 }).level).toBe('warning');
+    expect(t({ totalSugar: 0, totalSatFat: 20, totalP: 0 }).level).toBe('warning');
+    expect(t({ totalSugar: 0, totalSatFat: 0, totalP: 30 }).level).toBe('good');
+    expect(t({ totalSugar: 5, totalSatFat: 0, totalP: 5 }, 'Yakult').level).toBe('good');
+    expect(t({ totalSugar: 0, totalSatFat: 0, totalP: 5 }).level).toBe('neutral');
+    expect(t({ totalSugar: 99, totalSatFat: 99, totalP: 99 }, 'X', { label: 'Kept', level: 'good' })).toEqual({ label: 'Kept', level: 'good' });
+  });
+
+  it('walks the advice ladder and passes existing advice through', () => {
+    const t = (totals: any, mealName = 'Bowl', rawAdvice: any = '') =>
+      decideScoutAdvice({ rawAdvice, totals, mealName, language: 'en' });
+    expect(t({ totalSugar: 5, totalSatFat: 0, totalP: 5 }, 'Yakult')).toContain('5');
+    expect(t({ totalSugar: 0, totalSatFat: 0, totalP: 25 })).toContain('25');
+    expect(t({ totalSugar: 40, totalSatFat: 0, totalP: 0 })).toContain('40');
+    expect(t({ totalSugar: 0, totalSatFat: 0, totalP: 0 }, 'Rice')).toContain('Rice');
+    expect(t({ totalSugar: 0, totalSatFat: 0, totalP: 0 }, 'Rice', 'Custom note')).toBe('Custom note');
   });
 });

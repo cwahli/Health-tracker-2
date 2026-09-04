@@ -6,8 +6,8 @@ import { Type } from '@google/genai';
 import { z } from 'zod';
 import { formatUSDANutrients, formatOFFNutrients, extractOFFNutrientsPer100g, isFastFoodChain, buildWebSearchQuery, loosenQuery, cleanQuery, detectChainKeyFromText, scoutHasCompletePrintedLabel, enrichScoutComponentsWithMatches, buildPastMealsContext } from './src/server/food/server_food_analyze_helpers.js';
 import { foodAnalyzeSchema, visionScoutResponseSchema } from './src/server/food/server_food_analyze_schema.js';
-import { buildUserContext, buildTimeContext, buildImageContext, buildHistoryContext, buildVisionScoutContext, buildDatabaseMatchesContext, buildBiomarkersContext, stitchFoodPrompt } from './src/server/food/server_food_prompt_context.js';
-import { sanitizeLlmJsonOutput, computeDietitianSkipGates } from './src/server/food/server_food_dietitian_dispatch.js';
+import { buildUserContext, buildTimeContext, buildImageContext, buildHistoryContext, buildVisionScoutContext, buildDatabaseMatchesContext, buildBiomarkersContext, stitchFoodPrompt, selectSystemInstruction } from './src/server/food/server_food_prompt_context.js';
+import { sanitizeLlmJsonOutput, computeDietitianSkipGates, decideScoutVerdict, decideScoutAdvice } from './src/server/food/server_food_dietitian_dispatch.js';
 import { resolveFoodAnalyzeMode, buildFoodApiCalls } from './src/server/food/server_food_mode_routing.js';
 import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput } from './src/server/food/server_food_meal_assemble.js';
 import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, mapTextQueriesToScoutItems, buildScoutFailureError, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries } from './src/server/food/server_food_scout_source.js';
@@ -81,13 +81,6 @@ import {
   buildPortionClarifyPayload,
   applyPortionChoices,
 } from './server_portion_clarify.js';
-import {
-  buildFoodAnalyzeInstruction,
-  buildModeAReviewInstruction,
-  buildModeAEditInstruction,
-  buildModeDCompareInstruction,
-  buildModeDEditInstruction,
-} from './agents/index.js';
 import {
   rebalanceNutrientProfile,
   computeCaloriesFromMacros,
@@ -888,32 +881,8 @@ export async function runFoodAnalyze(req: any, res: any) {
           }));
       }
     }
-    let systemInstruction = "";
-    const activeMealState = activeMeal || req.body.activeMealState || null;
     const activeComparisonState = activeComparison || req.body.activeComparisonState || null;
-    if (userSelectedMode === 'review' || userSelectedMode === 'edit') {
-      if (isExplicitModify || effectiveActiveMeal !== null) {
-        systemInstruction = buildModeAEditInstruction({ biomarkersNeedingImprovement, remainingAllowance, activeMeal: effectiveActiveMeal, foodLogs, userProfile });
-      } else {
-        systemInstruction = buildModeAReviewInstruction({ biomarkersNeedingImprovement, remainingAllowance, foodLogs, userProfile });
-      }
-    } else if (userSelectedMode === 'compare') {
-      if (activeComparisonState !== null) {
-        systemInstruction = buildModeDEditInstruction({ biomarkersNeedingImprovement, remainingAllowance, activeComparison: activeComparisonState, foodLogs, userProfile });
-      } else {
-        systemInstruction = buildModeDCompareInstruction({ biomarkersNeedingImprovement, remainingAllowance, foodLogs, userProfile });
-      }
-    } else {
-      systemInstruction = buildFoodAnalyzeInstruction({
-        biomarkersNeedingImprovement,
-        remainingAllowance,
-        activeMeal: effectiveActiveMeal,
-        compareItemCount: userSelectedMode === 'review' ? 0 : (visionScoutItems ? visionScoutItems.length : 0),
-        forceModifyMode: isExplicitModify,
-        foodLogs,
-        userProfile
-      });
-    }
+    const systemInstruction = selectSystemInstruction({ userSelectedMode, isExplicitModify, effectiveActiveMeal, activeComparisonState, biomarkersNeedingImprovement, remainingAllowance, foodLogs, userProfile, visionScoutItems });
     // Suppress Scout payload during text-only edits to conserve tokens
     const visionScoutCtx = buildVisionScoutContext({ visionScoutItems, visionScoutContentType, scoutConfidenceRating, scoutConfidenceComment, scoutCookingMethod, diningEnvironment, userSelectedMode, isExplicitModify, hasActiveMeal: effectiveActiveMeal !== null, hasComparison: activeComparisonState !== null, hasImages: Boolean(imagePayloads && imagePayloads.length) });
     const databaseMatchesCtx = buildDatabaseMatchesContext(preCalculatedCtx, databaseMatches);
@@ -1099,33 +1068,9 @@ export async function runFoodAnalyze(req: any, res: any) {
       const totalAddedSugar = preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.addedSugar) || 0), 0);
       const totalSatFat = preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.saturatedFat) || 0), 0);
 
-      let scoutVerdict = rawScoutData?.verdict;
-      if (!scoutVerdict || typeof scoutVerdict !== 'object' || !scoutVerdict.label) {
-        if (totalSugar >= 30) {
-          scoutVerdict = { label: t(userProfile?.language, 'verdictHighGlycemicSugar'), level: 'warning' };
-        } else if (totalSatFat >= 15) {
-          scoutVerdict = { label: t(userProfile?.language, 'verdictElevatedSatFat'), level: 'warning' };
-        } else if (totalP >= 25) {
-          scoutVerdict = { label: t(userProfile?.language, 'verdictLeanMuscle'), level: 'good' };
-        } else if (/probiotic|fermented|yogurt|kefir|yakult/i.test(mealName)) {
-          scoutVerdict = { label: t(userProfile?.language, 'verdictGutMicrobiome'), level: totalSugar >= 25 ? 'neutral' : 'good' };
-        } else {
-          scoutVerdict = { label: t(userProfile?.language, 'verdictSupportsMetabolicEnergy'), level: 'neutral' };
-        }
-      }
+      let scoutVerdict = decideScoutVerdict({ scoutVerdict: rawScoutData?.verdict, totals: { totalSugar, totalSatFat, totalP }, mealName, language: userProfile?.language });
 
-      let rawAdvice = rawScoutData?.clinicalAdvice || rawScoutData?.message;
-      if (!rawAdvice || String(rawAdvice).trim().length === 0) {
-        if (/probiotic|yakult|kefir|yogurt/i.test(mealName)) {
-          rawAdvice = t(userProfile?.language, 'adviceProbioticSugar').replace('{grams}', String(Math.round(totalSugar)));
-        } else if (totalP >= 20) {
-          rawAdvice = t(userProfile?.language, 'adviceSolidProtein').replace('{grams}', String(Math.round(totalP)));
-        } else if (totalSugar >= 30) {
-          rawAdvice = t(userProfile?.language, 'adviceHighSugar').replace('{grams}', String(Math.round(totalSugar)));
-        } else {
-          rawAdvice = t(userProfile?.language, 'adviceLoggedBalanced').replace('{name}', String(mealName));
-        }
-      }
+      let rawAdvice = decideScoutAdvice({ rawAdvice: rawScoutData?.clinicalAdvice || rawScoutData?.message, totals: { totalSugar, totalSatFat, totalP }, mealName, language: userProfile?.language });
 
       const formattedMsg = reconcileMessageWithLedger(rawAdvice, {
         mealName,

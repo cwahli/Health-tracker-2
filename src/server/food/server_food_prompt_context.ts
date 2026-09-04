@@ -4,6 +4,14 @@
  * stitches the results. No streaming/DB/LLM deps.
  */
 
+import {
+  buildModeAEditInstruction,
+  buildModeAReviewInstruction,
+  buildModeDCompareInstruction,
+  buildModeDEditInstruction,
+  buildFoodAnalyzeInstruction,
+} from '../../../agents/dietitianInstructions.js';
+
 export function buildUserContext(userProfile: any): string {
   let userCtx = "";
   if (userProfile) {
@@ -213,4 +221,59 @@ ${databaseMatchesCtx}
 Current User Input: "${message}"`) + modeDPromptSuffix;
   const fullPromptSent = `System Instruction:\n${finalSystemInstruction}\n\n${promptText}`;
   return { promptText, fullPromptSent, finalSystemInstruction: finalSystemInstruction as string };
+}
+
+export interface SystemInstructionArgs {
+  userSelectedMode?: string;
+  isExplicitModify: boolean;
+  effectiveActiveMeal: any;
+  activeComparisonState: any;
+  biomarkersNeedingImprovement: any;
+  remainingAllowance: any;
+  foodLogs: any;
+  userProfile: any;
+  visionScoutItems: any;
+}
+
+/**
+ * F-8.10 shard 15 — mode-specific system instruction router, extracted
+ * verbatim from runFoodAnalyze.
+ */
+export function selectSystemInstruction(args: SystemInstructionArgs): string {
+  const {
+    userSelectedMode,
+    isExplicitModify,
+    effectiveActiveMeal,
+    activeComparisonState,
+    biomarkersNeedingImprovement,
+    remainingAllowance,
+    foodLogs,
+    userProfile,
+    visionScoutItems,
+  } = args;
+  let systemInstruction = "";
+  if (userSelectedMode === 'review' || userSelectedMode === 'edit') {
+    if (isExplicitModify || effectiveActiveMeal !== null) {
+      systemInstruction = buildModeAEditInstruction({ biomarkersNeedingImprovement, remainingAllowance, activeMeal: effectiveActiveMeal, foodLogs, userProfile });
+    } else {
+      systemInstruction = buildModeAReviewInstruction({ biomarkersNeedingImprovement, remainingAllowance, foodLogs, userProfile });
+    }
+  } else if (userSelectedMode === 'compare') {
+    if (activeComparisonState !== null) {
+      systemInstruction = buildModeDEditInstruction({ biomarkersNeedingImprovement, remainingAllowance, activeComparison: activeComparisonState, foodLogs, userProfile });
+    } else {
+      systemInstruction = buildModeDCompareInstruction({ biomarkersNeedingImprovement, remainingAllowance, foodLogs, userProfile });
+    }
+  } else {
+    systemInstruction = buildFoodAnalyzeInstruction({
+      biomarkersNeedingImprovement,
+      remainingAllowance,
+      activeMeal: effectiveActiveMeal,
+      compareItemCount: userSelectedMode === 'review' ? 0 : (visionScoutItems ? visionScoutItems.length : 0),
+      forceModifyMode: isExplicitModify,
+      foodLogs,
+      userProfile
+    });
+  }
+  return systemInstruction;
 }
