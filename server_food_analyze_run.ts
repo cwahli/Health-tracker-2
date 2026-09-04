@@ -9,7 +9,7 @@ import { foodAnalyzeSchema } from './src/server/food/server_food_analyze_schema.
 import { buildUserContext, buildTimeContext, buildImageContext, buildHistoryContext, buildVisionScoutContext, buildDatabaseMatchesContext, buildBiomarkersContext, stitchFoodPrompt } from './src/server/food/server_food_prompt_context.js';
 import { sanitizeLlmJsonOutput, computeDietitianSkipGates } from './src/server/food/server_food_dietitian_dispatch.js';
 import { resolveFoodAnalyzeMode, buildFoodApiCalls } from './src/server/food/server_food_mode_routing.js';
-import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput } from './src/server/food/server_food_meal_assemble.js';
+import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput } from './src/server/food/server_food_meal_assemble.js';
 
 import { executeFoodResolverCurator } from './server_food_resolver_curator.js';
 import {
@@ -2256,72 +2256,9 @@ export async function runFoodAnalyze(req: any, res: any) {
       }
       // Ensure composition is always derived from the final itemsBreakdown names & visual ingredient breakdown
       if (parsedData.itemsBreakdown && Array.isArray(parsedData.itemsBreakdown)) {
-        parsedData.composition = parsedData.itemsBreakdown.map((it: any) => {
-          let ingStr = "";
-          const nameLower = String(it.canonicalDbName || it.name || "").toLowerCase();
-          const isLabelItem = it.dbSource === 'label' || it.source === 'label' || String(it.dbId).startsWith('printed_packaging_label');
-          if (isLabelItem) {
-            it.visualIngredients = [];
-          }
-          let visList = isLabelItem ? [] : (it.visualIngredients || []);
-          if (!isLabelItem && (!Array.isArray(visList) || visList.length === 0) && it.components && Array.isArray(it.components)) {
-            visList = it.components.map((c: any) => typeof c === 'string' ? c : c.name || c.searchQuery || c.keyword).filter(Boolean);
-          }
-          if (Array.isArray(visList) && visList.length > 0) {
-            // Filter out sauces, dressings, glazes, condiments per Round 2 Addendum
-            const lexicons = ["sauce", "mayonnaise", "dressing", "glaze", "gravy", "ketchup", "mustard", "vinaigrette", "mayo"];
-            visList = visList.filter((vis: any) => {
-              const vLower = String(vis || "").toLowerCase();
-              return !lexicons.some(lex => vLower.includes(lex));
-            });
-            // Filter out ingredients that are already in the name to prevent redundancy
-            const remainingVis = visList.filter((vis: any) => {
-              const vLower = String(vis).toLowerCase();
-              if (nameLower.includes(vLower)) return false;
-              // Handle common abbreviations/substrings
-              if (vLower === "mayo" && nameLower.includes("mayonnaise")) return false;
-              if (vLower === "mayonnaise" && nameLower.includes("mayo")) return false;
-              if (vLower === "potato" && nameLower.includes("potato wedges")) return false;
-              if (vLower === "beef" && nameLower.includes("beef steak")) return false;
-              return true;
-            });
-            if (remainingVis.length > 0) {
-              ingStr = ` (${remainingVis.join(", ")})`;
-            }
-          }
-          return `${it.canonicalDbName || it.name}${ingStr}`;
-        }).join(", ");
+        parsedData.composition = deriveMealComposition(parsedData.itemsBreakdown);
       }
-      if (!parsedData.imageUrl) {
-        if (req.body.photoUrl && typeof req.body.photoUrl === 'string' && req.body.photoUrl.trim() && req.body.photoUrl !== "[base64_image_data_truncated]") {
-          parsedData.imageUrl = req.body.photoUrl;
-        } else if (req.body.imageUrl && typeof req.body.imageUrl === 'string' && req.body.imageUrl.trim() && req.body.imageUrl !== "[base64_image_data_truncated]") {
-          parsedData.imageUrl = req.body.imageUrl;
-        } else if (Array.isArray(req.body.imageUrls) && req.body.imageUrls.length > 0 && req.body.imageUrls[0] && req.body.imageUrls[0] !== "[base64_image_data_truncated]") {
-          parsedData.imageUrl = req.body.imageUrls[0];
-        } else if (Array.isArray(images) && images.length > 0 && images[0] && images[0] !== "[base64_image_data_truncated]") {
-          parsedData.imageUrl = images[0];
-        } else if (image && typeof image === 'string' && image.trim() && image !== "[base64_image_data_truncated]") {
-          parsedData.imageUrl = image;
-        } else if (req.body.activeMeal?.imageUrl && req.body.activeMeal.imageUrl !== "[base64_image_data_truncated]") {
-          parsedData.imageUrl = req.body.activeMeal.imageUrl;
-        } else if (Array.isArray(req.body.activeMeal?.imageUrls) && req.body.activeMeal.imageUrls.length > 0 && req.body.activeMeal.imageUrls[0] !== "[base64_image_data_truncated]") {
-          parsedData.imageUrl = req.body.activeMeal.imageUrls[0];
-        } else if (req.body.activeMeal?.photoUrl && req.body.activeMeal.photoUrl !== "[base64_image_data_truncated]") {
-          parsedData.imageUrl = req.body.activeMeal.photoUrl;
-        }
-      }
-      if (!parsedData.imageUrls || parsedData.imageUrls.length === 0 || parsedData.imageUrls[0] === "[base64_image_data_truncated]") {
-        if (Array.isArray(req.body.imageUrls) && req.body.imageUrls.length > 0 && req.body.imageUrls[0] !== "[base64_image_data_truncated]") {
-          parsedData.imageUrls = req.body.imageUrls;
-        } else if (Array.isArray(images) && images.length > 0 && images[0] !== "[base64_image_data_truncated]") {
-          parsedData.imageUrls = images;
-        } else if (parsedData.imageUrl && parsedData.imageUrl !== "[base64_image_data_truncated]") {
-          parsedData.imageUrls = [parsedData.imageUrl];
-        } else if (Array.isArray(req.body.activeMeal?.imageUrls) && req.body.activeMeal.imageUrls.length > 0 && req.body.activeMeal.imageUrls[0] !== "[base64_image_data_truncated]") {
-          parsedData.imageUrls = req.body.activeMeal.imageUrls;
-        }
-      }
+      resolveMealImageUrls({ body: req.body, images, image, parsedData });
       if (originalModeIsModify) {
         parsedData.id = req.body.activeMeal?.id;
         if (!parsedData.imageUrl) parsedData.imageUrl = req.body.activeMeal?.imageUrl || req.body.activeMeal?.imageUrls?.[0];
@@ -2360,29 +2297,7 @@ export async function runFoodAnalyze(req: any, res: any) {
           diningEnvironment,
         });
         const finalMeal = pendingFoodLog || parsedData;
-        const gate = evaluateMealGate({
-          mealId: finalMeal?.id || req.body.jobId,
-          name: finalMeal?.name,
-          weightGrams: finalMeal?.weightGrams,
-          calories: finalMeal?.nutrients?.calories ?? finalMeal?.calories,
-          protein: finalMeal?.nutrients?.protein ?? finalMeal?.protein,
-          carbohydrates: finalMeal?.nutrients?.carbohydrates ?? finalMeal?.carbohydrates,
-          totalFat: finalMeal?.nutrients?.totalFat ?? finalMeal?.totalFat,
-          items: (finalMeal?.itemsBreakdown || []).map((it: any) => ({
-            name: it.originalName || it.canonicalDbName || it.name || 'Item',
-            weightGrams: it.weightGrams ?? it.estimatedWeightGrams,
-            calories: it.nutrients?.calories ?? it.calories,
-            protein: it.nutrients?.protein ?? it.protein,
-            carbohydrates: it.nutrients?.carbohydrates ?? it.carbohydrates,
-            totalFat: it.nutrients?.totalFat ?? it.totalFat,
-            sourceImageIndex: it.sourceImageIndex,
-            lockedNutrientKeys: it.lockedNutrientKeys,
-            dbSource: it.dbSource,
-          })),
-          mealHasImages: Boolean(req.body.photoUrl || (imagePayloads && imagePayloads.length > 0)),
-          imageCount: (imagePayloads && imagePayloads.length > 0) ? imagePayloads.length : (req.body.photoUrl ? 1 : 0),
-          narrative: rawParsed.message,
-        });
+        const gate = evaluateMealGate(buildNewLogGateInput({ finalMeal, jobId: req.body.jobId, photoUrl: req.body.photoUrl, imagePayloads, narrative: rawParsed.message }));
         return res.json({
           mode: "modify",
           dietitianScratchpad: rawParsed._internalReasoning,
@@ -2421,37 +2336,7 @@ export async function runFoodAnalyze(req: any, res: any) {
           addDebugLog(`[Text Search Image Lookup Error] ${imgErr?.message || imgErr}`);
         }
       }
-      let finalScoutItems = mergeScoutItems(visionScoutItems, rawParsed.scoutItems);
-      if (preCalculatedItems && Array.isArray(preCalculatedItems)) {
-        finalScoutItems = finalScoutItems.map((sItem: any) => {
-          const preCalc = preCalculatedItems.find((p: any) => p.scoutIndex === sItem.scoutIndex);
-          if (preCalc && preCalc.nutrients) {
-            return {
-              ...sItem,
-              nutrients: preCalc.nutrients,
-              preCalcNutrients: preCalc.nutrients,
-            };
-          }
-          return sItem;
-        });
-      }
-      if (parsedData && Array.isArray(parsedData.itemsBreakdown) && parsedData.itemsBreakdown.length > 0) {
-        finalScoutItems = finalScoutItems.map((sItem: any, sIdx: number) => {
-          const bItem = parsedData.itemsBreakdown.find((b: any) =>
-            b.scoutIndex !== undefined && b.scoutIndex !== null && b.scoutIndex === sItem.scoutIndex
-          ) || parsedData.itemsBreakdown.find((b: any) => namesReferToSameFood(b.canonicalDbName || b.name, sItem.originalName || sItem.keyword));
-          if (bItem && (bItem.canonicalDbName || bItem.name)) {
-            const newName = bItem.canonicalDbName || bItem.name;
-            return {
-              ...sItem,
-              originalName: newName,
-              keyword: newName,
-              estimatedWeightGrams: bItem.weightGrams || sItem.estimatedWeightGrams
-            };
-          }
-          return sItem;
-        });
-      }
+      let finalScoutItems = mergeFinalScoutItems({ visionScoutItems, dietitianScoutItems: rawParsed.scoutItems, preCalculatedItems, itemsBreakdown: parsedData.itemsBreakdown });
       addDebugLog('[MealBuild] happy-path');
       const { mealBuild, pendingFoodLog } = attachHappyPathMealBuild({
         parsedData,
@@ -2461,29 +2346,7 @@ export async function runFoodAnalyze(req: any, res: any) {
         diningEnvironment,
       });
       const finalMeal = pendingFoodLog || parsedData;
-      const gate = evaluateMealGate({
-        mealId: finalMeal?.id || req.body.jobId,
-        name: finalMeal?.name,
-        weightGrams: finalMeal?.weightGrams,
-        calories: finalMeal?.nutrients?.calories ?? finalMeal?.calories,
-        protein: finalMeal?.nutrients?.protein ?? finalMeal?.protein,
-        carbohydrates: finalMeal?.nutrients?.carbohydrates ?? finalMeal?.carbohydrates,
-        totalFat: finalMeal?.nutrients?.totalFat ?? finalMeal?.totalFat,
-        items: (finalMeal?.itemsBreakdown || []).map((it: any) => ({
-          name: it.originalName || it.canonicalDbName || it.name || 'Item',
-          weightGrams: it.weightGrams ?? it.estimatedWeightGrams,
-          calories: it.nutrients?.calories ?? it.calories,
-          protein: it.nutrients?.protein ?? it.protein,
-          carbohydrates: it.nutrients?.carbohydrates ?? it.carbohydrates,
-          totalFat: it.nutrients?.totalFat ?? it.totalFat,
-          sourceImageIndex: it.sourceImageIndex,
-          lockedNutrientKeys: it.lockedNutrientKeys,
-          dbSource: it.dbSource,
-        })),
-        mealHasImages: Boolean(req.body.photoUrl || (imagePayloads && imagePayloads.length > 0)),
-        imageCount: (imagePayloads && imagePayloads.length > 0) ? imagePayloads.length : (req.body.photoUrl ? 1 : 0),
-        narrative: rawParsed.message,
-      });
+      const gate = evaluateMealGate(buildNewLogGateInput({ finalMeal, jobId: req.body.jobId, photoUrl: req.body.photoUrl, imagePayloads, narrative: rawParsed.message }));
       const responsePayload = {
         mode: "new_log",
         dietitianScratchpad: rawParsed._internalReasoning,

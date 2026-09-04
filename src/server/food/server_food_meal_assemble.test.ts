@@ -8,6 +8,10 @@ import {
   appendEditHistoryEntry,
   syncEditScoutItems,
   buildGateInput,
+  deriveMealComposition,
+  resolveMealImageUrls,
+  mergeFinalScoutItems,
+  buildNewLogGateInput,
 } from './server_food_meal_assemble';
 
 describe('F-8.10 shard 6 — fallback breakdown', () => {
@@ -167,5 +171,56 @@ describe('F-8.10 shard 7 — modify-path seams', () => {
     expect(gate.calories).toBe(400);
     expect(gate.imageCount).toBe(1);
     expect(gate.items[0].name).toBe('Rice');
+  });
+});
+
+describe('F-8.10 shard 8 — new_log tail seams', () => {
+  it('derives composition with sauce and redundancy filters, clears label visuals', () => {
+    const items: any[] = [
+      { canonicalDbName: 'Chicken Rice', visualIngredients: ['chicken', 'rice', 'soy sauce', 'cucumber'] },
+      { canonicalDbName: 'Cola', dbSource: 'label', dbId: 'printed_packaging_label_1', visualIngredients: ['caramel'] },
+    ];
+    expect(deriveMealComposition(items)).toBe('Chicken Rice (cucumber), Cola');
+    expect(items[1].visualIngredients).toEqual([]);
+    expect(deriveMealComposition(null)).toBe('');
+  });
+
+  it('resolves image urls through the payload priority chain', () => {
+    const parsed: any = {};
+    resolveMealImageUrls({ body: { photoUrl: 'http://p' }, images: [], image: null, parsedData: parsed });
+    expect(parsed.imageUrl).toBe('http://p');
+    expect(parsed.imageUrls).toEqual(['http://p']);
+    const parsed2: any = {};
+    resolveMealImageUrls({ body: {}, images: [], image: null, parsedData: parsed2 });
+    expect(parsed2.imageUrl).toBeUndefined();
+  });
+
+  it('merges final scout items with precalc overlay and ledger renames', () => {
+    const out = mergeFinalScoutItems({
+      visionScoutItems: [{ scoutIndex: 0, keyword: 'rice', originalName: 'Rice', estimatedWeightGrams: 100 }],
+      dietitianScoutItems: [],
+      preCalculatedItems: [{ scoutIndex: 0, nutrients: { calories: 130 } }],
+      itemsBreakdown: [{ scoutIndex: 0, canonicalDbName: 'Steamed Rice', weightGrams: 200 }],
+    });
+    expect(out[0].nutrients.calories).toBe(130);
+    expect(out[0].preCalcNutrients.calories).toBe(130);
+    expect(out[0].originalName).toBe('Steamed Rice');
+    expect(out[0].estimatedWeightGrams).toBe(200);
+  });
+
+  it('shapes identical gate input for new_log and modify fallback', () => {
+    const meal: any = {
+      id: 'm1', name: 'Lunch', weightGrams: 300,
+      nutrients: { calories: 400, protein: 20, carbohydrates: 50, totalFat: 10 },
+      itemsBreakdown: [{ originalName: 'Rice', weightGrams: 300, nutrients: { calories: 400 } }],
+    };
+    const args = { finalMeal: meal, jobId: 'j1', photoUrl: 'http://p', imagePayloads: [{}], narrative: 'msg' };
+    const gate = buildNewLogGateInput(args);
+    expect(gate.mealId).toBe('m1');
+    expect(gate.items).toHaveLength(1);
+    expect(gate.imageCount).toBe(1);
+    expect(gate.narrative).toBe('msg');
+    expect(gate).not.toHaveProperty('commands');
+    expect(gate).not.toHaveProperty('previousMeal');
   });
 });

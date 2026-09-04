@@ -9,6 +9,8 @@ import { extractMostRecentImageDate } from '../../utils/dateUtils.js';
 import { t } from '../../utils/i18n.js';
 import { applyModifierToItemName } from '../../../server_meal_edit.js';
 import { appendHistory } from '../../mealBuild/consolidate.js';
+import { mergeScoutItems } from '../../../server_vision_scout.js';
+import { namesReferToSameFood } from '../../../server_scout_reconcile.js';
 
 /**
  * F-8.10 shard 6 — new_log meal assembly, extracted verbatim from
@@ -349,5 +351,171 @@ export function buildGateInput(args: GateInputArgs): any {
     narrative: finalMessage,
     previousMeal,
     commands: Array.isArray(editCommands) ? editCommands : [],
+  };
+}
+
+/**
+ * F-8.10 shard 8 — new_log tail seams, extracted verbatim from runFoodAnalyze.
+ */
+
+/** Derives the composition string from final itemsBreakdown names + visual ingredients. */
+export function deriveMealComposition(itemsBreakdown: any): string {
+  if (!itemsBreakdown || !Array.isArray(itemsBreakdown)) return "";
+  return itemsBreakdown.map((it: any) => {
+    let ingStr = "";
+    const nameLower = String(it.canonicalDbName || it.name || "").toLowerCase();
+    const isLabelItem = it.dbSource === 'label' || it.source === 'label' || String(it.dbId).startsWith('printed_packaging_label');
+    if (isLabelItem) {
+      it.visualIngredients = [];
+    }
+    let visList = isLabelItem ? [] : (it.visualIngredients || []);
+    if (!isLabelItem && (!Array.isArray(visList) || visList.length === 0) && it.components && Array.isArray(it.components)) {
+      visList = it.components.map((c: any) => typeof c === 'string' ? c : c.name || c.searchQuery || c.keyword).filter(Boolean);
+    }
+    if (Array.isArray(visList) && visList.length > 0) {
+      // Filter out sauces, dressings, glazes, condiments per Round 2 Addendum
+      const lexicons = ["sauce", "mayonnaise", "dressing", "glaze", "gravy", "ketchup", "mustard", "vinaigrette", "mayo"];
+      visList = visList.filter((vis: any) => {
+        const vLower = String(vis || "").toLowerCase();
+        return !lexicons.some(lex => vLower.includes(lex));
+      });
+      // Filter out ingredients that are already in the name to prevent redundancy
+      const remainingVis = visList.filter((vis: any) => {
+        const vLower = String(vis).toLowerCase();
+        if (nameLower.includes(vLower)) return false;
+        // Handle common abbreviations/substrings
+        if (vLower === "mayo" && nameLower.includes("mayonnaise")) return false;
+        if (vLower === "mayonnaise" && nameLower.includes("mayo")) return false;
+        if (vLower === "potato" && nameLower.includes("potato wedges")) return false;
+        if (vLower === "beef" && nameLower.includes("beef steak")) return false;
+        return true;
+      });
+      if (remainingVis.length > 0) {
+        ingStr = ` (${remainingVis.join(", ")})`;
+      }
+    }
+    return `${it.canonicalDbName || it.name}${ingStr}`;
+  }).join(", ");
+}
+
+export interface MealImageArgs {
+  body: any;
+  images: any;
+  image: any;
+  parsedData: any;
+}
+
+/** Resolves imageUrl/imageUrls from the request payload chain (mutates parsedData, as inline). */
+export function resolveMealImageUrls(args: MealImageArgs): void {
+  const { body, images, image, parsedData } = args;
+  if (!parsedData.imageUrl) {
+    if (body.photoUrl && typeof body.photoUrl === 'string' && body.photoUrl.trim() && body.photoUrl !== "[base64_image_data_truncated]") {
+      parsedData.imageUrl = body.photoUrl;
+    } else if (body.imageUrl && typeof body.imageUrl === 'string' && body.imageUrl.trim() && body.imageUrl !== "[base64_image_data_truncated]") {
+      parsedData.imageUrl = body.imageUrl;
+    } else if (Array.isArray(body.imageUrls) && body.imageUrls.length > 0 && body.imageUrls[0] && body.imageUrls[0] !== "[base64_image_data_truncated]") {
+      parsedData.imageUrl = body.imageUrls[0];
+    } else if (Array.isArray(images) && images.length > 0 && images[0] && images[0] !== "[base64_image_data_truncated]") {
+      parsedData.imageUrl = images[0];
+    } else if (image && typeof image === 'string' && image.trim() && image !== "[base64_image_data_truncated]") {
+      parsedData.imageUrl = image;
+    } else if (body.activeMeal?.imageUrl && body.activeMeal.imageUrl !== "[base64_image_data_truncated]") {
+      parsedData.imageUrl = body.activeMeal.imageUrl;
+    } else if (Array.isArray(body.activeMeal?.imageUrls) && body.activeMeal.imageUrls.length > 0 && body.activeMeal.imageUrls[0] !== "[base64_image_data_truncated]") {
+      parsedData.imageUrl = body.activeMeal.imageUrls[0];
+    } else if (body.activeMeal?.photoUrl && body.activeMeal.photoUrl !== "[base64_image_data_truncated]") {
+      parsedData.imageUrl = body.activeMeal.photoUrl;
+    }
+  }
+  if (!parsedData.imageUrls || parsedData.imageUrls.length === 0 || parsedData.imageUrls[0] === "[base64_image_data_truncated]") {
+    if (Array.isArray(body.imageUrls) && body.imageUrls.length > 0 && body.imageUrls[0] !== "[base64_image_data_truncated]") {
+      parsedData.imageUrls = body.imageUrls;
+    } else if (Array.isArray(images) && images.length > 0 && images[0] !== "[base64_image_data_truncated]") {
+      parsedData.imageUrls = images;
+    } else if (parsedData.imageUrl && parsedData.imageUrl !== "[base64_image_data_truncated]") {
+      parsedData.imageUrls = [parsedData.imageUrl];
+    } else if (Array.isArray(body.activeMeal?.imageUrls) && body.activeMeal.imageUrls.length > 0 && body.activeMeal.imageUrls[0] !== "[base64_image_data_truncated]") {
+      parsedData.imageUrls = body.activeMeal.imageUrls;
+    }
+  }
+}
+
+export interface FinalScoutMergeArgs {
+  visionScoutItems: any;
+  dietitianScoutItems: any;
+  preCalculatedItems: any;
+  itemsBreakdown: any;
+}
+
+/** Merges scout items with dietitian output, overlays precalc nutrients, renames to ledger names. */
+export function mergeFinalScoutItems(args: FinalScoutMergeArgs): any[] {
+  const { visionScoutItems, dietitianScoutItems, preCalculatedItems, itemsBreakdown } = args;
+  let finalScoutItems = mergeScoutItems(visionScoutItems, dietitianScoutItems);
+  if (preCalculatedItems && Array.isArray(preCalculatedItems)) {
+    finalScoutItems = finalScoutItems.map((sItem: any) => {
+      const preCalc = preCalculatedItems.find((p: any) => p.scoutIndex === sItem.scoutIndex);
+      if (preCalc && preCalc.nutrients) {
+        return {
+          ...sItem,
+          nutrients: preCalc.nutrients,
+          preCalcNutrients: preCalc.nutrients,
+        };
+      }
+      return sItem;
+    });
+  }
+  if (itemsBreakdown && Array.isArray(itemsBreakdown) && itemsBreakdown.length > 0) {
+    finalScoutItems = finalScoutItems.map((sItem: any, sIdx: number) => {
+      const bItem = itemsBreakdown.find((b: any) =>
+        b.scoutIndex !== undefined && b.scoutIndex !== null && b.scoutIndex === sItem.scoutIndex
+      ) || itemsBreakdown.find((b: any) => namesReferToSameFood(b.canonicalDbName || b.name, sItem.originalName || sItem.keyword));
+      if (bItem && (bItem.canonicalDbName || bItem.name)) {
+        const newName = bItem.canonicalDbName || bItem.name;
+        return {
+          ...sItem,
+          originalName: newName,
+          keyword: newName,
+          estimatedWeightGrams: bItem.weightGrams || sItem.estimatedWeightGrams
+        };
+      }
+      return sItem;
+    });
+  }
+  return finalScoutItems;
+}
+
+export interface NewLogGateArgs {
+  finalMeal: any;
+  jobId?: string;
+  photoUrl?: string;
+  imagePayloads: any;
+  narrative: any;
+}
+
+/** Shapes the evaluateMealGate input for new_log AND the modify fallback (identical shape). */
+export function buildNewLogGateInput(args: NewLogGateArgs): any {
+  const { finalMeal, jobId, photoUrl, imagePayloads, narrative } = args;
+  return {
+    mealId: finalMeal?.id || jobId,
+    name: finalMeal?.name,
+    weightGrams: finalMeal?.weightGrams,
+    calories: finalMeal?.nutrients?.calories ?? finalMeal?.calories,
+    protein: finalMeal?.nutrients?.protein ?? finalMeal?.protein,
+    carbohydrates: finalMeal?.nutrients?.carbohydrates ?? finalMeal?.carbohydrates,
+    totalFat: finalMeal?.nutrients?.totalFat ?? finalMeal?.totalFat,
+    items: (finalMeal?.itemsBreakdown || []).map((it: any) => ({
+      name: it.originalName || it.canonicalDbName || it.name || 'Item',
+      weightGrams: it.weightGrams ?? it.estimatedWeightGrams,
+      calories: it.nutrients?.calories ?? it.calories,
+      protein: it.nutrients?.protein ?? it.protein,
+      carbohydrates: it.nutrients?.carbohydrates ?? it.carbohydrates,
+      totalFat: it.nutrients?.totalFat ?? it.totalFat,
+      sourceImageIndex: it.sourceImageIndex,
+      lockedNutrientKeys: it.lockedNutrientKeys,
+      dbSource: it.dbSource,
+    })),
+    mealHasImages: Boolean(photoUrl || (imagePayloads && imagePayloads.length > 0)),
+    imageCount: (imagePayloads && imagePayloads.length > 0) ? imagePayloads.length : (photoUrl ? 1 : 0),
+    narrative,
   };
 }
