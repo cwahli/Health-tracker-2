@@ -11,6 +11,7 @@ import { sanitizeLlmJsonOutput, computeDietitianSkipGates } from './src/server/f
 import { resolveFoodAnalyzeMode, buildFoodApiCalls } from './src/server/food/server_food_mode_routing.js';
 import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput } from './src/server/food/server_food_meal_assemble.js';
 import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, mapTextQueriesToScoutItems, buildScoutFailureError, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries } from './src/server/food/server_food_scout_source.js';
+import { shouldPauseForPortionClarify, filterPortionCarryCandidates, detectDominantBrand, collectFdcHintTasks, isFdcHintRelevant, mapLedgersToPrecalcItems, applyMealModifiers } from './src/server/food/server_food_precalc.js';
 
 import { executeFoodResolverCurator } from './server_food_resolver_curator.js';
 import {
@@ -88,7 +89,6 @@ import {
 import {
   rebalanceNutrientProfile,
   computeCaloriesFromMacros,
-  applyNutrientModifiers,
 } from './server_derivation.js';
 import {
   attachHappyPathMealBuild,
@@ -1141,12 +1141,11 @@ export async function runFoodAnalyze(req: any, res: any) {
     // B1 — Pause before nutrient calculation when multi-serve pack portion is ambiguous.
     // Resume path: skipScout + activeScoutItems + portionChoices + resolvedDbCandidates (no second scout/DB).
     const portionClarify =
-      !req.body.portionChoices &&
-      !req.body.skipPortionClarify &&
-      !isWeightModification &&
-      !compareOnly &&
-      !isExplicitModify &&
-      visionScoutRanAndReturnedItems
+      shouldPauseForPortionClarify({
+        portionChoices: req.body.portionChoices,
+        skipPortionClarify: req.body.skipPortionClarify,
+        isWeightModification, compareOnly, isExplicitModify, visionScoutRanAndReturnedItems,
+      })
         ? buildPortionClarifyPayload(visionScoutItems)
         : null;
     if (portionClarify) {
@@ -1156,14 +1155,7 @@ export async function runFoodAnalyze(req: any, res: any) {
       // Carry the resolved DB candidates so turn 2 does not re-run DB search from empty.
       // Filter to the meal-relevant candidates only (those belonging to the current scout items
       // or the detected chain brand), capped at 60 to keep the payload manageable.
-      const clarifyItemQueries = new Set(visionScoutItems.map((it: any) => String(it.originalName || it.keyword || '').toLowerCase()));
-      const resolvedDbCandidates = databaseMatchesArray.filter((c: any) => {
-        const cQuery = String(c.searchQuery || c.name || '').toLowerCase();
-        return clarifyItemQueries.has(cQuery) ||
-          (detectedChainKey && String(c.chainName || '').toLowerCase().includes(detectedChainKey)) ||
-          c.source === 'brand_official' ||
-          c.source === 'internal_catalog';
-      }).slice(0, 60);
+      const resolvedDbCandidates = filterPortionCarryCandidates({ visionScoutItems, databaseMatchesArray, detectedChainKey });
       addDebugLog(`[PortionClarify] Embedding ${resolvedDbCandidates.length} pre-resolved DB candidates for turn-2 carry-forward.`);
       sendStreamEvent({
         type: 'status',
@@ -1212,16 +1204,7 @@ export async function runFoodAnalyze(req: any, res: any) {
       });
     }
     // Brand Environment Locking logic
-    const globalBrands = ["mcdonald", "burger king", "wendy", "kfc", "denny", "starbucks", "subway", "taco bell", "domino", "pizza hut", "chipotle", "panera", "dunkin", "sonic", "popeyes", "arby", "dairy queen", "panda express"];
-    let dominantBrand = "";
-    const allContextText = (message + " " + JSON.stringify(visionScoutItems)).toLowerCase();
-    for (const b of globalBrands) {
-      if (allContextText.includes(b) || allContextText.includes(b.replace(/\s+/g, ""))) {
-         dominantBrand = b;
-         addDebugLog(`[Environment Locking] Detected dominant brand "${b}" in scene context. Restricting matching hierarchy.`);
-         break;
-      }
-    }
+    let dominantBrand = detectDominantBrand({ message, visionScoutItems, onLog: addDebugLog });
     // Verified Scout FDC hint pre-fetch: for components where Vision Scout supplied a
     // suggestedFdcId (only expected for well-known, unambiguous staple foods), do a
     // direct single-ID USDA lookup and validate it with the same relevance check used
@@ -1232,16 +1215,7 @@ export async function runFoodAnalyze(req: any, res: any) {
     // through to today's normal search pipeline exactly as if no hint had been given.
     const verifiedFdcHintMap = new Map<string, any>();
     {
-      const hintFetchTasks: Array<{ key: string; fdcId: string; query: string }> = [];
-      visionScoutItems.forEach((item: any, itemIdx: number) => {
-        (item.components || []).forEach((comp: any, cIdx: number) => {
-          const hintId = comp.suggestedFdcId;
-          if (hintId && String(hintId).trim()) {
-            const q = comp.searchQuery || comp.name || comp.keyword || "";
-            hintFetchTasks.push({ key: `${itemIdx}:${cIdx}`, fdcId: String(hintId).trim(), query: q });
-          }
-        });
-      });
+      const hintFetchTasks = collectFdcHintTasks(visionScoutItems);
       if (hintFetchTasks.length > 0) {
         const hintResults = await Promise.all(hintFetchTasks.map(async (task) => {
           const food = await fetchUSDAFoodById(task.fdcId);
@@ -1253,10 +1227,7 @@ export async function runFoodAnalyze(req: any, res: any) {
             return;
           }
           // Same relevance check as the final safety-net gate below (Task 1 stopword list).
-          const hintStopwords = new Set(['cheese', 'canned', 'sauce', 'sauces', 'salad', 'dressing', 'cream', 'sliced', 'chopped', 'mixed', 'fresh', 'cooked', 'raw', 'shredded', 'grated', 'diced', 'whole', 'baked', 'fried', 'roasted', 'steamed', 'boiled', 'grilled', 'style', 'flavored', 'flavoured', 'plain', 'organic', 'natural', 'sweet', 'spicy', 'crushed', 'minced', 'topping', 'toppings', 'spread', 'filling', 'blend', 'garnish', 'crumbs', 'chunks', 'pieces', 'with', 'and', 'leaf', 'leaves', 'seed', 'seeds', 'green']);
-          const qTokens = String(task.query).toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter((t: string) => t.length > 3 && !hintStopwords.has(t));
-          const fNameLow = String(food.description || '').toLowerCase();
-          const relevant = qTokens.length === 0 || qTokens.some((t: string) => fNameLow.includes(t));
+          const relevant = isFdcHintRelevant(task.query, food.description);
           if (!relevant) {
             addDebugLog(`[ScoutFdcHint] Relevance check rejected hint id=${task.fdcId} ("${food.description}") for query "${task.query}" — falling through to normal search.`);
             return;
@@ -1314,97 +1285,9 @@ export async function runFoodAnalyze(req: any, res: any) {
           });
         })
       );
-      preCalculatedItems = ledgers.map((l) => {
-        addDebugLog(`[Budget] Finalized ledger for "${l.originalName}": ${l.nutrients.calories} kcal (${l.weightGrams}g, source=${l.dbSource})`);
-        const vItem = visionScoutItems[l.scoutIndex] || {};
-        const comps = l.componentsDetailList || l.components || vItem.componentsDetailList || vItem.components || vItem.compositeSiblings || [];
-        return {
-          scoutIndex: l.scoutIndex,
-          originalName: l.originalName,
-          keyword: l.keyword || l.originalName,
-          foodType: l.dishClass,
-          estimatedWeightGrams: l.weightGrams,
-          portionMultiplier: 1.0,
-          nutrients: l.nutrients,
-          nutrients100g: {},
-          lockedNutrientKeys: l.lockedNutrientKeys,
-          rawNutritionLabel: (l.dbSource === 'label' ? l.nutrients : vItem.rawNutritionLabel) || null,
-          labelNutrientsPerServing: l.brandLock ? l.brandLock.valuesAtBasis : (vItem.labelNutrientsPerServing || null),
-          brandLock: l.brandLock,
-          dbSource: l.dbSource,
-          dbId: l.dbId,
-          atwaterFlag: l.atwaterFlag,
-          ingredients: l.ingredients,
-          visualIngredients: l.visualIngredients,
-          ingredientsList: l.ingredientsList || (l.ingredients.length > 0 ? l.ingredients.join(', ') : null),
-          boundingBox2D: vItem.boundingBox2D || null,
-          sourceImageIndex: vItem.sourceImageIndex ?? 0,
-          components: comps.length > 0 ? comps : null,
-          componentsDetailList: comps.length > 0 ? comps : [],
-          compositeSiblings: comps.length > 0 ? comps : [],
-          hasComponents: Boolean(l.hasComponents || comps.length > 1),
-        };
-      });
+      preCalculatedItems = mapLedgersToPrecalcItems({ ledgers, visionScoutItems, onLog: addDebugLog });
       if (isModifySession && preCalculatedItems && preCalculatedItems.length > 0) {
-        preCalculatedItems.forEach((pItem: any) => {
-          const subComponents: any[] = (pItem.componentsDetailList && pItem.componentsDetailList.length > 0)
-            ? pItem.componentsDetailList
-            : (pItem.components && pItem.components.length > 0 ? pItem.components : []);
-          if (subComponents.length > 1) {
-            // Composite dish: try the modifier against each individual sub-ingredient
-            // (e.g. "the tea was unsweetened" must target the "Sweet Iced Tea" component,
-            // never the whole parent dish name it happens to be embedded in).
-            let anySubComponentChanged = false;
-            subComponents.forEach((sub: any) => {
-              const subNutrients = sub.nutrients || sub;
-              const modRes = applyNutrientModifiers(subNutrients, {
-                message,
-                foodType: sub.foodType || null,
-                name: sub.name || sub.searchQuery || sub.keyword || '',
-              });
-              if (modRes.lockedKeys.length > 0) {
-                anySubComponentChanged = true;
-                sub.nutrients = { ...(sub.nutrients || {}), ...modRes.updatedNutrients };
-                // Row-builder for the nutrition table reads top-level fields, not nested
-                // .nutrients — mirror the updated values onto the flattened component too.
-                sub.calories = modRes.updatedNutrients.calories;
-                sub.sugar = modRes.updatedNutrients.sugar;
-                sub.addedSugar = modRes.updatedNutrients.addedSugar;
-                sub.carbohydrates = modRes.updatedNutrients.carbohydrates;
-                sub.carbs = modRes.updatedNutrients.carbohydrates;
-                addDebugLog(`[Nutrient Modifier Matrix] Applied modifiers to sub-component "${sub.name}" inside "${pItem.originalName}": locked keys [${modRes.lockedKeys.join(', ')}]`);
-              }
-            });
-            if (anySubComponentChanged && pItem.nutrients) {
-              // Re-sum parent dish totals from the (possibly modified) sub-components so
-              // the dish-level total reflects the edited ingredient instead of staying frozen.
-              const sumCal = subComponents.reduce((acc, c) => acc + (Number(c.calories) || 0), 0);
-              const sumCarbs = subComponents.reduce((acc, c) => acc + (Number(c.carbohydrates ?? c.carbs) || 0), 0);
-              const sumSugar = subComponents.reduce((acc, c) => acc + (Number(c.sugar ?? c.nutrients?.sugar) || 0), 0);
-              const sumAddedSugar = subComponents.reduce((acc, c) => acc + (Number(c.addedSugar ?? c.nutrients?.addedSugar) || 0), 0);
-              pItem.nutrients.calories = Math.round(sumCal);
-              pItem.nutrients.carbohydrates = Math.round(sumCarbs * 10) / 10;
-              pItem.nutrients.sugar = Math.round(sumSugar * 10) / 10;
-              pItem.nutrients.addedSugar = Math.round(sumAddedSugar * 10) / 10;
-              pItem.lockedNutrientKeys = Array.from(new Set([...(pItem.lockedNutrientKeys || []), 'calories', 'carbohydrates', 'sugar', 'addedSugar']));
-              pItem.componentsDetailList = subComponents;
-              pItem.components = subComponents;
-              pItem.compositeSiblings = subComponents;
-            }
-          } else if (pItem.nutrients) {
-            // Single-food item (no sub-components) — unchanged behavior from before.
-            const modRes = applyNutrientModifiers(pItem.nutrients, {
-              message,
-              foodType: pItem.foodType,
-              name: pItem.originalName || pItem.keyword,
-            });
-            pItem.nutrients = modRes.updatedNutrients;
-            if (modRes.lockedKeys.length > 0) {
-              pItem.lockedNutrientKeys = Array.from(new Set([...(pItem.lockedNutrientKeys || []), ...modRes.lockedKeys]));
-              addDebugLog(`[Nutrient Modifier Matrix] Applied modifiers to "${pItem.originalName}": locked keys [${modRes.lockedKeys.join(', ')}]`);
-            }
-          }
-        });
+        applyMealModifiers({ preCalculatedItems, message, onLog: addDebugLog });
       }
     }
     let preCalculatedCtx = "";
