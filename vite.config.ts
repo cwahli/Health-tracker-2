@@ -11,6 +11,22 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, './src'),
       },
     },
+    optimizeDeps: {
+      include: [
+        'react',
+        'react-dom',
+        'react-dom/client',
+        'lucide-react',
+        'motion/react',
+        'clsx',
+        'tailwind-merge',
+        'firebase/app',
+        'firebase/auth',
+        'firebase/firestore',
+        '@supabase/supabase-js',
+        'zod',
+      ],
+    },
     build: {
       sourcemap: false,
       chunkSizeWarningLimit: 4000,

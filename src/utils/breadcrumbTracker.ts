@@ -88,8 +88,20 @@ export function initNetworkDiagnosticInterceptor() {
     const cleanUrl = url.split('?')[0];
 
     try {
-      const response = await originalFetch.apply(window, args);
-      const duration = Date.now() - start;
+      let response = await originalFetch.apply(window, args);
+      let duration = Date.now() - start;
+
+      // Transparent retry on 429 (rate-limited by cloud proxy burst)
+      if (response.status === 429) {
+        for (let retry = 1; retry <= 3; retry++) {
+          await new Promise((resolve) => setTimeout(resolve, 60 * Math.pow(1.8, retry)));
+          try {
+            response = await originalFetch.apply(window, args);
+            if (response.status !== 429) break;
+          } catch (_) {}
+        }
+        duration = Date.now() - start;
+      }
 
       // Track non-2xx responses or API endpoints or slow requests (> 2500ms)
       if (!response.ok || duration > 2500 || cleanUrl.includes('/api/')) {

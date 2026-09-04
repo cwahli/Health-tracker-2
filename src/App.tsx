@@ -18,14 +18,12 @@ import { JobQueueRunner } from './jobs/JobQueueRunner';
 import { initSupabaseJobSync, hydrateUserJobs, upsertJobToSupabase } from './jobs/SupabaseJobSync';
 import { ImageStore } from './jobs/ImageStore';
 import { refundCredits } from './jobs/credits';
-import { startGoldenIngestWatcher } from './utils/goldenIngestClient';
 import { getProgressPercent, getStepCeiling } from './jobs/progress';
 import FloatingActionSheet from './components/FloatingActionSheet';
 import { saveAgentRequestLog } from './utils/agentLogsTracker';
 import { translations } from './utils/translations';
 import { AVAILABLE_LLMS } from './utils/llm';
 import { PRIMARY_NUTRIENTS, isCoreNutrient, isAdditionalNutrient } from './utils/nutrients';
-import { getLocalFallbackReport } from './utils/fallbackReport';
 import { toPendingFoodLog } from './mealBuild/adapters';
 
 // Mobile/background tabs throttle or fully suspend plain setTimeout timers, so a job-status
@@ -107,7 +105,7 @@ function extractPendingFoodLogFromCleanResult(cleanResult: any, photoUrl?: strin
   }
   return null;
 }
-import { getDemoProfile, getDemoBiomarkerHistory, getDemoFoodLogs, getDemoReport, DemoProfileType } from './utils/demoData';
+import type { DemoProfileType } from './utils/demoData';
 import { getAvailableCredits, deductAgentCredits } from './utils/creditManager';
 import { Plus, HeartHandshake, RefreshCw, Sparkles, Stethoscope, Utensils, Loader, CloudLightning, AlertTriangle, Activity, X } from 'lucide-react';
 import { auth, db } from './firebase';
@@ -1760,7 +1758,9 @@ export default function App() {
     JobQueueRunner.start();
     let stopGoldenIngest: (() => void) | null = null;
     const ingestTimer = setTimeout(() => {
-      stopGoldenIngest = startGoldenIngestWatcher();
+      import('./utils/goldenIngestClient').then(({ startGoldenIngestWatcher }) => {
+        stopGoldenIngest = startGoldenIngestWatcher();
+      });
     }, 1500);
 
     // Subscribe to JobStore to handle automated credit refund when a job transitions to failed/cancelled
@@ -3341,9 +3341,10 @@ export default function App() {
         clearChatMemoryKeys();
         JobStore.resetAllJobs();
       }
-      loadedProfile = getDemoProfile(demoType);
-      loadedFoods = getDemoFoodLogs(demoType);
-      loadedHistory = getDemoBiomarkerHistory(demoType);
+      const demoDataModule = await import('./utils/demoData');
+      loadedProfile = demoDataModule.getDemoProfile(demoType);
+      loadedFoods = demoDataModule.getDemoFoodLogs(demoType);
+      loadedHistory = demoDataModule.getDemoBiomarkerHistory(demoType);
       if (demoType === 'empty') {
         loadedBiomarkers = {};
       } else if (demoType === 'complex') {
@@ -3351,7 +3352,7 @@ export default function App() {
       } else {
         loadedBiomarkers = { fasting_glucose: 91, hba1c: 5.3, total_cholesterol: 208, ldl: 132, hdl: 46, triglycerides: 155, egfr: 94, vitamin_d: 22, wbc: 6.2, hemoglobin: 14.6, bmi: 23.4 };
       }
-      loadedReport = getDemoReport(demoType, loadedProfile?.language);
+      loadedReport = demoDataModule.getDemoReport(demoType, loadedProfile?.language);
       loadedActions = loadedReport.actions || [];
       loadedBenefits = loadedReport.dailyBenefits || [];
     }
@@ -6078,7 +6079,7 @@ export default function App() {
         setDailyBenefits(updatedBenefits);
       }
     }
-    let updatedReport = report ? { ...report } : getLocalFallbackReport(profile);
+    let updatedReport = report ? { ...report } : (await import('./utils/fallbackReport')).getLocalFallbackReport(profile);
     if (updates.targetCalories && updatedReport) {
       updatedReport = {
         ...updatedReport,
@@ -6207,11 +6208,11 @@ export default function App() {
       console.error("Analysis generation error/timeout:", err);
       if (err.name === 'AbortError') {
         safeAlert('Server took longer than expected to complete profiling. Activating specialized local preventative engine fallback.');
-        const fallback = getLocalFallbackReport(profile);
+        const fallback = (await import('./utils/fallbackReport')).getLocalFallbackReport(profile);
         setDraftReport(fallback);
       } else {
         safeAlert(`Failed to complete analysis: ${err.message || 'Server timeout. Activating high-fidelity fallback.'}`);
-        const fallback = getLocalFallbackReport(profile);
+        const fallback = (await import('./utils/fallbackReport')).getLocalFallbackReport(profile);
         setDraftReport(fallback);
       }
     } finally {

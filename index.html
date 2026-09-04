@@ -7,6 +7,11 @@
     <meta name="description" content="An Android Material-styled application for tracking health biomarkers, food nutrients, and receiving personalized health recommendations based on LLM analysis." />
     <meta property="og:title" content="Biomarker and Nutrient Tracker" />
     <meta property="og:description" content="An Android Material-styled application for tracking health biomarkers, food nutrients, and receiving personalized health recommendations based on LLM analysis." />
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(function() {});
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

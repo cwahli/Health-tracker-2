@@ -1444,6 +1444,17 @@ app.use((req, res, next) => {
     res.json({ status: "ok" });
   });
 
+  // Fallback for expired AI Studio image upload blobs from previous turns to prevent 404 network errors
+  app.get('/_/upload/*', (req, res) => {
+    const transparentPng = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+      'base64'
+    );
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.send(transparentPng);
+  });
+
   app.post("/api/auth/check-email-status", async (req, res) => {
     const email = (req.body?.email || '').trim().toLowerCase();
     if (!email) {
