@@ -11,6 +11,7 @@ import { sanitizeLlmJsonOutput, computeDietitianSkipGates } from './src/server/f
 import { resolveFoodAnalyzeMode, buildFoodApiCalls } from './src/server/food/server_food_mode_routing.js';
 import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput } from './src/server/food/server_food_meal_assemble.js';
 import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, mapTextQueriesToScoutItems, buildScoutFailureError, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries } from './src/server/food/server_food_scout_source.js';
+import { collectImagePayloads, decideWeightRefine } from './src/server/food/server_food_session_setup.js';
 import { shouldPauseForPortionClarify, filterPortionCarryCandidates, detectDominantBrand, collectFdcHintTasks, isFdcHintRelevant, mapLedgersToPrecalcItems, applyMealModifiers } from './src/server/food/server_food_precalc.js';
 
 import { executeFoodResolverCurator } from './server_food_resolver_curator.js';
@@ -101,8 +102,6 @@ import { projectDietitianInput } from './src/mealBuild/projectors.js';
 import { beginStage, endStage, formatDietitianProjectionBlock } from './src/mealBuild/stageLifecycle.js';
 import { reconcileMessageWithLedger } from './src/mealBuild/narration.js';
 import {
-  detectWeightRefineIntent,
-  shouldSkipScoutForWeightRefine,
   applyWeightRefineToScoutItems,
   priorScoutHasLabelLocks,
   REFINE_SCALE_ONLY_LOG,
@@ -282,17 +281,7 @@ export async function runFoodAnalyze(req: any, res: any) {
       sendStreamEvent({ type: 'log', logType: type, stage, message, data });
     };
 
-    const imagePayloads: any[] = [];
-    if (image) {
-      imagePayloads.push(image);
-    }
-    if (Array.isArray(images)) {
-      images.forEach((img: any) => {
-        if (img && !imagePayloads.includes(img)) {
-          imagePayloads.push(img);
-        }
-      });
-    }
+    const imagePayloads: any[] = collectImagePayloads(image, images);
 
     const analysisNutrientKeys = [
       'calories',
@@ -330,32 +319,9 @@ export async function runFoodAnalyze(req: any, res: any) {
     ];
     // B5 — Detect weight/portion refine on prior scout (skip Vision Scout + DB when safe).
     // Path A: text-only refine. Path B: images still attached but printed label locks exist.
-    const priorScoutForRefine = Array.isArray(req.body.activeScoutItems) ? req.body.activeScoutItems : [];
-    const refineDecision = shouldSkipScoutForWeightRefine({
-      message,
-      imageCount: imagePayloads?.length || 0,
-      activeScoutItems: priorScoutForRefine,
-      activeMeal,
-      explicitSkipScout: req.body.skipScout === true,
+    const { priorScoutForRefine, refineDecision, weightRefineIntent, isPureWeightModification } = decideWeightRefine({
+      body: req.body, message, imagePayloads, activeMeal,
     });
-    const weightRefineIntent = refineDecision.intent.isRefine
-      ? refineDecision.intent
-      : detectWeightRefineIntent(message);
-    // Pure weight modification: only true if there is an explicit numerical gram weight for the whole meal
-    const isPureWeightModification = !!(
-      (refineDecision.skip && weightRefineIntent.isRefine && weightRefineIntent.kind === 'absolute_grams' && typeof weightRefineIntent.weightGrams === 'number' && weightRefineIntent.weightGrams > 0 && !weightRefineIntent.targetHint) ||
-      (
-        activeMeal &&
-        (!imagePayloads || imagePayloads.length === 0) &&
-        message &&
-        weightRefineIntent.isRefine &&
-        weightRefineIntent.kind === 'absolute_grams' &&
-        typeof weightRefineIntent.weightGrams === 'number' &&
-        weightRefineIntent.weightGrams > 0 &&
-        !weightRefineIntent.targetHint &&
-        !/\b(only|remove|delete|without|except|no|instead|replace|add|plus|with|not|didn't|did\s+not)\b/i.test(message)
-      )
-    );
     // Frontend sends the user's explicit mode selection (review | compare | edit) from the pill toggle.
     // When the user has explicitly selected "Edit", treat any text-only follow-up as a modification
     // command regardless of wording, instead of relying solely on keyword matching.
