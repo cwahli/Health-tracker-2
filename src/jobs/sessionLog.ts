@@ -17,7 +17,7 @@ export interface SessionEvent {
   action: SessionAction;
 }
 
-const MAX = 20;
+const MAX = 80;
 const logs = new Map<string, SessionEvent[]>();
 
 export function recordSessionEvent(

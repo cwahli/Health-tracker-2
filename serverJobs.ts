@@ -2,7 +2,7 @@ import { uploadPhotoToR2, uploadPhotosToR2, uploadDebugPayloadToR2 } from './src
 // [FreeTier] thin clean_result
 import { supabase, isSupabaseConfigured } from './src/utils/supabaseClient';
 import { supabaseAdmin, isSupabaseConfigured as isSupabaseAdminConfigured } from './supabaseAdmin';
-import { remainingQuotaCooldownMs } from './server_gemini_retry.js';
+import { remainingQuotaCooldownMs, nextGeminiFallbackEngine } from './server_gemini_retry.js';
 import { extractMostRecentImageDate } from './src/utils/dateUtils';
 
 export interface ServerJobPayload {
@@ -142,6 +142,26 @@ export async function checkOrRegisterIdempotentSubmission(payload: ServerJobPayl
 
 export function getInMemoryServerJob(jobId: string) {
   return inMemoryServerJobs.get(jobId) || null;
+}
+
+/** Flip in-memory status to succeeded as soon as pendingFoodLog exists.
+ * Pollers read this map first — do not wait for R2 / Supabase. */
+export function publishResultReady(jobId: string, cleanResult: any): boolean {
+  const memJob = inMemoryServerJobs.get(jobId);
+  if (!memJob) return false;
+  const meal = cleanResult?.pendingFoodLog || cleanResult?.data;
+  if (!meal) return false;
+  if (memJob.status === 'succeeded' && memJob.clean_result?.pendingFoodLog) return false;
+  memJob.status = 'succeeded';
+  memJob.progress_percent = 100;
+  memJob.status_message = 'Analysis complete';
+  memJob.clean_result = { ...(memJob.clean_result && typeof memJob.clean_result === 'object' ? memJob.clean_result : {}), ...cleanResult };
+  memJob.updated_at = new Date().toISOString();
+  memJob.sessionEvents = [
+    ...(memJob.sessionEvents || []),
+    { ts: Date.now(), writer: 'serverJobs.publish', status: 'succeeded', action: 'result_ready' },
+  ];
+  return true;
 }
 
 export function listInMemoryServerJobs(userId?: string) {
@@ -477,37 +497,11 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
       };
       // Note: priorLogsUrl is kept in payload separately for log stitching in persistSucceeded.
 
-      // Server background job worker invocation via loopback with AbortController timeout
-      const controller = new AbortController();
-      const globalTimeout = setTimeout(() => {
-        controller.abort(new Error('Analysis request timed out after 180s.'));
-      }, 180000);
-
-      const engineLabel = String(payload.engine || bodyData.engine || 'gemini-3.5-flash-lite');
-      let chunkTimer: NodeJS.Timeout | null = null;
-      const stallMessage = `Stream stalled: Vision Scout (${engineLabel}) produced no tokens for 90s after the prompt. Gemini often hangs when free-tier quota is exhausted or the model is overloaded — not a bad photo. Switch to gemini-3.1-flash-lite.`;
-      const resetChunkTimer = () => {
-        if (chunkTimer) clearTimeout(chunkTimer);
-        chunkTimer = setTimeout(() => {
-          accumulatedLogs.push(`[error] ${stallMessage}`);
-          controller.abort(new Error(stallMessage));
-        }, 90000);
-      };
-
-      resetChunkTimer();
-
-      const cooldownMs = remainingQuotaCooldownMs(engineLabel);
-      if (cooldownMs > 0) {
-        const sec = Math.ceil(cooldownMs / 1000);
-        throw new Error(
-          `Gemini free-tier quota on ${engineLabel} — cooldown ${sec}s. Switch to gemini-3.1-flash-lite (separate bucket). Not a bad photo.`
-        );
-      }
-
-      let response: Response | null = null;
-      if (prebuiltIngestTrace && !finalMessage && (!images || images.length === 0) && (!photoUrls || photoUrls.length === 0)) {
+      const interceptNoLlm =
+        !!(prebuiltIngestTrace && !finalMessage && (!images || images.length === 0) && (!photoUrls || photoUrls.length === 0));
+      if (interceptNoLlm) {
         accumulatedLogs.push(`[System] Intercepted table. 0 unmatched rows. Skipping LLM.`);
-        
+
         const {
           stagedRowsToExtractedData,
           flaggedRowsToModificationCommands,
@@ -524,130 +518,206 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           ingestTrace: prebuiltIngestTrace
         };
       } else {
-        let endpoint = dbKind === 'medical' ? '/api/gemini/medical-analyze?stream=true' : '/api/gemini/food-analyze?stream=true';
-        if (payload.agentType === 'health_baseline') {
-          endpoint = '/api/gemini/health-baseline-analyze?stream=true';
+        let engineUsed = String(payload.engine || bodyData.engine || 'gemini-3.5-flash-lite');
+        let usedFallback = false;
+        bodyData.engine = engineUsed;
+
+        const cooldownMs = remainingQuotaCooldownMs(engineUsed);
+        if (cooldownMs > 0) {
+          const sec = Math.ceil(cooldownMs / 1000);
+          const next = nextGeminiFallbackEngine(engineUsed, new Error(`quota cooldown ${sec}s`), usedFallback);
+          if (!next) {
+            throw new Error(
+              `Gemini free-tier quota on ${engineUsed} — cooldown ${sec}s. Switch to gemini-3.1-flash-lite (separate bucket). Not a bad photo.`
+            );
+          }
+          accumulatedLogs.push(
+            `[backend] [UnifiedLLM] ${engineUsed} in quota cooldown — falling back to ${next} on the same job (no user retry).`
+          );
+          engineUsed = next;
+          bodyData.engine = next;
+          usedFallback = true;
         }
-        try {
-        response = await fetch(`${baseUrl}${endpoint}`, {
-          method: 'POST',
-          headers: {
+
+        const runLoopbackOnce = async () => {
+          const controller = new AbortController();
+          const globalTimeout = setTimeout(() => {
+            controller.abort(new Error('Analysis request timed out after 180s.'));
+          }, 180000);
+
+          let chunkTimer: NodeJS.Timeout | null = null;
+          const stallMessage = `Stream stalled: Vision Scout (${engineUsed}) produced no tokens for 90s after the prompt. Gemini often hangs when free-tier quota is exhausted or the model is overloaded — not a bad photo. Switch to gemini-3.1-flash-lite.`;
+          const resetChunkTimer = () => {
+            if (chunkTimer) clearTimeout(chunkTimer);
+            chunkTimer = setTimeout(() => {
+              accumulatedLogs.push(`[error] ${stallMessage}`);
+              controller.abort(new Error(stallMessage));
+            }, 90000);
+          };
+
+          resetChunkTimer();
+
+          let response: Response | null = null;
+          let endpoint = dbKind === 'medical' ? '/api/gemini/medical-analyze?stream=true' : '/api/gemini/food-analyze?stream=true';
+          if (payload.agentType === 'health_baseline') {
+            endpoint = '/api/gemini/health-baseline-analyze?stream=true';
+          }
+          const loopbackHeaders = {
             'Content-Type': 'application/json',
             'X-Session-ID': 'server-job-' + jobId
-          },
-          body: JSON.stringify(bodyData),
-          signal: controller.signal
-        });
-      } catch (fetchErr: any) {
-        try {
-          response = await fetch(`http://localhost:${port}${endpoint}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Session-ID': 'server-job-' + jobId
-            },
-            body: JSON.stringify(bodyData),
-            signal: controller.signal
-          });
-        } catch (retryErr: any) {
-          if (chunkTimer) clearTimeout(chunkTimer);
-          clearTimeout(globalTimeout);
-          throw retryErr;
-        }
-      }
-
-      if (!response.ok) {
-        if (chunkTimer) clearTimeout(chunkTimer);
-        clearTimeout(globalTimeout);
-        throw new Error(`Local food-analyze failed with status ${response.status}`);
-      }
-
-      const reader = response.body?.getReader();
-      if (!reader) {
-        if (chunkTimer) clearTimeout(chunkTimer);
-        clearTimeout(globalTimeout);
-        throw new Error('Response body stream is not readable');
-      }
-
-      const decoder = new TextDecoder();
-      let buffer = '';
-      finalData = null;
-
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          resetChunkTimer();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed.startsWith('data: ')) continue;
-
-            const rawData = trimmed.slice(6);
-            if (!rawData) continue;
-
+          };
+          const loopbackBody = JSON.stringify(bodyData);
+          try {
+            response = await fetch(`${baseUrl}${endpoint}`, {
+              method: 'POST',
+              headers: loopbackHeaders,
+              body: loopbackBody,
+              signal: controller.signal
+            });
+          } catch (fetchErr: any) {
+            if (controller.signal.aborted) {
+              const reason = (controller.signal.reason as any)?.message || fetchErr?.cause?.message || fetchErr?.message || stallMessage;
+              throw new Error(String(reason));
+            }
             try {
-              const parsed = JSON.parse(rawData);
-              if (parsed.error) {
-                const errMsg = typeof parsed.error === 'string' ? parsed.error : JSON.stringify(parsed.error);
-                accumulatedLogs.push(`[error] ${errMsg}`);
-                throw new Error(errMsg);
-              }
-              if (parsed.type === 'log') {
-                accumulatedLogs.push(`[${parsed.logType || 'info'}] ${parsed.message}`);
-                
-                if (parsed.logType === 'status') {
-                  let prog = currentProgress;
-                  const msg = parsed.message || '';
-                  if (msg.toLowerCase().includes('scout')) {
-                    prog = Math.max(prog, 30);
-                  } else if (msg.toLowerCase().includes('database') || msg.toLowerCase().includes('usda') || msg.toLowerCase().includes('search')) {
-                    prog = Math.max(prog, 50);
-                  } else if (msg.toLowerCase().includes('dietitian') || msg.toLowerCase().includes('nutritionist')) {
-                    prog = Math.max(prog, 70);
-                  } else if (msg.toLowerCase().includes('final')) {
-                    prog = Math.max(prog, 90);
-                  }
-                  await updateSupabaseProgress(prog, msg);
-                }
-              } else if ((parsed.final === true || parsed.type === 'done') && parsed.result) {
-                finalData = parsed.result;
-              }
-            } catch (err: any) {
-              if (err.message && !err.message.includes('JSON')) {
-                throw err;
-              }
-              // ignore JSON parse error on incomplete chunks
+              response = await fetch(`http://localhost:${port}${endpoint}`, {
+                method: 'POST',
+                headers: loopbackHeaders,
+                body: loopbackBody,
+                signal: controller.signal
+              });
+            } catch (retryErr: any) {
+              if (chunkTimer) clearTimeout(chunkTimer);
+              clearTimeout(globalTimeout);
+              throw retryErr;
             }
           }
-        }
 
-        if (buffer && buffer.trim()) {
-          const remainingLines = buffer.split('\n');
-          for (const line of remainingLines) {
-            const trimmed = line.trim();
-            if (trimmed.startsWith('data: ')) {
-              const rawData = trimmed.slice(6);
-              if (rawData) {
+          if (!response.ok) {
+            if (chunkTimer) clearTimeout(chunkTimer);
+            clearTimeout(globalTimeout);
+            throw new Error(`Local food-analyze failed with status ${response.status}`);
+          }
+
+          const reader = response.body?.getReader();
+          if (!reader) {
+            if (chunkTimer) clearTimeout(chunkTimer);
+            clearTimeout(globalTimeout);
+            throw new Error('Response body stream is not readable');
+          }
+
+          const decoder = new TextDecoder();
+          let buffer = '';
+          finalData = null;
+
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              resetChunkTimer();
+              if (done) break;
+
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split('\n');
+              buffer = lines.pop() || '';
+
+              for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed.startsWith('data: ')) continue;
+
+                const rawData = trimmed.slice(6);
+                if (!rawData) continue;
+
                 try {
                   const parsed = JSON.parse(rawData);
-                  if ((parsed.final === true || parsed.type === 'done') && parsed.result) {
+                  if (parsed.error) {
+                    const errMsg = typeof parsed.error === 'string' ? parsed.error : JSON.stringify(parsed.error);
+                    accumulatedLogs.push(`[error] ${errMsg}`);
+                    throw new Error(errMsg);
+                  }
+                  if (parsed.type === 'log') {
+                    accumulatedLogs.push(`[${parsed.logType || 'info'}] ${parsed.message}`);
+
+                    if (parsed.logType === 'status') {
+                      let prog = currentProgress;
+                      const msg = parsed.message || '';
+                      if (msg.toLowerCase().includes('scout')) {
+                        prog = Math.max(prog, 30);
+                      } else if (msg.toLowerCase().includes('database') || msg.toLowerCase().includes('usda') || msg.toLowerCase().includes('search')) {
+                        prog = Math.max(prog, 50);
+                      } else if (msg.toLowerCase().includes('dietitian') || msg.toLowerCase().includes('nutritionist')) {
+                        prog = Math.max(prog, 70);
+                      } else if (msg.toLowerCase().includes('final')) {
+                        prog = Math.max(prog, 90);
+                      }
+                      await updateSupabaseProgress(prog, msg);
+                    }
+                  } else if ((parsed.final === true || parsed.type === 'done') && parsed.result) {
                     finalData = parsed.result;
                   }
-                } catch {}
+                } catch (err: any) {
+                  if (err.message && !err.message.includes('JSON')) {
+                    throw err;
+                  }
+                  // ignore JSON parse error on incomplete chunks
+                }
               }
             }
+
+            if (buffer && buffer.trim()) {
+              const remainingLines = buffer.split('\n');
+              for (const line of remainingLines) {
+                const trimmed = line.trim();
+                if (trimmed.startsWith('data: ')) {
+                  const rawData = trimmed.slice(6);
+                  if (rawData) {
+                    try {
+                      const parsed = JSON.parse(rawData);
+                      if ((parsed.final === true || parsed.type === 'done') && parsed.result) {
+                        finalData = parsed.result;
+                      }
+                    } catch {}
+                  }
+                }
+              }
+            }
+          } catch (streamErr: any) {
+            if (controller.signal.aborted) {
+              const reason = (controller.signal.reason as any)?.message || streamErr?.cause?.message || streamErr?.message || stallMessage;
+              throw new Error(String(reason));
+            }
+            throw streamErr;
+          } finally {
+            if (chunkTimer) clearTimeout(chunkTimer);
+            clearTimeout(globalTimeout);
+          }
+
+          if (!finalData) {
+            const lastErr = [...accumulatedLogs].reverse().find(l => l.startsWith('[error]'));
+            if (lastErr) {
+              throw new Error(lastErr.replace(/^\[error\]\s*/, ''));
+            }
+            throw new Error('Stream finished but no final result data was received');
+          }
+        };
+
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            await runLoopbackOnce();
+            break;
+          } catch (loopErr: any) {
+            const next = nextGeminiFallbackEngine(engineUsed, loopErr, usedFallback);
+            if (!next || attempt === 1) throw loopErr;
+            usedFallback = true;
+            accumulatedLogs.push(
+              `[backend] [UnifiedLLM] ${engineUsed} stalled/unavailable — falling back to ${next} on the same job (no user retry).`
+            );
+            engineUsed = next;
+            bodyData.engine = next;
+            finalData = null;
+            await updateSupabaseProgress(Math.max(currentProgress, 15), `Retrying on ${next}...`);
           }
         }
-      } finally {
-        if (chunkTimer) clearTimeout(chunkTimer);
-        clearTimeout(globalTimeout);
       }
-      } // CLOSE ELSE BLOCK
 
       if (!finalData) {
         const lastErr = [...accumulatedLogs].reverse().find(l => l.startsWith('[error]'));
@@ -794,6 +864,26 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
 
         let logsUrl = '';
         const rawLogsText = accumulatedLogs.join('\n');
+
+        const earlyResult: any = {
+          pendingFoodLog: pendingFoodLog,
+          message: finalPayload?.message || finalPayload?.text || '',
+          text: finalPayload?.text || finalPayload?.message || '',
+          dietitianScratchpad: finalPayload?.dietitianScratchpad || '',
+          mode: finalPayload?.mode || mode || 'review',
+          comparison: finalPayload?.comparison || undefined,
+          comparisonSet: finalPayload?.comparisonSet || undefined,
+          scoutItems: finalPayload?.scoutItems || undefined,
+          scoutContentType: finalPayload?.scoutContentType || undefined,
+          photoUrl: photoUrl || undefined,
+          photoUrls: photoUrls.length > 0 ? photoUrls : (photoUrl ? [photoUrl] : undefined),
+          degradedStages: finalPayload?.degradedStages,
+          mealBuild: finalPayload?.mealBuild,
+        };
+        if (publishResultReady(jobId, earlyResult)) {
+          releaseUserJobLock(userId, jobId);
+        }
+
         try {
           const { uploadLogsToR2 } = await import('./src/utils/r2Storage');
           logsUrl = await uploadLogsToR2(jobId, rawLogsText);

@@ -20,6 +20,7 @@
     "test:benchmark:biomarkers": "tsx prototype/biomarkers/runner.ts --case C1",
     "test:prepush": "npm run test:receptionist && npm run test:bio && npm run test:food && npm run lint",
     "check:tests": "vitest run src/mealBuild/__tests__",
+    "test:from-debug": "tsx scripts/test-from-debug.ts",
     "golden:from-debug": "node scripts/golden-from-debug.mjs",
     "golden:inbox": "vitest run tests/golden_inbox.test.ts",
     "golden:inbox:watch": "vitest tests/golden_inbox.test.ts",

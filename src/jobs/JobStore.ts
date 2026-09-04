@@ -447,15 +447,21 @@ class JobStoreImpl {
         delete patch.status;
       }
     }
+    // Submit .then() writes queued after the runner already flipped running.
+    // That made the card say "Queued on server" for the whole Gemini run.
+    if (patch.status === 'queued' && (job.status === 'running' || job.status === 'processing')) {
+      delete patch.status;
+    }
 
     // While an edit turn is in flight, ignore succeeded echoes of the SAME meal
-    // (the prior analysis). Clearing inFlightTurnAt here is what made the
-    // preview skip "Updating meal..." and stay on Analysis completed until
-    // the new numbers arrived.
+    // (the prior analysis). A *new* job has no existing meal key — do not treat
+    // a thin realtime succeeded (no result payload) as a prior-turn echo, or the
+    // card stays on "Attempt 1 of 3" after analyze already finished.
     if (job.inFlightTurnAt && (patch.status === 'succeeded' || patch.status === 'awaiting_user')) {
       const incomingKey = mealSnapshotKey(patch.result);
       const existingKey = mealSnapshotKey(job.result);
-      const isSamePriorMeal = !patch.result || (incomingKey !== '' && incomingKey === existingKey);
+      const isSamePriorMeal =
+        !!existingKey && (!patch.result || (incomingKey !== '' && incomingKey === existingKey));
       if (isSamePriorMeal) {
         delete patch.status;
         delete patch.result;
@@ -466,17 +472,34 @@ class JobStoreImpl {
       }
     }
 
+    const nextStatus = patch.status !== undefined ? patch.status : job.status;
+    const alreadySucceededWithMeal = job.status === 'succeeded' && !!job.result?.pendingFoodLog;
+    const isPollHeartbeat =
+      eventType === 'updateJob' &&
+      nextStatus === job.status &&
+      (job.status === 'running' || job.status === 'queued' || job.status === 'processing');
+
+    if (
+      (nextStatus === 'succeeded' || nextStatus === 'failed' || nextStatus === 'cancelled' || nextStatus === 'awaiting_user') &&
+      patch.status === nextStatus
+    ) {
+      if (patch.inFlightTurnAt === undefined) patch.inFlightTurnAt = undefined;
+      if (!patch.finishedAt && !job.finishedAt) patch.finishedAt = new Date().toISOString();
+    }
+
     Object.assign(job, { ...patch, updatedAt: new Date().toISOString() });
 
     const eventAction = eventType
       ? `${eventType}`
       : (job.status === 'succeeded' ? 'completed' : 'accepted');
 
-    job.sessionEvents = recordSessionEvent(id, {
-      writer: writer as any,
-      status: job.status,
-      action: eventAction,
-    });
+    if (!isPollHeartbeat) {
+      job.sessionEvents = recordSessionEvent(id, {
+        writer: writer as any,
+        status: job.status,
+        action: eventAction,
+      });
+    }
 
     this.saveJobs();
     this.notify();
@@ -487,7 +510,11 @@ class JobStoreImpl {
     const turnStillInFlight =
       typeof job.inFlightTurnAt === 'number' &&
       (!job.finishedAt || new Date(job.finishedAt).getTime() < job.inFlightTurnAt);
-    if (!turnStillInFlight && (patch.status === 'succeeded' || patch.status === 'awaiting_user' || (job.status === 'succeeded' && patch.result))) {
+    if (
+      !alreadySucceededWithMeal &&
+      !turnStillInFlight &&
+      (patch.status === 'succeeded' || patch.status === 'awaiting_user' || (job.status === 'succeeded' && patch.result))
+    ) {
       upsertJobToSupabase(job).catch(() => {});
     }
   }
@@ -542,7 +569,16 @@ class JobStoreImpl {
   }
 
   getQueue(): AgentJob[] {
-    return this.getAllJobs().filter((j) => j.status === 'queued');
+    return this.getAllJobs().filter((j) => {
+      if (j.status === 'queued') return true;
+      // Submit may flip the card to running before the runner starts. Those
+      // jobs still need /api/jobs/status polling or they sit on Attempt 1/3
+      // after the server already finished.
+      if (j.status === 'running' || j.status === 'processing') {
+        return !j.result?.pendingFoodLog;
+      }
+      return false;
+    });
   }
 
   subscribe(listener: Listener) {

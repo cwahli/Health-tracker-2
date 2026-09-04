@@ -160,6 +160,40 @@ describe('JobStore', () => {
     expect(JobStore.getJob('edit1')?.status).toBe('running');
   });
 
+  it('keeps a running new job in the queue until a meal result lands', () => {
+    JobStore.createJob({ id: 'poll-me', status: 'queued' });
+    JobStore.updateJob('poll-me', { status: 'running', inFlightTurnAt: Date.now() });
+    expect(JobStore.getQueue().map((j) => j.id)).toContain('poll-me');
+    JobStore.updateJob('poll-me', {
+      status: 'succeeded',
+      result: { pendingFoodLog: { name: 'Soto', nutrients: { calories: 598 } } },
+    });
+    expect(JobStore.getJob('poll-me')?.status).toBe('succeeded');
+    expect(JobStore.getJob('poll-me')?.inFlightTurnAt).toBeUndefined();
+    expect(JobStore.getQueue().map((j) => j.id)).not.toContain('poll-me');
+  });
+
+  it('accepts succeeded on a new in-flight job that has no prior meal', () => {
+    JobStore.createJob({
+      id: 'new-meal',
+      status: 'running',
+      inFlightTurnAt: Date.now(),
+      finishedAt: undefined,
+    });
+    JobStore.updateJob('new-meal', { status: 'succeeded', statusMessage: 'Analysis complete' });
+    const job = JobStore.getJob('new-meal');
+    expect(job?.status).toBe('succeeded');
+    expect(job?.inFlightTurnAt).toBeUndefined();
+    expect(job?.finishedAt).toBeTruthy();
+  });
+
+  it('does not let a late submit callback downgrade running back to queued', () => {
+    JobStore.createJob({ id: 'live1', status: 'queued' });
+    JobStore.updateJob('live1', { status: 'running', statusMessage: 'Analyzing on server...' });
+    JobStore.updateJob('live1', { status: 'queued', clientSubmitPending: false, statusMessage: 'Analyzing on server...' });
+    expect(JobStore.getJob('live1')?.status).toBe('running');
+  });
+
   it('does not let stale sync downgrade a finished job to queued', () => {
     JobStore.createJob({
       id: 'done1',

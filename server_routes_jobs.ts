@@ -119,7 +119,7 @@ jobsRouter.post('/api/jobs/submit', async (req, res) => {
       jobId,
       userId: userId || 'anonymous',
     });
-    res.json({ success: true, jobId, status: 'queued' });
+    res.json({ success: true, jobId, status: 'running' });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to submit job to cloud' });
   }

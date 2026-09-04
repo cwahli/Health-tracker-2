@@ -1,9 +1,41 @@
+export const DEFAULT_GEMINI_ENGINE = 'gemini-3.5-flash-lite';
+export const GEMINI_FALLBACK_ENGINE = 'gemini-3.1-flash-lite';
+
+export function geminiErrorText(e: any): string {
+  if (e == null) return '';
+  const parts = [e?.message, e?.cause?.message, e?.cause, e];
+  return parts.map((p) => (p == null ? '' : String(p))).filter(Boolean).join(' ');
+}
+
 export function isGeminiQuotaError(e: any): boolean {
-  return /429|RESOURCE_EXHAUSTED|quota exceeded|generate_content_free_tier/i.test(String(e?.message || e || ''));
+  return /429|RESOURCE_EXHAUSTED|quota exceeded|generate_content_free_tier|quota cooldown/i.test(geminiErrorText(e));
 }
 
 export function isGeminiUnavailableError(e: any): boolean {
-  return /503|UNAVAILABLE|high demand/i.test(String(e?.message || e || ''));
+  return /503|UNAVAILABLE|high demand/i.test(geminiErrorText(e));
+}
+
+/** Scout hang / 503 / quota — fail the *model*, not the job. */
+export function isGeminiStallOrUnavailable(e: any): boolean {
+  const s = geminiErrorText(e);
+  return (
+    isGeminiUnavailableError({ message: s }) ||
+    isGeminiQuotaError({ message: s }) ||
+    /stream stalled|produced no tokens|timed out after 180s|quota cooldown/i.test(s)
+  );
+}
+
+/** One hop: 3.5 (or anything else) → 3.1. Never a second hop; never on a random bug. */
+export function nextGeminiFallbackEngine(
+  currentEngine: string | undefined,
+  err: any,
+  alreadyFellBack: boolean
+): string | null {
+  if (alreadyFellBack) return null;
+  if (!isGeminiStallOrUnavailable(err)) return null;
+  const cur = String(currentEngine || DEFAULT_GEMINI_ENGINE);
+  if (cur === GEMINI_FALLBACK_ENGINE) return null;
+  return GEMINI_FALLBACK_ENGINE;
 }
 
 export function parseRetryAfterMs(e: any): number | null {

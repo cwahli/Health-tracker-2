@@ -12,6 +12,8 @@ export type JobExecutor = (job: AgentJob, abortSignal: AbortSignal) => Promise<v
 
 class JobQueueRunnerImpl {
   private isRunning = false;
+  private loopGeneration = 0;
+  private inFlightIds = new Set<string>();
   private consecutiveFailures = 0;
   private circuitBreakerPaused = false;
   private executor: JobExecutor = async (job, signal) => {
@@ -33,14 +35,16 @@ class JobQueueRunnerImpl {
   async start() {
     if (this.isRunning) return;
     this.isRunning = true;
+    const gen = ++this.loopGeneration;
     if (typeof window !== 'undefined' && typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', this.handleVisibilityChange);
     }
-    this.loop();
+    this.loop(gen);
   }
 
   stop() {
     this.isRunning = false;
+    this.loopGeneration++;
     this.circuitBreakerPaused = false;
     this.consecutiveFailures = 0;
     if (typeof window !== 'undefined' && typeof document !== 'undefined') {
@@ -56,8 +60,8 @@ class JobQueueRunnerImpl {
     }
   }
 
-  private async loop() {
-    while (this.isRunning) {
+  private async loop(gen: number) {
+    while (this.isRunning && this.loopGeneration === gen) {
       if (this.circuitBreakerPaused) {
         await this.sleep(5000);
         continue;
@@ -67,6 +71,7 @@ class JobQueueRunnerImpl {
       const now = new Date();
 
       const jobToRun = queue.find((job) => {
+        if (this.inFlightIds.has(job.id)) return false;
         const retryOk = !job.retryNotBefore || new Date(job.retryNotBefore) <= now;
         if (!retryOk) return false;
         // Do not pick up jobs where the client UI is actively performing the network submit right now.
@@ -91,6 +96,8 @@ class JobQueueRunnerImpl {
   }
 
   private async runJob(job: AgentJob) {
+    if (this.inFlightIds.has(job.id)) return;
+    this.inFlightIds.add(job.id);
     const controller = new AbortController();
     JobStore.apply({ id: job.id, type: 'ServerStatus',
       status: 'running',
@@ -112,6 +119,10 @@ class JobQueueRunnerImpl {
         } else {
           this.consecutiveFailures = 0;
         }
+        return;
+      }
+      if (currentJobState?.status === 'succeeded' && currentJobState.result?.pendingFoodLog) {
+        this.consecutiveFailures = 0;
         return;
       }
 
@@ -267,6 +278,7 @@ class JobQueueRunnerImpl {
         }
       }
     } finally {
+      this.inFlightIds.delete(job.id);
       // Clear the abort controller to prevent memory leaks
       JobStore.apply({ type: 'ServerStatus', id: job.id, abortController: undefined } as any);
     }

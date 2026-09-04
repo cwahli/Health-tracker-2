@@ -1,0 +1,42 @@
+#!/usr/bin/env npx tsx
+/**
+ * Inner loop for one captured debug.md.
+ * Classify the dump, then run named vitest for those classes.
+ * Usage: npx tsx scripts/test-from-debug.ts [path/to/debug.md]
+ * Default: tests/captures/job_1788538012316_m9wm9cs9a.md
+ */
+import fs from 'fs';
+import path from 'path';
+import { spawnSync } from 'child_process';
+import { fileURLToPath } from 'url';
+import { parseDebugMarkdown, classifyDump, formatOracleFails } from '../src/utils/dumpContract.ts';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const root = path.join(__dirname, '..');
+const defaultCapture = path.join(root, 'tests/captures/job_1788538012316_m9wm9cs9a.md');
+const capturePath = path.resolve(process.argv[2] || defaultCapture);
+
+if (!fs.existsSync(capturePath)) {
+  console.error(`test-from-debug: missing ${capturePath}`);
+  process.exit(2);
+}
+
+const md = fs.readFileSync(capturePath, 'utf8');
+const facts = parseDebugMarkdown(md);
+const classified = classifyDump(facts);
+
+console.log(`capture: ${path.relative(root, capturePath)}`);
+console.log(`job: ${facts.jobId || '?'}  status=${facts.status || '?'}  ledger=${facts.hasFinalizedLedger}  dietitianFail=${facts.dietitianFailedPermanently}`);
+console.log('');
+console.log('classified (this dump — historical red is expected until a new live confirm):');
+console.log(formatOracleFails(classified) || '(none)');
+console.log('');
+console.log('inner loop (code probes — these must be green without you clicking Log Meal again):');
+
+const vitest = spawnSync(
+  'npx',
+  ['vitest', 'run', 'src/utils/dumpContract.test.ts', 'server_sse_json.test.ts', 'server_gemini_retry.test.ts'],
+  { cwd: root, stdio: 'inherit', shell: process.platform === 'win32' }
+);
+
+process.exit(vitest.status === 0 ? 0 : vitest.status || 1);

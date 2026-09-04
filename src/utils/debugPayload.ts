@@ -185,13 +185,18 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
   lines.push(`| **4. Database Search & Truth Matching** | ${searchStatus} | ${searchDetails} |`);
 
   // Stage 5: Calculation & Math Engine
-  const hasCalc = Boolean(input.pendingFoodLog || input.receiptTable || input.comprehensiveNutrients);
+  const ledgerInLogs = /\[Budget\]\s*Finalized ledger/i.test(String(input.backendLogs || ''));
+  const hasCalc = Boolean(input.pendingFoodLog || input.receiptTable || input.comprehensiveNutrients || ledgerInLogs);
   const calcStatus = hasCalc ? '✅ Connected (Verified)' : '⚪ Standby / N/A';
-  const calcDetails = input.comprehensiveNutrients ? `${Object.keys(input.comprehensiveNutrients).length} nutrient profile computed` : (hasCalc ? 'Itemized breakdown & totals calculated' : 'No meal calculation required');
+  const calcDetails = input.comprehensiveNutrients
+    ? `${Object.keys(input.comprehensiveNutrients).length} nutrient profile computed`
+    : (ledgerInLogs && !input.pendingFoodLog
+      ? 'Ledger in backend logs (pendingFoodLog not on this snapshot)'
+      : (hasCalc ? 'Itemized breakdown & totals calculated' : 'No meal calculation required'));
   lines.push(`| **5. Mathematical Calculation Engine** | ${calcStatus} | ${calcDetails} |`);
 
   // Stage 6: Trial-Balance & Verification Gate
-  const hasGate = Boolean(input.gate || input.pendingFoodLog || input.receiptTable);
+  const hasGate = Boolean(input.gate || input.pendingFoodLog || input.receiptTable || ledgerInLogs);
   const gateSummary = input.gate?.summary || (computedGate?.summary ? computedGate.summary : (hasGate ? 'GATE: EVALUATED' : 'N/A'));
   const gateStatus = hasGate ? (input.savable !== false ? '✅ Passed & Savable' : '⚠️ Gate Check Triggered') : '⚪ Standby / N/A';
   lines.push(`| **6. Trial-Balance & Quality Gate** | ${gateStatus} | ${gateSummary} |`);
@@ -391,12 +396,16 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
   if (Array.isArray(input.userActionBreadcrumbs) && input.userActionBreadcrumbs.length > 0) {
     lines.push(`| Timestamp | Action | Target / Context | Details |`);
     lines.push(`|-----------|--------|------------------|---------|`);
+    const seenCrumb = new Set<string>();
     for (const b of input.userActionBreadcrumbs.slice(-100)) {
       const ts = b.timestamp ? b.timestamp.slice(11, 19) : '—';
       const act = String(b.action || 'event').replace(/\|/g, '/');
       const tgt = String(b.target || '—').replace(/\|/g, '/');
       const rawDet = typeof b.details === 'object' ? JSON.stringify(b.details) : (b.details != null ? String(b.details) : '—');
       const det = rawDet.replace(/\|/g, '/');
+      const key = `${ts}|${act}|${tgt}|${det}`;
+      if (seenCrumb.has(key)) continue;
+      seenCrumb.add(key);
       lines.push(`| ${ts} | ${act} | ${tgt} | ${det} |`);
     }
   } else {

@@ -98,6 +98,7 @@ import {
   buildSavableMealFromParsed,
 } from './server_meal_orchestrator.js';
 import { toPendingFoodLog, fromEvaluationComparison } from './src/mealBuild/adapters.js';
+import { attachSseJsonResponder } from './server_sse_json.js';
 import { appendHistory } from './src/mealBuild/consolidate.js';
 import { projectDietitianInput } from './src/mealBuild/projectors.js';
 import { beginStage, endStage, formatDietitianProjectionBlock } from './src/mealBuild/stageLifecycle.js';
@@ -243,15 +244,7 @@ export async function runFoodAnalyze(req: any, res: any) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     if (typeof (res as any).flushHeaders === 'function') (res as any).flushHeaders();
     hasSentHeaders = true;
-    const originalJson = res.json.bind(res);
-    const originalStatus = res.status.bind(res);
-    res.status = (code: number) => {
-      // If headers already sent, ignore status code changes
-      if (!res.headersSent) {
-        originalStatus(code);
-      }
-      return res;
-    };
+    attachSseJsonResponder(res);
   }
 
   const sendStreamEvent = (data: any) => {
@@ -3397,15 +3390,21 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       const salvagedMeal = buildSavableMealFromParsed(preCalculatedItems, req.body.activeMeal, salvagedAggregatedNutrients, null);
       const degradedMeal = markDietitianDegraded(salvagedMeal, error.message);
       const payloadData = toPendingFoodLog(degradedMeal);
+      const degradeMessage = "Nutrients logged based on core databases, but AI clinical advice is currently unavailable.";
       const successPayload = {
+        mode: "new_log",
         data: payloadData,
         pendingFoodLog: payloadData,
         mealBuild: degradedMeal,
         degradedStages: degradedMeal.degradedStages,
-        message: "Nutrients logged based on core databases, but AI clinical advice is currently unavailable.",
+        scoutItems: visionScoutItems,
+        scoutContentType: visionScoutContentType,
+        text: degradeMessage,
+        message: degradeMessage,
         agentPrompt: fullPromptSent,
         apiCalls
       };
+      addDebugLog(`[Dietitian Degrade] Emitting salvaged meal (kcal=${payloadData?.nutrients?.calories ?? payloadData?.calories ?? '?'}) as succeeded.`);
       return res.json(successPayload);
     }
     const errorPayload: any = {

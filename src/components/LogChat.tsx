@@ -44,6 +44,7 @@ import { mergeFoodEditMessages, shouldMergeFoodEditTurn } from '../jobs/mergeFoo
 import { toPendingFoodLog } from '../mealBuild/adapters';
 import { executeFoodAgent } from '../jobs/FoodAgentExecutor';
 import { downloadJobDebugReport } from '../utils/logChatDebugDownload';
+import { shouldRunHandoffAutoSend } from '../utils/chatAutoSend';
 import { getSessionLog } from '../jobs/sessionLog';
 function isValidFoodLog(log: any): boolean {
   if (!log || typeof log !== 'object' || Array.isArray(log)) return false;
@@ -2794,7 +2795,7 @@ ${logsText}`);
           .then(data => {
             console.log('[LogChat] Job successfully submitted to server:', data);
             JobStore.updateJob(currentJobId, {
-              status: 'queued',
+              status: 'running',
               statusMessage: submissionMode === 'edit' ? 'Updating meal...' : 'Analyzing on server...',
               serverSubmittedAt: Date.now(),
               clientSubmitPending: false,
@@ -4806,6 +4807,15 @@ ${logsText}`);
 
   useEffect(() => {
     const effectiveAutoSend = autoSendMessage || (isAgent('health_baseline') && handoffPayload ? (handoffPayload.summaryForAgent || (handoffPayload.userContextSummary ? `${handoffPayload.userContextSummary}\nPlease create my personalized health plan based on my profile.` : null)) : null);
+    const autoSendGate = shouldRunHandoffAutoSend({
+      isOpen,
+      type,
+      agentType,
+      autoSendMessage,
+      hasHandoffPayload: !!handoffPayload,
+      effectiveAutoSend,
+    });
+    if (!autoSendGate.run) return;
     console.log(`[DIAG5] auto-send effect fired: isOpen=${isOpen}, agentType=${agentType}, hasHandoffPayload=${!!handoffPayload}, effectiveAutoSend=${effectiveAutoSend ? JSON.stringify(effectiveAutoSend).slice(0, 120) : 'null'}`);
     if (isOpen && effectiveAutoSend && (isAgent('medical') || isAgent('daily_recommendation') || isAgent('health_baseline'))) {
       if (agentType === 'agent1' || agentType === 'agent2' || agentType === 'agent3' || agentType === 'agent4' || agentType === 'agent5' || agentType === 'agent7') {
