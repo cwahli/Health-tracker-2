@@ -10,7 +10,7 @@ import { buildUserContext, buildTimeContext, buildImageContext, buildHistoryCont
 import { sanitizeLlmJsonOutput, computeDietitianSkipGates, decideScoutVerdict, decideScoutAdvice } from './src/server/food/server_food_dietitian_dispatch.js';
 import { resolveFoodAnalyzeMode, buildFoodApiCalls } from './src/server/food/server_food_mode_routing.js';
 import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput } from './src/server/food/server_food_meal_assemble.js';
-import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, mapTextQueriesToScoutItems, buildScoutFailureError, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries } from './src/server/food/server_food_scout_source.js';
+import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, mapTextQueriesToScoutItems, buildScoutFailureError, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries, applyWeightModShortcut, restoreTurnOneCandidates, computeScoutRetryDelay } from './src/server/food/server_food_scout_source.js';
 import { collectImagePayloads, decideWeightRefine } from './src/server/food/server_food_session_setup.js';
 import { shouldPauseForPortionClarify, filterPortionCarryCandidates, detectDominantBrand, collectFdcHintTasks, isFdcHintRelevant, mapLedgersToPrecalcItems, applyMealModifiers } from './src/server/food/server_food_precalc.js';
 import { runDatabaseSearchStage } from './src/server/food/server_food_db_search.js';
@@ -95,11 +95,6 @@ import { attachSseJsonResponder } from './server_sse_json.js';
 import { projectDietitianInput } from './src/mealBuild/projectors.js';
 import { beginStage, endStage, formatDietitianProjectionBlock } from './src/mealBuild/stageLifecycle.js';
 import { reconcileMessageWithLedger } from './src/mealBuild/narration.js';
-import {
-  applyWeightRefineToScoutItems,
-  priorScoutHasLabelLocks,
-  REFINE_SCALE_ONLY_LOG,
-} from './server_refine_scale.js';
 import {
   getTraceNutrientsForFoodType,
   getCookingMethodModifier,
@@ -366,19 +361,19 @@ export async function runFoodAnalyze(req: any, res: any) {
         visionScoutItems = mapCompareItemsToScoutItems(compareItems);
       }
     } else if (isWeightModification || refineDecision.skip) {
-      // B5 scale-only: re-use prior scout, apply portionChoices and/or parsed refine grams
-      addDebugLog(
-        `${REFINE_SCALE_ONLY_LOG} reason=${refineDecision.reason} locks=${priorScoutHasLabelLocks(priorScoutForRefine)} images=${imagePayloads?.length || 0}`
-      );
-      addDebugLog(`[Shortcut] Weight modification detected on active meal. Skipping Vision Scout and DB Search.`);
-      visionScoutItems = Array.isArray(req.body.activeScoutItems) ? [...req.body.activeScoutItems] : visionScoutItems;
-      if (req.body.portionChoices) {
-        visionScoutItems = applyPortionChoices(visionScoutItems, req.body.portionChoices);
-      } else if (weightRefineIntent.isRefine) {
-        visionScoutItems = applyWeightRefineToScoutItems(visionScoutItems, weightRefineIntent);
-      }
-      visionScoutContentType = req.body.scoutContentType || 'visual';
-      visionScoutRanAndReturnedItems = visionScoutItems.length > 0;
+      const shortcut = applyWeightModShortcut({
+        activeScoutItems: req.body.activeScoutItems,
+        portionChoices: req.body.portionChoices,
+        weightRefineIntent,
+        scoutContentType: req.body.scoutContentType,
+        refineDecision,
+        priorScoutForRefine,
+        imagePayloads,
+        onLog: addDebugLog,
+      });
+      visionScoutItems = shortcut.visionScoutItems;
+      visionScoutContentType = shortcut.visionScoutContentType;
+      visionScoutRanAndReturnedItems = shortcut.ran;
     } else if (req.body.skipScout || req.body.portionChoices) {
       let priorScout = resolvePriorScoutItems({ body: req.body, history, activeMeal });
       if (priorScout.length > 0) {
@@ -399,15 +394,7 @@ export async function runFoodAnalyze(req: any, res: any) {
       }
       // Task 3: Restore pre-resolved DB candidates from turn-1 portionClarify payload.
       // This prevents the DB search from re-running from scratch and avoids cross-match bugs.
-      const priorCandidates = Array.isArray(req.body.resolvedDbCandidates) ? req.body.resolvedDbCandidates : [];
-      if (priorCandidates.length > 0) {
-        addDebugLog(`[PortionResume] Restoring ${priorCandidates.length} pre-resolved DB candidates from turn-1 payload. DB search will be skipped.`);
-        priorCandidates.forEach((c: any) => {
-          databaseMatchesArray.push(c);
-          const cid = String(c.id || c.fdcId || '');
-          if (cid) dbMatchMap.set(cid, c.nutrients || c);
-        });
-      }
+      restoreTurnOneCandidates({ resolvedDbCandidates: req.body.resolvedDbCandidates, databaseMatchesArray, dbMatchMap, onLog: addDebugLog });
     } else {
       const hasImage = imagePayloads && imagePayloads.length > 0;
       if (hasImage) {
@@ -425,7 +412,7 @@ export async function runFoodAnalyze(req: any, res: any) {
           try {
             if (scoutAttempts > 1) {
               if (isGeminiQuotaError(lastScoutErr)) break;
-              const delay = lastScoutErr?.message?.includes('503') || lastScoutErr?.message?.includes('UNAVAILABLE') ? 2000 : 1000;
+              const delay = computeScoutRetryDelay(lastScoutErr);
               addDebugLog(`[Vision Scout] Waiting ${delay}ms before retry...`);
               await new Promise(resolve => setTimeout(resolve, delay));
               addDebugLog(`[Vision Scout] Retrying LLM call (Attempt ${scoutAttempts} of ${maxScoutAttempts})...`);

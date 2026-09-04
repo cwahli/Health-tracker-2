@@ -11,6 +11,9 @@ import {
   applyScoutResultState,
   mergeScoutIntoActiveMeal,
   logScoutItemSummaries,
+  applyWeightModShortcut,
+  restoreTurnOneCandidates,
+  computeScoutRetryDelay,
 } from './server_food_scout_source';
 import { visionScoutResponseSchema } from './server_food_analyze_schema';
 
@@ -177,5 +180,45 @@ describe('F-8.10 shard 11 — scout result handling', () => {
     ], (m) => logs.push(m));
     expect(logs[0]).toContain('Nutrition Label:');
     expect(logs[0]).toContain('Flags: [big]');
+  });
+});
+
+describe('F-8.10 shard 16 — shortcut chain seams', () => {
+  it('reuses prior scout with portion choices or refine grams', () => {
+    const logs: string[] = [];
+    const out = applyWeightModShortcut({
+      activeScoutItems: [{ keyword: 'rice' }],
+      portionChoices: [{ scoutIndex: 0, weightGrams: 150 }],
+      weightRefineIntent: {},
+      scoutContentType: undefined,
+      refineDecision: { reason: 'test' },
+      priorScoutForRefine: [],
+      imagePayloads: [],
+      onLog: (m) => logs.push(m),
+    });
+    expect(out.visionScoutContentType).toBe('visual');
+    expect(out.ran).toBe(true);
+    expect(logs.some((m) => m.includes('Weight modification'))).toBe(true);
+  });
+
+  it('restores turn-1 candidates into the match stores', () => {
+    const logs: string[] = [];
+    const arr: any[] = [];
+    const map = new Map<string, any>();
+    const n = restoreTurnOneCandidates({
+      resolvedDbCandidates: [{ id: 'x', nutrients: { calories: 10 } }, { fdcId: 'y' }],
+      databaseMatchesArray: arr, dbMatchMap: map, onLog: (m) => logs.push(m),
+    });
+    expect(n).toBe(2);
+    expect(arr).toHaveLength(2);
+    expect(map.get('x').calories).toBe(10);
+    expect(map.get('y').fdcId).toBe('y');
+    expect(restoreTurnOneCandidates({ resolvedDbCandidates: [], databaseMatchesArray: [], dbMatchMap: new Map(), onLog: () => {} })).toBe(0);
+  });
+
+  it('backs off longer on 503/UNAVAILABLE than other failures', () => {
+    expect(computeScoutRetryDelay({ message: '503 UNAVAILABLE' })).toBe(2000);
+    expect(computeScoutRetryDelay({ message: 'boom' })).toBe(1000);
+    expect(computeScoutRetryDelay(null)).toBe(1000);
   });
 });

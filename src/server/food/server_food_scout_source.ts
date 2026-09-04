@@ -9,6 +9,12 @@ import { getFallbackCategoryProfile } from '../../../server_food_catalog.js';
 import { isPackagedBindItem, inferChainNameFromPackageLabel } from '../../../server_brand_match.js';
 import { userSafeScoutFailureMessage } from '../../../server_vision_scout.js';
 import { t } from '../../utils/i18n.js';
+import { applyPortionChoices } from '../../../server_portion_clarify.js';
+import {
+  applyWeightRefineToScoutItems,
+  priorScoutHasLabelLocks,
+  REFINE_SCALE_ONLY_LOG,
+} from '../../../server_refine_scale.js';
 
 export interface ScoutInheritArgs {
   isModifySession: boolean;
@@ -417,4 +423,83 @@ export function logScoutItemSummaries(items: any[], onLog: (msg: string) => void
     const labelStr = rawLabelHasRealData ? ` | Nutrition Label: ${JSON.stringify(item.rawNutritionLabel)}` : '';
     onLog(`[Vision Scout] - Index: ${item.scoutIndex} | Name: "${item.originalName || item.keyword}" | Keyword: "${item.keyword}"${labelStr}${flagStr}${confStr}`);
   });
+}
+
+/**
+ * F-8.10 shard 16 — shortcut-chain seams. B5 scale-only reuse, turn-1
+ * candidate restore, and scout retry delay. Streaming/LLM calls stay inline.
+ */
+
+export interface WeightModShortcutArgs {
+  activeScoutItems: any;
+  portionChoices: any;
+  weightRefineIntent: any;
+  scoutContentType?: string;
+  refineDecision: { reason?: string };
+  priorScoutForRefine: any[];
+  imagePayloads: any;
+  onLog: (msg: string) => void;
+}
+
+/** B5 scale-only: re-uses prior scout, applies portionChoices or refine grams. */
+export function applyWeightModShortcut(args: WeightModShortcutArgs): {
+  visionScoutItems: any[];
+  visionScoutContentType: string;
+  ran: boolean;
+} {
+  const {
+    activeScoutItems,
+    portionChoices,
+    weightRefineIntent,
+    scoutContentType,
+    refineDecision,
+    priorScoutForRefine,
+    imagePayloads,
+    onLog,
+  } = args;
+  // B5 scale-only: re-use prior scout, apply portionChoices and/or parsed refine grams
+  onLog(
+    `${REFINE_SCALE_ONLY_LOG} reason=${refineDecision.reason} locks=${priorScoutHasLabelLocks(priorScoutForRefine)} images=${imagePayloads?.length || 0}`
+  );
+  onLog(`[Shortcut] Weight modification detected on active meal. Skipping Vision Scout and DB Search.`);
+  let visionScoutItems = Array.isArray(activeScoutItems) ? [...activeScoutItems] : [];
+  if (portionChoices) {
+    visionScoutItems = applyPortionChoices(visionScoutItems, portionChoices);
+  } else if (weightRefineIntent.isRefine) {
+    visionScoutItems = applyWeightRefineToScoutItems(visionScoutItems, weightRefineIntent);
+  }
+  return {
+    visionScoutItems,
+    visionScoutContentType: scoutContentType || 'visual',
+    ran: visionScoutItems.length > 0,
+  };
+}
+
+export interface TurnOneRestoreArgs {
+  resolvedDbCandidates: any;
+  databaseMatchesArray: any[];
+  dbMatchMap: Map<string, any>;
+  onLog: (msg: string) => void;
+}
+
+/** Restores pre-resolved DB candidates from the turn-1 portionClarify payload. */
+export function restoreTurnOneCandidates(args: TurnOneRestoreArgs): number {
+  const { resolvedDbCandidates, databaseMatchesArray, dbMatchMap, onLog } = args;
+  // Task 3: Restore pre-resolved DB candidates from turn-1 portionClarify payload.
+  // This prevents the DB search from re-running from scratch and avoids cross-match bugs.
+  const priorCandidates = Array.isArray(resolvedDbCandidates) ? resolvedDbCandidates : [];
+  if (priorCandidates.length > 0) {
+    onLog(`[PortionResume] Restoring ${priorCandidates.length} pre-resolved DB candidates from turn-1 payload. DB search will be skipped.`);
+    priorCandidates.forEach((c: any) => {
+      databaseMatchesArray.push(c);
+      const cid = String(c.id || c.fdcId || '');
+      if (cid) dbMatchMap.set(cid, c.nutrients || c);
+    });
+  }
+  return priorCandidates.length;
+}
+
+/** Scout retry backoff: 503/UNAVAILABLE waits longer than other failures. */
+export function computeScoutRetryDelay(lastScoutErr: any): number {
+  return lastScoutErr?.message?.includes('503') || lastScoutErr?.message?.includes('UNAVAILABLE') ? 2000 : 1000;
 }
