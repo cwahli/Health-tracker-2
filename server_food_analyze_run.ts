@@ -4,6 +4,8 @@
  */
 import { Type } from '@google/genai';
 import { z } from 'zod';
+import { formatUSDANutrients, formatOFFNutrients, extractOFFNutrientsPer100g, isFastFoodChain, buildWebSearchQuery } from './src/server/food/server_food_analyze_helpers.js';
+
 import { executeFoodResolverCurator } from './server_food_resolver_curator.js';
 import {
   checkCategoryAndStateCompatibility,
@@ -174,7 +176,6 @@ import {
   searchOpenFoodFacts,
   fetchUSDAFoodById,
   fetchOFFProductByBarcode,
-  extractOFFNutrientsPer100g,
   lookupChainMenuSources,
   isUsableWebNutritionHit,
   resolveComparisonGroups,
@@ -251,407 +252,95 @@ export async function runFoodAnalyze(req: any, res: any) {
       }
       return res;
     };
-    res.json = (body: any) => {
-      const sessionId = logSessionStorage.getStore() || "global";
-      const logsToUse = sessionDebugLogs[sessionId] || globalDebugLogs;
-      body.agentResult = body.agentResult || {};
-      body.agentResult.backendLogs = logsToUse.slice(initialLogCount).map((l: any) => `[${l.timestamp}] ${l.message}`).join('\n');
-      const jobId = req.body.jobId;
-      const photoUrl = req.body.photoUrl;
-      if (jobId) {
-         import('./supabaseAdmin.js').then(({ supabaseAdmin }) => {
-            let cleanResult: any = null;
-            try {
-               cleanResult = JSON.parse(JSON.stringify(body));
-            } catch(e) {
-               console.error('[res.json hook] Circular structure when parsing body for supabase:', e);
-               return;
-            }
-            if (cleanResult.agentResult) delete cleanResult.agentResult.backendLogs;
-            if (cleanResult.raw) delete cleanResult.raw;
-            // Flatten to match the same shape serverJobs.ts already uses successfully:
-            // pendingFoodLog must be the actual meal object (itemsBreakdown/nutrients/name),
-            // not the whole response envelope, and mode/text/message must be preserved
-            // at the top level so a reload/reconnect fallback can tell a review from an edit.
-            const dbCleanResult: any = {
-               pendingFoodLog: cleanResult.pendingFoodLog || cleanResult.data || null,
-               photoUrl,
-               mode: cleanResult.mode || 'review',
-               text: cleanResult.text || '',
-               message: cleanResult.message || '',
-               editApplied: cleanResult.editApplied,
-               mealBuild: cleanResult.mealBuild || undefined,
-               scoutItems: cleanResult.scoutItems || undefined,
-               modificationCommand: cleanResult.modificationCommand || undefined,
-            };
-            import('./src/utils/r2Storage.js').then(async ({ uploadJobResultToR2 }) => {
-               let lightweightResult = dbCleanResult;
-               try {
-                  const publicUrl = await uploadJobResultToR2(jobId, dbCleanResult);
-                  if (publicUrl) {
-                     lightweightResult = {
-                        is_r2: true,
-                        r2_url: publicUrl,
-                        mode: dbCleanResult.mode,
-                        text: dbCleanResult.text || '',
-                        message: dbCleanResult.message || 'Completed successfully',
-                     } as any;
-                  }
-               } catch (r2Err) {
-                  console.error('[Background Worker] Failed to save cleanResult to R2:', r2Err);
-               }
-               return supabaseAdmin.from('agent_jobs').update({
-                  status: 'succeeded',
-                  progress_percent: 100,
-                  status_message: 'Completed successfully',
-                  clean_result: lightweightResult,
-                  updated_at: new Date().toISOString()
-               }).eq('id', jobId);
-            }).then(() => {
-               console.log('[Background Worker] Successfully saved job to Supabase:', jobId);
-            }).catch(e => console.error('Failed to update supabase', e));
-         });
-      }
-      try {
-         res.write(`data: ${JSON.stringify({ final: true, result: body })}\n\n`);
-      } catch (stringifyErr) {
-         console.error('[res.json hook] Stringify failed:', stringifyErr);
-         res.write(`data: ${JSON.stringify({ final: true, error: "Internal Error: JSON serialization failed." })}\n\n`);
-      }
-      res.end();
-      return res;
-    };
   }
+
   const sendStreamEvent = (data: any) => {
     if (isStream && hasSentHeaders) {
       try {
         res.write(`data: ${JSON.stringify(data)}\n\n`);
         if (typeof (res as any).flush === 'function') (res as any).flush();
-      } catch (e) {
-        console.error('[sendStreamEvent] Error serializing/sending event:', e);
-      }
+      } catch (e) {}
     }
   };
-  await streamDebugLogStorage.run((_msg: string) => {
-    // sendLog() below already broadcasts its own tagged event directly — every message
-    // it passes to addDebugLog() is prefixed "[<logType>] ...", so skip re-forwarding
-    // those here to avoid sending the same line twice under two different tags.
-    if (/^\[(status|scout_instruction|scout_answer|db_search|db_search_complete|dietitian_instruction|dietitian_answer)\]/.test(_msg)) {
-      return;
-    }
-    sendStreamEvent({ type: 'log', logType: 'backend', stage: 'backend', message: _msg });
-  }, async () => {
+
   let visionScoutItems: any[] = [];
-  let visionScoutContentType: string | null = null;
-  let preCalculatedItems: any[] | undefined;
-  let aggregatedNutrients: any;
-  let fullPromptSent: string = "";
+  let visionScoutContentType: any = 'visual';
+  let preCalculatedItems: any[] = [];
+  let aggregatedNutrients: any = null;
+  let fullPromptSent = "";
   let apiCalls: any[] = [];
+
   try {
-    const { message, image, images, imageDates, history, userProfile, engine, biomarkersNeedingImprovement, remainingAllowance, userId, activeMeal, customSystemInstruction, customVariableData, foodLogs, userSelectedMode } = req.body;
-    const activeComparison = req.body.activeComparison;
-    const sendLog = (logType: string, stage: 'scout' | 'db_search' | 'dietitian' | 'food_resolver', messageText: string, extra?: any) => {
-      addDebugLog(`[${logType}] ${messageText}`);
-      sendStreamEvent({ type: 'log', logType, stage, message: messageText, timestamp: Date.now(), ...extra });
+    const {
+      message,
+      image,
+      images,
+      imageDates,
+      history,
+      userProfile,
+      engine,
+      biomarkersNeedingImprovement,
+      remainingAllowance,
+      userId,
+      activeMeal,
+      customSystemInstruction,
+      customVariableData,
+      foodLogs,
+      userSelectedMode,
+    } = req.body;
+
+    const activeComparison = req.body.activeComparison || null;
+
+    const sendLog = (type: string, stage: string, message: string, data?: any) => {
+      sendStreamEvent({ type: 'log', logType: type, stage, message, data });
     };
-    sendLog('status', 'scout', 'Starting food analysis...');
-    // 1. Intercept prompt & read current active state from Request Body (passed from client)
-    if (activeMeal) {
-      addDebugLog(`[Client State] Received active meal: ${activeMeal.name}`);
-    } else {
-      addDebugLog(`[Client State] No active meal received.`);
+
+    const imagePayloads: any[] = [];
+    if (image) {
+      imagePayloads.push(image);
     }
-    // Check if key is mock
-    if (!getGeminiApiKey()) {
-      // If the user's message is a modify request, let's execute modify command offline!
-      const isModifyRequest = message.toLowerCase().includes("change") || message.toLowerCase().includes("modify") || message.toLowerCase().includes("update") || message.toLowerCase().includes("remove") || message.toLowerCase().includes("add") || message.toLowerCase().includes("gram");
-      if (isModifyRequest && activeMeal) {
-        // Let's create an offline mock command
-        let mockCommand: any = null;
-        if (message.toLowerCase().includes("steak")) {
-          const match = message.match(/(\d+)\s*g/);
-          const grams = match ? Number(match[1]) : 100;
-          mockCommand = { action: "update_weight", itemName: "Beef Steak", newWeightGrams: grams };
-        } else if (message.toLowerCase().includes("remove")) {
-          mockCommand = { action: "remove_item", itemName: "Beef Steak" };
-        } else {
-          const match = message.match(/(\d+)\s*g/);
-          const grams = match ? Number(match[1]) : 120;
-          mockCommand = { action: "add_item", itemName: "Extra Topping", newWeightGrams: grams };
+    if (Array.isArray(images)) {
+      images.forEach((img: any) => {
+        if (img && !imagePayloads.includes(img)) {
+          imagePayloads.push(img);
         }
-        const originalTotalWeight = (activeMeal.itemsBreakdown || []).reduce((acc: number, it: any) => acc + (Number(it.weightGrams) || 0), 0) || 1;
-        if (mockCommand) {
-          if (mockCommand.action === "update_weight") {
-            const item = activeMeal.itemsBreakdown?.find((it: any) => it.name.toLowerCase().includes(mockCommand.itemName.toLowerCase()));
-            if (item) {
-              const oldWeight = Math.max(1, Number(item.weightGrams) || 1);
-              const newWeight = Number(mockCommand.newWeightGrams);
-              const R = newWeight / oldWeight;
-              if (isDishEstimateEnabled()) {
-                const ledger = await finalizeDishLedger({
-                  item: {
-                    ...item,
-                    originalName: item.name || item.originalName,
-                    keyword: item.keyword || item.name,
-                    nutrients: item.nutrients || {
-                      calories: item.calories,
-                      protein: item.protein,
-                      totalFat: item.totalFat,
-                      saturatedFat: item.saturatedFat,
-                      carbohydrates: item.carbohydrates,
-                      sodium: item.sodium,
-                    },
-                  },
-                  nutrientBasisWeight: item.nutrientBasisWeight || oldWeight,
-                  consumedWeight: newWeight,
-                  storedBrandLock: item.brandLock || null,
-                  storedOcrLock: item.rawNutritionLabel ? {
-                    basisType: item.rawNutritionLabel.basisType || 'per_dish',
-                    servingGrams: item.rawNutritionLabel.servingGrams || null,
-                    keys: item.lockedNutrientKeys || ['calories'],
-                    valuesAtBasis: item.rawNutritionLabel,
-                  } : null,
-                });
-                addDebugLog(`[Budget] mode=edit item="${item.name}" kcal=${ledger.nutrients.calories} source=${ledger.dbSource} weight=${newWeight}`);
-                item.weightGrams = newWeight;
-                item.calories = ledger.nutrients.calories;
-                item.protein = ledger.nutrients.protein;
-                item.totalFat = ledger.nutrients.totalFat;
-                item.saturatedFat = ledger.nutrients.saturatedFat;
-                item.carbohydrates = ledger.nutrients.carbohydrates;
-                item.sodium = ledger.nutrients.sodium;
-                if (item.nutrients) {
-                  item.nutrients = { ...item.nutrients, ...ledger.nutrients };
-                }
-              } else {
-              // Scale foundation macros by weight ratio first
-              const foundation: Record<string, number> = {
-                calories: Number(item.calories || 0) * R,
-                protein: Number(item.protein || 0) * R,
-                totalFat: Number(item.totalFat || item.fat || 0) * R,
-                saturatedFat: Number(item.saturatedFat || 0) * R,
-                carbohydrates: Number(item.carbohydrates || 0) * R,
-                sodium: Number(item.sodium || 0) * R,
-              };
-              // Soft budget: prior calories scaled, or scout estimate scaled if present
-              const priorScout = Number(item.estimatedCalories || item.scoutEstimatedCalories);
-              const scoutEst = Number.isFinite(priorScout) && priorScout > 0 ? priorScout * R : null;
-              const budget = computeItemBudget({
-                itemName: item.name || item.originalName || mockCommand.itemName,
-                weightGrams: newWeight,
-                hardLabelKcal: item.lockedNutrientKeys?.includes?.('calories') ? Number(item.calories) * R : null,
-                scoutEstimatedCalories: scoutEst,
-              });
-              const rec = reconcileNutrients({ nutrients: foundation, budget, formOk: true });
-              addDebugLog(`[Budget] mode=edit item="${item.name}" kcal=${budget.budgetKcal} source=${budget.source} weight=${newWeight}`);
-              addDebugLog(`[Reconcile] mode=edit action=${rec.action} foundation=${rec.foundationKcal} final=${rec.finalKcal}`);
-              if (item) {
-                item.weightGrams = newWeight;
-                item.calories = Number(((rec?.nutrients?.calories ?? rec?.finalKcal) || 0).toFixed(1));
-                item.protein = Number(((rec?.nutrients?.protein ?? foundation?.protein) || 0).toFixed(2));
-                item.totalFat = Number(((rec?.nutrients?.totalFat ?? foundation?.totalFat) || 0).toFixed(2));
-                item.saturatedFat = Number(((rec?.nutrients?.saturatedFat ?? foundation?.saturatedFat) || 0).toFixed(2));
-                item.carbohydrates = Number(((rec?.nutrients?.carbohydrates ?? foundation?.carbohydrates) || 0).toFixed(2));
-                item.sodium = Number(((rec?.nutrients?.sodium ?? foundation?.sodium) || 0).toFixed(1));
-                if (scoutEst != null) item.estimatedCalories = scoutEst;
-              }
-              }
-            }
-          } else if (mockCommand.action === "remove_item") {
-            const idx = activeMeal.itemsBreakdown?.findIndex((it: any) => it.name.toLowerCase().includes(mockCommand.itemName.toLowerCase()));
-            if (idx !== -1) {
-              activeMeal.itemsBreakdown.splice(idx, 1);
-            }
-          } else if (mockCommand.action === "add_item") {
-            if (!activeMeal.itemsBreakdown) activeMeal.itemsBreakdown = [];
-            activeMeal.itemsBreakdown.push({
-              name: mockCommand.itemName,
-              weightGrams: mockCommand.newWeightGrams,
-              calories: mockCommand.newWeightGrams * 1.5,
-              saturatedFat: mockCommand.newWeightGrams * 0.02,
-              sodium: mockCommand.newWeightGrams * 0.5
-            });
-          }
-        }
-        const newTotalWeight = (activeMeal.itemsBreakdown || []).reduce((acc: number, it: any) => acc + (Number(it.weightGrams) || 0), 0);
-        const mealWeightRatio = newTotalWeight / originalTotalWeight;
-        const newItems = activeMeal.itemsBreakdown || [];
-        activeMeal.weightGrams = newTotalWeight;
-        if (newItems.length === 1) {
-          activeMeal.name = newItems[0].name;
-        }
-        if (activeMeal.scoutItems && Array.isArray(activeMeal.scoutItems)) {
-          const currentNames = new Set(newItems.map((it: any) => (it.name || '').toLowerCase().trim()));
-          activeMeal.scoutItems = activeMeal.scoutItems.filter((scout: any) => {
-            const sName = String(scout.keyword || scout.originalName || scout.name || '').toLowerCase().trim();
-            return Array.from(currentNames).some((cName: any) => String(cName).includes(sName) || sName.includes(String(cName)));
-          });
-        }
-        activeMeal.composition = newItems.map((it: any) => it.name).join(", ");
-        const newCalories = (activeMeal.itemsBreakdown || []).reduce((acc: number, it: any) => acc + (Number(it.calories) || 0), 0);
-        const newSaturatedFat = (activeMeal.itemsBreakdown || []).reduce((acc: number, it: any) => acc + (Number(it.saturatedFat) || 0), 0);
-        const newSodium = (activeMeal.itemsBreakdown || []).reduce((acc: number, it: any) => acc + (Number(it.sodium) || 0), 0);
-        if (!activeMeal.nutrients) activeMeal.nutrients = {};
-        activeMeal.nutrients.calories = Number(newCalories.toFixed(1));
-        activeMeal.nutrients.saturatedFat = Number(newSaturatedFat.toFixed(2));
-        activeMeal.nutrients.sodium = Number(newSodium.toFixed(1));
-        for (const key of Object.keys(activeMeal.nutrients)) {
-          if (key !== "calories" && key !== "saturatedFat" && key !== "sodium") {
-            activeMeal.nutrients[key] = Number(((activeMeal.nutrients[key] || 0) * mealWeightRatio).toFixed(2));
-          }
-        }
-        // We removed offline mock write to user_meals to avoid permission issues
-        return res.json({
-          text: `[Simulated Offline Mod] Modifying active meal: **${activeMeal.name}** to new weights/items. Recalculated all 30 sub-nutrients mathematically offline to save tokens and ensure precision.`,
-          data: activeMeal
-        });
-      }
-      const isDiscussionRequest = message.toLowerCase().includes("why") || message.toLowerCase().includes("explain") || message.toLowerCase().includes("question");
-      if (isDiscussionRequest) {
-        return res.json({
-          text: "This is a simulated conversational answer about your active meal ingredients, explaining that avocado and salmon are rich sources of dietary fibre and heart-healthy monounsaturated fatty acids.",
-          data: null
-        });
-      }
-      return res.json({
-        error: "The food log agent is not available. Please enter the food details manually.",
-        agentNotAvailable: true
       });
     }
-    let imagePayloads = null;
-    if (images && Array.isArray(images) && images.length > 0) {
-      imagePayloads = images.map((imgStr: string) => {
-        const mimeType = imgStr.split(";")[0].split(":")[1] || "image/jpeg";
-        const base64Data = imgStr.split(",")[1];
-        return { mimeType, data: base64Data };
-      });
-    } else if (image) {
-      const mimeType = image.split(";")[0].split(":")[1] || "image/jpeg";
-      const base64Data = image.split(",")[1];
-      imagePayloads = [{ mimeType, data: base64Data }];
-    }
-    addDebugLog(`[Image Payload] Received ${imagePayloads ? imagePayloads.length : 0} image(s). Approx sizes (KB): ${imagePayloads ? imagePayloads.map(p => Math.round((p.data.length * 0.75) / 1024) + 'KB').join(', ') : 'none'}.`);
+
     const analysisNutrientKeys = [
-        "calories", "protein", "totalFat", "saturatedFat", "transFat", "unsaturatedFat", "omega3", 
-      "carbohydrates", "addedSugar", "totalFibre", "solubleFibre", "sodium", "potassium", 
-      "magnesium", "calcium", "iron", "zinc", "selenium", "iodine", "phosphorus", 
-      "vitaminD", "vitaminB12", "folate", "vitaminC", "vitaminE", "vitaminK", 
-      "vitaminA", "vitaminB6", "thiamine", "riboflavin", "niacin"
+      'calories',
+      'protein',
+      'carbohydrates',
+      'totalFat',
+      'saturatedFat',
+      'transFat',
+      'unsaturatedFat',
+      'sugar',
+      'totalSugar',
+      'addedSugar',
+      'totalFibre',
+      'solubleFibre',
+      'sodium',
+      'potassium',
+      'magnesium',
+      'calcium',
+      'iron',
+      'zinc',
+      'selenium',
+      'iodine',
+      'phosphorus',
+      'vitaminD',
+      'vitaminB12',
+      'folate',
+      'vitaminC',
+      'vitaminE',
+      'vitaminK',
+      'vitaminA',
+      'vitaminB6',
+      'thiamine',
+      'riboflavin',
+      'niacin',
     ];
-    // Helper functions for nutritional data lookup
-    const formatUSDANutrients = (nutrients: any[]): string => {
-      if (!nutrients || !Array.isArray(nutrients)) return "No nutrients available";
-      const findNutrient = (namePatterns: string[]) => {
-        // Stricter exact word match first
-        const exactMatch = nutrients.find(n => {
-          const name = (n.nutrientName || (n.nutrient && n.nutrient.name) || "").toLowerCase().trim();
-          return namePatterns.some(p => name === p.toLowerCase().trim());
-        });
-        if (exactMatch) {
-          const val = getUSDANutrientValue(exactMatch);
-          const unit = exactMatch.unitName || (exactMatch.nutrient && exactMatch.nutrient.unitName) || "";
-          return `${val}${unit}`;
-        }
-        // Fallback with precise keyword validation to avoid false fatty acid matches on "fat"
-        const nut = nutrients.find(n => {
-          const name = (n.nutrientName || (n.nutrient && n.nutrient.name) || "").toLowerCase();
-          return namePatterns.some(p => {
-            const cleanP = p.toLowerCase().trim();
-            if (cleanP === "fat" && name.includes("fatty")) {
-              return false; // prevent totalFat matching on saturated fat
-            }
-            return name.includes(cleanP);
-          });
-        });
-        if (!nut) return null;
-        const val = getUSDANutrientValue(nut);
-        const unit = nut.unitName || (nut.nutrient && nut.nutrient.unitName) || "";
-        return `${val}${unit}`;
-      };
-      const mapped: string[] = [];
-      const kcal = findNutrient(["energy", "calories"]);
-      const protein = findNutrient(["protein"]);
-      const fat = findNutrient(["total lipid", "fat"]);
-      const satFat = findNutrient(["saturated fat", "fatty acids, total saturated"]);
-      const sodium = findNutrient(["sodium"]);
-      if (kcal) mapped.push(`Calories: ${kcal}`);
-      if (protein) mapped.push(`Protein: ${protein}`);
-      if (fat) mapped.push(`Fat: ${fat}`);
-      if (satFat) mapped.push(`SatFat: ${satFat}`);
-      if (sodium) mapped.push(`Sodium: ${sodium}`);
-      return mapped.join(", ");
-    };
-    const formatOFFNutrients = (nutriments: any): string => {
-      if (!nutriments) return "No nutrients available";
-      const mapped: string[] = [];
-      const formatVal = (val: any) => {
-        if (val === undefined || val === null) return null;
-        const num = Number(val);
-        return isNaN(num) ? val : Math.round(num * 100) / 100;
-      };
-      const kcal = nutriments["energy-kcal_100g"] !== undefined 
-        ? formatVal(nutriments["energy-kcal_100g"]) 
-        : (nutriments["energy_100g"] !== undefined ? formatVal(Math.round(nutriments["energy_100g"] / 4.184)) : null);
-      const protein = formatVal(nutriments["proteins_100g"]);
-      const fat = formatVal(nutriments["fat_100g"]);
-      const satFat = formatVal(nutriments["saturated-fat_100g"]);
-      const sodium = formatVal(nutriments["sodium_100g"]);
-      if (kcal !== null) mapped.push(`Calories: ${kcal}kcal`);
-      if (protein !== null) mapped.push(`Protein: ${protein}g`);
-      if (fat !== null) mapped.push(`Fat: ${fat}g`);
-      if (satFat !== null) mapped.push(`SatFat: ${satFat}g`);
-      if (sodium !== null) mapped.push(`Sodium: ${Math.round(Number(sodium) * 1000)}mg`);
-      return mapped.join(", ");
-    };
-    const extractOFFNutrientsPer100g = (product: any): Record<string, number> => {
-      const profile: Record<string, number> = {};
-      const n = product.nutriments;
-      if (!n) return profile;
-      if (n["energy-kcal_100g"] !== undefined) {
-        profile["calories"] = Number(n["energy-kcal_100g"]) || 0;
-      } else if (n["energy_100g"] !== undefined) {
-        profile["calories"] = Math.round(Number(n["energy_100g"]) / 4.184) || 0;
-      }
-      const setNum = (key: string, field: string, scale: number = 1) => {
-        if (n[field] !== undefined) {
-          profile[key] = (Number(n[field]) || 0) * scale;
-        }
-      };
-      setNum("protein", "proteins_100g");
-      setNum("totalFat", "fat_100g");
-      setNum("saturatedFat", "saturated-fat_100g");
-      setNum("transFat", "trans-fat_100g");
-      if (profile["totalFat"] !== undefined) {
-        profile["unsaturatedFat"] = Math.max(0, profile["totalFat"] - (profile["saturatedFat"] || 0) - (profile["transFat"] || 0));
-      }
-      setNum("omega3", "omega-3_100g");
-      setNum("carbohydrates", "carbohydrates_100g");
-      setNum("sugar", "sugars_100g");
-      setNum("addedSugar", "added_sugars_100g");
-      setNum("totalFibre", "fiber_100g");
-      setNum("solubleFibre", "soluble-fiber_100g");
-      setNum("sodium", "sodium_100g", 1000);
-      setNum("potassium", "potassium_100g", 1000);
-      setNum("magnesium", "magnesium_100g", 1000);
-      setNum("calcium", "calcium_100g", 1000);
-      setNum("iron", "iron_100g", 1000);
-      setNum("zinc", "zinc_100g", 1000);
-      setNum("selenium", "selenium_100g");
-      setNum("iodine", "iodine_100g");
-      setNum("phosphorus", "phosphorus_100g", 1000);
-      setNum("vitaminD", "vitamin-d_100g");
-      setNum("vitaminB12", "vitamin-b12_100g");
-      setNum("folate", "folate_100g");
-      setNum("vitaminC", "vitamin-c_100g", 1000);
-      setNum("vitaminE", "vitamin-e_100g", 1000);
-      setNum("vitaminK", "vitamin-k_100g");
-      setNum("vitaminA", "vitamin-a_100g");
-      setNum("vitaminB6", "vitamin-b6_100g", 1000);
-      setNum("thiamine", "thiamine_100g", 1000);
-      setNum("riboflavin", "riboflavin_100g", 1000);
-      setNum("niacin", "niacin_100g", 1000);
-      return profile;
-    };
     // B5 — Detect weight/portion refine on prior scout (skip Vision Scout + DB when safe).
     // Path A: text-only refine. Path B: images still attached but printed label locks exist.
     const priorScoutForRefine = Array.isArray(req.body.activeScoutItems) ? req.body.activeScoutItems : [];
@@ -3738,5 +3427,4 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       return res.status(200).json(errorPayload);
     }
   }
-  });
 }

@@ -1,0 +1,1628 @@
+{
+  "id": "C2",
+  "dry": false,
+  "insightSize": 20,
+  "draftSize": 12,
+  "instruction": "You are an expert clinical laboratory AI reviewing a patient's biomarker panel.\nPatient Profile: 43-year-old Chinese male, Unit Preference: SI.\n\nFor each biomarker:\n- id: matching id\n- medicalInsight: Provide a concise, clinically accurate insight for every row (including optimal/normal baseline markers). Cite trend if previous values exist. Consider patient ethnography (e.g. for Chinese patients, HbA1c >=39 indicates elevated prediabetes risk).\n- customRangeOverlay: If agreeing with range, return \"\". If missing thresholds or ethnic demographics, provide FULL multi-bracket range specifying the profile source and clinical names. Format MUST be \"[Profile] Clinical Name: Range; Clinical Name: Range\". Example: \"[Chinese Ethnicity] Elevated (Diabetes): >=48; Elevated: >=39; Optimal: <39\" or \"[Western Standard] High: >104; Normal: 64-104; Low: <64\". If multiple demographic profiles exist, provide all of them.\n- optimalValue: If existing is accurate, return \"\". Otherwise provide 1 single ideal target value without inequalities or ranges (e.g. \"33 mmol/mol\", \"80 umol/L\", \"95 mL/min/1.73m2\"; note 60 for eGFR is naive CKD G2, correct it).\n- editReason: If replacing/correcting existing user values or suboptimal optimalValue, explain why. Otherwise \"\".\n- logs: Extract all logs with standardized \"YYYY-MM-DD\" dates, labName if mentioned (e.g. \"US lab\", \"GP Clinic\"), and comments. Convert US units to patient's unitPreference with standard clinical integer rounding (e.g. 1.1 mg/dL creatinine → 97 umol/L, not decimals like 97.24). Standardize scientific units (e.g. 10^9/L).\n- DICTIONARY CORRECTION: If dictionary info has typos/errors (e.g. Total Protein 6-8 g/L instead of 60-80 g/L), output dictionaryCorrection: { field, correctedValue, reason }. Otherwise null.\n- UNCATALOGED (MISS): If not in dictionary, output match=\"none\", writeTarget=\"pending\", key=null, and newCatalogDraft: { suggestedKey, name, unit, aliases, normalRange, description, riskCategories }. NOTE: normalRange MUST follow the same bracketed profile format with clinical names, e.g., \"[Western Standard] High: >1.4; Optimal: 0.5-1.4; Low: <0.5\".\n\nJSON { \"rows\": [...] }.",
+  "turns": [
+    {
+      "turn": 1,
+      "kind": "hit",
+      "ids": [
+        "r01",
+        "r02",
+        "r03",
+        "r04",
+        "r05",
+        "r06",
+        "r07",
+        "r08",
+        "r09",
+        "r10",
+        "r11",
+        "r12",
+        "r13",
+        "r14"
+      ],
+      "ms": 15759,
+      "n": 14,
+      "raw": "{\n  \"rows\": [\n    {\n      \"id\": \"r01\",\n      \"medicalInsight\": \"Your HbA1c is 40 mmol/mol, showing a slight increase from 39 mmol/mol in 2024. For a Chinese male, this falls within the elevated prediabetes risk threshold of >=39 mmol/mol.\",\n      \"optimalValue\": \"35 mmol/mol\",\n      \"editReason\": \"Corrected optimal target to reflect a healthy normal baseline for a Chinese male at risk of prediabetes.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 40,\n          \"unit\": \"mmol/mol\",\n          \"comment\": \"IFCC standardised\"\n        },\n        {\n          \"date\": \"2024-04-04\",\n          \"value\": 39,\n          \"unit\": \"mmol/mol\",\n          \"comment\": \"Annual GP checkup\"\n        }\n      ],\n      \"customRangeOverlay\": \"[Chinese Ethnicity] Elevated (Prediabetes Risk): >=39; Optimal: <39\",\n      \"dictionaryCorrection\": null\n    },\n    {\n      \"id\": \"r02\",\n      \"medicalInsight\": \"Serum creatinine is 100 umol/L, which remains stable compared to previous readings of 95 umol/L and 97 umol/L, well within the normal range.\",\n      \"optimalValue\": \"80 umol/L\",\n      \"editReason\": \"\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 100,\n          \"unit\": \"umol/L\",\n          \"comment\": null\n        },\n        {\n          \"date\": \"2025-12-10\",\n          \"value\": 95,\n          \"unit\": \"umol/L\",\n          \"comment\": \"Fasting morning sample\"\n        },\n        {\n          \"date\": \"2024-10-15\",\n          \"value\": 97,\n          \"unit\": \"umol/L\",\n          \"comment\": \"US lab\"\n        }\n      ],\n      \"customRangeOverlay\": \"\",\n      \"dictionaryCorrection\": null\n    },\n    {\n      \"id\": \"r03\",\n      \"medicalInsight\": \"Your eGFR of 80 mL/min/1.73m2 indicates normal kidney function, reflecting stable filtration capacity.\",\n      \"optimalValue\": \"95 mL/min/1.73m2\",\n      \"editReason\": \"Corrected naive CKD G2 threshold to an optimal target reflecting youthful filtration.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 80,\n          \"unit\": \"mL/min/1.73m2\",\n          \"comment\": \"Calculated using CKD-EPI equation without ethnicity\"\n        }\n      ],\n      \"customRangeOverlay\": \"[Western Standard] Optimal: >=90; Mild Decrease: 60-89; Low: <60\",\n      \"dictionaryCorrection\": null\n    },\n    {\n      \"id\": \"r04\",\n      \"medicalInsight\": \"Serum albumin is 46 g/L, which is slightly above the standard reference range, indicating good nutritional protein status.\",\n      \"optimalValue\": \"43 g/L\",\n      \"editReason\": \"\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 46,\n          \"unit\": \"g/L\",\n          \"comment\": null\n        }\n      ],\n      \"customRangeOverlay\": \"\",\n      \"dictionaryCorrection\": null\n    },\n    {\n      \"id\": \"r05\",\n      \"medicalInsight\": \"Serum ALT is 41 U/L, showing a slight elevation compared to the baseline of 35 U/L from last year, though still within normal limits.\",\n      \"optimalValue\": \"25 U/L\",\n      \"editReason\": \"\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 41,\n          \"unit\": \"U/L\",\n          \"comment\": null\n        },\n        {\n          \"date\": \"2025-06-01\",\n          \"value\": 35,\n          \"unit\": \"U/L\",\n          \"comment\": \"Baseline health check\"\n        }\n      ],\n      \"customRangeOverlay\": \"\",\n      \"dictionaryCorrection\": null\n    },\n    {\n      \"id\": \"r06\",\n      \"medicalInsight\": \"AST serum level is 27 U/L, sitting comfortably within the healthy reference range.\",\n      \"optimalValue\": \"22 U/L\",\n      \"editReason\": \"\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 27,\n          \"unit\": \"U/L\",\n          \"comment\": null\n        }\n      ],\n      \"customRangeOverlay\": \"\",\n      \"dictionaryCorrection\": null\n    },\n    {\n      \"id\": \"r07\",\n      \"medicalInsight\": \"Serum total protein is 81 g/L, marginally above the upper limit, typically reflecting hydration status or normal physiologic variation.\",\n      \"optimalValue\": \"70 g/L\",\n      \"editReason\": \"Corrected dictionary range error where normal range was misstated as 6-8 g/L instead of 60-80 g/L.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 81,\n          \"unit\": \"g/L\",\n          \"comment\": null\n        }\n      ],\n      \"customRangeOverlay\": \"[Standard] High: >80; Normal: 60-80; Low: <60\",\n      \"dictionaryCorrection\": {\n        \"field\": \"normalRange\",\n        \"correctedValue\": \"60 - 80\",\n        \"reason\": \"Total protein reference range in g/L is correctly 60-80, not 6-8.\"\n      }\n    },\n    {\n      \"id\": \"r08\",\n      \"medicalInsight\": \"Total white cell count is 5.7 x10^9/L, well within normal limits, suggesting a healthy immune profile.\",\n      \"optimalValue\": \"6.0 10*9/L\",\n      \"editReason\": \"\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 5.7,\n          \"unit\": \"10*9/L\",\n          \"comment\": null\n        }\n      ],\n      \"customRangeOverlay\": \"\",\n      \"dictionaryCorrection\": null\n    },\n    {\n      \"id\": \"r09\",\n      \"medicalInsight\": \"Red blood cell count is 5.47 x10^12/L, normal and optimal for oxygen transport capacity.\",\n      \"optimalValue\": \"5.00 10*12/L\",\n      \"editReason\": \"\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 5.47,\n          \"unit\": \"10*12/L\",\n          \"comment\": null\n        }\n      ],\n      \"customRangeOverlay\": \"\",\n      \"dictionaryCorrection\": null\n    },\n    {\n      \"id\": \"r10\",\n      \"medicalInsight\": \"Haemoglobin estimation is 166 g/L, within the normal adult male reference range.\",\n      \"optimalValue\": \"150 g/L\",\n      \"editReason\": \"\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 166,\n          \"unit\": \"g/L\",\n          \"comment\": null\n        }\n      ],\n      \"customRangeOverlay\": \"\",\n      \"dictionaryCorrection\": null\n    },\n    {\n      \"id\": \"r11\",\n      \"medicalInsight\": \"Haematocrit is 0.48 L/L, indicating a normal proportion of red blood cells in circulation.\",\n      \"optimalValue\": \"0.450 L/L\",\n      \"editReason\": \"\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 0.48,\n          \"unit\": \"L/L\",\n          \"comment\": null\n        }\n      ],\n      \"customRangeOverlay\": \"\",\n      \"dictionaryCorrection\": null\n    },\n    {\n      \"id\": \"r12\",\n      \"medicalInsight\": \"Mean corpuscular volume (MCV) is 88 fL, falling ideally within the center of the normal range.\",\n      \"optimalValue\": \"90 fL\",\n      \"editReason\": \"\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 88,\n          \"unit\": \"fL\",\n          \"comment\": null\n        }\n      ],\n      \"customRangeOverlay\": \"\",\n      \"dictionaryCorrection\": null\n    },\n    {\n      \"id\": \"r13\",\n      \"medicalInsight\": \"Mean corpuscular haemoglobin (MCH) is 30.3 pg, normal and consistent with healthy red cell indices.\",\n      \"optimalValue\": \"30.0 pg\",\n      \"editReason\": \"\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 30.3,\n          \"unit\": \"pg\",\n          \"comment\": null\n        }\n      ],\n      \"customRangeOverlay\": \"\",\n      \"dictionaryCorrection\": null\n    },\n    {\n      \"id\": \"r14\",\n      \"medicalInsight\": \"Mean corpuscular Hb concentration (MCHC) is 346 g/L, within expected parameters.\",\n      \"optimalValue\": \"340 g/L\",\n      \"editReason\": \"\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 346,\n          \"unit\": \"g/L\",\n          \"comment\": null\n        }\n      ],\n      \"customRangeOverlay\": \"\",\n      \"dictionaryCorrection\": null\n    }\n  ]\n}",
+      "rows": [
+        {
+          "id": "r01",
+          "medicalInsight": "Your HbA1c is 40 mmol/mol, showing a slight increase from 39 mmol/mol in 2024. For a Chinese male, this falls within the elevated prediabetes risk threshold of >=39 mmol/mol.",
+          "optimalValue": "35 mmol/mol",
+          "editReason": "Corrected optimal target to reflect a healthy normal baseline for a Chinese male at risk of prediabetes.",
+          "logs": [
+            {
+              "date": "2026-06-05",
+              "value": 40,
+              "unit": "mmol/mol",
+              "comment": "IFCC standardised"
+            },
+            {
+              "date": "2024-04-04",
+              "value": 39,
+              "unit": "mmol/mol",
+              "comment": "Annual GP checkup"
+            }
+          ],
+          "customRangeOverlay": "[Chinese Ethnicity] Elevated (Prediabetes Risk): >=39; Optimal: <39",
+          "dictionaryCorrection": null
+        },
+        {
+          "id": "r02",
+          "medicalInsight": "Serum creatinine is 100 umol/L, which remains stable compared to previous readings of 95 umol/L and 97 umol/L, well within the normal range.",
+          "optimalValue": "80 umol/L",
+          "editReason": "",
+          "logs": [
+            {
+              "date": "2026-06-05",
+              "value": 100,
+              "unit": "umol/L",
+              "comment": null
+            },
+            {
+              "date": "2025-12-10",
+              "value": 95,
+              "unit": "umol/L",
+              "comment": "Fasting morning sample"
+            },
+            {
+              "date": "2024-10-15",
+              "value": 97,
+              "unit": "umol/L",
+              "comment": "US lab"
+            }
+          ],
+          "customRangeOverlay": "",
+          "dictionaryCorrection": null
+        },
+        {
+          "id": "r03",
+          "medicalInsight": "Your eGFR of 80 mL/min/1.73m2 indicates normal kidney function, reflecting stable filtration capacity.",
+          "optimalValue": "95 mL/min/1.73m2",
+          "editReason": "Corrected naive CKD G2 threshold to an optimal target reflecting youthful filtration.",
+          "logs": [
+            {
+              "date": "2026-06-05",
+              "value": 80,
+              "unit": "mL/min/1.73m2",
+              "comment": "Calculated using CKD-EPI equation without ethnicity"
+            }
+          ],
+          "customRangeOverlay": "[Western Standard] Optimal: >=90; Mild Decrease: 60-89; Low: <60",
+          "dictionaryCorrection": null
+        },
+        {
+          "id": "r04",
+          "medicalInsight": "Serum albumin is 46 g/L, which is slightly above the standard reference range, indicating good nutritional protein status.",
+          "optimalValue": "43 g/L",
+          "editReason": "",
+          "logs": [
+            {
+              "date": "2026-06-05",
+              "value": 46,
+              "unit": "g/L",
+              "comment": null
+            }
+          ],
+          "customRangeOverlay": "",
+          "dictionaryCorrection": null
+        },
+        {
+          "id": "r05",
+          "medicalInsight": "Serum ALT is 41 U/L, showing a slight elevation compared to the baseline of 35 U/L from last year, though still within normal limits.",
+          "optimalValue": "25 U/L",
+          "editReason": "",
+          "logs": [
+            {
+              "date": "2026-06-05",
+              "value": 41,
+              "unit": "U/L",
+              "comment": null
+            },
+            {
+              "date": "2025-06-01",
+              "value": 35,
+              "unit": "U/L",
+              "comment": "Baseline health check"
+            }
+          ],
+          "customRangeOverlay": "",
+          "dictionaryCorrection": null
+        },
+        {
+          "id": "r06",
+          "medicalInsight": "AST serum level is 27 U/L, sitting comfortably within the healthy reference range.",
+          "optimalValue": "22 U/L",
+          "editReason": "",
+          "logs": [
+            {
+              "date": "2026-06-05",
+              "value": 27,
+              "unit": "U/L",
+              "comment": null
+            }
+          ],
+          "customRangeOverlay": "",
+          "dictionaryCorrection": null
+        },
+        {
+          "id": "r07",
+          "medicalInsight": "Serum total protein is 81 g/L, marginally above the upper limit, typically reflecting hydration status or normal physiologic variation.",
+          "optimalValue": "70 g/L",
+          "editReason": "Corrected dictionary range error where normal range was misstated as 6-8 g/L instead of 60-80 g/L.",
+          "logs": [
+            {
+              "date": "2026-06-05",
+              "value": 81,
+              "unit": "g/L",
+              "comment": null
+            }
+          ],
+          "customRangeOverlay": "[Standard] High: >80; Normal: 60-80; Low: <60",
+          "dictionaryCorrection": {
+            "field": "normalRange",
+            "correctedValue": "60 - 80",
+            "reason": "Total protein reference range in g/L is correctly 60-80, not 6-8."
+          }
+        },
+        {
+          "id": "r08",
+          "medicalInsight": "Total white cell count is 5.7 x10^9/L, well within normal limits, suggesting a healthy immune profile.",
+          "optimalValue": "6.0 10*9/L",
+          "editReason": "",
+          "logs": [
+            {
+              "date": "2026-06-05",
+              "value": 5.7,
+              "unit": "10*9/L",
+              "comment": null
+            }
+          ],
+          "customRangeOverlay": "",
+          "dictionaryCorrection": null
+        },
+        {
+          "id": "r09",
+          "medicalInsight": "Red blood cell count is 5.47 x10^12/L, normal and optimal for oxygen transport capacity.",
+          "optimalValue": "5.00 10*12/L",
+          "editReason": "",
+          "logs": [
+            {
+              "date": "2026-06-05",
+              "value": 5.47,
+              "unit": "10*12/L",
+              "comment": null
+            }
+          ],
+          "customRangeOverlay": "",
+          "dictionaryCorrection": null
+        },
+        {
+          "id": "r10",
+          "medicalInsight": "Haemoglobin estimation is 166 g/L, within the normal adult male reference range.",
+          "optimalValue": "150 g/L",
+          "editReason": "",
+          "logs": [
+            {
+              "date": "2026-06-05",
+              "value": 166,
+              "unit": "g/L",
+              "comment": null
+            }
+          ],
+          "customRangeOverlay": "",
+          "dictionaryCorrection": null
+        },
+        {
+          "id": "r11",
+          "medicalInsight": "Haematocrit is 0.48 L/L, indicating a normal proportion of red blood cells in circulation.",
+          "optimalValue": "0.450 L/L",
+          "editReason": "",
+          "logs": [
+            {
+              "date": "2026-06-05",
+              "value": 0.48,
+              "unit": "L/L",
+              "comment": null
+            }
+          ],
+          "customRangeOverlay": "",
+          "dictionaryCorrection": null
+        },
+        {
+          "id": "r12",
+          "medicalInsight": "Mean corpuscular volume (MCV) is 88 fL, falling ideally within the center of the normal range.",
+          "optimalValue": "90 fL",
+          "editReason": "",
+          "logs": [
+            {
+              "date": "2026-06-05",
+              "value": 88,
+              "unit": "fL",
+              "comment": null
+            }
+          ],
+          "customRangeOverlay": "",
+          "dictionaryCorrection": null
+        },
+        {
+          "id": "r13",
+          "medicalInsight": "Mean corpuscular haemoglobin (MCH) is 30.3 pg, normal and consistent with healthy red cell indices.",
+          "optimalValue": "30.0 pg",
+          "editReason": "",
+          "logs": [
+            {
+              "date": "2026-06-05",
+              "value": 30.3,
+              "unit": "pg",
+              "comment": null
+            }
+          ],
+          "customRangeOverlay": "",
+          "dictionaryCorrection": null
+        },
+        {
+          "id": "r14",
+          "medicalInsight": "Mean corpuscular Hb concentration (MCHC) is 346 g/L, within expected parameters.",
+          "optimalValue": "340 g/L",
+          "editReason": "",
+          "logs": [
+            {
+              "date": "2026-06-05",
+              "value": 346,
+              "unit": "g/L",
+              "comment": null
+            }
+          ],
+          "customRangeOverlay": "",
+          "dictionaryCorrection": null
+        }
+      ],
+      "user": "<user_upload>\n\"05-Jun-2026\",\"HbA1c levl - IFCC standardised\",\"40 mmol/mol\",\"20 - 41 mmol/mol\",\"(AlyssaFRS) - 01. Satisfactory - No Action\"\n\"05-Jun-2026\",\"Serum creatinine\",\"100 umol/L\",\"64 - 104 umol/L\",\"\"\n\"05-Jun-2026\",\"eGFRcreat (CKD-EPI)/1.73 m*2\",\"80 mL/min/1.73m2\",\"- mL/min/1.73m2\",\"NA Note eGFR calculated using the CKD-EPI (2009 without ethnicity) equation.\"\n\"05-Jun-2026\",\"Serum albumin\",\"46 g/L\",\"31 - 45 g/L\",\"\"\n\"05-Jun-2026\",\"Serum ALT level\",\"41 U/L\",\"0 - 45 U/L\",\"\"\n\"05-Jun-2026\",\"AST serum level\",\"27 U/L\",\"5 - 34 U/L\",\"\"\n\"05-Jun-2026\",\"Serum total protein\",\"81 g/L\",\"60 - 80 g/L\",\"\"\n\"05-Jun-2026\",\"Total white cell count\",\"5.7 10*9/L\",\"2.9 - 9.6 10*9/L\",\"\"\n\"05-Jun-2026\",\"Red blood cell (RBC) count\",\"5.47 10*12/L\",\"4.20 - 5.80 10*12/L\",\"\"\n\"05-Jun-2026\",\"Haemoglobin estimation\",\"166 g/L\",\"125 - 170 g/L\",\"\"\n\"05-Jun-2026\",\"Haematocrit\",\"0.48 L/L\",\"0.390 - 0.510 L/L\",\"\"\n\"05-Jun-2026\",\"Mean corpuscular volume (MCV)\",\"88 fL\",\"81 - 100 fL\",\"\"\n\"05-Jun-2026\",\"Mean corpusc. haemoglobin(MCH)\",\"30.3 pg\",\"27.0 - 33.3 pg\",\"\"\n\"05-Jun-2026\",\"Mean corpusc. Hb. conc. (MCHC)\",\"346 g/L\",\"310 - 350 g/L\",\"\"\n\nPrior medical records:\n- On 4 April 2024, HbA1c was 39 mmol/mol (annual GP checkup).\n- US clinic visit on 10/15/2024: Serum creatinine was 1.1 mg/dL (annual routine check, US lab).\n- On 12/10/2025, Serum creatinine was 95 umol/L (fasting morning sample).\n- On June 1st, 2025, Serum ALT level was 35 U/L (baseline health check).\n</user_upload>\n\nBiomarkers to review (hits - in catalog):\n{\n  \"biomarkers\": [\n    {\n      \"id\": \"r01\",\n      \"name\": \"HbA1c\",\n      \"value\": 40,\n      \"unit\": \"mmol/mol\",\n      \"date\": \"2026-06-05\",\n      \"range\": \"20 - 41 mmol/mol\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"20 - 41\",\n        \"unit\": \"mmol/mol\",\n        \"description\": \"Average blood glucose levels over the past 2-3 months.\"\n      },\n      \"previous\": \"39 mmol/mol\"\n    },\n    {\n      \"id\": \"r02\",\n      \"name\": \"Creatinine\",\n      \"value\": 100,\n      \"unit\": \"umol/L\",\n      \"date\": \"2026-06-05\",\n      \"range\": \"64 - 104 umol/L\",\n      \"optimalValue\": \"80 umol/L\",\n      \"existingInsight\": \"Serum creatinine is 100 umol/L, within the normal laboratory range.\",\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"44 - 106\",\n        \"unit\": \"umol/L\",\n        \"description\": \"A waste product from muscle breakdown, filtered by kidneys.\"\n      }\n    },\n    {\n      \"id\": \"r03\",\n      \"name\": \"eGFR\",\n      \"value\": 80,\n      \"unit\": \"mL/min/1.73m2\",\n      \"date\": \"2026-06-05\",\n      \"range\": \">= 60 mL/min/1.73m2\",\n      \"optimalValue\": \"60 mL/min/1.73m2\",\n      \"existingInsight\": \"Your eGFR of 80 is normal.\",\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"over 90\",\n        \"unit\": \"mL/min/1.73m²\",\n        \"description\": \"Estimated Glomerular Filtration Rate, showing kidney health.\"\n      }\n    },\n    {\n      \"id\": \"r04\",\n      \"name\": \"Serum Albumin\",\n      \"value\": 46,\n      \"unit\": \"g/L\",\n      \"date\": \"2026-06-05\",\n      \"range\": \"31 - 45 g/L\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"35 - 50\",\n        \"unit\": \"g/L\",\n        \"description\": \"Main protein produced by the liver, keeping fluid balance in vessels.\"\n      }\n    },\n    {\n      \"id\": \"r05\",\n      \"name\": \"ALT (SGPT)\",\n      \"value\": 41,\n      \"unit\": \"U/L\",\n      \"date\": \"2026-06-05\",\n      \"range\": \"0 - 45 U/L\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"10 - 40\",\n        \"unit\": \"U/L\",\n        \"description\": \"Alanine Aminotransferase, an enzyme found mostly in the liver.\"\n      }\n    },\n    {\n      \"id\": \"r06\",\n      \"name\": \"AST (SGOT)\",\n      \"value\": 27,\n      \"unit\": \"U/L\",\n      \"date\": \"2026-06-05\",\n      \"range\": \"5 - 34 U/L\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"10 - 40\",\n        \"unit\": \"U/L\",\n        \"description\": \"Aspartate Aminotransferase, an enzyme found in liver and muscle.\"\n      }\n    },\n    {\n      \"id\": \"r07\",\n      \"name\": \"Total Protein\",\n      \"value\": 81,\n      \"unit\": \"g/L\",\n      \"date\": \"2026-06-05\",\n      \"range\": \"6 - 8 g/L\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"6 - 8 g/L\",\n        \"unit\": \"g/L\",\n        \"description\": \"Measures the total amount of protein in your blood.\"\n      }\n    },\n    {\n      \"id\": \"r08\",\n      \"name\": \"White Blood Cell (WBC)\",\n      \"value\": 5.7,\n      \"unit\": \"10*9/L\",\n      \"date\": \"2026-06-05\",\n      \"range\": \"2.9 - 9.6 10*9/L\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"4.5 - 11.0\",\n        \"unit\": \"K/uL\",\n        \"description\": \"Total white blood cell count for immune function.\"\n      }\n    },\n    {\n      \"id\": \"r09\",\n      \"name\": \"Red Blood Cell (RBC)\",\n      \"value\": 5.47,\n      \"unit\": \"10*12/L\",\n      \"date\": \"2026-06-05\",\n      \"range\": \"4.20 - 5.80 10*12/L\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"4.5 - 5.9\",\n        \"unit\": \"M/uL\",\n        \"description\": \"Total red blood cell count carrying oxygen to tissue.\"\n      }\n    },\n    {\n      \"id\": \"r10\",\n      \"name\": \"Hemoglobin\",\n      \"value\": 166,\n      \"unit\": \"g/L\",\n      \"date\": \"2026-06-05\",\n      \"range\": \"125 - 170 g/L\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"120 - 175\",\n        \"unit\": \"g/L\",\n        \"description\": \"Oxygen-carrying protein in red blood cells.\"\n      }\n    },\n    {\n      \"id\": \"r11\",\n      \"name\": \"Hematocrit\",\n      \"value\": 0.48,\n      \"unit\": \"L/L\",\n      \"date\": \"2026-06-05\",\n      \"range\": \"0.390 - 0.510 L/L\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"0.36 - 0.50\",\n        \"unit\": \"L/L\",\n        \"description\": \"The proportion of blood made up of red blood cells.\"\n      }\n    },\n    {\n      \"id\": \"r12\",\n      \"name\": \"Mean Corpuscular Volume (MCV)\",\n      \"value\": 88,\n      \"unit\": \"fL\",\n      \"date\": \"2026-06-05\",\n      \"range\": \"81 - 100 fL\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"80 - 100\",\n        \"unit\": \"fL\",\n        \"description\": \"Average volume or size of red blood cells.\"\n      }\n    },\n    {\n      \"id\": \"r13\",\n      \"name\": \"Mean Corpuscular Hemoglobin (MCH)\",\n      \"value\": 30.3,\n      \"unit\": \"pg\",\n      \"date\": \"2026-06-05\",\n      \"range\": \"27.0 - 33.3 pg\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"27 - 33\",\n        \"unit\": \"pg\",\n        \"description\": \"Average amount of hemoglobin per red blood cell.\"\n      }\n    },\n    {\n      \"id\": \"r14\",\n      \"name\": \"Mean Corpuscular Hemoglobin Concentration (MCHC)\",\n      \"value\": 346,\n      \"unit\": \"g/L\",\n      \"date\": \"2026-06-05\",\n      \"range\": \"310 - 350 g/L\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"320 - 360\",\n        \"unit\": \"g/L\",\n        \"description\": \"Average concentration of hemoglobin inside red blood cells.\"\n      }\n    }\n  ]\n}",
+      "payload": [
+        {
+          "id": "r01",
+          "name": "HbA1c",
+          "value": 40,
+          "unit": "mmol/mol",
+          "date": "2026-06-05",
+          "range": "20 - 41 mmol/mol",
+          "optimalValue": null,
+          "existingInsight": null,
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "20 - 41",
+            "unit": "mmol/mol",
+            "description": "Average blood glucose levels over the past 2-3 months."
+          },
+          "previous": "39 mmol/mol"
+        },
+        {
+          "id": "r02",
+          "name": "Creatinine",
+          "value": 100,
+          "unit": "umol/L",
+          "date": "2026-06-05",
+          "range": "64 - 104 umol/L",
+          "optimalValue": "80 umol/L",
+          "existingInsight": "Serum creatinine is 100 umol/L, within the normal laboratory range.",
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "44 - 106",
+            "unit": "umol/L",
+            "description": "A waste product from muscle breakdown, filtered by kidneys."
+          }
+        },
+        {
+          "id": "r03",
+          "name": "eGFR",
+          "value": 80,
+          "unit": "mL/min/1.73m2",
+          "date": "2026-06-05",
+          "range": ">= 60 mL/min/1.73m2",
+          "optimalValue": "60 mL/min/1.73m2",
+          "existingInsight": "Your eGFR of 80 is normal.",
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "over 90",
+            "unit": "mL/min/1.73m²",
+            "description": "Estimated Glomerular Filtration Rate, showing kidney health."
+          }
+        },
+        {
+          "id": "r04",
+          "name": "Serum Albumin",
+          "value": 46,
+          "unit": "g/L",
+          "date": "2026-06-05",
+          "range": "31 - 45 g/L",
+          "optimalValue": null,
+          "existingInsight": null,
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "35 - 50",
+            "unit": "g/L",
+            "description": "Main protein produced by the liver, keeping fluid balance in vessels."
+          }
+        },
+        {
+          "id": "r05",
+          "name": "ALT (SGPT)",
+          "value": 41,
+          "unit": "U/L",
+          "date": "2026-06-05",
+          "range": "0 - 45 U/L",
+          "optimalValue": null,
+          "existingInsight": null,
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "10 - 40",
+            "unit": "U/L",
+            "description": "Alanine Aminotransferase, an enzyme found mostly in the liver."
+          }
+        },
+        {
+          "id": "r06",
+          "name": "AST (SGOT)",
+          "value": 27,
+          "unit": "U/L",
+          "date": "2026-06-05",
+          "range": "5 - 34 U/L",
+          "optimalValue": null,
+          "existingInsight": null,
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "10 - 40",
+            "unit": "U/L",
+            "description": "Aspartate Aminotransferase, an enzyme found in liver and muscle."
+          }
+        },
+        {
+          "id": "r07",
+          "name": "Total Protein",
+          "value": 81,
+          "unit": "g/L",
+          "date": "2026-06-05",
+          "range": "6 - 8 g/L",
+          "optimalValue": null,
+          "existingInsight": null,
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "6 - 8 g/L",
+            "unit": "g/L",
+            "description": "Measures the total amount of protein in your blood."
+          }
+        },
+        {
+          "id": "r08",
+          "name": "White Blood Cell (WBC)",
+          "value": 5.7,
+          "unit": "10*9/L",
+          "date": "2026-06-05",
+          "range": "2.9 - 9.6 10*9/L",
+          "optimalValue": null,
+          "existingInsight": null,
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "4.5 - 11.0",
+            "unit": "K/uL",
+            "description": "Total white blood cell count for immune function."
+          }
+        },
+        {
+          "id": "r09",
+          "name": "Red Blood Cell (RBC)",
+          "value": 5.47,
+          "unit": "10*12/L",
+          "date": "2026-06-05",
+          "range": "4.20 - 5.80 10*12/L",
+          "optimalValue": null,
+          "existingInsight": null,
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "4.5 - 5.9",
+            "unit": "M/uL",
+            "description": "Total red blood cell count carrying oxygen to tissue."
+          }
+        },
+        {
+          "id": "r10",
+          "name": "Hemoglobin",
+          "value": 166,
+          "unit": "g/L",
+          "date": "2026-06-05",
+          "range": "125 - 170 g/L",
+          "optimalValue": null,
+          "existingInsight": null,
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "120 - 175",
+            "unit": "g/L",
+            "description": "Oxygen-carrying protein in red blood cells."
+          }
+        },
+        {
+          "id": "r11",
+          "name": "Hematocrit",
+          "value": 0.48,
+          "unit": "L/L",
+          "date": "2026-06-05",
+          "range": "0.390 - 0.510 L/L",
+          "optimalValue": null,
+          "existingInsight": null,
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "0.36 - 0.50",
+            "unit": "L/L",
+            "description": "The proportion of blood made up of red blood cells."
+          }
+        },
+        {
+          "id": "r12",
+          "name": "Mean Corpuscular Volume (MCV)",
+          "value": 88,
+          "unit": "fL",
+          "date": "2026-06-05",
+          "range": "81 - 100 fL",
+          "optimalValue": null,
+          "existingInsight": null,
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "80 - 100",
+            "unit": "fL",
+            "description": "Average volume or size of red blood cells."
+          }
+        },
+        {
+          "id": "r13",
+          "name": "Mean Corpuscular Hemoglobin (MCH)",
+          "value": 30.3,
+          "unit": "pg",
+          "date": "2026-06-05",
+          "range": "27.0 - 33.3 pg",
+          "optimalValue": null,
+          "existingInsight": null,
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "27 - 33",
+            "unit": "pg",
+            "description": "Average amount of hemoglobin per red blood cell."
+          }
+        },
+        {
+          "id": "r14",
+          "name": "Mean Corpuscular Hemoglobin Concentration (MCHC)",
+          "value": 346,
+          "unit": "g/L",
+          "date": "2026-06-05",
+          "range": "310 - 350 g/L",
+          "optimalValue": null,
+          "existingInsight": null,
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "320 - 360",
+            "unit": "g/L",
+            "description": "Average concentration of hemoglobin inside red blood cells."
+          }
+        }
+      ]
+    }
+  ],
+  "classified": [
+    {
+      "id": "r01",
+      "printed": "HbA1c levl - IFCC standardised",
+      "match": "alias",
+      "writeTarget": "observation",
+      "key": "hba1c",
+      "status": "Elevated"
+    },
+    {
+      "id": "r02",
+      "printed": "Serum creatinine",
+      "match": "alias",
+      "writeTarget": "observation",
+      "key": "creatinine",
+      "status": "Optimal"
+    },
+    {
+      "id": "r03",
+      "printed": "eGFRcreat (CKD-EPI)/1.73 m*2",
+      "match": "alias",
+      "writeTarget": "observation",
+      "key": "egfr",
+      "status": "Mildly Decreased (CKD G2)"
+    },
+    {
+      "id": "r04",
+      "printed": "Serum albumin",
+      "match": "key",
+      "writeTarget": "observation",
+      "key": "serum_albumin",
+      "status": "Optimal"
+    },
+    {
+      "id": "r05",
+      "printed": "Serum ALT level",
+      "match": "alias",
+      "writeTarget": "observation",
+      "key": "alt",
+      "status": "Elevated"
+    },
+    {
+      "id": "r06",
+      "printed": "AST serum level",
+      "match": "alias",
+      "writeTarget": "observation",
+      "key": "ast",
+      "status": "Optimal"
+    },
+    {
+      "id": "r07",
+      "printed": "Serum total protein",
+      "match": "alias",
+      "writeTarget": "observation",
+      "key": "total_protein",
+      "status": "Elevated"
+    },
+    {
+      "id": "r08",
+      "printed": "Total white cell count",
+      "match": "alias",
+      "writeTarget": "observation",
+      "key": "wbc",
+      "status": "Optimal"
+    },
+    {
+      "id": "r09",
+      "printed": "Red blood cell (RBC) count",
+      "match": "alias",
+      "writeTarget": "observation",
+      "key": "rbc",
+      "status": "Optimal"
+    },
+    {
+      "id": "r10",
+      "printed": "Haemoglobin estimation",
+      "match": "alias",
+      "writeTarget": "observation",
+      "key": "hemoglobin",
+      "status": "Optimal"
+    },
+    {
+      "id": "r11",
+      "printed": "Haematocrit",
+      "match": "alias",
+      "writeTarget": "observation",
+      "key": "hematocrit",
+      "status": "Optimal"
+    },
+    {
+      "id": "r12",
+      "printed": "Mean corpuscular volume (MCV)",
+      "match": "alias",
+      "writeTarget": "observation",
+      "key": "mean_corpuscular_volume",
+      "status": "Optimal"
+    },
+    {
+      "id": "r13",
+      "printed": "Mean corpusc. haemoglobin(MCH)",
+      "match": "alias",
+      "writeTarget": "observation",
+      "key": "mean_corpuscular_hemoglobin",
+      "status": "Optimal"
+    },
+    {
+      "id": "r14",
+      "printed": "Mean corpusc. Hb. conc. (MCHC)",
+      "match": "alias",
+      "writeTarget": "observation",
+      "key": "mean_corpuscular_hemoglobin_concentration",
+      "status": "Optimal"
+    }
+  ],
+  "templates": [
+    {
+      "id": "r01",
+      "printed": "HbA1c levl - IFCC standardised",
+      "match": "alias",
+      "writeTarget": "observation",
+      "biomarkerName": "HbA1c",
+      "key": "hba1c",
+      "alias": [
+        "hba1cc",
+        "glycatedhaemoglobin",
+        "hemoglobin_a1c_mmol_mol",
+        "hba1c_mmol_mol",
+        "hemoglobin_a1c"
+      ],
+      "normalRange": "20 - 41",
+      "unit": "mmol/mol",
+      "description": "Average blood glucose levels over the past 2-3 months.",
+      "riskCategories": [
+        "Metabolic"
+      ],
+      "notUsed": false,
+      "customRangePopulation": "[All patients] Elevated (Diabetes): >= 48; Elevated: >= 39; Normal: >= 20; Elevated (Diabetes): >= 6.5; Elevated: >= 5.7",
+      "printedRange": "20 - 41 mmol/mol",
+      "assignedRange": "20 - 41 mmol/mol",
+      "optimalValue": "35 mmol/mol",
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": "Corrected optimal target to reflect a healthy normal baseline for a Chinese male at risk of prediabetes.",
+      "customRangeOverlay": "[Chinese Ethnicity] Elevated (Prediabetes Risk): >=39; Optimal: <39",
+      "medicalInsight": "Your HbA1c is 40 mmol/mol, showing a slight increase from 39 mmol/mol in 2024. For a Chinese male, this falls within the elevated prediabetes risk threshold of >=39 mmol/mol.",
+      "historicalLogs": [
+        {
+          "date": "2026-06-05",
+          "value": 40,
+          "unit": "mmol/mol",
+          "comment": "IFCC standardised"
+        },
+        {
+          "date": "2024-04-04",
+          "value": 39,
+          "unit": "mmol/mol",
+          "comment": "Annual GP checkup"
+        }
+      ],
+      "currentEvaluationStatus": "Elevated",
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r02",
+      "printed": "Serum creatinine",
+      "match": "alias",
+      "writeTarget": "observation",
+      "biomarkerName": "Creatinine",
+      "key": "creatinine",
+      "alias": [
+        "serumcreatinine",
+        "serumcreatinineumoll",
+        "serum_creatinine_umol_l",
+        "serum_creatinine"
+      ],
+      "normalRange": "44 - 106",
+      "unit": "umol/L",
+      "description": "A waste product from muscle breakdown, filtered by kidneys.",
+      "riskCategories": [
+        "Kidney"
+      ],
+      "notUsed": false,
+      "customRangePopulation": "",
+      "printedRange": "64 - 104 umol/L",
+      "assignedRange": "64 - 104 umol/L",
+      "optimalValue": "80 umol/L",
+      "existingInsight": "Serum creatinine is 100 umol/L, within the normal laboratory range.",
+      "existingCustomRange": null,
+      "editReason": null,
+      "customRangeOverlay": null,
+      "medicalInsight": "Serum creatinine is 100 umol/L, which remains stable compared to previous readings of 95 umol/L and 97 umol/L, well within the normal range.",
+      "historicalLogs": [
+        {
+          "date": "2026-06-05",
+          "value": 100,
+          "unit": "umol/L",
+          "comment": null
+        },
+        {
+          "date": "2025-12-10",
+          "value": 95,
+          "unit": "umol/L",
+          "comment": "Fasting morning sample"
+        },
+        {
+          "date": "2024-10-15",
+          "value": 97,
+          "unit": "umol/L",
+          "comment": "US lab"
+        }
+      ],
+      "currentEvaluationStatus": "Optimal",
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r03",
+      "printed": "eGFRcreat (CKD-EPI)/1.73 m*2",
+      "match": "alias",
+      "writeTarget": "observation",
+      "biomarkerName": "eGFR",
+      "key": "egfr",
+      "alias": [
+        "egfrmlmin173m2",
+        "egfrmlmin173",
+        "egfr_ml_min_1_73m2",
+        "egfr_mlmin173m2"
+      ],
+      "normalRange": "over 90",
+      "unit": "mL/min/1.73m²",
+      "description": "Estimated Glomerular Filtration Rate, showing kidney health.",
+      "riskCategories": [
+        "Kidney"
+      ],
+      "notUsed": false,
+      "customRangePopulation": "[All patients] Decreased (CKD G3): < 60; Mildly Decreased (CKD G2): < 90; Optimal: >= 90",
+      "printedRange": "- mL/min/1.73m2",
+      "assignedRange": ">= 60 mL/min/1.73m2",
+      "optimalValue": "95 mL/min/1.73m2",
+      "existingInsight": "Your eGFR of 80 is normal.",
+      "existingCustomRange": null,
+      "editReason": "Corrected naive CKD G2 threshold to an optimal target reflecting youthful filtration.",
+      "customRangeOverlay": "[Western Standard] Optimal: >=90; Mild Decrease: 60-89; Low: <60",
+      "medicalInsight": "Your eGFR of 80 mL/min/1.73m2 indicates normal kidney function, reflecting stable filtration capacity.",
+      "historicalLogs": [
+        {
+          "date": "2026-06-05",
+          "value": 80,
+          "unit": "mL/min/1.73m2",
+          "comment": "Calculated using CKD-EPI equation without ethnicity"
+        }
+      ],
+      "currentEvaluationStatus": "Mildly Decreased (CKD G2)",
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r04",
+      "printed": "Serum albumin",
+      "match": "key",
+      "writeTarget": "observation",
+      "biomarkerName": "Serum Albumin",
+      "key": "serum_albumin",
+      "alias": [
+        "albumin",
+        "serumalbumin",
+        "serum_albumin_g_l"
+      ],
+      "normalRange": "35 - 50",
+      "unit": "g/L",
+      "description": "Main protein produced by the liver, keeping fluid balance in vessels.",
+      "riskCategories": [
+        "Liver",
+        "Kidney"
+      ],
+      "notUsed": false,
+      "customRangePopulation": "",
+      "printedRange": "31 - 45 g/L",
+      "assignedRange": "31 - 45 g/L",
+      "optimalValue": "43 g/L",
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": null,
+      "customRangeOverlay": null,
+      "medicalInsight": "Serum albumin is 46 g/L, which is slightly above the standard reference range, indicating good nutritional protein status.",
+      "historicalLogs": [
+        {
+          "date": "2026-06-05",
+          "value": 46,
+          "unit": "g/L",
+          "comment": null
+        }
+      ],
+      "currentEvaluationStatus": "Optimal",
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r05",
+      "printed": "Serum ALT level",
+      "match": "alias",
+      "writeTarget": "observation",
+      "biomarkerName": "ALT (SGPT)",
+      "key": "alt",
+      "alias": [
+        "sgpt",
+        "alanine_aminotransferase",
+        "serum_alt_level_u_l",
+        "serum_alt_level"
+      ],
+      "normalRange": "10 - 40",
+      "unit": "U/L",
+      "description": "Alanine Aminotransferase, an enzyme found mostly in the liver.",
+      "riskCategories": [
+        "Liver"
+      ],
+      "notUsed": false,
+      "customRangePopulation": "",
+      "printedRange": "0 - 45 U/L",
+      "assignedRange": "0 - 45 U/L",
+      "optimalValue": "25 U/L",
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": null,
+      "customRangeOverlay": null,
+      "medicalInsight": "Serum ALT is 41 U/L, showing a slight elevation compared to the baseline of 35 U/L from last year, though still within normal limits.",
+      "historicalLogs": [
+        {
+          "date": "2026-06-05",
+          "value": 41,
+          "unit": "U/L",
+          "comment": null
+        },
+        {
+          "date": "2025-06-01",
+          "value": 35,
+          "unit": "U/L",
+          "comment": "Baseline health check"
+        }
+      ],
+      "currentEvaluationStatus": "Elevated",
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r06",
+      "printed": "AST serum level",
+      "match": "alias",
+      "writeTarget": "observation",
+      "biomarkerName": "AST (SGOT)",
+      "key": "ast",
+      "alias": [
+        "sgot",
+        "aspartate_aminotransferase",
+        "ast_serum_level_u_l",
+        "ast_serum_level"
+      ],
+      "normalRange": "10 - 40",
+      "unit": "U/L",
+      "description": "Aspartate Aminotransferase, an enzyme found in liver and muscle.",
+      "riskCategories": [
+        "Liver"
+      ],
+      "notUsed": false,
+      "customRangePopulation": "",
+      "printedRange": "5 - 34 U/L",
+      "assignedRange": "5 - 34 U/L",
+      "optimalValue": "22 U/L",
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": null,
+      "customRangeOverlay": null,
+      "medicalInsight": "AST serum level is 27 U/L, sitting comfortably within the healthy reference range.",
+      "historicalLogs": [
+        {
+          "date": "2026-06-05",
+          "value": 27,
+          "unit": "U/L",
+          "comment": null
+        }
+      ],
+      "currentEvaluationStatus": "Optimal",
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r07",
+      "printed": "Serum total protein",
+      "match": "alias",
+      "writeTarget": "observation",
+      "biomarkerName": "Total Protein",
+      "key": "total_protein",
+      "alias": [
+        "serumtotalprotein",
+        "serum_total_protein_g_l",
+        "serum_total_protein"
+      ],
+      "normalRange": "6 - 8 g/L",
+      "unit": "g/L",
+      "description": "Measures the total amount of protein in your blood.",
+      "riskCategories": [
+        "Liver",
+        "Kidney"
+      ],
+      "notUsed": false,
+      "customRangePopulation": "",
+      "printedRange": "60 - 80 g/L",
+      "assignedRange": "6 - 8 g/L",
+      "optimalValue": "70 g/L",
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": "Corrected dictionary range error where normal range was misstated as 6-8 g/L instead of 60-80 g/L.",
+      "customRangeOverlay": "[Standard] High: >80; Normal: 60-80; Low: <60",
+      "medicalInsight": "Serum total protein is 81 g/L, marginally above the upper limit, typically reflecting hydration status or normal physiologic variation.",
+      "historicalLogs": [
+        {
+          "date": "2026-06-05",
+          "value": 81,
+          "unit": "g/L",
+          "comment": null
+        }
+      ],
+      "currentEvaluationStatus": "Elevated",
+      "newCatalogDraft": null,
+      "dictionaryCorrection": {
+        "field": "normalRange",
+        "correctedValue": "60 - 80",
+        "reason": "Total protein reference range in g/L is correctly 60-80, not 6-8."
+      }
+    },
+    {
+      "id": "r08",
+      "printed": "Total white cell count",
+      "match": "alias",
+      "writeTarget": "observation",
+      "biomarkerName": "White Blood Cell (WBC)",
+      "key": "wbc",
+      "alias": [
+        "whitebloodcell",
+        "total_white_cell_count",
+        "total_white_cell_count_10_9_l",
+        "white_blood_cell_count"
+      ],
+      "normalRange": "4.5 - 11.0",
+      "unit": "K/uL",
+      "description": "Total white blood cell count for immune function.",
+      "riskCategories": [
+        "Hematology"
+      ],
+      "notUsed": false,
+      "customRangePopulation": "",
+      "printedRange": "2.9 - 9.6 10*9/L",
+      "assignedRange": "2.9 - 9.6 10*9/L",
+      "optimalValue": "6.0 10*9/L",
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": null,
+      "customRangeOverlay": null,
+      "medicalInsight": "Total white cell count is 5.7 x10^9/L, well within normal limits, suggesting a healthy immune profile.",
+      "historicalLogs": [
+        {
+          "date": "2026-06-05",
+          "value": 5.7,
+          "unit": "10*9/L",
+          "comment": null
+        }
+      ],
+      "currentEvaluationStatus": "Optimal",
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r09",
+      "printed": "Red blood cell (RBC) count",
+      "match": "alias",
+      "writeTarget": "observation",
+      "biomarkerName": "Red Blood Cell (RBC)",
+      "key": "rbc",
+      "alias": [
+        "redbloodcell",
+        "redbloodcells",
+        "redbloodcellcount",
+        "red_blood_cell_count_10_12_l",
+        "red_blood_cell_count"
+      ],
+      "normalRange": "4.5 - 5.9",
+      "unit": "M/uL",
+      "description": "Total red blood cell count carrying oxygen to tissue.",
+      "riskCategories": [
+        "Hematology"
+      ],
+      "notUsed": false,
+      "customRangePopulation": "",
+      "printedRange": "4.20 - 5.80 10*12/L",
+      "assignedRange": "4.20 - 5.80 10*12/L",
+      "optimalValue": "5.00 10*12/L",
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": null,
+      "customRangeOverlay": null,
+      "medicalInsight": "Red blood cell count is 5.47 x10^12/L, normal and optimal for oxygen transport capacity.",
+      "historicalLogs": [
+        {
+          "date": "2026-06-05",
+          "value": 5.47,
+          "unit": "10*12/L",
+          "comment": null
+        }
+      ],
+      "currentEvaluationStatus": "Optimal",
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r10",
+      "printed": "Haemoglobin estimation",
+      "match": "alias",
+      "writeTarget": "observation",
+      "biomarkerName": "Hemoglobin",
+      "key": "hemoglobin",
+      "alias": [
+        "haemoglobin",
+        "hgb",
+        "hb",
+        "hemoglobin_g_l",
+        "haemoglobinestimation",
+        "haemoglobin_estimation",
+        "haemoglobin_estimation_hb",
+        "haemoglobin_hb",
+        "hemoglobingl",
+        "hemoglobingdl",
+        "haemoglobingl",
+        "haemoglobingdl"
+      ],
+      "normalRange": "120 - 175",
+      "unit": "g/L",
+      "description": "Oxygen-carrying protein in red blood cells.",
+      "riskCategories": [
+        "Hematology"
+      ],
+      "notUsed": false,
+      "customRangePopulation": "",
+      "printedRange": "125 - 170 g/L",
+      "assignedRange": "125 - 170 g/L",
+      "optimalValue": "150 g/L",
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": null,
+      "customRangeOverlay": null,
+      "medicalInsight": "Haemoglobin estimation is 166 g/L, within the normal adult male reference range.",
+      "historicalLogs": [
+        {
+          "date": "2026-06-05",
+          "value": 166,
+          "unit": "g/L",
+          "comment": null
+        }
+      ],
+      "currentEvaluationStatus": "Optimal",
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r11",
+      "printed": "Haematocrit",
+      "match": "alias",
+      "writeTarget": "observation",
+      "biomarkerName": "Hematocrit",
+      "key": "hematocrit",
+      "alias": [],
+      "normalRange": "0.36 - 0.50",
+      "unit": "L/L",
+      "description": "The proportion of blood made up of red blood cells.",
+      "riskCategories": [],
+      "notUsed": false,
+      "customRangePopulation": "",
+      "printedRange": "0.390 - 0.510 L/L",
+      "assignedRange": "0.390 - 0.510 L/L",
+      "optimalValue": "0.450 L/L",
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": null,
+      "customRangeOverlay": null,
+      "medicalInsight": "Haematocrit is 0.48 L/L, indicating a normal proportion of red blood cells in circulation.",
+      "historicalLogs": [
+        {
+          "date": "2026-06-05",
+          "value": 0.48,
+          "unit": "L/L",
+          "comment": null
+        }
+      ],
+      "currentEvaluationStatus": "Optimal",
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r12",
+      "printed": "Mean corpuscular volume (MCV)",
+      "match": "alias",
+      "writeTarget": "observation",
+      "biomarkerName": "Mean Corpuscular Volume (MCV)",
+      "key": "mean_corpuscular_volume",
+      "alias": [
+        "mcv",
+        "mean_corpuscular_volume_fl",
+        "meancorpuscularvolume",
+        "meancorpuscularvolumemcv"
+      ],
+      "normalRange": "80 - 100",
+      "unit": "fL",
+      "description": "Average volume or size of red blood cells.",
+      "riskCategories": [
+        "Hematology"
+      ],
+      "notUsed": false,
+      "customRangePopulation": "",
+      "printedRange": "81 - 100 fL",
+      "assignedRange": "81 - 100 fL",
+      "optimalValue": "90 fL",
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": null,
+      "customRangeOverlay": null,
+      "medicalInsight": "Mean corpuscular volume (MCV) is 88 fL, falling ideally within the center of the normal range.",
+      "historicalLogs": [
+        {
+          "date": "2026-06-05",
+          "value": 88,
+          "unit": "fL",
+          "comment": null
+        }
+      ],
+      "currentEvaluationStatus": "Optimal",
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r13",
+      "printed": "Mean corpusc. haemoglobin(MCH)",
+      "match": "alias",
+      "writeTarget": "observation",
+      "biomarkerName": "Mean Corpuscular Hemoglobin (MCH)",
+      "key": "mean_corpuscular_hemoglobin",
+      "alias": [
+        "mch",
+        "mean_corpuscular_hemoglobin_pg",
+        "meancorpuscularhemoglobin",
+        "meancorpuscularhemoglobinpg",
+        "meancorpuschaemoglobinmch",
+        "haemoglobin_mch"
+      ],
+      "normalRange": "27 - 33",
+      "unit": "pg",
+      "description": "Average amount of hemoglobin per red blood cell.",
+      "riskCategories": [
+        "Hematology"
+      ],
+      "notUsed": false,
+      "customRangePopulation": "",
+      "printedRange": "27.0 - 33.3 pg",
+      "assignedRange": "27.0 - 33.3 pg",
+      "optimalValue": "30.0 pg",
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": null,
+      "customRangeOverlay": null,
+      "medicalInsight": "Mean corpuscular haemoglobin (MCH) is 30.3 pg, normal and consistent with healthy red cell indices.",
+      "historicalLogs": [
+        {
+          "date": "2026-06-05",
+          "value": 30.3,
+          "unit": "pg",
+          "comment": null
+        }
+      ],
+      "currentEvaluationStatus": "Optimal",
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r14",
+      "printed": "Mean corpusc. Hb. conc. (MCHC)",
+      "match": "alias",
+      "writeTarget": "observation",
+      "biomarkerName": "Mean Corpuscular Hemoglobin Concentration (MCHC)",
+      "key": "mean_corpuscular_hemoglobin_concentration",
+      "alias": [
+        "mchc",
+        "mean_corpuscular_hb_conc_g_l",
+        "mean_corpuscular_hb_concentration",
+        "mean_corpuscular_hb_conc",
+        "meancorpuschbconcmchc",
+        "mean_corpuscular_hemoglobin_concentration_g_l"
+      ],
+      "normalRange": "320 - 360",
+      "unit": "g/L",
+      "description": "Average concentration of hemoglobin inside red blood cells.",
+      "riskCategories": [
+        "Hematology"
+      ],
+      "notUsed": false,
+      "customRangePopulation": "",
+      "printedRange": "310 - 350 g/L",
+      "assignedRange": "310 - 350 g/L",
+      "optimalValue": "340 g/L",
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": null,
+      "customRangeOverlay": null,
+      "medicalInsight": "Mean corpuscular Hb concentration (MCHC) is 346 g/L, within expected parameters.",
+      "historicalLogs": [
+        {
+          "date": "2026-06-05",
+          "value": 346,
+          "unit": "g/L",
+          "comment": null
+        }
+      ],
+      "currentEvaluationStatus": "Optimal",
+      "newCatalogDraft": null
+    }
+  ],
+  "filled": [
+    {
+      "id": "r01",
+      "op": "add",
+      "printed": "HbA1c levl - IFCC standardised",
+      "value": 40,
+      "unit": "mmol/mol",
+      "date": "2026-06-05",
+      "printedRange": "20 - 41 mmol/mol",
+      "assignedRange": "20 - 41 mmol/mol",
+      "optimalValue": "35 mmol/mol",
+      "editReason": "Corrected optimal target to reflect a healthy normal baseline for a Chinese male at risk of prediabetes.",
+      "match": "alias",
+      "key": "hba1c",
+      "writeTarget": "observation",
+      "medicalInsight": "Your HbA1c is 40 mmol/mol, showing a slight increase from 39 mmol/mol in 2024. For a Chinese male, this falls within the elevated prediabetes risk threshold of >=39 mmol/mol.",
+      "customRangeOverlay": "[Chinese Ethnicity] Elevated (Prediabetes Risk): >=39; Optimal: <39",
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 40,
+          "unit": "mmol/mol",
+          "comment": "IFCC standardised"
+        },
+        {
+          "date": "2024-04-04",
+          "value": 39,
+          "unit": "mmol/mol",
+          "comment": "Annual GP checkup"
+        }
+      ],
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r02",
+      "op": "add",
+      "printed": "Serum creatinine",
+      "value": 100,
+      "unit": "umol/L",
+      "date": "2026-06-05",
+      "printedRange": "64 - 104 umol/L",
+      "assignedRange": "64 - 104 umol/L",
+      "optimalValue": "80 umol/L",
+      "editReason": null,
+      "match": "alias",
+      "key": "creatinine",
+      "writeTarget": "observation",
+      "medicalInsight": "Serum creatinine is 100 umol/L, which remains stable compared to previous readings of 95 umol/L and 97 umol/L, well within the normal range.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 100,
+          "unit": "umol/L",
+          "comment": null
+        },
+        {
+          "date": "2025-12-10",
+          "value": 95,
+          "unit": "umol/L",
+          "comment": "Fasting morning sample"
+        },
+        {
+          "date": "2024-10-15",
+          "value": 97,
+          "unit": "umol/L",
+          "comment": "US lab"
+        }
+      ],
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r03",
+      "op": "add",
+      "printed": "eGFRcreat (CKD-EPI)/1.73 m*2",
+      "value": 80,
+      "unit": "mL/min/1.73m2",
+      "date": "2026-06-05",
+      "printedRange": "- mL/min/1.73m2",
+      "assignedRange": ">= 60 mL/min/1.73m2",
+      "optimalValue": "95 mL/min/1.73m2",
+      "editReason": "Corrected naive CKD G2 threshold to an optimal target reflecting youthful filtration.",
+      "match": "alias",
+      "key": "egfr",
+      "writeTarget": "observation",
+      "medicalInsight": "Your eGFR of 80 mL/min/1.73m2 indicates normal kidney function, reflecting stable filtration capacity.",
+      "customRangeOverlay": "[Western Standard] Optimal: >=90; Mild Decrease: 60-89; Low: <60",
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 80,
+          "unit": "mL/min/1.73m2",
+          "comment": "Calculated using CKD-EPI equation without ethnicity"
+        }
+      ],
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r04",
+      "op": "add",
+      "printed": "Serum albumin",
+      "value": 46,
+      "unit": "g/L",
+      "date": "2026-06-05",
+      "printedRange": "31 - 45 g/L",
+      "assignedRange": "31 - 45 g/L",
+      "optimalValue": "43 g/L",
+      "editReason": null,
+      "match": "key",
+      "key": "serum_albumin",
+      "writeTarget": "observation",
+      "medicalInsight": "Serum albumin is 46 g/L, which is slightly above the standard reference range, indicating good nutritional protein status.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 46,
+          "unit": "g/L",
+          "comment": null
+        }
+      ],
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r05",
+      "op": "add",
+      "printed": "Serum ALT level",
+      "value": 41,
+      "unit": "U/L",
+      "date": "2026-06-05",
+      "printedRange": "0 - 45 U/L",
+      "assignedRange": "0 - 45 U/L",
+      "optimalValue": "25 U/L",
+      "editReason": null,
+      "match": "alias",
+      "key": "alt",
+      "writeTarget": "observation",
+      "medicalInsight": "Serum ALT is 41 U/L, showing a slight elevation compared to the baseline of 35 U/L from last year, though still within normal limits.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 41,
+          "unit": "U/L",
+          "comment": null
+        },
+        {
+          "date": "2025-06-01",
+          "value": 35,
+          "unit": "U/L",
+          "comment": "Baseline health check"
+        }
+      ],
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r06",
+      "op": "add",
+      "printed": "AST serum level",
+      "value": 27,
+      "unit": "U/L",
+      "date": "2026-06-05",
+      "printedRange": "5 - 34 U/L",
+      "assignedRange": "5 - 34 U/L",
+      "optimalValue": "22 U/L",
+      "editReason": null,
+      "match": "alias",
+      "key": "ast",
+      "writeTarget": "observation",
+      "medicalInsight": "AST serum level is 27 U/L, sitting comfortably within the healthy reference range.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 27,
+          "unit": "U/L",
+          "comment": null
+        }
+      ],
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r07",
+      "op": "add",
+      "printed": "Serum total protein",
+      "value": 81,
+      "unit": "g/L",
+      "date": "2026-06-05",
+      "printedRange": "60 - 80 g/L",
+      "assignedRange": "6 - 8 g/L",
+      "optimalValue": "70 g/L",
+      "editReason": "Corrected dictionary range error where normal range was misstated as 6-8 g/L instead of 60-80 g/L.",
+      "dictionaryCorrection": {
+        "field": "normalRange",
+        "correctedValue": "60 - 80",
+        "reason": "Total protein reference range in g/L is correctly 60-80, not 6-8."
+      },
+      "match": "alias",
+      "key": "total_protein",
+      "writeTarget": "observation",
+      "medicalInsight": "Serum total protein is 81 g/L, marginally above the upper limit, typically reflecting hydration status or normal physiologic variation.",
+      "customRangeOverlay": "[Standard] High: >80; Normal: 60-80; Low: <60",
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 81,
+          "unit": "g/L",
+          "comment": null
+        }
+      ],
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r08",
+      "op": "add",
+      "printed": "Total white cell count",
+      "value": 5.7,
+      "unit": "10*9/L",
+      "date": "2026-06-05",
+      "printedRange": "2.9 - 9.6 10*9/L",
+      "assignedRange": "2.9 - 9.6 10*9/L",
+      "optimalValue": "6.0 10*9/L",
+      "editReason": null,
+      "match": "alias",
+      "key": "wbc",
+      "writeTarget": "observation",
+      "medicalInsight": "Total white cell count is 5.7 x10^9/L, well within normal limits, suggesting a healthy immune profile.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 5.7,
+          "unit": "10*9/L",
+          "comment": null
+        }
+      ],
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r09",
+      "op": "add",
+      "printed": "Red blood cell (RBC) count",
+      "value": 5.47,
+      "unit": "10*12/L",
+      "date": "2026-06-05",
+      "printedRange": "4.20 - 5.80 10*12/L",
+      "assignedRange": "4.20 - 5.80 10*12/L",
+      "optimalValue": "5.00 10*12/L",
+      "editReason": null,
+      "match": "alias",
+      "key": "rbc",
+      "writeTarget": "observation",
+      "medicalInsight": "Red blood cell count is 5.47 x10^12/L, normal and optimal for oxygen transport capacity.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 5.47,
+          "unit": "10*12/L",
+          "comment": null
+        }
+      ],
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r10",
+      "op": "add",
+      "printed": "Haemoglobin estimation",
+      "value": 166,
+      "unit": "g/L",
+      "date": "2026-06-05",
+      "printedRange": "125 - 170 g/L",
+      "assignedRange": "125 - 170 g/L",
+      "optimalValue": "150 g/L",
+      "editReason": null,
+      "match": "alias",
+      "key": "hemoglobin",
+      "writeTarget": "observation",
+      "medicalInsight": "Haemoglobin estimation is 166 g/L, within the normal adult male reference range.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 166,
+          "unit": "g/L",
+          "comment": null
+        }
+      ],
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r11",
+      "op": "add",
+      "printed": "Haematocrit",
+      "value": 0.48,
+      "unit": "L/L",
+      "date": "2026-06-05",
+      "printedRange": "0.390 - 0.510 L/L",
+      "assignedRange": "0.390 - 0.510 L/L",
+      "optimalValue": "0.450 L/L",
+      "editReason": null,
+      "match": "alias",
+      "key": "hematocrit",
+      "writeTarget": "observation",
+      "medicalInsight": "Haematocrit is 0.48 L/L, indicating a normal proportion of red blood cells in circulation.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 0.48,
+          "unit": "L/L",
+          "comment": null
+        }
+      ],
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r12",
+      "op": "add",
+      "printed": "Mean corpuscular volume (MCV)",
+      "value": 88,
+      "unit": "fL",
+      "date": "2026-06-05",
+      "printedRange": "81 - 100 fL",
+      "assignedRange": "81 - 100 fL",
+      "optimalValue": "90 fL",
+      "editReason": null,
+      "match": "alias",
+      "key": "mean_corpuscular_volume",
+      "writeTarget": "observation",
+      "medicalInsight": "Mean corpuscular volume (MCV) is 88 fL, falling ideally within the center of the normal range.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 88,
+          "unit": "fL",
+          "comment": null
+        }
+      ],
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r13",
+      "op": "add",
+      "printed": "Mean corpusc. haemoglobin(MCH)",
+      "value": 30.3,
+      "unit": "pg",
+      "date": "2026-06-05",
+      "printedRange": "27.0 - 33.3 pg",
+      "assignedRange": "27.0 - 33.3 pg",
+      "optimalValue": "30.0 pg",
+      "editReason": null,
+      "match": "alias",
+      "key": "mean_corpuscular_hemoglobin",
+      "writeTarget": "observation",
+      "medicalInsight": "Mean corpuscular haemoglobin (MCH) is 30.3 pg, normal and consistent with healthy red cell indices.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 30.3,
+          "unit": "pg",
+          "comment": null
+        }
+      ],
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r14",
+      "op": "add",
+      "printed": "Mean corpusc. Hb. conc. (MCHC)",
+      "value": 346,
+      "unit": "g/L",
+      "date": "2026-06-05",
+      "printedRange": "310 - 350 g/L",
+      "assignedRange": "310 - 350 g/L",
+      "optimalValue": "340 g/L",
+      "editReason": null,
+      "match": "alias",
+      "key": "mean_corpuscular_hemoglobin_concentration",
+      "writeTarget": "observation",
+      "medicalInsight": "Mean corpuscular Hb concentration (MCHC) is 346 g/L, within expected parameters.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 346,
+          "unit": "g/L",
+          "comment": null
+        }
+      ],
+      "newCatalogDraft": null
+    }
+  ],
+  "score": {
+    "pass": true,
+    "fails": [],
+    "known": 14,
+    "unknown": 0,
+    "turns": 1
+  }
+}
