@@ -1,5 +1,12 @@
 import { evaluateMealGate, MealGateResult } from '../mealBuild/mealGate.js';
 import { getSessionLog } from '../jobs/sessionLog.js';
+import {
+  buildCanonicalRunTree,
+  type CanonicalRunTree,
+  type DialogInventory,
+  type DispatchTrace,
+  type HandoffTrace,
+} from './debugRunTree.js';
 
 /** Recursively strip base64 / huge data-URLs; keep short https photo URLs. */
 export function stripHeavyImages(value: any): any {
@@ -114,6 +121,11 @@ export type DebugReportInput = {
    * server-generated exports. Falls back to the in-process sessionLog map
    * for client-only callers running in the same tab that recorded them. */
   sessionEvents?: any[];
+  dialogInventory?: DialogInventory | null;
+  dispatches?: DispatchTrace[];
+  handoffs?: HandoffTrace[];
+  pack?: 'food' | 'receptionist' | 'medical' | 'health_coach';
+  conversationId?: string | null;
 };
 
 /**
@@ -121,14 +133,16 @@ export type DebugReportInput = {
  * Cleaned up without redundant duplicates. No base64 images.
  */
 export function buildDebugMarkdownReport(input: DebugReportInput): string {
+  const tree = buildCanonicalRunTree(input);
   const lines: string[] = [];
-  const at = input.exportedAt || new Date().toISOString();
+  const at = input.exportedAt || tree.exportedAt || new Date().toISOString();
   let computedGate: MealGateResult | null = null;
   lines.push(`# Health Tracker — End-to-End Diagnostic Report`);
   lines.push('');
   lines.push(`- **Exported:** ${at}`);
-  if (input.jobId) lines.push(`- **Job ID:** \`${input.jobId}\``);
-  if (input.status) lines.push(`- **Status:** ${input.status}`);
+  if (input.jobId || tree.jobId) lines.push(`- **Job ID:** \`${input.jobId || tree.jobId}\``);
+  if (input.status || tree.status) lines.push(`- **Status:** ${input.status || tree.status}`);
+  lines.push(`- **Pack:** ${tree.pack}`);
   if (input.mode) lines.push(`- **Mode:** ${input.mode}`);
   if (input.version !== undefined) lines.push(`- **Version:** ${input.version}`);
   if (input.savable !== undefined) lines.push(`- **Savable:** ${input.savable}`);
@@ -151,7 +165,65 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
       lines.push(`- **Photo:** ${input.photoUrl}`);
     }
   }
-  // 1. Data Pipeline Execution & Infrastructure Connectivity Matrix
+  lines.push('');
+
+  // 1. Contract Table first (after identity) — Invariant §1.2 & §9
+  lines.push(`## ⚖️ Contract Evaluation`);
+  lines.push('');
+  lines.push(`| Law | Layer | Fault | Result | Actual |`);
+  lines.push(`|-----|-------|-------|--------|--------|`);
+  for (const c of tree.contract) {
+    const icon = c.result === 'PASS' ? '✅' : c.result === 'FAIL' ? '❌' : '⚪';
+    lines.push(`| ${c.law} | ${c.layer} | ${c.fault} | ${icon} ${c.result} | ${c.actual.replace(/\|/g, '\\|')} |`);
+  }
+  lines.push('');
+
+  // 2. Snapshot at Download — Dialog Inventory (Invariant §1.3 & §5)
+  if (tree.dialogInventory) {
+    lines.push(`## 🪟 Modal Snapshot (Dialog Inventory)`);
+    lines.push('');
+    lines.push(`- **open:** ${tree.dialogInventory.open}`);
+    if (tree.dialogInventory.title) lines.push(`- **title:** "${tree.dialogInventory.title}"`);
+    if (tree.dialogInventory.on_card) lines.push(`- **on_card:** ${JSON.stringify(tree.dialogInventory.on_card)}`);
+    if (tree.dialogInventory.visible) lines.push(`- **visible:** [${tree.dialogInventory.visible.join(', ')}]`);
+    if (tree.dialogInventory.hidden) lines.push(`- **hidden:** [${tree.dialogInventory.hidden.join(', ')}]`);
+    if (tree.dialogInventory.composer) lines.push(`- **composer:** ${JSON.stringify(tree.dialogInventory.composer)}`);
+    if (tree.dialogInventory.expand !== undefined) lines.push(`- **expand:** ${tree.dialogInventory.expand}`);
+    lines.push('');
+  }
+
+  // 3. Agent Dispatches — once per dispatch that ran (§7)
+  if (tree.dispatches && tree.dispatches.length > 0) {
+    lines.push(`## 📡 Agent Dispatches (${tree.dispatches.length})`);
+    lines.push('');
+    for (const d of tree.dispatches) {
+      lines.push(`### Dispatch ${d.id}`);
+      if (d.user) lines.push(`- **User:** ${d.user}`);
+      if (d.received) lines.push(`- **Received:** ${typeof d.received === 'object' ? JSON.stringify(d.received) : d.received}`);
+      if (d.instruction) {
+        lines.push(`- **Instruction:**`);
+        lines.push('```');
+        lines.push(d.instruction.slice(0, 4000));
+        lines.push('```');
+      }
+      if (d.output) {
+        lines.push(`- **Output:**`);
+        lines.push('```');
+        lines.push(typeof d.output === 'object' ? JSON.stringify(d.output, null, 2).slice(0, 4000) : String(d.output).slice(0, 4000));
+        lines.push('```');
+      }
+      const sigs: string[] = [];
+      if (d.model) sigs.push(`model=${d.model}`);
+      if (d.latency_ms != null) sigs.push(`latency_ms=${d.latency_ms}`);
+      if (d.tokens != null) sigs.push(`tokens=${d.tokens}`);
+      if (d.error) sigs.push(`error=${d.error}`);
+      if (sigs.length > 0) lines.push(`- **Signals:** ${sigs.join(', ')}`);
+      if (d.parent) lines.push(`- **Parent:** ${d.parent}`);
+      lines.push('');
+    }
+  }
+
+  // 4. Data Pipeline Execution & Infrastructure Connectivity Matrix
   lines.push(`## 🔗 Data Pipelines & Infrastructure Connectivity Matrix`);
   lines.push('');
   lines.push(`| Pipeline Stage | Connectivity & Status | Details / Metrics |`);
@@ -1003,7 +1075,9 @@ export function debugReportFromJobMsg(job: any, msg: any): DebugReportInput {
     ingestTrace: result.ingestTrace || msg?.data?.ingestTrace || msg?.data?.agentResult?.ingestTrace || job?.clean_result?.ingestTrace,
     gate: result.gate || msg?.data?.gate,
     report: result.report || msg?.data?.report || msg?.data?.agentResult?.report || job?.clean_result?.report,
-    handoffChain: result.handoffChain || msg?.data?.handoffChain || msg?.data?.agentResult?.handoffChain || job?.result?.handoffChain
+    handoffChain: result.handoffChain || msg?.data?.handoffChain || msg?.data?.agentResult?.handoffChain || job?.result?.handoffChain,
+    dialogInventory: job?.dialogInventory || msg?.data?.dialogInventory || job?.result?.dialogInventory,
+    dispatches: job?.dispatches || msg?.data?.dispatches || job?.result?.dispatches
   };
 }
 

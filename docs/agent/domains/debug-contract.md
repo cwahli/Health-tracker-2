@@ -60,6 +60,7 @@ Plus (do not drop when adding packs):
 8. **JSON tree is canonical; markdown is a view.**
 9. **`jobId` (and turn/dispatch id) on console, network, and server lines.** Handoff carries the same id.
 10. **Per-dispatch signals:** `model`, `latency_ms` (time-to-first-token if streamed), `tokens` if returned, `error` / finish.
+11. **Feature test & debug coupling (case-by-case):** New and updated features must map to a home in the canonical run tree (under `pack`, `dispatches`, `dialogInventory`, or `contract`) and integrate into the most relevant existing golden/contract suite. Consolidate into existing regression and golden paths to prevent test sprawl and redundancy.
 
 ---
 

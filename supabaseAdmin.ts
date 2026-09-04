@@ -1,4 +1,10 @@
 import 'dotenv/config';
+import WebSocket from 'ws';
+
+if (typeof globalThis.WebSocket === 'undefined') {
+  (globalThis as any).WebSocket = WebSocket;
+}
+
 import { createClient } from '@supabase/supabase-js';
 
 const rawUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';

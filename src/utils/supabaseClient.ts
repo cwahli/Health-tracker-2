@@ -55,6 +55,13 @@ export const cleanupAuthUrlParams = (): void => {
   }
 };
 
+if (typeof window === 'undefined' && typeof globalThis.WebSocket === 'undefined') {
+  try {
+    const ws = await import('ws');
+    (globalThis as any).WebSocket = ws.default || ws;
+  } catch {}
+}
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,

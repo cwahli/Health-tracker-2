@@ -18,6 +18,7 @@
     "test:e2e": "playwright test",
     "test:benchmark:receptionist": "tsx prototype/receptionist/runner.ts --case UC-01",
     "test:benchmark:biomarkers": "tsx prototype/biomarkers/runner.ts --case C1",
+    "test:benchmark:food": "tsx prototype/meallog/runner.ts --case 08",
     "test:prepush": "npm run test:receptionist && npm run test:bio && npm run test:food && npm run lint",
     "check:tests": "vitest run src/mealBuild/__tests__",
     "test:from-debug": "tsx scripts/test-from-debug.ts",

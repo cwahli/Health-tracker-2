@@ -249,6 +249,8 @@ jobsRouter.all('/api/jobs/debug', async (req, res) => {
     const networkErrors = Array.isArray(req.body?.networkErrors) ? req.body.networkErrors : [];
     const userActionBreadcrumbs = Array.isArray(req.body?.userActionBreadcrumbs) ? req.body.userActionBreadcrumbs : [];
     const lastUserAction = req.body?.lastUserAction;
+    const dialogInventory = req.body?.dialogInventory;
+    const dispatches = Array.isArray(req.body?.dispatches) ? req.body.dispatches : undefined;
 
     if (!jobId) {
       return res.status(400).json({ error: 'jobId parameter is required' });
@@ -303,15 +305,28 @@ jobsRouter.all('/api/jobs/debug', async (req, res) => {
 
     if (!debugPayload) {
       if (!job) {
-        if (format === 'markdown' || format === 'md') {
-          res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
-          res.setHeader('Content-Disposition', `attachment; filename="debug-${cleanJobId}.md"`);
-          return res.send(`# Diagnostic Log: ${cleanJobId}\n\n- **Status**: Local/Offline entry\n- **Details**: No server execution trace found in remote storage for ID \`${cleanJobId}\`.\n- **Generated At**: ${new Date().toISOString()}\n`);
+        if (req.body?.dialogInventory || req.body?.result || req.body?.dispatches || req.body?.clientSessionEvents) {
+          debugPayload = {
+            jobId: cleanJobId,
+            status: req.body?.status || 'succeeded',
+            result: req.body?.result || {},
+            dialogInventory: req.body?.dialogInventory,
+            dispatches: req.body?.dispatches,
+            backendLogs: req.body?.backendLogs || '',
+            sessionEvents: req.body?.clientSessionEvents || [],
+            source: 'client-payload',
+          };
+        } else {
+          if (format === 'markdown' || format === 'md') {
+            res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+            res.setHeader('Content-Disposition', `attachment; filename="debug-${cleanJobId}.md"`);
+            return res.send(`# Diagnostic Log: ${cleanJobId}\n\n- **Status**: Local/Offline entry\n- **Details**: No server execution trace found in remote storage for ID \`${cleanJobId}\`.\n- **Generated At**: ${new Date().toISOString()}\n`);
+          }
+          return res.status(404).json({ error: 'Job or debug payload not found', jobId: cleanJobId });
         }
-        return res.status(404).json({ error: 'Job or debug payload not found', jobId: cleanJobId });
-      }
-      const accumulated = Array.isArray(job.accumulatedLogs) ? job.accumulatedLogs.join('\n') : (Array.isArray(job.turn1Logs) ? job.turn1Logs.join('\n') : '');
-      debugPayload = {
+      } else {
+        const accumulated = Array.isArray(job.accumulatedLogs) ? job.accumulatedLogs.join('\n') : (Array.isArray(job.turn1Logs) ? job.turn1Logs.join('\n') : '');
+        debugPayload = {
         jobId: job.id,
         userId: job.user_id,
         kind: job.kind,
@@ -333,6 +348,7 @@ jobsRouter.all('/api/jobs/debug', async (req, res) => {
         source: 'server-job'
       };
     }
+  }
 
     if (!debugPayload.backendLogs || String(debugPayload.backendLogs).startsWith('[Logs stored in R2') || String(debugPayload.backendLogs).startsWith('http')) {
       try {
@@ -382,61 +398,62 @@ jobsRouter.all('/api/jobs/debug', async (req, res) => {
     const mergedBreadcrumbs = [...serverBreadcrumbs, ...userActionBreadcrumbs];
 
     const effectiveLastUserAction = lastUserAction || debugPayload.lastUserAction || debugPayload.result?.lastUserAction;
+    const effectiveDialogInventory = dialogInventory || debugPayload.dialogInventory || debugPayload.result?.dialogInventory;
+    const effectiveDispatches = dispatches || debugPayload.dispatches || debugPayload.result?.dispatches;
 
     const { stripHeavyImages, buildDebugMarkdownReport } = await import('./src/utils/debugPayload.js');
+    const { buildCanonicalRunTree } = await import('./src/utils/debugRunTree.js');
     const safePayload = stripHeavyImages(debugPayload);
 
+    const reportInput = {
+      jobId: cleanJobId,
+      status: safePayload.status,
+      mode: safePayload.mode,
+      agentType: safePayload.result?.agentType || safePayload.inputSnapshot?.agentType,
+      message: safePayload.result?.message || safePayload.result?.text,
+      backendLogs: safePayload.backendLogs,
+      pendingFoodLog: safePayload.result?.pendingFoodLog || null,
+      scoutItems: safePayload.result?.scoutItems,
+      scoutInternalReasoning: safePayload.result?.scoutInternalReasoning || safePayload.result?.scoutReasoning || safePayload.result?.internalReasoning,
+      rawScout: safePayload.result?.rawScout || safePayload.result?.scoutResult,
+      scoutContentType: safePayload.result?.scoutContentType || safePayload.result?.visionScoutContentType,
+      diningEnvironment: safePayload.result?.diningEnvironment || safePayload.result?.pendingFoodLog?.diningEnvironment,
+      receiptTable: safePayload.result?.receiptTable || safePayload.result?.pendingFoodLog?.receiptTable,
+      error: safePayload.error,
+      debugUrl: safePayload.debugUrl,
+      photoUrl: safePayload.photoUrl,
+      lastUserAction: effectiveLastUserAction,
+      sessionEvents: uniqueSessionEvents,
+      userActionBreadcrumbs: mergedBreadcrumbs,
+      clientConsoleLogs: mergedConsoleLogs,
+      networkErrors: mergedNetworkErrors,
+      usdaSearchResults: safePayload.result?.usdaSearchResults,
+      brandSearchResults: safePayload.result?.brandSearchResults,
+      comprehensiveNutrients: safePayload.result?.comprehensiveNutrients || safePayload.result?.pendingFoodLog?.nutrients,
+      stageLedger: safePayload.result?.stageLedger,
+      historyLog: safePayload.result?.historyLog,
+      ingestTrace: safePayload.result?.ingestTrace,
+      report: safePayload.result?.report,
+      conversationHistory: safePayload.conversationHistory || safePayload.result?.conversationHistory,
+      handoffChain: safePayload.result?.handoffChain || safePayload.handoffChain,
+      handoffPayload: safePayload.result?.handoffPayload || safePayload.handoffPayload,
+      agentPayload: safePayload.inputSnapshot || safePayload.result?.inputSnapshot || safePayload.payload,
+      agentInstructions: safePayload.result?.agentInstructions || safePayload.agentInstructions,
+      dialogInventory: effectiveDialogInventory,
+      dispatches: effectiveDispatches,
+    };
+
     if (format === 'markdown' || format === 'md') {
-      const mdReport = buildDebugMarkdownReport({
-        jobId: cleanJobId,
-        status: safePayload.status,
-        mode: safePayload.mode,
-        agentType: safePayload.result?.agentType || safePayload.inputSnapshot?.agentType,
-        message: safePayload.result?.message || safePayload.result?.text,
-        backendLogs: safePayload.backendLogs,
-        pendingFoodLog: safePayload.result?.pendingFoodLog || null,
-        scoutItems: safePayload.result?.scoutItems,
-        scoutInternalReasoning: safePayload.result?.scoutInternalReasoning || safePayload.result?.scoutReasoning || safePayload.result?.internalReasoning,
-        rawScout: safePayload.result?.rawScout || safePayload.result?.scoutResult,
-        scoutContentType: safePayload.result?.scoutContentType || safePayload.result?.visionScoutContentType,
-        diningEnvironment: safePayload.result?.diningEnvironment || safePayload.result?.pendingFoodLog?.diningEnvironment,
-        receiptTable: safePayload.result?.receiptTable || safePayload.result?.pendingFoodLog?.receiptTable,
-        error: safePayload.error,
-        debugUrl: safePayload.debugUrl,
-        photoUrl: safePayload.photoUrl,
-        lastUserAction: effectiveLastUserAction,
-        sessionEvents: uniqueSessionEvents,
-        userActionBreadcrumbs: mergedBreadcrumbs,
-        clientConsoleLogs: mergedConsoleLogs,
-        networkErrors: mergedNetworkErrors,
-        usdaSearchResults: safePayload.result?.usdaSearchResults,
-        brandSearchResults: safePayload.result?.brandSearchResults,
-        comprehensiveNutrients: safePayload.result?.comprehensiveNutrients || safePayload.result?.pendingFoodLog?.nutrients,
-        stageLedger: safePayload.result?.stageLedger,
-        historyLog: safePayload.result?.historyLog,
-        ingestTrace: safePayload.result?.ingestTrace,
-        report: safePayload.result?.report,
-        conversationHistory: safePayload.conversationHistory || safePayload.result?.conversationHistory,
-        handoffChain: safePayload.result?.handoffChain || safePayload.handoffChain,
-        handoffPayload: safePayload.result?.handoffPayload || safePayload.handoffPayload,
-        agentPayload: safePayload.inputSnapshot || safePayload.result?.inputSnapshot || safePayload.payload,
-        agentInstructions: safePayload.result?.agentInstructions || safePayload.agentInstructions
-      });
+      const mdReport = buildDebugMarkdownReport(reportInput);
       res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="debug-${cleanJobId}.md"`);
       return res.send(mdReport);
     }
 
+    const runTree = buildCanonicalRunTree(reportInput);
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', `attachment; filename="debug-${cleanJobId}.json"`);
-    return res.json({
-      ...safePayload,
-      sessionEvents: uniqueSessionEvents,
-      clientConsoleLogs: mergedConsoleLogs,
-      networkErrors: mergedNetworkErrors,
-      userActionBreadcrumbs: mergedBreadcrumbs,
-      lastUserAction: effectiveLastUserAction
-    });
+    return res.json(runTree);
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to fetch debug payload' });
   }

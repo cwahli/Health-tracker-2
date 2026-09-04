@@ -9,7 +9,7 @@
 | Track | State | Next |
 |-------|--------|------|
 | **Live food** | Pass 6 `STALL_NO_FALLBACK` in tree. Process method parked as **Q-8**. | One website Log Meal **after Q-8.2** (Tier 3 once). Do not re-upload between process-row fixes. |
-| **Q-8** Process goldens | **Truth:** `docs/agent/domains/debug-contract.md`. Execute: RELIABILITY §11 / F-8.13 / Q-8.1–8.6. | **Next (Grok):** Q-8.1 + F-8.13 against debug-contract.md §12 A–F. Then 8.2, 8.3. |
+| **Q-8** Process goldens | **Truth:** `docs/agent/domains/debug-contract.md`. Execute: RELIABILITY §11 / F-8.13 / Q-8.1–8.6. | **F-8.13 & Q-8.3 COMPLETE**: Canonical JSON Run Tree (`debugRunTree.ts`), Dialog Inventory snapshot, §9 Contract Scorer (`dumpContract.ts`), Markdown view with Contract table first (`debugPayload.ts`), Tier 2 Playwright stubbed dialog inventory test (`prototype/tests/dialog-inventory.spec.ts` 3/3 passed). 62 named regression tests + 88 test:food + tsc clean. Next: Q-8.2 / live confirm. |
 
 ### Soto/matcha display bug — actual passes (1-pass dump loop failed)
 

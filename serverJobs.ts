@@ -1,7 +1,7 @@
 import { uploadPhotoToR2, uploadPhotosToR2, uploadDebugPayloadToR2 } from './src/utils/r2Storage';
 // [FreeTier] thin clean_result
-import { supabase, isSupabaseConfigured } from './src/utils/supabaseClient';
 import { supabaseAdmin, isSupabaseConfigured as isSupabaseAdminConfigured } from './supabaseAdmin';
+import { supabase, isSupabaseConfigured } from './src/utils/supabaseClient';
 import { remainingQuotaCooldownMs, nextGeminiFallbackEngine } from './server_gemini_retry.js';
 import { extractMostRecentImageDate } from './src/utils/dateUtils';
 

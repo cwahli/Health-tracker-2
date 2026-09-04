@@ -21,9 +21,29 @@ if (!fs.existsSync(capturePath)) {
   process.exit(2);
 }
 
-const md = fs.readFileSync(capturePath, 'utf8');
-const facts = parseDebugMarkdown(md);
-const classified = classifyDump(facts);
+const raw = fs.readFileSync(capturePath, 'utf8');
+let facts: any;
+let classified: any;
+
+if (capturePath.endsWith('.json') || raw.trim().startsWith('{')) {
+  try {
+    const json = JSON.parse(raw);
+    if (json && typeof json === 'object' && ('contract' in json || 'pack' in json)) {
+      classified = classifyDump(json);
+      facts = {
+        jobId: json.jobId,
+        status: json.status,
+        hasFinalizedLedger: Boolean(json.pendingFoodLog) || /\[Budget\]\s*Finalized ledger/i.test(json.backendLogs || ''),
+        dietitianFailedPermanently: /Dietitian Failed Permanently/i.test(json.backendLogs || ''),
+      };
+    }
+  } catch {}
+}
+
+if (!facts) {
+  facts = parseDebugMarkdown(raw);
+  classified = classifyDump(facts);
+}
 
 console.log(`capture: ${path.relative(root, capturePath)}`);
 console.log(`job: ${facts.jobId || '?'}  status=${facts.status || '?'}  ledger=${facts.hasFinalizedLedger}  dietitianFail=${facts.dietitianFailedPermanently}`);

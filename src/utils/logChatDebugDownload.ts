@@ -79,6 +79,48 @@ export async function downloadJobDebugReport(args: {
     args.globalLiveLogs ||
     '';
 
+  const onCardKcal = pendingFoodLog?.nutrients?.calories ?? (msg?.data?.pendingFoodLog?.nutrients?.calories ?? null);
+  const onCardProtein = pendingFoodLog?.nutrients?.protein ?? (msg?.data?.pendingFoodLog?.nutrients?.protein ?? null);
+  const onCardCarbs = pendingFoodLog?.nutrients?.carbohydrates ?? (msg?.data?.pendingFoodLog?.nutrients?.carbohydrates ?? null);
+  const onCardFat = pendingFoodLog?.nutrients?.totalFat ?? (msg?.data?.pendingFoodLog?.nutrients?.totalFat ?? null);
+
+  const isJobFailed = job?.status === 'failed' || msg?.isError || msg?.agentUnavailable;
+  const isJobSucceeded = job?.status === 'succeeded' || (!isJobFailed && onCardKcal != null);
+
+  const visibleControls = ['View Analysis', 'Download Debug'];
+  const hiddenControls: string[] = [];
+  if (isJobFailed) {
+    visibleControls.push('Retry');
+  } else {
+    hiddenControls.push('Retry');
+  }
+  const retryCount = (job as any)?.retryCount || (job as any)?.retries || 0;
+  if (retryCount > 0 && !isJobSucceeded) {
+    visibleControls.push(`Attempt ${retryCount}/3`);
+  } else {
+    hiddenControls.push('Attempt 1 of 3');
+  }
+
+  const dialogInventory = {
+    open: true,
+    title: pendingFoodLog?.name || msg?.data?.pendingFoodLog?.name || (args.inputText ? 'Log Meal' : 'Health Assistant'),
+    on_card: onCardKcal != null ? {
+      kcal: onCardKcal,
+      protein: onCardProtein,
+      carbs: onCardCarbs,
+      fat: onCardFat,
+    } : undefined,
+    visible: visibleControls,
+    hidden: hiddenControls,
+    composer: {
+      photo: 1,
+      add_image: 1,
+      paste: 1,
+      send: 1,
+    },
+    expand: w.__shouldExpandMealAgent || false,
+  };
+
   const localPayload = {
     jobId: resolvedJobId,
     status: job?.status,
@@ -88,6 +130,7 @@ export async function downloadJobDebugReport(args: {
       clientConsoleLogs,
       networkErrors,
     },
+    dialogInventory,
     messages: job?.messages,
     liveThoughts: job?.liveThoughts,
     backendLogs: initialBackendLogs,
@@ -112,6 +155,7 @@ export async function downloadJobDebugReport(args: {
         networkErrors,
         userActionBreadcrumbs: w.__userActionBreadcrumbs || [],
         lastUserAction,
+        dialogInventory,
       }),
     });
     if (res.ok) {
@@ -225,6 +269,7 @@ export async function downloadJobDebugReport(args: {
       handoffChain,
       handoffPayload,
       agentPayload,
+      dialogInventory,
     });
     triggerBlobDownload(new Blob([mdContent], { type: 'text/markdown;charset=utf-8' }), `debug-${resolvedJobId}.md`);
   } else {

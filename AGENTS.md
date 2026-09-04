@@ -90,6 +90,12 @@ Triggers: `work bug` · `next bug` · `work 11` / `work #11` · Hand off that st
 Not L15: `continue`, `work`, pack phases.  
 Live: `GET /api/bugs/next` (or `?mode=next` / `?n=11`). Drain **automatic** tape fails on `continue.active_line`. Named vitest for the class. `POST /attempts`. Do not `POST /loop` or paint `expected.json`. Detail: `plan/QUALITY.md` §14 if you are actually on a bug card.
 
+### L16 — Feature Test & Debug Coupling (Case-by-case)
+When implementing or updating features (new agent flows, dispatches, interactive dialog actions, or schema updates), integrate them directly into the testing and debugging framework:
+- **Debug observability match**: Ensure the feature's states, dispatches, and UI components are represented in the Canonical Run Tree (`debugRunTree.ts`, `dumpContract.ts`) or dialog inventory so runs are immediately inspectable.
+- **Testing & golden consolidation**: Identify where the feature naturally belongs in the testing framework (e.g., existing golden process tests, golden meal/biomarker suites, or Tier 2 Playwright stubs). Consolidate assertions into the **most relevant existing file** rather than spawning redundant, uncontrolled one-off test suites.
+- **Scope**: Applied on a case-by-case basis. Pure cosmetic/copy tweaks (Class S) do not require debug or golden updates; substantive logic, pipeline, or UI interaction updates must have their matching debug and golden/test representation.
+
 ### L10 — COMPLETE (code only)
 `tsc` + matching regression-map commands + the ROADMAP ID’s named assert if any. Skip all of that when no application code changed. Forbidden until then: “all done” / “fully verified.”
 

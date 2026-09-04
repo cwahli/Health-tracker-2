@@ -175,4 +175,44 @@ describe('debugPayload', () => {
     expect((md.match(/SCOUT_REPLY_TOKEN/g) || []).length).toBe(1);
     expect(md).toContain('DIETITIAN_REPLY_TOKEN');
   });
+
+  it('renders Contract Table first immediately after report header', () => {
+    const md = buildDebugMarkdownReport({
+      jobId: 'job_order_test',
+      status: 'succeeded',
+      backendLogs: '[Budget] Finalized ledger: 520 kcal',
+      pendingFoodLog: { nutrients: { calories: 520 } },
+    });
+
+    const contractIndex = md.indexOf('## ⚖️ Contract Evaluation');
+    const matrixIndex = md.indexOf('## 🔗 Data Pipelines & Infrastructure Connectivity Matrix');
+
+    expect(contractIndex).toBeGreaterThan(0);
+    expect(matrixIndex).toBeGreaterThan(0);
+    expect(contractIndex).toBeLessThan(matrixIndex);
+  });
+
+  it('renders Modal Snapshot (Dialog Inventory) when present in input', () => {
+    const md = buildDebugMarkdownReport({
+      jobId: 'job_modal_test',
+      status: 'succeeded',
+      dialogInventory: {
+        open: true,
+        title: 'Nasi Goreng',
+        on_card: { kcal: 550, protein: 25, carbs: 70, fat: 18 },
+        visible: ['View Analysis', 'Download Debug'],
+        hidden: ['Retry', 'Attempt 1 of 3'],
+        composer: { photo: 1, send: 1 },
+        expand: false,
+      },
+    });
+
+    expect(md).toContain('## 🪟 Modal Snapshot (Dialog Inventory)');
+    expect(md).toContain('- **open:** true');
+    expect(md).toContain('- **title:** "Nasi Goreng"');
+    expect(md).toContain('"kcal":550');
+    expect(md).toContain('[View Analysis, Download Debug]');
+    expect(md).toContain('[Retry, Attempt 1 of 3]');
+  });
 });
+
