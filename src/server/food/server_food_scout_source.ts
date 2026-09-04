@@ -7,6 +7,8 @@
 
 import { getFallbackCategoryProfile } from '../../../server_food_catalog.js';
 import { isPackagedBindItem, inferChainNameFromPackageLabel } from '../../../server_brand_match.js';
+import { userSafeScoutFailureMessage } from '../../../server_vision_scout.js';
+import { t } from '../../utils/i18n.js';
 
 export interface ScoutInheritArgs {
   isModifySession: boolean;
@@ -237,4 +239,182 @@ export function mapTextQueriesToScoutItems(extractedQueries: string[]): any[] {
     cookingMethod: /\b(fried|deep_fried|pan_fried|roasted|grilled|baked|boiled|steamed)\b/i.exec(q)?.[0] || "raw",
     visualIngredients: []
   }));
+}
+
+/**
+ * F-8.10 shard 11 — scout result handling. The retry loop and LLM call stay
+ * inline; classification, state application, meal merge, and item logging
+ * move here verbatim.
+ */
+
+/** Classifies a dead scout run into the user-facing error (quota/503/corrupt/generic). */
+export function buildScoutFailureError(lastScoutErr: any, language?: unknown): Error {
+  const raw = userSafeScoutFailureMessage(lastScoutErr);
+  const msg = String(lastScoutErr?.message || '');
+  const isQuota = /429|RESOURCE_EXHAUSTED|quota exceeded/i.test(msg);
+  const isUnavailable = /503|UNAVAILABLE|overloaded/i.test(msg);
+  if (/Vision Scout Corrupted/i.test(msg)) {
+    throw new Error(t(language, 'analysisFailed'));
+  }
+  if (isQuota) {
+    throw new Error(
+      `Vision Scout Failed: Gemini quota (429) on this model — wait the retry-after window or switch model. Not a bad photo. (Details: ${raw})`
+    );
+  }
+  if (isUnavailable) {
+    throw new Error(`Vision Scout Failed: Gemini unavailable (503). Retry shortly. (Details: ${raw})`);
+  }
+  throw new Error(`Vision Scout Failed: Couldn't reliably read this image, please try again or re-upload. (Details: ${raw})`);
+}
+
+export interface ScoutResultStateArgs {
+  scoutResult: any;
+  requestedMode?: string;
+  hasActiveMealDocument: boolean;
+  activeMealDining?: string;
+  currentRecommendedMode?: string | null;
+  onLog: (msg: string) => void;
+  onEvent: (type: string, stage: string, message: string, data?: any) => void;
+  onStream: (event: any) => void;
+}
+
+/** Applies a successful scout result to pipeline state (items, confidence, mode, queries). */
+export function applyScoutResultState(args: ScoutResultStateArgs): {
+  scoutInternalReasoning: string | null;
+  rawScoutData: any;
+  visionScoutItems: any[];
+  scoutConfidenceRating: any;
+  scoutConfidenceComment: any;
+  scoutCookingMethod: any;
+  visionScoutContentType: any;
+  diningEnvironment: string;
+  scoutRecommendedMode: string | null;
+  queriesToSearch: string[];
+  visionScoutRanAndReturnedItems: boolean;
+} {
+  const {
+    scoutResult,
+    requestedMode,
+    hasActiveMealDocument,
+    activeMealDining,
+    currentRecommendedMode,
+    onLog,
+    onEvent,
+    onStream,
+  } = args;
+  const scoutInternalReasoning = scoutResult.internalReasoning || scoutResult._internalReasoning || null;
+  const rawScoutData = scoutResult.rawScoutJson || scoutResult.rawDishes || null;
+  if (scoutInternalReasoning) {
+    onLog(`[Vision Scout Internal Reasoning] ${scoutInternalReasoning}`);
+  }
+  const visionScoutItems = (scoutResult.items || []).map((item: any) => ({
+    ...item,
+    internalReasoning: scoutInternalReasoning,
+    // Vision Scout's schema/prompt never asks the model to populate `source`, so
+    // photographed dishes arrive with it undefined. Tag anything without a
+    // transcribed printed nutrition label as 'visual' so the single-serve-photo
+    // guard in detectPortionAmbiguity() (server_portion_clarify.ts) can actually
+    // fire. Items with a genuine rawNutritionLabel (OCR'd package) are left as-is
+    // so they still flow through multi-serve-pack portion clarification.
+    source: item.source || (item.rawNutritionLabel ? 'label' : 'visual'),
+  }));
+  const scoutConfidenceRating = scoutResult.scoutConfidenceRating;
+  const scoutConfidenceComment = scoutResult.scoutConfidenceComment;
+  const scoutCookingMethod = scoutResult.scoutCookingMethod;
+  const visionScoutContentType = scoutResult.visionScoutContentType;
+  const diningEnvironment = (scoutResult.diningEnvironment && scoutResult.diningEnvironment !== 'unknown')
+    ? scoutResult.diningEnvironment
+    : (activeMealDining || "unknown");
+  let scoutRecommendedMode = currentRecommendedMode ?? null;
+  if (requestedMode === 'review' && !hasActiveMealDocument) {
+    scoutRecommendedMode = "new_log";
+    onLog(`[Mode Override] User explicitly selected 'review' mode via UI pill. Forcing mode to 'new_log'.`);
+  } else if (hasActiveMealDocument && requestedMode === 'review') {
+    scoutRecommendedMode = "modify";
+    onLog(`[Mode Override] Review pill on an existing modal meal — staying on the same document (edit/merge).`);
+  } else if (requestedMode === 'compare') {
+    scoutRecommendedMode = "evaluation";
+    onLog(`[Mode Override] User explicitly selected 'compare' mode via UI pill. Forcing mode to 'evaluation'.`);
+  } else if (visionScoutItems && visionScoutItems.length <= 1 && scoutRecommendedMode === "evaluation") {
+    scoutRecommendedMode = "new_log";
+  }
+  const queriesToSearch: string[] = [...(scoutResult.queriesToSearch || [])];
+  const visionScoutRanAndReturnedItems = scoutResult.visionScoutRanAndReturnedItems;
+  const scoutItemsSummary = visionScoutItems.map((it: any) => ({
+    name: it.originalName || it.keyword,
+    keyword: it.keyword,
+    weight: it.estimatedWeightGrams
+  }));
+  const scoutItemsSummaryStr = scoutItemsSummary.map((i: any) => `${i.name} (~${i.weight}g)`).join(', ');
+  onEvent('scout_answer', 'scout', `Scout identified ${visionScoutItems.length} item(s): ${scoutItemsSummaryStr}`, {
+    items: scoutItemsSummary
+  });
+  onStream({ type: 'status', stage: 'scout', status: 'completed', message: 'Vision Scout completed.' });
+  onLog(`[Vision Scout] Exploded high density rows into ${visionScoutItems.length} individual item(s) to process:`);
+  return {
+    scoutInternalReasoning,
+    rawScoutData,
+    visionScoutItems,
+    scoutConfidenceRating,
+    scoutConfidenceComment,
+    scoutCookingMethod,
+    visionScoutContentType,
+    diningEnvironment,
+    scoutRecommendedMode,
+    queriesToSearch,
+    visionScoutRanAndReturnedItems,
+  };
+}
+
+export interface ScoutMealMergeArgs {
+  activeMealItemsBreakdown: any[];
+  visionScoutItems: any[];
+  onLog: (msg: string) => void;
+}
+
+/** Merges fresh scout dishes into the same meal behind existing items (index offset). */
+export function mergeScoutIntoActiveMeal(args: ScoutMealMergeArgs): any[] {
+  const { activeMealItemsBreakdown, visionScoutItems, onLog } = args;
+  const existing = activeMealItemsBreakdown.map((it: any, idx: number) => ({
+    scoutIndex: it.scoutIndex ?? idx,
+    originalName: it.originalName || it.canonicalDbName || it.name,
+    keyword: it.keyword || it.canonicalDbName || it.name,
+    estimatedWeightGrams: it.weightGrams || it.estimatedWeightGrams,
+    nutrients: it.nutrients || null,
+    boundingBox2D: it.boundingBox2D || null,
+    sourceImageIndex: it.sourceImageIndex,
+    components: it.components || it.componentsDetailList || null,
+    componentsDetailList: it.componentsDetailList || it.components || [],
+    cookingMethod: it.cookingMethod,
+    foodType: it.foodType,
+    dbSource: it.dbSource,
+    dbId: it.dbId,
+    lockedNutrientKeys: it.lockedNutrientKeys,
+    _alreadyFinalized: Boolean(it.nutrients && (it.nutrients.calories != null || it.calories != null)),
+  }));
+  const maxIdx = existing.reduce((m: number, it: any) => Math.max(m, Number(it.scoutIndex) || 0), -1);
+  const newcomers = visionScoutItems.map((it: any, i: number) => ({
+    ...it,
+    scoutIndex: (typeof it.scoutIndex === 'number' ? it.scoutIndex : i) + maxIdx + 1,
+  }));
+  const merged = [...existing, ...newcomers];
+  onLog(`[Single-Path] Merged ${newcomers.length} new scout dish(es) into the same meal (${existing.length} existing).`);
+  return merged;
+}
+
+/** Per-item scout debug lines (label/confidence/flags). */
+export function logScoutItemSummaries(items: any[], onLog: (msg: string) => void): void {
+  items.forEach((item: any) => {
+    const rawLabelHasRealData = item.rawNutritionLabel && typeof item.rawNutritionLabel === 'object'
+      ? Object.keys(item.rawNutritionLabel).some((k: string) => {
+          if (k === 'servingSize' || k === 'weight' || k === 'servingsPerContainer') return false;
+          const v = item.rawNutritionLabel[k];
+          return v !== undefined && v !== null && v !== '' && v !== '-' && v !== '--';
+        })
+      : false;
+    const flagStr = (item.anomalyFlags && item.anomalyFlags.length > 0) ? ` | Flags: [${item.anomalyFlags.join(', ')}]` : '';
+    const confStr = item.itemConfidence ? ` | Confidence: ${item.itemConfidence}` : '';
+    const labelStr = rawLabelHasRealData ? ` | Nutrition Label: ${JSON.stringify(item.rawNutritionLabel)}` : '';
+    onLog(`[Vision Scout] - Index: ${item.scoutIndex} | Name: "${item.originalName || item.keyword}" | Keyword: "${item.keyword}"${labelStr}${flagStr}${confStr}`);
+  });
 }

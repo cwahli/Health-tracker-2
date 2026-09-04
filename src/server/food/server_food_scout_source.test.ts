@@ -7,6 +7,10 @@ import {
   injectExplicitFoodTags,
   inferPackagedBindChains,
   mapTextQueriesToScoutItems,
+  buildScoutFailureError,
+  applyScoutResultState,
+  mergeScoutIntoActiveMeal,
+  logScoutItemSummaries,
 } from './server_food_scout_source';
 import { visionScoutResponseSchema } from './server_food_analyze_schema';
 
@@ -108,5 +112,70 @@ describe('F-8.10 shard 10 — scout-prep seams', () => {
       { scoutIndex: 0, keyword: 'grilled salmon', originalName: 'grilled salmon', estimatedWeightGrams: 100, source: 'text_query', cookingMethod: 'grilled', visualIngredients: [] },
       { scoutIndex: 1, keyword: 'rice', originalName: 'rice', estimatedWeightGrams: 100, source: 'text_query', cookingMethod: 'raw', visualIngredients: [] },
     ]);
+  });
+});
+
+describe('F-8.10 shard 11 — scout result handling', () => {
+  it('classifies dead scout runs into quota/503/corrupt/generic errors', () => {
+    expect(() => buildScoutFailureError({ message: '429 RESOURCE_EXHAUSTED' }, 'en')).toThrow(/quota \(429\)/);
+    expect(() => buildScoutFailureError({ message: '503 UNAVAILABLE' }, 'en')).toThrow(/503/);
+    expect(() => buildScoutFailureError({ message: 'Vision Scout Corrupted output' }, 'en')).toThrow();
+    expect(() => buildScoutFailureError({ message: 'weird' }, 'en')).toThrow(/re-upload/);
+  });
+
+  it('applies scout state with source defaulting and mode overrides', () => {
+    const logs: string[] = [];
+    const events: any[] = [];
+    const streams: any[] = [];
+    const state = applyScoutResultState({
+      scoutResult: {
+        internalReasoning: 'r',
+        items: [
+          { keyword: 'rice', originalName: 'Rice', estimatedWeightGrams: 200 },
+          { keyword: 'cola', originalName: 'Cola', estimatedWeightGrams: 330, rawNutritionLabel: { calories: '100' } },
+        ],
+        scoutConfidenceRating: 'High',
+        visionScoutContentType: 'visual',
+        diningEnvironment: 'unknown',
+        queriesToSearch: ['rice', 'cola'],
+        visionScoutRanAndReturnedItems: true,
+      },
+      requestedMode: 'review',
+      hasActiveMealDocument: false,
+      activeMealDining: 'casual_restaurant',
+      currentRecommendedMode: null,
+      onLog: (m) => logs.push(m),
+      onEvent: (t, s, m, d) => events.push([t, s, m]),
+      onStream: (e) => streams.push(e),
+    });
+    expect(state.visionScoutItems[0].source).toBe('visual');
+    expect(state.visionScoutItems[1].source).toBe('label');
+    expect(state.diningEnvironment).toBe('casual_restaurant');
+    expect(state.scoutRecommendedMode).toBe('new_log');
+    expect(state.queriesToSearch).toEqual(['rice', 'cola']);
+    expect(events[0][0]).toBe('scout_answer');
+    expect(streams[0].stage).toBe('scout');
+  });
+
+  it('merges fresh dishes behind existing meal items with index offset', () => {
+    const logs: string[] = [];
+    const merged = mergeScoutIntoActiveMeal({
+      activeMealItemsBreakdown: [{ canonicalDbName: 'Rice', weightGrams: 200, scoutIndex: 0 }],
+      visionScoutItems: [{ keyword: 'tea', scoutIndex: 0 }],
+      onLog: (m) => logs.push(m),
+    });
+    expect(merged).toHaveLength(2);
+    expect(merged[0].keyword).toBe('Rice');
+    expect(merged[1].scoutIndex).toBe(1);
+    expect(logs.some((m) => m.includes('same meal'))).toBe(true);
+  });
+
+  it('logs per-item summaries with label and flag chrome', () => {
+    const logs: string[] = [];
+    logScoutItemSummaries([
+      { scoutIndex: 0, keyword: 'cola', rawNutritionLabel: { calories: '100', servingSize: '330ml' }, anomalyFlags: ['big'] },
+    ], (m) => logs.push(m));
+    expect(logs[0]).toContain('Nutrition Label:');
+    expect(logs[0]).toContain('Flags: [big]');
   });
 });
