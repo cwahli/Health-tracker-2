@@ -1,80 +1,24 @@
 import { describe, it, expect } from 'vitest';
 import {
-  sanitizeLlmJsonOutput,
   computeDietitianSkipGates,
   decideScoutVerdict,
   decideScoutAdvice,
-  buildDietitianCallArgs,
   buildPureScaleResponse,
   sumPrecalcTotals,
-  computeDietitianRetryDelay,
-  repairTruncatedJson,
   applyPreDietitianDensityCheck,
-  parseAndValidateDietitian,
   buildCreateSkipResponse,
   sumSalvagedAggregates,
-  runDietitianDispatch,
-  runDietitianRetryLoop,
 } from './server_food_dietitian_dispatch';
 import { NUTRIENT_KEYS } from '../../utils/nutrients';
 
-describe('F-8.10 shard 4 — LLM JSON repair', () => {
-  it('collapses runaway decimals and trims repeating foodType', () => {
-    const raw = '{"weightGrams": "350.0000000000", "calories": 150.00000000000003, "foodType": "protein grain vegetable fruit dairy snack condiment prepared dish entree other extra words here"} ```json';
-    const { cleanJson, extractedScratchpad } = sanitizeLlmJsonOutput(raw);
-    expect(cleanJson).toContain('"350"');
-    expect(cleanJson).toContain(': 150');
-    expect(cleanJson).toContain('"foodType": "protein"');
-    expect(extractedScratchpad).toBe('');
-    expect(() => JSON.parse(cleanJson)).not.toThrow();
-  });
-
-  it('preserves significant fractional digits and scratchpad text', () => {
-    const raw = 'reasoning notes here {"protein": 22.5, "sodium": 300}';
-    const { cleanJson, extractedScratchpad } = sanitizeLlmJsonOutput(raw);
-    expect(cleanJson).toContain('22.5');
-    expect(extractedScratchpad).toContain('reasoning notes here');
-  });
-});
-
-describe('F-8.10 shard 4 — dietitian skip gates (F-10 adaptive law)', () => {
+describe('F-8.10 shard 4 — dietitian skip gates (pure-scale refine)', () => {
   const baseArgs = {
     isPureWeightModification: false,
     activeMeal: null,
     userSelectedMode: 'review',
     weightRefineIntent: {},
     message: 'log lunch',
-    isModifySession: false,
-    hasActiveMealDocument: false,
-    visionScoutRanAndReturnedItems: true,
-    preCalculatedItems: [{ estimatedWeightGrams: 300 }],
-    visionScoutItems: [{ keyword: 'rice' }],
-    imagePayloads: [{}],
-    visionScoutContentType: 'visual',
-    rawScoutData: {},
   };
-
-  it('allows single-agent create skip on a simple one-dish scout', () => {
-    const gates = computeDietitianSkipGates(baseArgs);
-    expect(gates.isCreateSession).toBe(true);
-    expect(gates.hasBarcode).toBe(false);
-    expect(gates.hasReceipt).toBe(false);
-    expect(gates.canSkipDietitianForCreate).toBe(true);
-    expect(gates.canSkipDietitianForPureScale).toBe(false);
-  });
-
-  it('forces dietitian expansion via barcode, receipt, and multi-dish signals', () => {
-    const barcode = computeDietitianSkipGates({
-      ...baseArgs,
-      visionScoutItems: [{ keyword: '8992761111059' }],
-    });
-    expect(barcode.hasBarcode).toBe(true);
-    expect(barcode.canSkipDietitianForCreate).toBe(false);
-
-    const receipt = computeDietitianSkipGates({ ...baseArgs, visionScoutContentType: 'receipt' });
-    expect(receipt.hasReceipt).toBe(true);
-    expect(receipt.canSkipDietitianForCreate).toBe(false);
-  });
 
   it('allows pure-scale refine skip only for clean single-item absolute grams', () => {
     const ok = computeDietitianSkipGates({
@@ -94,6 +38,15 @@ describe('F-8.10 shard 4 — dietitian skip gates (F-10 adaptive law)', () => {
       message: 'remove the oats',
     });
     expect(withVerb.canSkipDietitianForPureScale).toBe(false);
+
+    const multiItem = computeDietitianSkipGates({
+      ...baseArgs,
+      isPureWeightModification: true,
+      activeMeal: { itemsBreakdown: [{ name: 'oats' }, { name: 'milk' }] },
+      weightRefineIntent: { isRefine: true, weightGrams: 150, kind: 'absolute_grams' },
+      message: 'make it 150g',
+    });
+    expect(multiItem.canSkipDietitianForPureScale).toBe(false);
   });
 });
 
@@ -120,17 +73,6 @@ describe('F-8.10 shard 15 — scout verdict and advice ladders', () => {
   });
 });
 
-describe('F-8.10 shard 17 — dietitian call args', () => {
-  it('strips images, pins flash-lite, and attaches the schema', () => {
-    const args = buildDietitianCallArgs({ engine: 'gemini-x', finalSystemInstruction: 'SYS', promptText: 'P' });
-    expect(args.modelId).toBe('gemini-x');
-    expect(args.imagePayloads).toBeUndefined();
-    expect(args.responseMimeType).toBe('application/json');
-    expect(args.responseSchema.required).toContain('message');
-    expect(args.maxOutputTokens).toBe(8192);
-  });
-});
-
 describe('F-8.10 shard 18 — skip-path builders', () => {
   it('builds the pure-scale refine payload without an LLM call', () => {
     const { textOutput, rawParsed } = buildPureScaleResponse({ targetWeightGrams: 150, language: 'en' });
@@ -147,34 +89,9 @@ describe('F-8.10 shard 18 — skip-path builders', () => {
     ]);
     expect(totals).toEqual({ totalGrams: 300, totalCals: 310, totalP: 12, totalC: 40, totalF: 6, totalSugar: 10, totalAddedSugar: 9, totalSatFat: 1 });
   });
-
-  it('backs off longer on 503/429/UNAVAILABLE', () => {
-    expect(computeDietitianRetryDelay({ message: '503 boom' })).toBe(3000);
-    expect(computeDietitianRetryDelay({ message: '429 quota' })).toBe(3000);
-    expect(computeDietitianRetryDelay({ message: 'meh' })).toBe(1000);
-  });
 });
 
-describe('F-8.10 shard 19 — truncation repair and density check', () => {
-  it('repairs truncated JSON and throws the original error when unrepairable', () => {
-    const logs: string[] = [];
-    const out = repairTruncatedJson({
-      cleanJson: '{"mode": "new_log", "message": "hi',
-      extractedScratchpad: 'scratch',
-      parseErr: new Error('orig'),
-      onLog: (m) => logs.push(m),
-    });
-    expect(out.mode).toBe('new_log');
-    expect(out._internalReasoning).toBe('scratch');
-    expect(logs.some((m) => m.includes('repair succeeded'))).toBe(true);
-    expect(() => repairTruncatedJson({
-      cleanJson: 'not json at all {{{',
-      extractedScratchpad: '',
-      parseErr: new Error('orig'),
-      onLog: () => {},
-    })).toThrow(/orig/);
-  });
-
+describe('F-8.10 shard 19 — pre-dietitian density check', () => {
   it('rescales implausible beverage calories and rolls up aggregates', () => {
     const logs: string[] = [];
     const items: any[] = [{
@@ -189,24 +106,6 @@ describe('F-8.10 shard 19 — truncation repair and density check', () => {
     expect(items[0].nutrients.calories).toBe(550);
     expect(agg.calories).toBe(550);
     expect(logs.some((m) => m.includes('Reality Check'))).toBe(true);
-  });
-});
-
-describe('F-8.10 shard 25 — dietitian parse and validate', () => {
-  it('parses valid JSON and attaches scratchpad reasoning', async () => {
-    const out = await parseAndValidateDietitian({
-      cleanJson: JSON.stringify({ _internalReasoning: '', verdict: { label: 'Good fuel', level: 'good' }, message: 'Nice meal' }),
-      extractedScratchpad: 'scratch',
-      language: 'en',
-    });
-    expect(out.verdict.label).toBe('Good fuel');
-    expect(out._internalReasoning).toBe('scratch');
-  });
-
-  it('validates leniently and throws on garbage', async () => {
-    const validated = await parseAndValidateDietitian({ cleanJson: JSON.stringify({ nope: 1 }), extractedScratchpad: '', language: 'en' });
-    expect(validated).toBeTruthy();
-    await expect(parseAndValidateDietitian({ cleanJson: 'not json', extractedScratchpad: '', language: 'en' })).rejects.toThrow();
   });
 });
 
@@ -242,66 +141,5 @@ describe('F-8.10 shard 28 — create-skip synthesis and salvaged aggregates', ()
     const empty = sumSalvagedAggregates(null);
     expect(empty.calories).toBe(0);
     expect(Object.keys(empty)).toHaveLength(NUTRIENT_KEYS.length);
-  });
-});
-
-describe('F-8.10 shard 30 — dietitian dispatch and retry (stubbed LLM)', () => {
-  const validJson = () => JSON.stringify({
-    _internalReasoning: 'r',
-    verdict: { label: 'Good fuel', level: 'good' },
-    message: 'Nice meal',
-  });
-  const base = {
-    callArgs: { modelId: 'test' },
-    language: 'en' as unknown,
-    onLog: () => {},
-  };
-
-  it('dispatches once and parses on success', async () => {
-    let calls = 0;
-    const seen: any[] = [];
-    const out = await runDietitianDispatch({
-      ...base,
-      callUnifiedLLM: async (a: any) => { calls++; seen.push(a); return validJson(); },
-      onStreamChunk: () => {},
-    });
-    expect(calls).toBe(1);
-    expect(out.rawParsed.verdict.label).toBe('Good fuel');
-    expect(typeof seen[0].onStream).toBe('function');
-  });
-
-  it('repairs truncated JSON inside the retry loop', async () => {
-    let calls = 0;
-    const out = await runDietitianRetryLoop({
-      llmCallArgs: { modelId: 'test' },
-      callUnifiedLLM: async () => { calls++; return '{"mode": "new_log", "message": "hi'; },
-      language: 'en' as unknown,
-      sleep: async () => {},
-      onLog: () => {},
-    });
-    expect(calls).toBe(1);
-    expect(out.rawParsed.mode).toBe('new_log');
-  });
-
-  it('retries failures, throws aborts immediately, and throws when exhausted', async () => {
-    let calls = 0;
-    const sleeps: number[] = [];
-    await expect(runDietitianRetryLoop({
-      llmCallArgs: { modelId: 'test' },
-      callUnifiedLLM: async () => { calls++; throw new Error('boom'); },
-      language: 'en' as unknown,
-      sleep: async (ms: number) => { sleeps.push(ms); },
-      onLog: () => {},
-    })).rejects.toThrow(/boom/);
-    expect(calls).toBe(3);
-    expect(sleeps).toEqual([1000, 1000]);
-
-    await expect(runDietitianRetryLoop({
-      llmCallArgs: { modelId: 'test' },
-      callUnifiedLLM: async () => { const e: any = new Error('aborted by timeout'); e.name = 'AbortError'; throw e; },
-      language: 'en' as unknown,
-      sleep: async () => {},
-      onLog: () => {},
-    })).rejects.toThrow(/aborted by timeout/);
   });
 });

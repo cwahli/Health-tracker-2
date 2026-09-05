@@ -10,7 +10,7 @@ import {
 
 describe('F-8.10 shard 26 — mode response payloads', () => {
   it('shapes discussion and modify-no-meal fallbacks', () => {
-    const d = buildDiscussionResponse({ rawParsed: {}, fullPromptSent: 'P', apiCalls: [] });
+    const d = buildDiscussionResponse({ rawParsed: {}, apiCalls: [] });
     expect(d.mode).toBe('discussion');
     expect(d.text).toContain('details on this meal composition');
     expect(d.data).toBeNull();
@@ -25,7 +25,7 @@ describe('F-8.10 shard 26 — mode response payloads', () => {
       scoutInternalReasoning: 's', rawScoutData: null,
       comparisonData: { groups: [] }, comparisonSet: { id: 'c' },
       scoutItems: [], scoutContentType: 'visual', diningEnvironment: 'home_cooked',
-      fullPromptSent: 'P', apiCalls: [],
+      apiCalls: [],
     });
     expect(e.mode).toBe('evaluation');
     expect(e.message).toBe('pick one');
@@ -37,7 +37,7 @@ describe('F-8.10 shard 26 — mode response payloads', () => {
       rawParsed: {}, parsedData: { name: 'Bowl', quantity: '1 serving' },
       pendingFoodLog: null, mealBuild: {}, gate: { savable: true },
       scoutInternalReasoning: null, rawScoutData: null, scoutContentType: 'visual',
-      diningEnvironment: 'home_cooked', fullPromptSent: 'P', scoutItems: [], apiCalls: [],
+      diningEnvironment: 'home_cooked', scoutItems: [], apiCalls: [],
     });
     expect(n.mode).toBe('new_log');
     expect(n.message).toContain('Bowl');
@@ -49,7 +49,7 @@ describe('F-8.10 shard 26 — mode response payloads', () => {
     const m = buildModifyResponse({
       rawParsed: { _internalReasoning: 'r' }, finalMessage: 'done',
       pendingFoodLog: null, activeMeal: { name: 'Lunch' }, mealBuild: {},
-      gate: { savable: true }, editApplied: true, fullPromptSent: 'P', scoutItems: [], apiCalls: [],
+      gate: { savable: true }, editApplied: true, scoutItems: [], apiCalls: [],
     });
     expect(m.mode).toBe('modify');
     expect(m.text).toBe('done');
@@ -63,7 +63,7 @@ describe('F-8.10 shard 28 — degrade response', () => {
     const meal = { name: 'Lunch', degradedStages: ['dietitian'] };
     const d = buildDegradeResponse({
       payloadData: meal, degradedMeal: meal, visionScoutItems: [],
-      scoutContentType: 'visual', fullPromptSent: 'P', apiCalls: [],
+      scoutContentType: 'visual', apiCalls: [],
     });
     expect(d.mode).toBe('new_log');
     expect(d.message).toContain('core databases');

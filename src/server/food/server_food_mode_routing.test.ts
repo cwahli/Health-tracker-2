@@ -57,16 +57,15 @@ describe('F-8.10 shard 5 — mode routing matrix', () => {
 });
 
 describe('F-8.10 shard 5 — apiCalls ledger', () => {
-  it('lists scout, USDA, and dietitian legs; omits dietitian on skip', () => {
+  it('lists scout and USDA legs, omitting dietitian', () => {
     const full = buildFoodApiCalls({
-      hasImage: true, queriesToSearch: ['a', 'b'],
-      canSkipDietitianForCreate: false, canSkipDietitianForPureScale: false, engine: 'gemini-x',
+      hasImage: true, queriesToSearch: ['a', 'b'], engine: 'gemini-x',
     });
-    expect(full.map((c) => c.type)).toEqual(['gemini', 'usda', 'gemini']);
-    expect(full[2].label).toContain('Dietitian');
+    expect(full.map((c) => c.type)).toEqual(['gemini', 'usda']);
+    expect(full[0].label).toContain('Visual Scout');
+    expect(full[1].label).toContain('USDA (2)');
     const skipped = buildFoodApiCalls({
-      hasImage: false, queriesToSearch: [],
-      canSkipDietitianForCreate: true, canSkipDietitianForPureScale: false, engine: 'gemini-x',
+      hasImage: false, queriesToSearch: [], engine: 'gemini-x',
     });
     expect(skipped).toEqual([]);
   });

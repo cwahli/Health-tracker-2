@@ -20,7 +20,9 @@ function foodInput(over: any = {}) {
       '[Vision Scout] done in 1500ms',
       '[UnifiedLLM-Usage:scout] prompt=812 completion=96 total=908',
       '[Budget] Finalized ledger',
-      '[UnifiedLLM-Usage:dietitian] prompt=3012 completion=918 total=3930',
+      'Food Resolver agent',
+      '[UnifiedLLM-Usage:food_resolver] prompt=500 completion=50 total=550',
+      '[UnifiedLLM-Timing:food_resolver] ms=1200',
     ].join('\n'),
     scoutItems: [{ keyword: 'Steak', name: 'Steak' }],
     pendingFoodLog: { id: 'meal_1', nutrients: { calories: 398 } },
@@ -58,11 +60,14 @@ describe('extractDispatches (food)', () => {
   it('attaches tokens per stage and rawEmission without replacing output', () => {
     const d = extractDispatches(foodInput());
     const scout = d.find(x => x.agent === 'scout')!;
-    const diet = d.find(x => x.agent === 'dietitian')!;
+    const resolver = d.find(x => x.agent === 'resolver')!;
     expect(scout.tokens).toBe(908);
-    expect(diet.tokens).toBe(3930);
     expect(scout.rawEmission).toEqual(foodInput().rawScout);
     expect(scout.output).toEqual([{ keyword: 'Steak', name: 'Steak' }]);
+    expect(resolver).toBeDefined();
+    expect(resolver.tokens).toBe(550);
+    expect(resolver.latency_ms).toBe(1200);
+    expect(resolver.called).toBe(true);
   });
   it('leaves tokens undefined when no usage lines exist', () => {
     const d = extractDispatches(foodInput({ backendLogs: '[Vision Scout] done' }));
@@ -74,29 +79,23 @@ describe('extractDispatches (food)', () => {
     }));
     expect(d.find(x => x.agent === 'scout')!.latency_ms).toBe(5231);
   });
-  it('marks a projector dietitian (no call evidence) with called=false and no model/latency', () => {
+  it('omits resolver when no gap resolution occurred', () => {
     const d = extractDispatches(foodInput({
       backendLogs: '[Vision Scout] done\n[Budget] Finalized ledger',
     }));
-    const diet = d.find(x => x.agent === 'dietitian')!;
-    expect(diet.called).toBe(false);
-    expect(diet.model).toBeNull();
-    expect(diet.latency_ms).toBeNull();
-    expect(diet.note).toMatch(/projector/);
-    expect(diet.tokens).toBeUndefined();
+    expect(d.find(x => x.agent === 'resolver')).toBeUndefined();
   });
 });
 
 describe('hasCallEvidence', () => {
   it('detects dispatch/prompt/usage/timing/answer lines per stage', () => {
     expect(hasCallEvidence('[UnifiedLLM-Prompt:scout] x', 'scout')).toBe(true);
-    expect(hasCallEvidence('[UnifiedLLM-Usage:dietitian] prompt=1 completion=1 total=2', 'dietitian')).toBe(true);
-    expect(hasCallEvidence('[MealBuild] projector dietitian', 'dietitian')).toBe(false);
+    expect(hasCallEvidence('[UnifiedLLM-Usage:food_resolver] prompt=1 completion=1 total=2', 'resolver')).toBe(true);
     expect(hasCallEvidence('', 'scout')).toBe(false);
   });
   it('does NOT count instruction/answer lines logged on skip paths', () => {
-    expect(hasCallEvidence('[dietitian_answer] Solid protein intake', 'dietitian')).toBe(false);
-    expect(hasCallEvidence('[dietitian_instruction] Dietitian Instruction dispatched (model: x)', 'dietitian')).toBe(false);
+    expect(hasCallEvidence('[dietitian_answer] Solid protein intake', 'resolver')).toBe(false);
+    expect(hasCallEvidence('[dietitian_instruction] Dietitian Instruction dispatched (model: x)', 'resolver')).toBe(false);
   });
 });
 

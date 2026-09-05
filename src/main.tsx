@@ -84,9 +84,10 @@ const pushClientLog = (prefix: string, rawMsg: string) => {
   if (!window.__clientConsoleLogs) return;
   if (shouldIgnoreConsoleNoise(rawMsg)) return;
 
-  const entry = `[${prefix} ${new Date().toISOString()}] ${rawMsg}`;
+  const jobIdTag = window.__activeJobId ? ` [${window.__activeJobId}]` : '';
+  const entry = `[${prefix} ${new Date().toISOString()}]${jobIdTag} ${rawMsg}`;
   const last = window.__clientConsoleLogs[window.__clientConsoleLogs.length - 1];
-  if (last && last.replace(/^\[[A-Z_\s0-9:.-]+\]\s*/, '') === rawMsg) {
+  if (last && last.replace(/^\[[A-Z_\s0-9:.-]+\](?:\s*\[[^\]]+\])?\s*/, '') === rawMsg) {
     // Avoid spamming consecutive duplicates
     return;
   }

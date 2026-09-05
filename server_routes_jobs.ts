@@ -335,6 +335,8 @@ jobsRouter.all('/api/jobs/debug', async (req, res) => {
         photoUrl: job.photo_url,
         debugUrl: job.debug_url,
         result: job.clean_result,
+        dialogInventory: job.clean_result?.dialogInventory || (job as any).dialogInventory,
+        dispatches: job.clean_result?.dispatches || (job as any).dispatches,
         sessionEvents: job.clean_result?.sessionEvents || (job as any).sessionEvents,
         lastUserAction: job.clean_result?.lastUserAction || (job as any).lastUserAction,
         userActionBreadcrumbs: job.clean_result?.userActionBreadcrumbs || (job as any).userActionBreadcrumbs,
@@ -365,11 +367,20 @@ jobsRouter.all('/api/jobs/debug', async (req, res) => {
       debugPayload.backendLogs = job.accumulatedLogs.join('\n');
     }
 
+    let memJobForMerge: any = null;
+    try {
+      const { getInMemoryServerJob: getMem } = await import('./serverJobs.js');
+      memJobForMerge = getMem(cleanJobId) || getMem(rawJobId);
+    } catch { /* best-effort */ }
+
     // Merge server session events with client session events
     const serverSessionEvents = Array.isArray(debugPayload.sessionEvents)
       ? debugPayload.sessionEvents
       : (Array.isArray(debugPayload.result?.sessionEvents) ? debugPayload.result.sessionEvents : []);
-    const rawMergedEvents = [...serverSessionEvents, ...clientSessionEvents];
+    const memJobEvents = Array.isArray(memJobForMerge?.sessionEvents)
+      ? memJobForMerge.sessionEvents
+      : (Array.isArray((job as any)?.sessionEvents) ? (job as any).sessionEvents : []);
+    const rawMergedEvents = [...serverSessionEvents, ...memJobEvents, ...clientSessionEvents];
     const seenEventKeys = new Set<string>();
     const uniqueSessionEvents: any[] = [];
     rawMergedEvents.sort((a, b) => (new Date(a.ts || 0).getTime()) - (new Date(b.ts || 0).getTime()));
@@ -400,11 +411,6 @@ jobsRouter.all('/api/jobs/debug', async (req, res) => {
     const effectiveLastUserAction = lastUserAction || debugPayload.lastUserAction || debugPayload.result?.lastUserAction;
     // Merge order: live client body first, then the in-memory job (persisted from
     // earlier POSTs — see below), then the stored payload / cold copy.
-    let memJobForMerge: any = null;
-    try {
-      const { getInMemoryServerJob: getMem } = await import('./serverJobs.js');
-      memJobForMerge = getMem(cleanJobId) || getMem(rawJobId);
-    } catch { /* best-effort */ }
     const effectiveDialogInventory = dialogInventory
       || (memJobForMerge as any)?.dialogInventory
       || (memJobForMerge as any)?.clean_result?.dialogInventory
@@ -422,9 +428,17 @@ jobsRouter.all('/api/jobs/debug', async (req, res) => {
         if (memJob) {
           (memJob as any).dialogInventory = effectiveDialogInventory;
           const cr = (memJob as any).clean_result;
-          if (cr && typeof cr === 'object' && !(cr as any).dialogInventory) {
+          if (cr && typeof cr === 'object') {
             (cr as any).dialogInventory = effectiveDialogInventory;
           }
+        }
+        const targetUserId = userId || debugPayload?.userId || (memJob as any)?.user_id;
+        if (targetUserId) {
+          const { uploadDebugPayloadToR2 } = await import('./src/utils/r2Storage.js');
+          debugPayload.dialogInventory = effectiveDialogInventory;
+          void uploadDebugPayloadToR2(cleanJobId, debugPayload).catch((e: any) =>
+            console.warn('[JobsDebug] Background update of debug payload to R2 failed:', e)
+          );
         }
       } catch { /* persistence is best-effort; the merged response below still carries it */ }
     }

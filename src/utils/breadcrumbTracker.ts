@@ -8,6 +8,7 @@ export interface UserActionBreadcrumb {
   action: string;
   target?: string;
   details?: any;
+  jobId?: string;
 }
 
 declare global {
@@ -15,8 +16,22 @@ declare global {
     __userActionBreadcrumbs?: UserActionBreadcrumb[];
     __clientConsoleLogs?: string[];
     __clientNetworkErrors?: string[];
+    __activeJobId?: string | null;
     __lastUserAction?: { action: string; prompt?: string; timestamp: string; details?: any };
   }
+}
+
+let activeJobScope: string | null = null;
+
+export function setActiveJobScope(jobId: string | null) {
+  activeJobScope = jobId;
+  if (typeof window !== 'undefined') {
+    window.__activeJobId = jobId;
+  }
+}
+
+export function getActiveJobScope(): string | null {
+  return activeJobScope || (typeof window !== 'undefined' ? (window.__activeJobId || null) : null);
 }
 
 if (typeof window !== 'undefined') {
@@ -34,7 +49,8 @@ export function recordBreadcrumb(action: string, target?: string, details?: any)
       timestamp: new Date().toISOString(),
       action,
       target,
-      details
+      details,
+      jobId: getActiveJobScope() || undefined
     };
     window.__userActionBreadcrumbs.push(entry);
     if (window.__userActionBreadcrumbs.length > 100) {
@@ -57,6 +73,7 @@ export function clearBreadcrumbs() {
   try {
     if (typeof window === 'undefined') return;
     window.__userActionBreadcrumbs = [];
+    window.__clientNetworkErrors = [];
   } catch (_) {}
 }
 

@@ -218,8 +218,29 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
       }
       if (d.output) {
         lines.push(`- **Output:**`);
-        lines.push('```');
-        lines.push(capField(typeof d.output === 'object' ? JSON.stringify(d.output, null, 2) : String(d.output)));
+        let formattedOutput = '';
+        let isJson = false;
+        if (typeof d.output === 'object') {
+          formattedOutput = JSON.stringify(d.output, null, 2);
+          isJson = true;
+        } else if (typeof d.output === 'string') {
+          const trimmed = d.output.trim();
+          if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+            try {
+              const parsed = JSON.parse(trimmed);
+              formattedOutput = JSON.stringify(parsed, null, 2);
+              isJson = true;
+            } catch {
+              formattedOutput = d.output;
+            }
+          } else {
+            formattedOutput = d.output;
+          }
+        } else {
+          formattedOutput = String(d.output);
+        }
+        lines.push(isJson ? '```json' : '```');
+        lines.push(capField(formattedOutput));
         lines.push('```');
       }
       const sigs: string[] = [];
@@ -800,7 +821,7 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
 
   // 6. Agent Message / Verdict Narrative
   if (input.message) {
-    lines.push(`## 💬 Dietitian & Agent Narrative`);
+    lines.push(`## 💬 Agent Message & Narrative`);
     lines.push('');
     lines.push(String(input.message).slice(0, 8000));
     lines.push('');

@@ -46,6 +46,7 @@ import { executeFoodAgent } from '../jobs/FoodAgentExecutor';
 import { downloadJobDebugReport } from '../utils/logChatDebugDownload';
 import { shouldRunHandoffAutoSend } from '../utils/chatAutoSend';
 import { getSessionLog } from '../jobs/sessionLog';
+import { setActiveJobScope } from '../utils/breadcrumbTracker';
 function isValidFoodLog(log: any): boolean {
   if (!log || typeof log !== 'object' || Array.isArray(log)) return false;
   return !!(
@@ -1845,6 +1846,7 @@ ${logsText}`);
       isSendingRef.current = false;
       setDelegatedAgentType(null);
       setDelegatedHandoffPayload(null);
+      setActiveJobScope(null);
     }
   }, [isOpen]);
   const handleDownloadDebug = async (jobIdToDownload: string, msg: any, format: 'json' | 'markdown' = 'markdown') => {
@@ -2782,13 +2784,14 @@ ${logsText}`);
             imageUrl: (extraOptions as any)?.imageUrl || (extraOptions as any)?.photoUrl || job?.photoUrl || job?.result?.photoUrl || prunedMealForJob?.imageUrl || undefined,
             imageUrls: (extraOptions as any)?.imageUrls || (Array.isArray(job?.result?.imageUrls) ? job.result.imageUrls : undefined) || (prunedMealForJob?.imageUrls) || undefined,
             requestId: currentReqId,
-            clientConsoleLogs: window.__clientConsoleLogs || [],
-            networkErrors: window.__clientNetworkErrors || [],
-            userActionBreadcrumbs: window.__userActionBreadcrumbs || [],
+            clientConsoleLogs: (window.__clientConsoleLogs || []).slice(-100),
+            networkErrors: (window.__clientNetworkErrors || []).slice(-50),
+            userActionBreadcrumbs: (window.__userActionBreadcrumbs || []).filter((b: any) => !b.jobId || b.jobId === currentJobId),
             lastUserAction: window.__lastUserAction || { action: 'chat_submit', prompt: userContent || textToSend, timestamp: new Date().toISOString() },
             sessionEvents: getSessionLog(currentJobId).length > 0 ? getSessionLog(currentJobId) : (job?.sessionEvents || undefined),
             explicitFoodTags: explicitFoodTags.length > 0 ? explicitFoodTags : undefined
           };
+          setActiveJobScope(currentJobId);
           fetchSubmitWithRetry('/api/jobs/submit', submitPayload)
           .then(async (res) => {
             if (!res.ok) {

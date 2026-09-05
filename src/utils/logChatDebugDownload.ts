@@ -56,8 +56,15 @@ export async function downloadJobDebugReport(args: {
 
   const job = JobStore.getJob(resolvedJobId);
   const w = window as any;
-  const clientConsoleLogs = w.__clientConsoleLogs || [];
+  const rawConsoleLogs: string[] = w.__clientConsoleLogs || [];
+  const clientConsoleLogs = resolvedJobId
+    ? rawConsoleLogs.filter((log: string) => log.includes(`[${resolvedJobId}]`) || !/\[job_[a-zA-Z0-9_-]+\]/.test(log))
+    : rawConsoleLogs;
   const networkErrors = w.__clientNetworkErrors || [];
+  const rawBreadcrumbs = w.__userActionBreadcrumbs || [];
+  const userActionBreadcrumbs = resolvedJobId
+    ? rawBreadcrumbs.filter((b: any) => !b.jobId || b.jobId === resolvedJobId)
+    : rawBreadcrumbs;
   const lastUserAction = w.__lastUserAction || (args.inputText ? { action: 'chat_submit', prompt: args.inputText, timestamp: new Date().toISOString() } : undefined);
 
   const pendingFoodLog = msg?.data?.pendingFoodLog || msg?.pendingFoodLog || job?.result?.pendingFoodLog;
@@ -129,6 +136,7 @@ export async function downloadJobDebugReport(args: {
       lastUserAction,
       clientConsoleLogs,
       networkErrors,
+      userActionBreadcrumbs,
     },
     dialogInventory,
     messages: job?.messages,
@@ -153,7 +161,7 @@ export async function downloadJobDebugReport(args: {
         clientSessionEvents,
         clientConsoleLogs,
         networkErrors,
-        userActionBreadcrumbs: w.__userActionBreadcrumbs || [],
+        userActionBreadcrumbs,
         lastUserAction,
         dialogInventory,
       }),

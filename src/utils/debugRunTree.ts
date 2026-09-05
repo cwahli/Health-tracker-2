@@ -41,7 +41,7 @@ export interface DialogInventory {
 }
 
 export interface DispatchTrace {
-  id: string; // e.g. "t1/scout", "t1/dietitian", "fd/front_desk"
+  id: string; // e.g. "t1/scout", "t1/resolver", "fd/front_desk"
   parent?: string | null;
   turn?: number | string;
   agent?: string;
@@ -286,9 +286,19 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
       agent: 'scout',
       user: input.lastUserAction?.details?.prompt || input.lastUserAction?.prompt || undefined,
       received: { photoCount: input.photoUrls?.length || (input.photoUrl ? 1 : 0) },
-      instruction: typeof input.agentInstructions === 'object' && !Array.isArray(input.agentInstructions)
-        ? (input.agentInstructions as any)?.scout
-        : undefined,
+      instruction: (() => {
+        if (typeof input.agentInstructions === 'object' && !Array.isArray(input.agentInstructions)) {
+          const s = (input.agentInstructions as any)?.scout;
+          if (s) return s;
+        } else if (typeof input.agentInstructions === 'string' && input.agentInstructions.trim()) {
+          return input.agentInstructions;
+        }
+        if (logs) {
+          const match = logs.match(/Vision Scout System Instruction \(config\.systemInstruction\):\s*"([\s\S]+?)"(?:\n\[|\n$|$)/);
+          if (match) return match[1];
+        }
+        return undefined;
+      })(),
       output: input.scoutItems || input.rawScout,
       rawEmission: input.rawScout || undefined,
       model: modelMatch ? (modelMatch[1] || modelMatch[2]) : 'gemini-3.5-flash-lite',
