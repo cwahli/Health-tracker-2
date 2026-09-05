@@ -6,7 +6,7 @@ import { Type } from '@google/genai';
 import { z } from 'zod';
 import { formatUSDANutrients, formatOFFNutrients, extractOFFNutrientsPer100g, isFastFoodChain, buildWebSearchQuery, loosenQuery, cleanQuery, detectChainKeyFromText, scoutHasCompletePrintedLabel, enrichScoutComponentsWithMatches, buildPastMealsContext } from './src/server/food/server_food_analyze_helpers.js';
 import { buildUserContext, buildTimeContext, buildImageContext, buildHistoryContext, buildVisionScoutContext, buildDatabaseMatchesContext, buildBiomarkersContext, stitchFoodPrompt, selectSystemInstruction, assemblePrecalcPromptBlock } from './src/server/food/server_food_prompt_context.js';
-import { sanitizeLlmJsonOutput, computeDietitianSkipGates, decideScoutVerdict, decideScoutAdvice, buildDietitianCallArgs, buildPureScaleResponse, sumPrecalcTotals, computeDietitianRetryDelay, repairTruncatedJson, applyPreDietitianDensityCheck, parseAndValidateDietitian, buildCreateSkipResponse, sumSalvagedAggregates } from './src/server/food/server_food_dietitian_dispatch.js';
+import { computeDietitianSkipGates, decideScoutVerdict, decideScoutAdvice, buildDietitianCallArgs, buildPureScaleResponse, sumPrecalcTotals, buildCreateSkipResponse, sumSalvagedAggregates, applyPreDietitianDensityCheck, runDietitianRetryLoop } from './src/server/food/server_food_dietitian_dispatch.js';
 import { resolveFoodAnalyzeMode, buildFoodApiCalls, normalizeParsedPostDietitian } from './src/server/food/server_food_mode_routing.js';
 import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput, mapFinalizeToMeal, mergeModifyPathScoutItems, runEvaluationFinalize, assembleEvaluationComparison } from './src/server/food/server_food_meal_assemble.js';
 import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, buildScoutFailureError, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries, applyWeightModShortcut, restoreTurnOneCandidates, computeScoutRetryDelay, applySkipScoutShortcut, checkResumedFromImageTurn, applyTextQueryShortcut, checkMenuScaleBypass, buildScoutCallArgs, runScoutRetryLoop } from './src/server/food/server_food_scout_source.js';
@@ -750,30 +750,6 @@ export async function runFoodAnalyze(req: any, res: any) {
     let promptText = stitchedPrompt.promptText;
     fullPromptSent = stitchedPrompt.fullPromptSent;
     addDebugLog(`[Dietitian Coach] Sending nutrition analysis request to Gemini...`);
-    async function callAndParseFoodAnalysis(callArgs: any): Promise<{ textOutput: string; rawParsed: any }> {
-      if (isStream) {
-        callArgs.onStream = (chunk: string, isThought?: boolean) => {
-          try {
-            if (isThought) {
-              res.write(`data: ${JSON.stringify({ type: 'stream', thought: chunk, stage: 'dietitian' })}\n\n`);
-            } else {
-              res.write(`data: ${JSON.stringify({ type: 'stream', chunk, stage: 'dietitian' })}\n\n`);
-            }
-            if (typeof (res as any).flush === 'function') (res as any).flush();
-          } catch (e) {}
-        };
-      }
-      const textOutput = await callUnifiedLLM(callArgs);
-      const { cleanJson, extractedScratchpad } = sanitizeLlmJsonOutput(textOutput);
-      let rawParsed;
-      try {
-        rawParsed = await parseAndValidateDietitian({ cleanJson, extractedScratchpad, language: userProfile?.language });
-      } catch (parseErr: any) {
-        addDebugLog(`[JSON Parse Error] JSON parse failed: ${parseErr.message}. Attempting robust truncation repair...`);
-        rawParsed = repairTruncatedJson({ cleanJson, extractedScratchpad, parseErr, onLog: addDebugLog });
-      }
-      return { textOutput, rawParsed };
-    }
     // Pre-dietitian density check: ensure beverage and composite items are rescaled prior to Dietitian prompt payload
     aggregatedNutrients = applyPreDietitianDensityCheck({ preCalculatedItems, aggregatedNutrients, beveragePattern: BEVERAGE_RAW_PATTERN, onLog: addDebugLog });
     const precalcAssembled = assemblePrecalcPromptBlock({ preCalculatedItems, activeMeal, aggregatedNutrients, userProfile, promptText, fullPromptSent, onLog: addDebugLog });
@@ -818,36 +794,25 @@ export async function runFoodAnalyze(req: any, res: any) {
       textOutput = created.textOutput;
       rawParsed = created.rawParsed;
     } else {
-      let dietitianAttempts = 0;
-      const maxDietitianAttempts = 3;
-      let lastDietitianErr: any = null;
-      while (dietitianAttempts < maxDietitianAttempts) {
-        dietitianAttempts++;
-        try {
-          if (dietitianAttempts > 1) {
-            const delay = computeDietitianRetryDelay(lastDietitianErr);
-            addDebugLog(`[Dietitian] Waiting ${delay}ms before retry...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-            addDebugLog(`[Dietitian] Retrying LLM call (Attempt ${dietitianAttempts} of ${maxDietitianAttempts})...`);
-          }
-          const result = await callAndParseFoodAnalysis(llmCallArgs);
-          textOutput = result.textOutput;
-          rawParsed = result.rawParsed;
-          break;
-        } catch (err: any) {
-          lastDietitianErr = err;
-          const isAbort = err.name === 'AbortError' || (err.message && err.message.toLowerCase().includes('abort'));
-          if (isAbort) {
-            addDebugLog(`[Dietitian] Fatal error (Timeout) detected. Throwing immediately without retry.`);
-            throw err;
-          }
-          addDebugLog(`[Dietitian Attempt ${dietitianAttempts} Failed] Error: ${err.message}`);
-        }
-      }
-      if (!textOutput) {
-        addDebugLog(`[Dietitian Failed Permanently] All attempts failed. Last error: ${lastDietitianErr?.message}`);
-        throw lastDietitianErr;
-      }
+      const dietitianRun = await runDietitianRetryLoop({
+        llmCallArgs,
+        callUnifiedLLM,
+        language: userProfile?.language,
+        onStreamChunk: isStream ? (chunk: string, isThought?: boolean) => {
+          try {
+            if (isThought) {
+              res.write(`data: ${JSON.stringify({ type: 'stream', thought: chunk, stage: 'dietitian' })}\n\n`);
+            } else {
+              res.write(`data: ${JSON.stringify({ type: 'stream', chunk, stage: 'dietitian' })}\n\n`);
+            }
+            if (typeof (res as any).flush === 'function') (res as any).flush();
+          } catch (e) {}
+        } : undefined,
+        sleep: (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms)),
+        onLog: addDebugLog,
+      });
+      textOutput = dietitianRun.textOutput;
+      rawParsed = dietitianRun.rawParsed;
     }
     addDebugLog(`[Dietitian Coach] Received response from Gemini. Length: ${textOutput.length} chars.`);
     if (rawParsed._internalReasoning) {

@@ -474,3 +474,92 @@ export function sumSalvagedAggregates(preCalculatedItems: any): Record<string, n
   }
   return salvagedAggregatedNutrients;
 }
+
+export interface DietitianDispatchArgs {
+  callArgs: any;
+  callUnifiedLLM: (args: any) => Promise<any>;
+  language?: unknown;
+  onLog: (msg: string) => void;
+  onStreamChunk?: (chunk: string, isThought?: boolean) => void;
+}
+
+/**
+ * F-8.10 shard 30 — single dietitian attempt, extracted verbatim from
+ * runFoodAnalyze. Streams via the injected hook, then sanitizes, parses,
+ * validates, and repairs. Throws on unparseable JSON (caller retries).
+ */
+export async function runDietitianDispatch(args: DietitianDispatchArgs): Promise<{
+  textOutput: string;
+  rawParsed: any;
+}> {
+  const { callArgs, callUnifiedLLM, language, onLog, onStreamChunk } = args;
+  if (onStreamChunk) {
+    callArgs.onStream = (chunk: string, isThought?: boolean) => onStreamChunk(chunk, isThought);
+  }
+  const textOutput = await callUnifiedLLM(callArgs);
+  const { cleanJson, extractedScratchpad } = sanitizeLlmJsonOutput(textOutput);
+  let rawParsed;
+  try {
+    rawParsed = await parseAndValidateDietitian({ cleanJson, extractedScratchpad, language });
+  } catch (parseErr: any) {
+    onLog(`[JSON Parse Error] JSON parse failed: ${parseErr.message}. Attempting robust truncation repair...`);
+    rawParsed = repairTruncatedJson({ cleanJson, extractedScratchpad, parseErr, onLog });
+  }
+  return { textOutput, rawParsed };
+}
+
+export interface DietitianRetryArgs {
+  llmCallArgs: any;
+  callUnifiedLLM: (args: any) => Promise<any>;
+  language?: unknown;
+  maxAttempts?: number;
+  onStreamChunk?: (chunk: string, isThought?: boolean) => void;
+  sleep: (ms: number) => Promise<void>;
+  onLog: (msg: string) => void;
+}
+
+/**
+ * F-8.10 shard 30 — dietitian retry loop, extracted verbatim from
+ * runFoodAnalyze. Abort/timeout errors throw immediately; other failures
+ * retry with backoff. Returns empty textOutput when attempts exhaust.
+ */
+export async function runDietitianRetryLoop(args: DietitianRetryArgs): Promise<{
+  textOutput: string;
+  rawParsed: any;
+}> {
+  const {
+    llmCallArgs, callUnifiedLLM, language, maxAttempts = 3, onStreamChunk, sleep, onLog,
+  } = args;
+  let textOutput: string = "";
+  let rawParsed: any;
+  let attempts = 0;
+  let lastDietitianErr: any = null;
+  while (attempts < maxAttempts) {
+    attempts++;
+    try {
+      if (attempts > 1) {
+        const delay = computeDietitianRetryDelay(lastDietitianErr);
+        onLog(`[Dietitian] Waiting ${delay}ms before retry...`);
+        await sleep(delay);
+        onLog(`[Dietitian] Retrying LLM call (Attempt ${attempts} of ${maxAttempts})...`);
+      }
+      const result = await runDietitianDispatch({ callArgs: llmCallArgs, callUnifiedLLM, language, onLog, onStreamChunk });
+      textOutput = result.textOutput;
+      rawParsed = result.rawParsed;
+      break;
+    } catch (err: any) {
+      lastDietitianErr = err;
+      const isAbort = err.name === 'AbortError' || (err.message && err.message.toLowerCase().includes('abort'));
+      if (isAbort) {
+        onLog(`[Dietitian] Fatal error (Timeout) detected. Throwing immediately without retry.`);
+        throw err;
+      }
+      onLog(`[Dietitian Attempt ${attempts} Failed] Error: ${err.message}`);
+    }
+  }
+  if (!textOutput) {
+    onLog(`[Dietitian Failed Permanently] All attempts failed. Last error: ${lastDietitianErr?.message}`);
+    throw lastDietitianErr;
+  }
+  return { textOutput, rawParsed };
+}

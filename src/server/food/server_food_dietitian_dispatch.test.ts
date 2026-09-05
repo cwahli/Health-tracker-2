@@ -13,6 +13,8 @@ import {
   parseAndValidateDietitian,
   buildCreateSkipResponse,
   sumSalvagedAggregates,
+  runDietitianDispatch,
+  runDietitianRetryLoop,
 } from './server_food_dietitian_dispatch';
 import { NUTRIENT_KEYS } from '../../utils/nutrients';
 
@@ -240,5 +242,66 @@ describe('F-8.10 shard 28 — create-skip synthesis and salvaged aggregates', ()
     const empty = sumSalvagedAggregates(null);
     expect(empty.calories).toBe(0);
     expect(Object.keys(empty)).toHaveLength(NUTRIENT_KEYS.length);
+  });
+});
+
+describe('F-8.10 shard 30 — dietitian dispatch and retry (stubbed LLM)', () => {
+  const validJson = () => JSON.stringify({
+    _internalReasoning: 'r',
+    verdict: { label: 'Good fuel', level: 'good' },
+    message: 'Nice meal',
+  });
+  const base = {
+    callArgs: { modelId: 'test' },
+    language: 'en' as unknown,
+    onLog: () => {},
+  };
+
+  it('dispatches once and parses on success', async () => {
+    let calls = 0;
+    const seen: any[] = [];
+    const out = await runDietitianDispatch({
+      ...base,
+      callUnifiedLLM: async (a: any) => { calls++; seen.push(a); return validJson(); },
+      onStreamChunk: () => {},
+    });
+    expect(calls).toBe(1);
+    expect(out.rawParsed.verdict.label).toBe('Good fuel');
+    expect(typeof seen[0].onStream).toBe('function');
+  });
+
+  it('repairs truncated JSON inside the retry loop', async () => {
+    let calls = 0;
+    const out = await runDietitianRetryLoop({
+      llmCallArgs: { modelId: 'test' },
+      callUnifiedLLM: async () => { calls++; return '{"mode": "new_log", "message": "hi'; },
+      language: 'en' as unknown,
+      sleep: async () => {},
+      onLog: () => {},
+    });
+    expect(calls).toBe(1);
+    expect(out.rawParsed.mode).toBe('new_log');
+  });
+
+  it('retries failures, throws aborts immediately, and throws when exhausted', async () => {
+    let calls = 0;
+    const sleeps: number[] = [];
+    await expect(runDietitianRetryLoop({
+      llmCallArgs: { modelId: 'test' },
+      callUnifiedLLM: async () => { calls++; throw new Error('boom'); },
+      language: 'en' as unknown,
+      sleep: async (ms: number) => { sleeps.push(ms); },
+      onLog: () => {},
+    })).rejects.toThrow(/boom/);
+    expect(calls).toBe(3);
+    expect(sleeps).toEqual([1000, 1000]);
+
+    await expect(runDietitianRetryLoop({
+      llmCallArgs: { modelId: 'test' },
+      callUnifiedLLM: async () => { const e: any = new Error('aborted by timeout'); e.name = 'AbortError'; throw e; },
+      language: 'en' as unknown,
+      sleep: async () => {},
+      onLog: () => {},
+    })).rejects.toThrow(/aborted by timeout/);
   });
 });
