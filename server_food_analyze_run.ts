@@ -8,7 +8,7 @@ import { formatUSDANutrients, formatOFFNutrients, extractOFFNutrientsPer100g, is
 import { buildUserContext, buildTimeContext, buildImageContext, buildHistoryContext, buildVisionScoutContext, buildDatabaseMatchesContext, buildBiomarkersContext, stitchFoodPrompt, selectSystemInstruction, assemblePrecalcPromptBlock } from './src/server/food/server_food_prompt_context.js';
 import { sanitizeLlmJsonOutput, computeDietitianSkipGates, decideScoutVerdict, decideScoutAdvice, buildDietitianCallArgs, buildPureScaleResponse, sumPrecalcTotals, computeDietitianRetryDelay, repairTruncatedJson, applyPreDietitianDensityCheck, parseAndValidateDietitian } from './src/server/food/server_food_dietitian_dispatch.js';
 import { resolveFoodAnalyzeMode, buildFoodApiCalls, normalizeParsedPostDietitian } from './src/server/food/server_food_mode_routing.js';
-import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput, mapFinalizeToMeal, mergeModifyPathScoutItems, runEvaluationFinalize } from './src/server/food/server_food_meal_assemble.js';
+import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput, mapFinalizeToMeal, mergeModifyPathScoutItems, runEvaluationFinalize, assembleEvaluationComparison } from './src/server/food/server_food_meal_assemble.js';
 import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, buildScoutFailureError, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries, applyWeightModShortcut, restoreTurnOneCandidates, computeScoutRetryDelay, applySkipScoutShortcut, checkResumedFromImageTurn, applyTextQueryShortcut, checkMenuScaleBypass, buildScoutCallArgs } from './src/server/food/server_food_scout_source.js';
 import { collectImagePayloads, decideWeightRefine } from './src/server/food/server_food_session_setup.js';
 import { shouldPauseForPortionClarify, filterPortionCarryCandidates, detectDominantBrand, collectFdcHintTasks, isFdcHintRelevant, mapLedgersToPrecalcItems, applyMealModifiers } from './src/server/food/server_food_precalc.js';
@@ -18,7 +18,6 @@ import { buildDiscussionResponse, buildEvaluationResponse, buildNewLogResponse, 
 import { executeFoodResolverCurator } from './server_food_resolver_curator.js';
 import {
   checkCategoryAndStateCompatibility,
-  applyServerAverageNutrients,
   checkThermodynamicDensitySanity,
   checkArchetypeMacroBounds,
   applySatFatAndAddedSugarFloor,
@@ -88,7 +87,7 @@ import {
   markDietitianDegraded,
   buildSavableMealFromParsed,
 } from './server_meal_orchestrator.js';
-import { toPendingFoodLog, fromEvaluationComparison } from './src/mealBuild/adapters.js';
+import { toPendingFoodLog } from './src/mealBuild/adapters.js';
 import { attachSseJsonResponder } from './server_sse_json.js';
 import { reconcileMessageWithLedger } from './src/mealBuild/narration.js';
 import {
@@ -153,7 +152,6 @@ import {
   fetchOFFProductByBarcode,
   lookupChainMenuSources,
   isUsableWebNutritionHit,
-  resolveComparisonGroups,
   retrieveFoodImages,
 } from './server.js';
 export async function runFoodAnalyze(req: any, res: any) {
@@ -927,16 +925,12 @@ export async function runFoodAnalyze(req: any, res: any) {
       addDebugLog(`[Mode Routing] EVALUATION mode triggered.`);
       const comparisonData = rawParsed.comparison || { groups: [] };
       const preCalcByScoutIndex = await runEvaluationFinalize({ visionScoutItems, diningEnvironment, onLog: addDebugLog });
-      const resolvedGroups = resolveComparisonGroups(comparisonData.groups, visionScoutItems, userProfile?.language);
-      addDebugLog(`[Comparison Resolve] ${visionScoutItems.length} scout item(s) -> ${resolvedGroups.length} group(s), covering ${resolvedGroups.reduce((sum: number, g: any) => sum + (g.items?.length || 0), 0)} item(s).`);
-      comparisonData.groups = applyServerAverageNutrients(resolvedGroups, preCalcByScoutIndex);
-      comparisonData.isMenuScale = isMenuScale;
-      addDebugLog('[MealBuild] mode=D stream');
-      const comparisonSet = fromEvaluationComparison(comparisonData, visionScoutItems, {
-        id: req.body.jobId || `cmp_${Date.now()}`,
+      const { comparisonData: resolvedComparisonData, comparisonSet } = assembleEvaluationComparison({
+        comparisonData, visionScoutItems, preCalcByScoutIndex, isMenuScale,
+        language: userProfile?.language, jobId: req.body.jobId, onLog: addDebugLog,
       });
       const responsePayload = buildEvaluationResponse({
-        rawParsed, scoutInternalReasoning, rawScoutData, comparisonData, comparisonSet,
+        rawParsed, scoutInternalReasoning, rawScoutData, comparisonData: resolvedComparisonData, comparisonSet,
         scoutItems: mergeScoutItems(visionScoutItems, rawParsed.scoutItems),
         scoutContentType: visionScoutContentType, diningEnvironment, fullPromptSent, apiCalls,
       });

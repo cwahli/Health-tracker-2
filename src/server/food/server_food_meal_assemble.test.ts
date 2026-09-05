@@ -15,6 +15,7 @@ import {
   mapFinalizeToMeal,
   mergeModifyPathScoutItems,
   runEvaluationFinalize,
+  assembleEvaluationComparison,
 } from './server_food_meal_assemble';
 
 describe('F-8.10 shard 6 — fallback breakdown', () => {
@@ -295,5 +296,23 @@ describe('F-8.10 shard 24 — evaluation finalize loop', () => {
     expect(out[0].calories).toBe(249);
     expect(logs.some((m) => m.includes('mode=D idx=0'))).toBe(true);
     expect(await runEvaluationFinalize({ visionScoutItems: [], onLog: () => {} })).toEqual({});
+  });
+});
+
+describe('F-8.10 shard 27 — evaluation comparison assembly', () => {
+  it('resolves groups and builds the comparison set', () => {
+    const logs: string[] = [];
+    const { comparisonData, comparisonSet } = assembleEvaluationComparison({
+      comparisonData: { groups: [{ groupName: 'A', scoutItemIndices: [0] }] },
+      visionScoutItems: [{ keyword: 'rice' }],
+      preCalcByScoutIndex: {},
+      isMenuScale: false,
+      language: 'en',
+      jobId: 'job1',
+      onLog: (m: string) => logs.push(m),
+    });
+    expect(comparisonData.isMenuScale).toBe(false);
+    expect(comparisonSet).toBeTruthy();
+    expect(logs.some((m) => m.includes('Comparison Resolve'))).toBe(true);
   });
 });

@@ -11,6 +11,9 @@ import { applyModifierToItemName } from '../../../server_meal_edit.js';
 import { appendHistory } from '../../mealBuild/consolidate.js';
 import { buildMealFromFinalizeLedgers } from '../../../server_meal_from_finalize.js';
 import { finalizeDishLedger } from '../../../server_dish_finalize.js';
+import { resolveComparisonGroups } from '../../../server.js';
+import { applyServerAverageNutrients } from '../../../server_pure_helpers.js';
+import { fromEvaluationComparison } from '../../mealBuild/adapters.js';
 import { mergeScoutItems } from '../../../server_vision_scout.js';
 import { namesReferToSameFood } from '../../../server_scout_reconcile.js';
 
@@ -635,4 +638,35 @@ export async function runEvaluationFinalize(args: EvaluationFinalizeArgs): Promi
     );
   }
   return preCalcByScoutIndex;
+}
+
+export interface EvaluationComparisonArgs {
+  comparisonData: any;
+  visionScoutItems: any[];
+  preCalcByScoutIndex: Record<number, Record<string, number>>;
+  isMenuScale: boolean;
+  language?: unknown;
+  jobId?: string;
+  onLog: (msg: string) => void;
+}
+
+/**
+ * F-8.10 shard 27 — evaluation comparison assembly, extracted verbatim
+ * from runFoodAnalyze. Resolves groups, applies server averages, and
+ * builds the comparison set.
+ */
+export function assembleEvaluationComparison(args: EvaluationComparisonArgs): {
+  comparisonData: any;
+  comparisonSet: any;
+} {
+  const { comparisonData, visionScoutItems, preCalcByScoutIndex, isMenuScale, language, jobId, onLog } = args;
+  const resolvedGroups = resolveComparisonGroups(comparisonData.groups, visionScoutItems, language);
+  onLog(`[Comparison Resolve] ${visionScoutItems.length} scout item(s) -> ${resolvedGroups.length} group(s), covering ${resolvedGroups.reduce((sum: number, g: any) => sum + (g.items?.length || 0), 0)} item(s).`);
+  comparisonData.groups = applyServerAverageNutrients(resolvedGroups, preCalcByScoutIndex);
+  comparisonData.isMenuScale = isMenuScale;
+  onLog('[MealBuild] mode=D stream');
+  const comparisonSet = fromEvaluationComparison(comparisonData, visionScoutItems, {
+    id: jobId || `cmp_${Date.now()}`,
+  });
+  return { comparisonData, comparisonSet };
 }
