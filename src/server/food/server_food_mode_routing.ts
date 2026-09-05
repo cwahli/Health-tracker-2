@@ -58,17 +58,16 @@ export function resolveFoodAnalyzeMode(args: FoodModeArgs): string {
 export interface FoodApiCallsArgs {
   hasImage: boolean;
   queriesToSearch: any;
-  canSkipDietitianForCreate: boolean;
-  canSkipDietitianForPureScale: boolean;
   engine: any;
 }
 
 export function buildFoodApiCalls(args: FoodApiCallsArgs): Array<{ type: string; label: string }> {
-  const { hasImage, queriesToSearch, canSkipDietitianForCreate, canSkipDietitianForPureScale, engine } = args;
+  // Dietitian LLM removed: the call list never includes it. Pure-scale and
+  // single-agent creates use precalc math, not a model call.
+  const { hasImage, queriesToSearch } = args;
   return [
     ...(hasImage ? [{ type: 'gemini', label: 'Food nutrition agent - Visual Scout (gemini-3.5-flash-lite)' }] : []),
     ...(queriesToSearch && queriesToSearch.length > 0 ? [{ type: 'usda', label: `Food nutrition agent - USDA (${queriesToSearch.length})` }] : []),
-    ...((canSkipDietitianForCreate || canSkipDietitianForPureScale) ? [] : [{ type: 'gemini', label: `Food nutrition agent - Dietitian (${(typeof engine === 'object' ? engine?.name || engine?.model : engine) || 'gemini-3.5-flash-lite'})` }])
   ];
 }
 

@@ -178,16 +178,16 @@ export function parseUnifiedTimingLines(logs: string): { stage: string; ms: numb
 
 /** True when the logs prove the stage dispatched an LLM call (not a projector run).
  *  Only call-time lines count: the pipeline also logs instruction/answer lines
- *  on skip paths (e.g. `[dietitian_answer]` is emitted by the projector too),
- *  so those are deliberately NOT evidence. `[scout_answer]` is kept as legacy
- *  evidence: old exports predate usage/timing lines and scout always calls. */
-export function hasCallEvidence(logs: string, stage: 'scout' | 'dietitian'): boolean {
+ *  on skip paths, so those are deliberately NOT evidence. `[scout_answer]` is
+ *  kept as legacy evidence: old exports predate usage/timing lines and scout
+ *  always calls. (The dietitian agent is removed; its stages never call.) */
+export function hasCallEvidence(logs: string, stage: 'scout' | 'resolver'): boolean {
   if (!logs || typeof logs !== 'string') return false;
   const tag = `\\[UnifiedLLM:${stage}\\]|\\[UnifiedLLM-Prompt:${stage}\\]|\\[UnifiedLLM-Usage:${stage}\\]|\\[UnifiedLLM-Timing:${stage}\\]|\\[UnifiedLLM-Response:${stage}\\]`;
   if (stage === 'scout') {
     return new RegExp(`${tag}|\\[scout_answer\\]|\\[Vision Scout\\] Retrying`).test(logs);
   }
-  return new RegExp(`${tag}|\\[Dietitian\\] Retrying LLM call`).test(logs);
+  return new RegExp(`${tag}|food_resolver|Food Resolver agent`).test(logs);
 }
 
 /** Prefix a log line with [jobId] unless blank or already tagged (contract §9: joinable lines) */
@@ -298,34 +298,32 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
     });
   }
 
-  const hasDietitian = Boolean(
-    input.pendingFoodLog ||
-    /\[Budget\]\s*Finalized ledger|YOU ARE THE DIETITIAN/i.test(logs)
+  // Food Resolver: runs inside DB search for gap items (unknown foods needing
+  // resolution). Evidence: streamed `food_resolver` status lines or usage/timing.
+  const hasResolver = Boolean(
+    /food_resolver|Food Resolver/i.test(logs) ||
+    parseUnifiedUsageLines(logs).some(u => u.stage === 'food_resolver') ||
+    parseUnifiedTimingLines(logs).some(t => t.stage === 'food_resolver')
   );
 
-  if (hasDietitian) {
-    const modelMatch = logs.match(/(?:Dietitian|UnifiedLLM).*?Calling (gemini-[^\s]+)/i);
-    const latencyMatch = logs.match(/(?:Dietitian|UnifiedLLM).*?(\d+(?:\.\d+)?)ms/i);
-    const usage = parseUnifiedUsageLines(logs).find(u => u.stage === 'dietitian');
-    const timing = parseUnifiedTimingLines(logs).find(t => t.stage === 'dietitian');
-    const called = hasCallEvidence(logs, 'dietitian');
+  if (hasResolver) {
+    const usage = parseUnifiedUsageLines(logs).find(u => u.stage === 'food_resolver');
+    const timing = parseUnifiedTimingLines(logs).find(t => t.stage === 'food_resolver');
+    const modelMatch = logs.match(/Food Resolver.*?Calling (gemini-[^\s]+)|Calling (gemini-[^\s]+).*?[Rr]esolver/i);
     dispatches.push({
-      id: 't1/dietitian',
+      id: 't1/resolver',
       parent: hasScout ? 't1/scout' : null,
       turn: 1,
-      agent: 'dietitian',
-      user: input.lastUserAction?.details?.prompt || input.lastUserAction?.prompt || undefined,
-      received: { scoutItemsCount: input.scoutItems?.length || 0 },
-      instruction: (typeof input.agentInstructions === 'object' && !Array.isArray(input.agentInstructions)
-        ? (input.agentInstructions as any)?.dietitian
-        : undefined) || input.agentPromptText || undefined,
-      output: input.pendingFoodLog,
-      model: called ? (modelMatch ? modelMatch[1] : 'gemini-3.5-flash-lite') : null,
-      latency_ms: called ? (timing ? timing.ms : (latencyMatch ? Math.round(Number(latencyMatch[1])) : 2100)) : null,
+      agent: 'resolver',
+      user: undefined,
+      received: { gapItems: true },
+      instruction: undefined,
+      output: undefined,
+      model: modelMatch ? (modelMatch[1] || modelMatch[2]) : 'gemini-3.5-flash-lite',
+      latency_ms: timing ? timing.ms : undefined,
       tokens: usage ? usage.total : undefined,
-      called,
-      note: called ? undefined : 'projector — stage ran without an LLM call (ledger from precalc); no model/latency to report',
-      error: null,
+      called: true,
+      error: input.error || null,
     });
   }
 

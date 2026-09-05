@@ -5,8 +5,7 @@
 import { Type } from '@google/genai';
 import { z } from 'zod';
 import { formatUSDANutrients, formatOFFNutrients, extractOFFNutrientsPer100g, isFastFoodChain, buildWebSearchQuery, loosenQuery, cleanQuery, detectChainKeyFromText, scoutHasCompletePrintedLabel, enrichScoutComponentsWithMatches, buildPastMealsContext } from './src/server/food/server_food_analyze_helpers.js';
-import { buildUserContext, buildTimeContext, buildImageContext, buildHistoryContext, buildVisionScoutContext, buildDatabaseMatchesContext, buildBiomarkersContext, stitchFoodPrompt, selectSystemInstruction, assemblePrecalcPromptBlock } from './src/server/food/server_food_prompt_context.js';
-import { computeDietitianSkipGates, decideScoutVerdict, decideScoutAdvice, buildDietitianCallArgs, buildPureScaleResponse, sumPrecalcTotals, buildCreateSkipResponse, sumSalvagedAggregates, applyPreDietitianDensityCheck, runDietitianRetryLoop } from './src/server/food/server_food_dietitian_dispatch.js';
+import { computeDietitianSkipGates, decideScoutVerdict, decideScoutAdvice, buildPureScaleResponse, sumPrecalcTotals, buildCreateSkipResponse, sumSalvagedAggregates, applyPreDietitianDensityCheck } from './src/server/food/server_food_dietitian_dispatch.js';
 import { resolveFoodAnalyzeMode, buildFoodApiCalls, normalizeParsedPostDietitian } from './src/server/food/server_food_mode_routing.js';
 import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput, mapFinalizeToMeal, mergeModifyPathScoutItems, runEvaluationFinalize, assembleEvaluationComparison } from './src/server/food/server_food_meal_assemble.js';
 import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, buildScoutFailureError, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries, applyWeightModShortcut, restoreTurnOneCandidates, computeScoutRetryDelay, applySkipScoutShortcut, checkResumedFromImageTurn, applyTextQueryShortcut, checkMenuScaleBypass, buildScoutCallArgs, runScoutRetryLoop } from './src/server/food/server_food_scout_source.js';
@@ -188,14 +187,12 @@ export async function runFoodAnalyze(req: any, res: any) {
   let visionScoutContentType: any = 'visual';
   let preCalculatedItems: any[] = [];
   let aggregatedNutrients: any = null;
-  let fullPromptSent = "";
-  // Hoisted so the Scout/Dietitian instruction text survives to the response
+  // Hoisted so the Scout instruction text survives to the response
   // payload as `agentInstructions` below (previously the Scout prompt was
   // only a local const inside the `if (hasImage)` block and discarded once
   // Scout finished, so the debug export's per-dispatch Instruction field
-  // was never populated for either agent on the async job-queue path).
+  // was never populated on the async job-queue path).
   let scoutInstructionForDebug: string | undefined;
-  let dietitianInstructionForDebug: string | undefined;
   let apiCalls: any[] = [];
 
   try {
@@ -217,7 +214,6 @@ export async function runFoodAnalyze(req: any, res: any) {
       userSelectedMode,
     } = req.body;
 
-    const activeComparison = req.body.activeComparison || null;
 
     const sendLog = (type: string, stage: string, message: string, data?: any) => {
       sendStreamEvent({ type: 'log', logType: type, stage, message, data });
@@ -707,12 +703,8 @@ export async function runFoodAnalyze(req: any, res: any) {
           return itemStr;
         }).join("\n") + "\n\n";
     }
-    const userCtx = buildUserContext(userProfile);
-    const timeCtx = buildTimeContext({ timezone: req.body.timezone, activeMealDate: activeMeal?.date, hasImageDates: Boolean(imageDates && imageDates.length > 0), message });
-    const imageCtx = buildImageContext(imagePayloads, imageDates);
-    let historyContext = buildHistoryContext(history);
-    const pastMealsCtx = buildPastMealsContext(foodLogs, addDebugLog);
-    // 2. Prepend active state to Master System Instructions
+    // Dietitian prompt contexts removed with the dietitian call (all builders
+    // in server_food_prompt_context.ts fed only the unsent prompt).
     let effectiveActiveMeal = activeMeal;
     const hasUploadedNewImages = imagePayloads && imagePayloads.length > 0;
     // B5: do not wipe active meal when this modal already owns a document.
@@ -724,7 +716,6 @@ export async function runFoodAnalyze(req: any, res: any) {
     ) {
       addDebugLog(`[State Isolation] First submit in this modal. Isolating leftover activeMeal context so Dietitian operates on clean state.`);
       effectiveActiveMeal = null;
-      historyContext = "";
     } else if (hasActiveMealDocument) {
       addDebugLog(`[Single-Path] Same modal — keeping meal ${activeMeal?.id || '(unnamed)'} for edit/Q&A/photo-merge.`);
     }
@@ -763,38 +754,17 @@ export async function runFoodAnalyze(req: any, res: any) {
           }));
       }
     }
-    const activeComparisonState = activeComparison || req.body.activeComparisonState || null;
-    const systemInstruction = selectSystemInstruction({ userSelectedMode, isExplicitModify, effectiveActiveMeal, activeComparisonState, biomarkersNeedingImprovement, remainingAllowance, foodLogs, userProfile, visionScoutItems });
-    // Suppress Scout payload during text-only edits to conserve tokens
-    const visionScoutCtx = buildVisionScoutContext({ visionScoutItems, visionScoutContentType, scoutConfidenceRating, scoutConfidenceComment, scoutCookingMethod, diningEnvironment, userSelectedMode, isExplicitModify, hasActiveMeal: effectiveActiveMeal !== null, hasComparison: activeComparisonState !== null, hasImages: Boolean(imagePayloads && imagePayloads.length) });
-    const databaseMatchesCtx = buildDatabaseMatchesContext(preCalculatedCtx, databaseMatches);
-    const biomarkersCtx = buildBiomarkersContext(biomarkersNeedingImprovement);
-    const stitchedPrompt = stitchFoodPrompt({ customSystemInstruction, systemInstruction, userSelectedMode, customVariableData, biomarkersCtx, visionScoutCtx, databaseMatchesCtx, historyContext, pastMealsCtx, userCtx, timeCtx, imageCtx, message });
-    const finalSystemInstruction = stitchedPrompt.finalSystemInstruction;
-    let promptText = stitchedPrompt.promptText;
-    fullPromptSent = stitchedPrompt.fullPromptSent;
-    addDebugLog(`[Dietitian Coach] Sending nutrition analysis request to Gemini...`);
-    // Pre-dietitian density check: ensure beverage and composite items are rescaled prior to Dietitian prompt payload
+    // Dietitian LLM removed: no prompt is built and no call is dispatched.
+    // Precalc math that the ledger depends on stays: the density rescale below.
+    // (The projector assembly that used to extend the dietitian prompt is gone;
+    // its stage-lifecycle bookkeeping guarded a call that no longer exists.)
+    // Pre-dietitian density check: ensure beverage and composite items are rescaled (ledger math, kept).
     aggregatedNutrients = applyPreDietitianDensityCheck({ preCalculatedItems, aggregatedNutrients, beveragePattern: BEVERAGE_RAW_PATTERN, onLog: addDebugLog });
-    const precalcAssembled = assemblePrecalcPromptBlock({ preCalculatedItems, activeMeal, aggregatedNutrients, userProfile, promptText, fullPromptSent, onLog: addDebugLog });
-    promptText = precalcAssembled.promptText;
-    fullPromptSent = precalcAssembled.fullPromptSent;
-    const llmCallArgs = buildDietitianCallArgs({ engine, finalSystemInstruction, promptText });
     sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'started', message: 'Analyzing nutrition payload...' });
-    // `fullPromptSent` (built in server_food_prompt_context.ts) already begins
-    // with "System Instruction:\n${finalSystemInstruction}" followed by the
-    // full prompt + precalc block, so it alone is the complete, non-duplicated
-    // text actually sent to the dietitian LLM call. Prepending
-    // finalSystemInstruction again here (as an earlier version of this fix
-    // did) rendered it twice in the debug export.
-    dietitianInstructionForDebug = fullPromptSent;
-    sendLog('dietitian_instruction', 'dietitian', `Dietitian Instruction dispatched (model: ${engine || 'gemini-3.5-flash-lite'}). System Instruction: "${finalSystemInstruction}" Prompt: "${fullPromptSent}"`);
     let textOutput: string = "";
     let rawParsed: any;
-    const { canSkipDietitianForPureScale, isCreateSession, hasBarcode, hasReceipt, canSkipDietitianForCreate } = computeDietitianSkipGates({
+    const { canSkipDietitianForPureScale } = computeDietitianSkipGates({
       isPureWeightModification, activeMeal, userSelectedMode, weightRefineIntent, message,
-      isModifySession, hasActiveMealDocument, visionScoutRanAndReturnedItems, preCalculatedItems,
-      visionScoutItems, imagePayloads, visionScoutContentType, rawScoutData,
     });
     if (canSkipDietitianForPureScale && weightRefineIntent.isRefine && weightRefineIntent.weightGrams) {
       const targetWeight = weightRefineIntent.weightGrams;
@@ -803,8 +773,10 @@ export async function runFoodAnalyze(req: any, res: any) {
       const pureScale = buildPureScaleResponse({ targetWeightGrams: targetWeight, language: userProfile?.language });
       textOutput = pureScale.textOutput;
       rawParsed = pureScale.rawParsed;
-    } else if (canSkipDietitianForCreate) {
-      addDebugLog(`[MealAgent] Adaptive single-agent create: skipping Dietitian LLM for ${visionScoutItems.length} dish(es).`);
+    } else {
+      // Dietitian LLM removed: every create goes through the single-agent
+      // projector (precalc math + scout verdict ladder). No model call.
+      addDebugLog(`[MealAgent] Single-agent create: composing meal from precalc for ${visionScoutItems.length} dish(es) (no LLM call).`);
       sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'completed', message: 'Meal analysis finalized.' });
 
       const mealName = rawScoutData?.mealName || rawScoutData?.name || (visionScoutItems.length === 1 ? (visionScoutItems[0].originalName || visionScoutItems[0].keyword) : t(userProfile?.language, 'balancedMealFallbackName'));
@@ -823,33 +795,13 @@ export async function runFoodAnalyze(req: any, res: any) {
       });
       textOutput = created.textOutput;
       rawParsed = created.rawParsed;
-    } else {
-      const dietitianRun = await runDietitianRetryLoop({
-        llmCallArgs,
-        callUnifiedLLM,
-        language: userProfile?.language,
-        onStreamChunk: isStream ? (chunk: string, isThought?: boolean) => {
-          try {
-            if (isThought) {
-              res.write(`data: ${JSON.stringify({ type: 'stream', thought: chunk, stage: 'dietitian' })}\n\n`);
-            } else {
-              res.write(`data: ${JSON.stringify({ type: 'stream', chunk, stage: 'dietitian' })}\n\n`);
-            }
-            if (typeof (res as any).flush === 'function') (res as any).flush();
-          } catch (e) {}
-        } : undefined,
-        sleep: (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms)),
-        onLog: addDebugLog,
-      });
-      textOutput = dietitianRun.textOutput;
-      rawParsed = dietitianRun.rawParsed;
     }
-    addDebugLog(`[Dietitian Coach] Received response from Gemini. Length: ${textOutput.length} chars.`);
+    addDebugLog(`[MealAgent] Composed meal message (projector, no LLM call). Length: ${textOutput.length} chars.`);
     if (rawParsed._internalReasoning) {
-      addDebugLog(`[Dietitian Internal Reasoning]\n${rawParsed._internalReasoning}`);
+      addDebugLog(`[MealAgent Internal Reasoning]\n${rawParsed._internalReasoning}`);
     }
     const dietitianScratchpad = rawParsed?._internalReasoning || "";
-    sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'completed', message: 'Dietitian evaluation completed.' });
+    sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'completed', message: 'Meal analysis finalized.' });
     normalizeParsedPostDietitian({ rawParsed, isExplicitModify, userSelectedMode, visionScoutItems });
     const originalModeIsModify = !!(
       isExplicitModify ||
@@ -869,8 +821,6 @@ export async function runFoodAnalyze(req: any, res: any) {
     apiCalls = buildFoodApiCalls({
       hasImage,
       queriesToSearch,
-      canSkipDietitianForCreate,
-      canSkipDietitianForPureScale,
       engine,
     });
     // CASE F: food origin lookup mode
@@ -878,8 +828,8 @@ export async function runFoodAnalyze(req: any, res: any) {
     if (mode === "discussion") {
       addDebugLog(`[Mode Routing] DISCUSSION mode triggered (0 database operations).`);
       return res.json(buildDiscussionResponse({
-        rawParsed, fullPromptSent,
-        agentInstructions: { scout: scoutInstructionForDebug, dietitian: dietitianInstructionForDebug },
+        rawParsed,
+        agentInstructions: { scout: scoutInstructionForDebug },
         apiCalls,
       }));
     }
@@ -895,8 +845,8 @@ export async function runFoodAnalyze(req: any, res: any) {
       const responsePayload = buildEvaluationResponse({
         rawParsed, scoutInternalReasoning, rawScoutData, comparisonData: resolvedComparisonData, comparisonSet,
         scoutItems: mergeScoutItems(visionScoutItems, rawParsed.scoutItems),
-        scoutContentType: visionScoutContentType, diningEnvironment, fullPromptSent,
-        agentInstructions: { scout: scoutInstructionForDebug, dietitian: dietitianInstructionForDebug },
+        scoutContentType: visionScoutContentType, diningEnvironment,
+        agentInstructions: { scout: scoutInstructionForDebug },
         apiCalls,
       });
       return res.json(responsePayload);
@@ -943,8 +893,7 @@ export async function runFoodAnalyze(req: any, res: any) {
           mealBuild,
           savable: gate.savable,
           gate,
-          agentPrompt: fullPromptSent,
-          agentInstructions: { scout: scoutInstructionForDebug, dietitian: dietitianInstructionForDebug },
+          agentInstructions: { scout: scoutInstructionForDebug },
           scoutItems: updatedScoutItems,
           apiCalls
         });
@@ -967,7 +916,6 @@ export async function runFoodAnalyze(req: any, res: any) {
       }
       let finalScoutItems = mergeFinalScoutItems({ visionScoutItems, dietitianScoutItems: rawParsed.scoutItems, preCalculatedItems, itemsBreakdown: parsedData.itemsBreakdown });
       addDebugLog('[MealBuild] happy-path');
-      emitStageUsage('dietitian');
       const { mealBuild, pendingFoodLog } = attachHappyPathMealBuild({
         parsedData,
         jobId: req.body.jobId,
@@ -979,8 +927,8 @@ export async function runFoodAnalyze(req: any, res: any) {
       const gate = evaluateMealGate(buildNewLogGateInput({ finalMeal, jobId: req.body.jobId, photoUrl: req.body.photoUrl, imagePayloads, narrative: rawParsed.message }));
       const responsePayload = buildNewLogResponse({
         rawParsed, parsedData, pendingFoodLog, mealBuild, gate, scoutInternalReasoning,
-        rawScoutData, scoutContentType: visionScoutContentType, diningEnvironment, fullPromptSent,
-        agentInstructions: { scout: scoutInstructionForDebug, dietitian: dietitianInstructionForDebug },
+        rawScoutData, scoutContentType: visionScoutContentType, diningEnvironment,
+        agentInstructions: { scout: scoutInstructionForDebug },
         scoutItems: finalScoutItems, apiCalls,
       });
       return res.json(responsePayload);
@@ -1063,8 +1011,8 @@ export async function runFoodAnalyze(req: any, res: any) {
         }));
         return res.json(buildModifyResponse({
           rawParsed, finalMessage, pendingFoodLog, activeMeal, mealBuild, gate,
-          editApplied: result.changed, fullPromptSent,
-          agentInstructions: { scout: scoutInstructionForDebug, dietitian: dietitianInstructionForDebug },
+          editApplied: result.changed,
+          agentInstructions: { scout: scoutInstructionForDebug },
           scoutItems: syncedScoutItemsForEdit, apiCalls,
         }));
       }
@@ -1080,8 +1028,8 @@ export async function runFoodAnalyze(req: any, res: any) {
       const payloadData = toPendingFoodLog(degradedMeal);
       const successPayload = buildDegradeResponse({
         payloadData, degradedMeal, visionScoutItems,
-        scoutContentType: visionScoutContentType, fullPromptSent,
-        agentInstructions: { scout: scoutInstructionForDebug, dietitian: dietitianInstructionForDebug },
+        scoutContentType: visionScoutContentType,
+        agentInstructions: { scout: scoutInstructionForDebug },
         apiCalls,
       });
       addDebugLog(`[Dietitian Degrade] Emitting salvaged meal (kcal=${payloadData?.nutrients?.calories ?? payloadData?.calories ?? '?'}) as succeeded.`);
