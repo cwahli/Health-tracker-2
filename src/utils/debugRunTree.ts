@@ -49,6 +49,8 @@ export interface DispatchTrace {
   received?: any;
   instruction?: string;
   output?: any;
+  /** Raw agent emission before pipeline transforms (e.g. scout dishes[]); working copy stays in `output`. */
+  rawEmission?: any;
   model?: string;
   latency_ms?: number;
   tokens?: number;
@@ -132,6 +134,41 @@ export function deduplicateSessionEvents(events: any[]): any[] {
   return out;
 }
 
+/** Per-stage token usage parsed from `[UnifiedLLM-Usage:stage]` backend lines */
+export interface TokenUsage {
+  stage: string;
+  input: number;
+  output: number;
+  total: number;
+}
+
+/** Parse `[UnifiedLLM-Usage:scout] prompt=812 completion=96 total=908` lines (last per stage wins) */
+export function parseUnifiedUsageLines(logs: string): TokenUsage[] {
+  const out = new Map<string, TokenUsage>();
+  if (!logs || typeof logs !== 'string') return [];
+  const re = /\[UnifiedLLM-Usage:([^\]]+)\]\s*prompt=(\d+)\s+completion=(\d+)\s+total=(\d+)/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(logs)) !== null) {
+    const stage = (m[1] || '').trim().toLowerCase() || 'unknown';
+    out.set(stage, {
+      stage,
+      input: Number(m[2]) || 0,
+      output: Number(m[3]) || 0,
+      total: Number(m[4]) || 0,
+    });
+  }
+  return [...out.values()];
+}
+
+/** Prefix a log line with [jobId] unless blank or already tagged (contract §9: joinable lines) */
+export function tagJobId(line: string, jobId: string): string {
+  if (line == null) return line;
+  const s = String(line);
+  if (!s.trim() || !jobId || jobId === 'unknown') return s;
+  if (s.includes(`[${jobId}]`)) return s;
+  return `[${jobId}] ${s}`;
+}
+
 /** Extract or construct handoff records */
 export function extractHandoffs(input: DebugReportInput, jobId: string): HandoffTrace[] {
   if (Array.isArray(input.handoffs) && input.handoffs.length > 0) {
@@ -210,6 +247,7 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
   if (hasScout) {
     const modelMatch = logs.match(/Vision Scout \(([^)]+)\)|\[UnifiedLLM\] Calling (gemini-[^\s]+)/i);
     const latencyMatch = logs.match(/(?:Vision Scout|UnifiedLLM).*?(\d+(?:\.\d+)?)ms/i);
+    const usage = parseUnifiedUsageLines(logs).find(u => u.stage === 'scout');
     dispatches.push({
       id: 't1/scout',
       parent: null,
@@ -221,9 +259,10 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
         ? (input.agentInstructions as any)?.scout
         : undefined,
       output: input.scoutItems || input.rawScout,
+      rawEmission: input.rawScout || undefined,
       model: modelMatch ? (modelMatch[1] || modelMatch[2]) : 'gemini-3.5-flash-lite',
       latency_ms: latencyMatch ? Math.round(Number(latencyMatch[1])) : 1500,
-      tokens: undefined,
+      tokens: usage ? usage.total : undefined,
       error: input.error || null,
     });
   }
@@ -236,6 +275,7 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
   if (hasDietitian) {
     const modelMatch = logs.match(/(?:Dietitian|UnifiedLLM).*?Calling (gemini-[^\s]+)/i);
     const latencyMatch = logs.match(/(?:Dietitian|UnifiedLLM).*?(\d+(?:\.\d+)?)ms/i);
+    const usage = parseUnifiedUsageLines(logs).find(u => u.stage === 'dietitian');
     dispatches.push({
       id: 't1/dietitian',
       parent: hasScout ? 't1/scout' : null,
@@ -249,7 +289,7 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
       output: input.pendingFoodLog,
       model: modelMatch ? modelMatch[1] : 'gemini-3.5-flash-lite',
       latency_ms: latencyMatch ? Math.round(Number(latencyMatch[1])) : 2100,
-      tokens: undefined,
+      tokens: usage ? usage.total : undefined,
       error: null,
     });
   }
@@ -266,8 +306,10 @@ export function buildCanonicalRunTree(input: DebugReportInput): CanonicalRunTree
   const pack = determinePack(input);
   const breadcrumbs = deduplicateBreadcrumbs(input.userActionBreadcrumbs || []);
   const sessionEvents = deduplicateSessionEvents(input.sessionEvents || []);
-  const consoleLogs = Array.isArray(input.clientConsoleLogs) ? input.clientConsoleLogs : [];
-  const networkErrors = Array.isArray(input.networkErrors) ? input.networkErrors : [];
+  const consoleLogs = (Array.isArray(input.clientConsoleLogs) ? input.clientConsoleLogs : [])
+    .map(l => tagJobId(typeof l === 'string' ? l : JSON.stringify(l), jobId));
+  const networkErrors = (Array.isArray(input.networkErrors) ? input.networkErrors : [])
+    .map(l => tagJobId(typeof l === 'string' ? l : JSON.stringify(l), jobId));
   const handoffs = extractHandoffs(input, jobId);
   const dispatches = extractDispatches(input);
 
@@ -290,7 +332,9 @@ export function buildCanonicalRunTree(input: DebugReportInput): CanonicalRunTree
     scoutItems: input.scoutItems,
     receiptTable: input.receiptTable,
     rawScout: input.rawScout,
-    backendLogs: input.backendLogs,
+    backendLogs: typeof input.backendLogs === 'string'
+      ? input.backendLogs.split('\n').map(l => tagJobId(l, jobId)).join('\n')
+      : input.backendLogs,
     extractedData: input.extractedData,
   };
 

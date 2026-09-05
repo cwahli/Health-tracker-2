@@ -2052,6 +2052,21 @@ async function callUnifiedLLMInternal({
 
   let finalResponseText = "{}";
   const stageTag = logStagePrefix ? `:${logStagePrefix}` : '';
+  // Contract §9/§11.12D: log per-stage token usage so the debug run tree can
+  // attribute tokens per dispatch. Defensive: SDK responses without
+  // usageMetadata (stream rebuilds, older models) simply emit no line.
+  const logUnifiedUsage = (sdkResponse: any) => {
+    try {
+      const u = sdkResponse?.usageMetadata;
+      if (!u) return;
+      const p = Number(u.promptTokenCount) || 0;
+      const c = Number(u.candidatesTokenCount) || 0;
+      const t = Number(u.totalTokenCount) || (p + c);
+      if (!t) return;
+      const stage = (stageTag || '').replace(/^:/, '') || 'unknown';
+      _localAddDebugLog(`[UnifiedLLM-Usage:${stage}] prompt=${p} completion=${c} total=${t}`);
+    } catch { /* usage logging must never break generation */ }
+  };
   _localAddDebugLog(`[UnifiedLLM${stageTag}] Dispatching prompt to model: "${targetGeminiModel}". Contents turns: ${contents.length}.`);
   _localAddDebugLog(`[UnifiedLLM${stageTag}] Attaching ${normalizedImagePayloads.length} image part(s) to model "${targetGeminiModel}".`);
   _localAddDebugLog(`[UnifiedLLM-Prompt${stageTag}] System Instruction:\n${resolvedInstruction}`);
@@ -2118,6 +2133,7 @@ async function callUnifiedLLMInternal({
         }), { label: "Unified LLM Stream Fallback" });
         let fullText = fullRes.text || "";
         if (onStream) onStream(fullText, false);
+        logUnifiedUsage(fullRes);
         response = { text: fullText, candidates: fullRes.candidates, functionCalls: fullRes.functionCalls };
       }
     } else {
@@ -2168,7 +2184,8 @@ async function callUnifiedLLMInternal({
     // fallback below. Rebuild `response` as a plain object so downstream code in this
     // function can keep reading response.text / response.functionCalls / response.candidates
     // exactly as before, without touching the SDK instance.
-    response = { text: finalJson, candidates: response.candidates, functionCalls: response.functionCalls };
+    // Carry usageMetadata through the rebuild so per-stage token logging still works.
+    response = { text: finalJson, candidates: response.candidates, functionCalls: response.functionCalls, usageMetadata: (response as any)?.usageMetadata };
     
     let callCount = 0;
     const maxCalls = 5;
@@ -2256,6 +2273,7 @@ async function callUnifiedLLMInternal({
     }
     
     addDebugLog(`[UnifiedLLM] Successfully completed content generation. Response length: ${response.text?.length || 0} chars.`);
+    logUnifiedUsage(response);
     const __respText = response.text || "{}";
     const __respLogged = __respText;
     addDebugLog(`[UnifiedLLM-Response${stageTag}] Complete response returned from agent:\n${__respLogged}`);

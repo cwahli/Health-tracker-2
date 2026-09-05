@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   stripHeavyImages,
   buildDebugMarkdownReport,
+  debugReportFromJobMsg,
   coldDebugR2Key,
   COLD_DEBUG_LOG,
 } from './debugPayload';
@@ -213,6 +214,16 @@ describe('debugPayload', () => {
     expect(md).toContain('"kcal":550');
     expect(md).toContain('[View Analysis, Download Debug]');
     expect(md).toContain('[Retry, Attempt 1 of 3]');
+  });
+
+  it('carries rawScout and dialogInventory from job result into the report input', () => {
+    const rawScout = { dishes: [{ dishName: 'Steak', foods: [{ foodName: 'Steak' }] }], _internalReasoning: 'saw steak' };
+    const input = debugReportFromJobMsg(
+      { id: 'job_raw', result: { rawScout, dialogInventory: { open: false } } },
+      {}
+    );
+    expect(input.rawScout).toEqual(rawScout);
+    expect(input.dialogInventory).toEqual({ open: false });
   });
 });
 

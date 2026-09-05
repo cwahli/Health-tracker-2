@@ -875,6 +875,11 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           comparisonSet: finalPayload?.comparisonSet || undefined,
           scoutItems: finalPayload?.scoutItems || undefined,
           scoutContentType: finalPayload?.scoutContentType || undefined,
+          // Debug-export fix: the food pipeline attaches the raw scout emission
+          // (dishes[] + _internalReasoning) under `rawScout`, but this whitelist
+          // dropped it — the debug export could only show the post-transform
+          // scoutItems. Carried through so the run tree keeps the raw emission.
+          rawScout: finalPayload?.rawScout || undefined,
           photoUrl: photoUrl || undefined,
           photoUrls: photoUrls.length > 0 ? photoUrls : (photoUrl ? [photoUrl] : undefined),
           degradedStages: finalPayload?.degradedStages,
@@ -907,6 +912,9 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           comparisonSet: finalPayload?.comparisonSet || undefined,
           scoutItems: finalPayload?.scoutItems || undefined,
           scoutContentType: finalPayload?.scoutContentType || undefined,
+          // Debug-export fix (same as earlyResult above): carry the raw scout
+          // emission through so R2 cold copies and the debug export keep it.
+          rawScout: finalPayload?.rawScout || undefined,
           photoUrl: photoUrl || undefined,
           photoUrls: photoUrls.length > 0 ? photoUrls : (photoUrl ? [photoUrl] : undefined),
           imageUrls: photoUrls.length > 0 ? photoUrls : (photoUrl ? [photoUrl] : undefined),

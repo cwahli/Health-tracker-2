@@ -401,6 +401,24 @@ jobsRouter.all('/api/jobs/debug', async (req, res) => {
     const effectiveDialogInventory = dialogInventory || debugPayload.dialogInventory || debugPayload.result?.dialogInventory;
     const effectiveDispatches = dispatches || debugPayload.dispatches || debugPayload.result?.dispatches;
 
+    // Debug-export fix: the client builds the dialog inventory at download time
+    // and POSTs it here, but it was only merged into this response — a later
+    // GET export (no body) saw null again. Persist it onto the in-memory job
+    // and its clean_result so every subsequent export carries it.
+    if (effectiveDialogInventory && typeof effectiveDialogInventory === 'object') {
+      try {
+        const { getInMemoryServerJob: getMemJob } = await import('./serverJobs.js');
+        const memJob = getMemJob(cleanJobId) || getMemJob(rawJobId);
+        if (memJob) {
+          (memJob as any).dialogInventory = effectiveDialogInventory;
+          const cr = (memJob as any).clean_result;
+          if (cr && typeof cr === 'object' && !(cr as any).dialogInventory) {
+            (cr as any).dialogInventory = effectiveDialogInventory;
+          }
+        }
+      } catch { /* persistence is best-effort; the merged response below still carries it */ }
+    }
+
     const { stripHeavyImages, buildDebugMarkdownReport } = await import('./src/utils/debugPayload.js');
     const { buildCanonicalRunTree } = await import('./src/utils/debugRunTree.js');
     const safePayload = stripHeavyImages(debugPayload);
