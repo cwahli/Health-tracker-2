@@ -5,6 +5,7 @@ import {
   buildNewLogResponse,
   buildModifyNoMealResponse,
   buildModifyResponse,
+  buildDegradeResponse,
 } from './server_food_responses';
 
 describe('F-8.10 shard 26 — mode response payloads', () => {
@@ -54,5 +55,18 @@ describe('F-8.10 shard 26 — mode response payloads', () => {
     expect(m.text).toBe('done');
     expect(m.editApplied).toBe(true);
     expect(m.data.name).toBe('Lunch');
+  });
+});
+
+describe('F-8.10 shard 28 — degrade response', () => {
+  it('emits the salvaged meal as succeeded without clinical advice', () => {
+    const meal = { name: 'Lunch', degradedStages: ['dietitian'] };
+    const d = buildDegradeResponse({
+      payloadData: meal, degradedMeal: meal, visionScoutItems: [],
+      scoutContentType: 'visual', fullPromptSent: 'P', apiCalls: [],
+    });
+    expect(d.mode).toBe('new_log');
+    expect(d.message).toContain('core databases');
+    expect(d.degradedStages).toEqual(['dietitian']);
   });
 });

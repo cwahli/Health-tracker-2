@@ -6,14 +6,14 @@ import { Type } from '@google/genai';
 import { z } from 'zod';
 import { formatUSDANutrients, formatOFFNutrients, extractOFFNutrientsPer100g, isFastFoodChain, buildWebSearchQuery, loosenQuery, cleanQuery, detectChainKeyFromText, scoutHasCompletePrintedLabel, enrichScoutComponentsWithMatches, buildPastMealsContext } from './src/server/food/server_food_analyze_helpers.js';
 import { buildUserContext, buildTimeContext, buildImageContext, buildHistoryContext, buildVisionScoutContext, buildDatabaseMatchesContext, buildBiomarkersContext, stitchFoodPrompt, selectSystemInstruction, assemblePrecalcPromptBlock } from './src/server/food/server_food_prompt_context.js';
-import { sanitizeLlmJsonOutput, computeDietitianSkipGates, decideScoutVerdict, decideScoutAdvice, buildDietitianCallArgs, buildPureScaleResponse, sumPrecalcTotals, computeDietitianRetryDelay, repairTruncatedJson, applyPreDietitianDensityCheck, parseAndValidateDietitian } from './src/server/food/server_food_dietitian_dispatch.js';
+import { sanitizeLlmJsonOutput, computeDietitianSkipGates, decideScoutVerdict, decideScoutAdvice, buildDietitianCallArgs, buildPureScaleResponse, sumPrecalcTotals, computeDietitianRetryDelay, repairTruncatedJson, applyPreDietitianDensityCheck, parseAndValidateDietitian, buildCreateSkipResponse, sumSalvagedAggregates } from './src/server/food/server_food_dietitian_dispatch.js';
 import { resolveFoodAnalyzeMode, buildFoodApiCalls, normalizeParsedPostDietitian } from './src/server/food/server_food_mode_routing.js';
 import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput, mapFinalizeToMeal, mergeModifyPathScoutItems, runEvaluationFinalize, assembleEvaluationComparison } from './src/server/food/server_food_meal_assemble.js';
 import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, buildScoutFailureError, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries, applyWeightModShortcut, restoreTurnOneCandidates, computeScoutRetryDelay, applySkipScoutShortcut, checkResumedFromImageTurn, applyTextQueryShortcut, checkMenuScaleBypass, buildScoutCallArgs } from './src/server/food/server_food_scout_source.js';
 import { collectImagePayloads, decideWeightRefine } from './src/server/food/server_food_session_setup.js';
 import { shouldPauseForPortionClarify, filterPortionCarryCandidates, detectDominantBrand, collectFdcHintTasks, isFdcHintRelevant, mapLedgersToPrecalcItems, applyMealModifiers } from './src/server/food/server_food_precalc.js';
 import { runDatabaseSearchStage } from './src/server/food/server_food_db_search.js';
-import { buildDiscussionResponse, buildEvaluationResponse, buildNewLogResponse, buildModifyNoMealResponse, buildModifyResponse } from './src/server/food/server_food_responses.js';
+import { buildDiscussionResponse, buildEvaluationResponse, buildNewLogResponse, buildModifyNoMealResponse, buildModifyResponse, buildDegradeResponse } from './src/server/food/server_food_responses.js';
 
 import { executeFoodResolverCurator } from './server_food_resolver_curator.js';
 import {
@@ -812,47 +812,21 @@ export async function runFoodAnalyze(req: any, res: any) {
       sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'completed', message: 'Meal analysis finalized.' });
 
       const mealName = rawScoutData?.mealName || rawScoutData?.name || (visionScoutItems.length === 1 ? (visionScoutItems[0].originalName || visionScoutItems[0].keyword) : t(userProfile?.language, 'balancedMealFallbackName'));
-      
+
       const { totalGrams, totalCals, totalP, totalC, totalF, totalSugar, totalAddedSugar, totalSatFat } = sumPrecalcTotals(preCalculatedItems);
 
       let scoutVerdict = decideScoutVerdict({ scoutVerdict: rawScoutData?.verdict, totals: { totalSugar, totalSatFat, totalP }, mealName, language: userProfile?.language });
 
       let rawAdvice = decideScoutAdvice({ rawAdvice: rawScoutData?.clinicalAdvice || rawScoutData?.message, totals: { totalSugar, totalSatFat, totalP }, mealName, language: userProfile?.language });
 
-      const formattedMsg = reconcileMessageWithLedger(rawAdvice, {
-        mealName,
-        weightGrams: totalGrams,
-        calories: Math.round(totalCals),
-        protein: Math.round(totalP * 10) / 10,
-        carbohydrates: Math.round(totalC * 10) / 10,
-        totalFat: Math.round(totalF * 10) / 10,
-      }, userProfile?.language);
-
-      textOutput = JSON.stringify({
-        _internalReasoning: scoutInternalReasoning || '[MealAgent] Single-agent create path',
-        mode: 'new_log',
-        message: formattedMsg,
-        verdict: scoutVerdict,
-        foodData: {
-          name: mealName,
-          weightGrams: String(totalGrams),
-          cookingMethod: scoutCookingMethod || t(userProfile?.language, 'cookingMethodUnknown'),
-          scoutConfidenceRating: scoutConfidenceRating || 'High (>90%)',
-          scoutConfidenceComment: scoutConfidenceComment || '',
-          diningEnvironment: diningEnvironment || 'unknown',
-          itemsBreakdown: preCalculatedItems.map((p: any) => ({
-            canonicalDbName: p.keyword || p.originalName,
-            originalName: p.originalName,
-            weightGrams: String(p.estimatedWeightGrams),
-            dbSource: p.dbSource || 'estimated',
-            dbId: p.dbId || null,
-            foodType: p.foodType || 'composed',
-            rawNutritionLabel: p.rawNutritionLabel || null,
-            labelNutrientsPerServing: p.labelNutrientsPerServing || null,
-          }))
-        }
+      const created = buildCreateSkipResponse({
+        rawScoutData, visionScoutItems, preCalculatedItems,
+        totals: { totalGrams, totalCals, totalP, totalC, totalF, totalSugar, totalAddedSugar, totalSatFat },
+        scoutVerdict, rawAdvice, scoutConfidenceRating, scoutConfidenceComment, scoutCookingMethod,
+        scoutInternalReasoning, diningEnvironment, language: userProfile?.language,
       });
-      rawParsed = JSON.parse(textOutput);
+      textOutput = created.textOutput;
+      rawParsed = created.rawParsed;
     } else {
       let dietitianAttempts = 0;
       const maxDietitianAttempts = 3;
@@ -1104,34 +1078,14 @@ export async function runFoodAnalyze(req: any, res: any) {
     // Dietitian Degrade logic (Phase 1)
     if (preCalculatedItems && preCalculatedItems.length > 0 && preCalculatedItems.some((p: any) => (p.nutrients && p.nutrients.calories != null) || (p.primaryBase100g && p.primaryBase100g.calories !== undefined))) {
       addDebugLog(`[Dietitian Degrade] Dietitian failed permanently, but pre-calculated math exists. Salvaging meal build.`);
-      const salvagedAggregatedNutrients: Record<string, number> = {};
-      NUTRIENT_KEYS.forEach(k => salvagedAggregatedNutrients[k] = 0);
-      if (preCalculatedItems && Array.isArray(preCalculatedItems)) {
-        preCalculatedItems.forEach((p: any) => {
-          if (p.nutrients) {
-            NUTRIENT_KEYS.forEach(k => {
-              salvagedAggregatedNutrients[k] = parseFloat(((salvagedAggregatedNutrients[k] || 0) + (Number(p.nutrients[k]) || 0)).toFixed(2));
-            });
-          }
-        });
-      }
+      const salvagedAggregatedNutrients = sumSalvagedAggregates(preCalculatedItems);
       const salvagedMeal = buildSavableMealFromParsed(preCalculatedItems, req.body.activeMeal, salvagedAggregatedNutrients, null);
       const degradedMeal = markDietitianDegraded(salvagedMeal, error.message);
       const payloadData = toPendingFoodLog(degradedMeal);
-      const degradeMessage = "Nutrients logged based on core databases, but AI clinical advice is currently unavailable.";
-      const successPayload = {
-        mode: "new_log",
-        data: payloadData,
-        pendingFoodLog: payloadData,
-        mealBuild: degradedMeal,
-        degradedStages: degradedMeal.degradedStages,
-        scoutItems: visionScoutItems,
-        scoutContentType: visionScoutContentType,
-        text: degradeMessage,
-        message: degradeMessage,
-        agentPrompt: fullPromptSent,
-        apiCalls
-      };
+      const successPayload = buildDegradeResponse({
+        payloadData, degradedMeal, visionScoutItems,
+        scoutContentType: visionScoutContentType, fullPromptSent, apiCalls,
+      });
       addDebugLog(`[Dietitian Degrade] Emitting salvaged meal (kcal=${payloadData?.nutrients?.calories ?? payloadData?.calories ?? '?'}) as succeeded.`);
       return res.json(successPayload);
     }

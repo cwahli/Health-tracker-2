@@ -2,6 +2,7 @@ import { extractBalancedJson } from '../../../server_pure_helpers.js';
 import { shouldExpandMealAgent } from '../../mealBuild/shouldExpandMealAgent.js';
 import { t, interpolate } from '../../utils/i18n.js';
 import { NUTRIENT_KEYS } from '../../utils/nutrients.js';
+import { reconcileMessageWithLedger } from '../../mealBuild/narration.js';
 import { asyncParseLLMJSON, validateOrFallback, RouteAgentSchema } from '../../../server.js';
 import { foodAnalyzeSchema } from './server_food_analyze_schema.js';
 
@@ -383,4 +384,93 @@ export async function parseAndValidateDietitian(args: DietitianParseArgs): Promi
     rawParsed._internalReasoning = extractedScratchpad;
   }
   return rawParsed;
+}
+
+export interface CreateSkipSynthesisArgs {
+  rawScoutData: any;
+  visionScoutItems: any[];
+  preCalculatedItems: any[];
+  totals: {
+    totalGrams: number; totalCals: number; totalP: number; totalC: number;
+    totalF: number; totalSugar: number; totalAddedSugar: number; totalSatFat: number;
+  };
+  scoutVerdict: any;
+  rawAdvice: string;
+  scoutConfidenceRating?: string;
+  scoutConfidenceComment?: string;
+  scoutCookingMethod?: string;
+  scoutInternalReasoning?: string | null;
+  diningEnvironment?: string;
+  language?: unknown;
+}
+
+/**
+ * F-8.10 shard 28 — single-agent-create synthesis, extracted verbatim from
+ * runFoodAnalyze. Reconciles the message with the ledger and serializes
+ * the dietitian-shaped response (which the caller re-parses, as inline).
+ */
+export function buildCreateSkipResponse(args: CreateSkipSynthesisArgs): {
+  textOutput: string;
+  rawParsed: any;
+} {
+  const {
+    rawScoutData, visionScoutItems, preCalculatedItems, totals, scoutVerdict, rawAdvice,
+    scoutConfidenceRating, scoutConfidenceComment, scoutCookingMethod,
+    scoutInternalReasoning, diningEnvironment, language,
+  } = args;
+  const { totalGrams, totalCals, totalP, totalC, totalF } = totals;
+  const mealName = rawScoutData?.mealName || rawScoutData?.name || (visionScoutItems.length === 1 ? (visionScoutItems[0].originalName || visionScoutItems[0].keyword) : t(language, 'balancedMealFallbackName'));
+  const formattedMsg = reconcileMessageWithLedger(rawAdvice, {
+    mealName,
+    weightGrams: totalGrams,
+    calories: Math.round(totalCals),
+    protein: Math.round(totalP * 10) / 10,
+    carbohydrates: Math.round(totalC * 10) / 10,
+    totalFat: Math.round(totalF * 10) / 10,
+  }, language);
+  // preCalculatedItems is captured from the caller scope via totals source
+  const textOutput = JSON.stringify({
+    _internalReasoning: scoutInternalReasoning || '[MealAgent] Single-agent create path',
+    mode: 'new_log',
+    message: formattedMsg,
+    verdict: scoutVerdict,
+    foodData: {
+      name: mealName,
+      weightGrams: String(totalGrams),
+      cookingMethod: scoutCookingMethod || t(language, 'cookingMethodUnknown'),
+      scoutConfidenceRating: scoutConfidenceRating || 'High (>90%)',
+      scoutConfidenceComment: scoutConfidenceComment || '',
+      diningEnvironment: diningEnvironment || 'unknown',
+      itemsBreakdown: preCalculatedItems.map((p: any) => ({
+        canonicalDbName: p.keyword || p.originalName,
+        originalName: p.originalName,
+        weightGrams: String(p.estimatedWeightGrams),
+        dbSource: p.dbSource || 'estimated',
+        dbId: p.dbId || null,
+        foodType: p.foodType || 'composed',
+        rawNutritionLabel: p.rawNutritionLabel || null,
+        labelNutrientsPerServing: p.labelNutrientsPerServing || null,
+      }))
+    }
+  });
+  return { textOutput, rawParsed: JSON.parse(textOutput) };
+}
+
+/**
+ * F-8.10 shard 28 — salvaged aggregates, extracted verbatim from
+ * runFoodAnalyze. Zero-fills and sums the 31 keys over precalc items.
+ */
+export function sumSalvagedAggregates(preCalculatedItems: any): Record<string, number> {
+  const salvagedAggregatedNutrients: Record<string, number> = {};
+  NUTRIENT_KEYS.forEach(k => salvagedAggregatedNutrients[k] = 0);
+  if (preCalculatedItems && Array.isArray(preCalculatedItems)) {
+    preCalculatedItems.forEach((p: any) => {
+      if (p.nutrients) {
+        NUTRIENT_KEYS.forEach(k => {
+          salvagedAggregatedNutrients[k] = parseFloat(((salvagedAggregatedNutrients[k] || 0) + (Number(p.nutrients[k]) || 0)).toFixed(2));
+        });
+      }
+    });
+  }
+  return salvagedAggregatedNutrients;
 }

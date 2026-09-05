@@ -11,7 +11,10 @@ import {
   repairTruncatedJson,
   applyPreDietitianDensityCheck,
   parseAndValidateDietitian,
+  buildCreateSkipResponse,
+  sumSalvagedAggregates,
 } from './server_food_dietitian_dispatch';
+import { NUTRIENT_KEYS } from '../../utils/nutrients';
 
 describe('F-8.10 shard 4 — LLM JSON repair', () => {
   it('collapses runaway decimals and trims repeating foodType', () => {
@@ -202,5 +205,40 @@ describe('F-8.10 shard 25 — dietitian parse and validate', () => {
     const validated = await parseAndValidateDietitian({ cleanJson: JSON.stringify({ nope: 1 }), extractedScratchpad: '', language: 'en' });
     expect(validated).toBeTruthy();
     await expect(parseAndValidateDietitian({ cleanJson: 'not json', extractedScratchpad: '', language: 'en' })).rejects.toThrow();
+  });
+});
+
+describe('F-8.10 shard 28 — create-skip synthesis and salvaged aggregates', () => {
+  it('synthesizes the single-agent response from totals', () => {
+    const out = buildCreateSkipResponse({
+      rawScoutData: {},
+      visionScoutItems: [{ originalName: 'Rice', keyword: 'rice' }],
+      preCalculatedItems: [{
+        keyword: 'rice', originalName: 'Rice', estimatedWeightGrams: 200,
+        dbSource: 'estimated', nutrients: { calories: 260, protein: 5, carbohydrates: 55, totalFat: 1 },
+      }],
+      totals: { totalGrams: 200, totalCals: 260, totalP: 5, totalC: 55, totalF: 1, totalSugar: 0, totalAddedSugar: 0, totalSatFat: 0 },
+      scoutVerdict: { label: 'Good fuel', level: 'good' },
+      rawAdvice: 'Eat up',
+      language: 'en',
+    });
+    expect(out.rawParsed.mode).toBe('new_log');
+    expect(out.rawParsed.foodData.itemsBreakdown).toHaveLength(1);
+    expect(out.rawParsed.foodData.name).toBe('Rice');
+    expect(JSON.parse(out.textOutput)).toEqual(out.rawParsed);
+  });
+
+  it('sums salvaged aggregates across items', () => {
+    const agg = sumSalvagedAggregates([
+      { nutrients: { calories: 100, protein: 10 } },
+      { nutrients: { calories: 50, protein: 5 } },
+      {},
+    ]);
+    expect(agg.calories).toBe(150);
+    expect(agg.protein).toBe(15);
+    expect(agg.sodium).toBe(0);
+    const empty = sumSalvagedAggregates(null);
+    expect(empty.calories).toBe(0);
+    expect(Object.keys(empty)).toHaveLength(NUTRIENT_KEYS.length);
   });
 });

@@ -137,3 +137,30 @@ export function buildModifyResponse(args: {
     apiCalls
   };
 }
+
+export function buildDegradeResponse(args: {
+  payloadData: any;
+  degradedMeal: any;
+  visionScoutItems: any;
+  scoutContentType: any;
+  fullPromptSent: string;
+  apiCalls: any;
+}): Record<string, any> {
+  const {
+    payloadData, degradedMeal, visionScoutItems, scoutContentType, fullPromptSent, apiCalls,
+  } = args;
+  const degradeMessage = "Nutrients logged based on core databases, but AI clinical advice is currently unavailable.";
+  return {
+    mode: "new_log",
+    data: payloadData,
+    pendingFoodLog: payloadData,
+    mealBuild: degradedMeal,
+    degradedStages: degradedMeal.degradedStages,
+    scoutItems: visionScoutItems,
+    scoutContentType,
+    text: degradeMessage,
+    message: degradeMessage,
+    agentPrompt: fullPromptSent,
+    apiCalls
+  };
+}
