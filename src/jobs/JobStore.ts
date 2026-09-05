@@ -140,7 +140,7 @@ export function isStalePriorTurn(
   const submittedAt = existing.inFlightTurnAt || existing.serverSubmittedAt || 0;
   if (submittedAt <= 0) return false;
   const rowUpdatedMs = incomingUpdatedAt ? new Date(incomingUpdatedAt).getTime() : 0;
-  if (!rowUpdatedMs) return true;
+  if (!rowUpdatedMs) return false;
   return rowUpdatedMs < submittedAt - 2500;
 }
 
@@ -595,12 +595,8 @@ class JobStoreImpl {
 
   getQueue(): AgentJob[] {
     return this.getAllJobs().filter((j) => {
-      if (j.status === 'queued') return true;
-      // Submit may flip the card to running before the runner starts. Those
-      // jobs still need /api/jobs/status polling or they sit on Attempt 1/3
-      // after the server already finished.
-      if (j.status === 'running' || j.status === 'processing') {
-        return !j.result?.pendingFoodLog;
+      if (j.status === 'queued' || j.status === 'running' || j.status === 'processing') {
+        return true;
       }
       return false;
     });
