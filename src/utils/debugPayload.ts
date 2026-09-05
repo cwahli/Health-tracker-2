@@ -206,16 +206,25 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
       lines.push(`### Dispatch ${d.id}`);
       if (d.user) lines.push(`- **User:** ${d.user}`);
       if (d.received) lines.push(`- **Received:** ${typeof d.received === 'object' ? JSON.stringify(d.received) : d.received}`);
+      // Debug exports exist for complete auditability — a 4000-char cap here
+      // silently cut off most real instruction/output payloads mid-JSON.
+      // Raised to a much larger safety ceiling (rather than removed outright)
+      // so a truly pathological payload still can't blow up the export.
+      const DISPATCH_FIELD_CHAR_LIMIT = 100000;
+      const capField = (text: string): string => {
+        if (text.length <= DISPATCH_FIELD_CHAR_LIMIT) return text;
+        return `${text.slice(0, DISPATCH_FIELD_CHAR_LIMIT)}\n... [truncated ${text.length - DISPATCH_FIELD_CHAR_LIMIT} more chars]`;
+      };
       if (d.instruction) {
         lines.push(`- **Instruction:**`);
         lines.push('```');
-        lines.push(d.instruction.slice(0, 4000));
+        lines.push(capField(d.instruction));
         lines.push('```');
       }
       if (d.output) {
         lines.push(`- **Output:**`);
         lines.push('```');
-        lines.push(typeof d.output === 'object' ? JSON.stringify(d.output, null, 2).slice(0, 4000) : String(d.output).slice(0, 4000));
+        lines.push(capField(typeof d.output === 'object' ? JSON.stringify(d.output, null, 2) : String(d.output)));
         lines.push('```');
       }
       const sigs: string[] = [];
@@ -866,6 +875,27 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
     const logLines = logs.split('\n');
     const collapsedLineIndices = new Set<number>();
 
+    // Agents whose full instruction already renders inline under their own
+    // "### Dispatch <id>" block in the Agent Dispatches section above (§3).
+    // Anything covered there must NOT be repeated down here — the whole point
+    // of wiring an agent's instruction into Agent Dispatches is that it lives
+    // next to the agent it belongs to, not in a separate dump at the bottom.
+    const dispatchAgentsWithInstruction = new Set(
+      (tree.dispatches || []).filter((d) => d.instruction).map((d) => (d.agent || '').toLowerCase())
+    );
+    const blockAgentName = (block: string): string | null => {
+      let m = block.match(/^\[(\w+?)_instruction\]/i);
+      if (m) return m[1].toLowerCase();
+      m = block.match(/^\[(FrontDesk|HealthCoach|Medical|Agent\d+)\]/i);
+      if (m) {
+        const tag = m[1].toLowerCase();
+        if (tag === 'frontdesk') return 'front_desk';
+        if (tag === 'healthcoach') return 'health_coach';
+        return tag;
+      }
+      return null;
+    };
+
     const instructionBlocks: string[] = [];
     const instructionStartPattern = /(Dispatched System Instruction|Dispatched Prompt|System Instruction:|UnifiedLLM-Prompt|Instruction dispatched|\[FrontDesk\]\s*Dispatched|\[HealthCoach\]\s*Dispatched|\[Medical(?:Analyze)?\]\s*Dispatched|\[Agent\d+\]\s*Dispatched)/i;
     for (let i = 0; i < logLines.length; i++) {
@@ -876,40 +906,51 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
           block.push(logLines[j]);
           j++;
         }
-        instructionBlocks.push(block.join('\n').trim());
+        const joined = block.join('\n').trim();
+        // Always collapse the raw lines out of the Backend Execution Logs dump
+        // below, whether or not we also list this block in the section here —
+        // an agent whose instruction already appears inline in Agent
+        // Dispatches shouldn't ALSO leave a raw, unlabelled copy in the log
+        // dump; it should just disappear from the log text entirely.
         for (let k = i; k < j; k++) collapsedLineIndices.add(k);
         i = j - 1;
+        const agentName = blockAgentName(joined);
+        if (agentName && dispatchAgentsWithInstruction.has(agentName)) continue;
+        instructionBlocks.push(joined);
       }
     }
     const directInstructions: string[] = [];
     if (input.agentInstructions) {
       if (typeof input.agentInstructions === 'string') {
-        directInstructions.push(input.agentInstructions);
+        if (!dispatchAgentsWithInstruction.size) directInstructions.push(input.agentInstructions);
       } else if (Array.isArray(input.agentInstructions)) {
         directInstructions.push(...input.agentInstructions);
       } else if (typeof input.agentInstructions === 'object') {
         for (const [agentName, instr] of Object.entries(input.agentInstructions)) {
+          if (!instr) continue;
+          if (dispatchAgentsWithInstruction.has(agentName.toLowerCase())) continue;
           directInstructions.push(`[${agentName}] System Instruction:\n${instr}`);
         }
       }
     }
 
-    if (instructionBlocks.length > 0 || directInstructions.length > 0) {
+    const seenInstr = new Set<string>();
+    const uniqueBlocks: string[] = [];
+    for (const block of [...directInstructions, ...instructionBlocks]) {
+      const normalizedKey = block
+        .replace(/^\[backend\]\s*\[UnifiedLLM-Prompt:[^\]]+\]\s*/i, '')
+        .replace(/^System Instruction:\s*/i, '')
+        .replace(/^\[(FrontDesk|HealthCoach|Medical|Agent\d+)\]\s*/i, '')
+        .trim();
+      if (seenInstr.has(normalizedKey)) continue;
+      seenInstr.add(normalizedKey);
+      uniqueBlocks.push(block);
+    }
+
+    if (uniqueBlocks.length > 0) {
       lines.push(`## 🧠 Agent System Instructions & Dispatched Prompts`);
       lines.push('');
-      const seenInstr = new Set<string>();
-      const uniqueBlocks: string[] = [];
-      for (const block of [...directInstructions, ...instructionBlocks]) {
-        const normalizedKey = block
-          .replace(/^\[backend\]\s*\[UnifiedLLM-Prompt:[^\]]+\]\s*/i, '')
-          .replace(/^System Instruction:\s*/i, '')
-          .replace(/^\[(FrontDesk|HealthCoach|Medical|Agent\d+)\]\s*/i, '')
-          .trim();
-        if (seenInstr.has(normalizedKey)) continue;
-        seenInstr.add(normalizedKey);
-        uniqueBlocks.push(block);
-      }
-      lines.push(`_Full agent instructions and prompts dispatched. Shown here for complete auditability._`);
+      lines.push(`_Instructions for agents already shown inline under "Agent Dispatches" above are not repeated here. This section only covers agents not yet wired into that structured view._`);
       lines.push('');
       for (const block of uniqueBlocks) {
         lines.push('```');

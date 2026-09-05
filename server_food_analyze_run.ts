@@ -187,6 +187,13 @@ export async function runFoodAnalyze(req: any, res: any) {
   let preCalculatedItems: any[] = [];
   let aggregatedNutrients: any = null;
   let fullPromptSent = "";
+  // Hoisted so the Scout/Dietitian instruction text survives to the response
+  // payload as `agentInstructions` below (previously the Scout prompt was
+  // only a local const inside the `if (hasImage)` block and discarded once
+  // Scout finished, so the debug export's per-dispatch Instruction field
+  // was never populated for either agent on the async job-queue path).
+  let scoutInstructionForDebug: string | undefined;
+  let dietitianInstructionForDebug: string | undefined;
   let apiCalls: any[] = [];
 
   try {
@@ -299,6 +306,7 @@ export async function runFoodAnalyze(req: any, res: any) {
         sendStreamEvent({ type: 'status', stage: 'scout', status: 'started', message: 'Reading your photos...' });
         const imageCount = imagePayloads?.length || 0;
         const scoutPromptText = buildVisualScoutPrompt(message || '', imageCount);
+        scoutInstructionForDebug = scoutPromptText;
         sendLog('scout_instruction', 'scout', `Vision Scout Instruction dispatched (model: ${engine || "gemini-3.5-flash-lite"}). Prompt: "${scoutPromptText}"`);
         addDebugLog(`[Vision Scout] Running Stage 3 lightweight vision scout with retry protection...`);
         let scoutResult: any = null;
@@ -792,6 +800,7 @@ export async function runFoodAnalyze(req: any, res: any) {
     fullPromptSent = precalcAssembled.fullPromptSent;
     const llmCallArgs = buildDietitianCallArgs({ engine, finalSystemInstruction, promptText });
     sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'started', message: 'Analyzing nutrition payload...' });
+    dietitianInstructionForDebug = `System Instruction: ${finalSystemInstruction}\n\nPrompt: ${fullPromptSent}`;
     sendLog('dietitian_instruction', 'dietitian', `Dietitian Instruction dispatched (model: ${engine || 'gemini-3.5-flash-lite'}). System Instruction: "${finalSystemInstruction}" Prompt: "${fullPromptSent}"`);
     let textOutput: string = "";
     let rawParsed: any;
@@ -892,7 +901,11 @@ export async function runFoodAnalyze(req: any, res: any) {
     // CASE B: discussion mode
     if (mode === "discussion") {
       addDebugLog(`[Mode Routing] DISCUSSION mode triggered (0 database operations).`);
-      return res.json(buildDiscussionResponse({ rawParsed, fullPromptSent, apiCalls }));
+      return res.json(buildDiscussionResponse({
+        rawParsed, fullPromptSent,
+        agentInstructions: { scout: scoutInstructionForDebug, dietitian: dietitianInstructionForDebug },
+        apiCalls,
+      }));
     }
     // CASE D: evaluation mode
     if (mode === "evaluation") {
@@ -906,7 +919,9 @@ export async function runFoodAnalyze(req: any, res: any) {
       const responsePayload = buildEvaluationResponse({
         rawParsed, scoutInternalReasoning, rawScoutData, comparisonData: resolvedComparisonData, comparisonSet,
         scoutItems: mergeScoutItems(visionScoutItems, rawParsed.scoutItems),
-        scoutContentType: visionScoutContentType, diningEnvironment, fullPromptSent, apiCalls,
+        scoutContentType: visionScoutContentType, diningEnvironment, fullPromptSent,
+        agentInstructions: { scout: scoutInstructionForDebug, dietitian: dietitianInstructionForDebug },
+        apiCalls,
       });
       return res.json(responsePayload);
     }
@@ -953,6 +968,7 @@ export async function runFoodAnalyze(req: any, res: any) {
           savable: gate.savable,
           gate,
           agentPrompt: fullPromptSent,
+          agentInstructions: { scout: scoutInstructionForDebug, dietitian: dietitianInstructionForDebug },
           scoutItems: updatedScoutItems,
           apiCalls
         });
@@ -987,6 +1003,7 @@ export async function runFoodAnalyze(req: any, res: any) {
       const responsePayload = buildNewLogResponse({
         rawParsed, parsedData, pendingFoodLog, mealBuild, gate, scoutInternalReasoning,
         rawScoutData, scoutContentType: visionScoutContentType, diningEnvironment, fullPromptSent,
+        agentInstructions: { scout: scoutInstructionForDebug, dietitian: dietitianInstructionForDebug },
         scoutItems: finalScoutItems, apiCalls,
       });
       return res.json(responsePayload);
@@ -1069,7 +1086,9 @@ export async function runFoodAnalyze(req: any, res: any) {
         }));
         return res.json(buildModifyResponse({
           rawParsed, finalMessage, pendingFoodLog, activeMeal, mealBuild, gate,
-          editApplied: result.changed, fullPromptSent, scoutItems: syncedScoutItemsForEdit, apiCalls,
+          editApplied: result.changed, fullPromptSent,
+          agentInstructions: { scout: scoutInstructionForDebug, dietitian: dietitianInstructionForDebug },
+          scoutItems: syncedScoutItemsForEdit, apiCalls,
         }));
       }
     }
@@ -1084,7 +1103,9 @@ export async function runFoodAnalyze(req: any, res: any) {
       const payloadData = toPendingFoodLog(degradedMeal);
       const successPayload = buildDegradeResponse({
         payloadData, degradedMeal, visionScoutItems,
-        scoutContentType: visionScoutContentType, fullPromptSent, apiCalls,
+        scoutContentType: visionScoutContentType, fullPromptSent,
+        agentInstructions: { scout: scoutInstructionForDebug, dietitian: dietitianInstructionForDebug },
+        apiCalls,
       });
       addDebugLog(`[Dietitian Degrade] Emitting salvaged meal (kcal=${payloadData?.nutrients?.calories ?? payloadData?.calories ?? '?'}) as succeeded.`);
       return res.json(successPayload);

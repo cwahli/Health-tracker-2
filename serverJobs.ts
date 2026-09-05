@@ -925,6 +925,15 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           // whitelist, so it was silently dropped here even though the backend
           // generated it correctly — the client always saw an empty report.
           report: finalPayload?.report || undefined,
+          // Debug-export fix: server_food_analyze_run.ts attaches the full
+          // per-agent instruction text (scout + dietitian) to every response
+          // under `agentInstructions`, and the raw dietitian prompt under
+          // `agentPrompt`, but this whitelist never carried either through
+          // for jobs completing via the async job-queue path
+          // (persistSucceeded/cleanResult) — only jobs that resolved
+          // synchronously ever showed instructions in the debug export.
+          agentPrompt: finalPayload?.agentPrompt || undefined,
+          agentInstructions: finalPayload?.agentInstructions || undefined,
           sessionEvents: payload.sessionEvents || existingMemJob?.sessionEvents || [],
           clientConsoleLogs: payload.clientConsoleLogs || [],
           networkErrors: payload.networkErrors || [],

@@ -7,9 +7,10 @@
 export function buildDiscussionResponse(args: {
   rawParsed: any;
   fullPromptSent: string;
+  agentInstructions?: any;
   apiCalls: any;
 }): Record<string, any> {
-  const { rawParsed, fullPromptSent, apiCalls } = args;
+  const { rawParsed, fullPromptSent, agentInstructions, apiCalls } = args;
   return {
     mode: "discussion",
     dietitianScratchpad: rawParsed._internalReasoning,
@@ -17,6 +18,7 @@ export function buildDiscussionResponse(args: {
     message: rawParsed.message || "Here is the details on this meal composition.",
     data: null,
     agentPrompt: fullPromptSent,
+    agentInstructions,
     apiCalls
   };
 }
@@ -31,11 +33,12 @@ export function buildEvaluationResponse(args: {
   scoutContentType: any;
   diningEnvironment: any;
   fullPromptSent: string;
+  agentInstructions?: any;
   apiCalls: any;
 }): Record<string, any> {
   const {
     rawParsed, scoutInternalReasoning, rawScoutData, comparisonData, comparisonSet,
-    scoutItems, scoutContentType, diningEnvironment, fullPromptSent, apiCalls,
+    scoutItems, scoutContentType, diningEnvironment, fullPromptSent, agentInstructions, apiCalls,
   } = args;
   return {
     mode: "evaluation",
@@ -48,6 +51,7 @@ export function buildEvaluationResponse(args: {
     scoutContentType,
     diningEnvironment,
     agentPrompt: fullPromptSent,
+    agentInstructions,
     message: rawParsed.message,
     text: rawParsed.message,
     apiCalls
@@ -65,12 +69,13 @@ export function buildNewLogResponse(args: {
   scoutContentType: any;
   diningEnvironment: any;
   fullPromptSent: string;
+  agentInstructions?: any;
   scoutItems: any;
   apiCalls: any;
 }): Record<string, any> {
   const {
     rawParsed, parsedData, pendingFoodLog, mealBuild, gate, scoutInternalReasoning,
-    rawScoutData, scoutContentType, diningEnvironment, fullPromptSent, scoutItems, apiCalls,
+    rawScoutData, scoutContentType, diningEnvironment, fullPromptSent, agentInstructions, scoutItems, apiCalls,
   } = args;
   return {
     mode: "new_log",
@@ -87,6 +92,7 @@ export function buildNewLogResponse(args: {
     savable: gate.savable,
     gate,
     agentPrompt: fullPromptSent,
+    agentInstructions,
     scoutItems,
     apiCalls
   };
@@ -114,12 +120,13 @@ export function buildModifyResponse(args: {
   gate: any;
   editApplied: boolean;
   fullPromptSent: string;
+  agentInstructions?: any;
   scoutItems: any;
   apiCalls: any;
 }): Record<string, any> {
   const {
     rawParsed, finalMessage, pendingFoodLog, activeMeal, mealBuild, gate,
-    editApplied, fullPromptSent, scoutItems, apiCalls,
+    editApplied, fullPromptSent, agentInstructions, scoutItems, apiCalls,
   } = args;
   return {
     mode: "modify",
@@ -133,6 +140,7 @@ export function buildModifyResponse(args: {
     gate,
     editApplied,
     agentPrompt: fullPromptSent,
+    agentInstructions,
     scoutItems,
     apiCalls
   };
@@ -144,10 +152,11 @@ export function buildDegradeResponse(args: {
   visionScoutItems: any;
   scoutContentType: any;
   fullPromptSent: string;
+  agentInstructions?: any;
   apiCalls: any;
 }): Record<string, any> {
   const {
-    payloadData, degradedMeal, visionScoutItems, scoutContentType, fullPromptSent, apiCalls,
+    payloadData, degradedMeal, visionScoutItems, scoutContentType, fullPromptSent, agentInstructions, apiCalls,
   } = args;
   const degradeMessage = "Nutrients logged based on core databases, but AI clinical advice is currently unavailable.";
   return {
@@ -161,6 +170,7 @@ export function buildDegradeResponse(args: {
     text: degradeMessage,
     message: degradeMessage,
     agentPrompt: fullPromptSent,
+    agentInstructions,
     apiCalls
   };
 }
