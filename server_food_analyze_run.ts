@@ -7,9 +7,9 @@ import { z } from 'zod';
 import { formatUSDANutrients, formatOFFNutrients, extractOFFNutrientsPer100g, isFastFoodChain, buildWebSearchQuery, loosenQuery, cleanQuery, detectChainKeyFromText, scoutHasCompletePrintedLabel, enrichScoutComponentsWithMatches, buildPastMealsContext } from './src/server/food/server_food_analyze_helpers.js';
 import { visionScoutResponseSchema } from './src/server/food/server_food_analyze_schema.js';
 import { buildUserContext, buildTimeContext, buildImageContext, buildHistoryContext, buildVisionScoutContext, buildDatabaseMatchesContext, buildBiomarkersContext, stitchFoodPrompt, selectSystemInstruction } from './src/server/food/server_food_prompt_context.js';
-import { sanitizeLlmJsonOutput, computeDietitianSkipGates, decideScoutVerdict, decideScoutAdvice, buildDietitianCallArgs, buildPureScaleResponse, sumPrecalcTotals, computeDietitianRetryDelay } from './src/server/food/server_food_dietitian_dispatch.js';
+import { sanitizeLlmJsonOutput, computeDietitianSkipGates, decideScoutVerdict, decideScoutAdvice, buildDietitianCallArgs, buildPureScaleResponse, sumPrecalcTotals, computeDietitianRetryDelay, repairTruncatedJson, applyPreDietitianDensityCheck } from './src/server/food/server_food_dietitian_dispatch.js';
 import { resolveFoodAnalyzeMode, buildFoodApiCalls, normalizeParsedPostDietitian } from './src/server/food/server_food_mode_routing.js';
-import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput } from './src/server/food/server_food_meal_assemble.js';
+import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput, mapFinalizeToMeal } from './src/server/food/server_food_meal_assemble.js';
 import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, mapTextQueriesToScoutItems, buildScoutFailureError, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries, applyWeightModShortcut, restoreTurnOneCandidates, computeScoutRetryDelay, applySkipScoutShortcut } from './src/server/food/server_food_scout_source.js';
 import { collectImagePayloads, decideWeightRefine } from './src/server/food/server_food_session_setup.js';
 import { shouldPauseForPortionClarify, filterPortionCarryCandidates, detectDominantBrand, collectFdcHintTasks, isFdcHintRelevant, mapLedgersToPrecalcItems, applyMealModifiers } from './src/server/food/server_food_precalc.js';
@@ -896,83 +896,12 @@ export async function runFoodAnalyze(req: any, res: any) {
         }
       } catch (parseErr: any) {
         addDebugLog(`[JSON Parse Error] JSON parse failed: ${parseErr.message}. Attempting robust truncation repair...`);
-        try {
-          let repaired = cleanJson.trim();
-          // 1. Remove trailing comma followed by a half-written key
-          repaired = repaired.replace(/,\s*"[^"]*"?\s*$/, "");
-          // 2. Handle unescaped double quotes inside an unclosed string
-          let quoteCount = 0;
-          for (let idx = 0; idx < repaired.length; idx++) {
-            if (repaired[idx] === '"' && (idx === 0 || repaired[idx - 1] !== '\\')) {
-              quoteCount++;
-            }
-          }
-          if (quoteCount % 2 !== 0) {
-            repaired += '"';
-          }
-          // 3. Remove trailing comma or colon
-          if (repaired.endsWith(",")) {
-            repaired = repaired.slice(0, -1).trim();
-          } else if (repaired.endsWith(":")) {
-            repaired += "null";
-          }
-          // 4. Count open braces and brackets outside strings
-          let openBraces = 0;
-          let openBrackets = 0;
-          let insideStr = false;
-          for (let i = 0; i < repaired.length; i++) {
-            const char = repaired[i];
-            if (char === '"' && (i === 0 || repaired[i - 1] !== '\\')) {
-              insideStr = !insideStr;
-            }
-            if (!insideStr) {
-              if (char === '{') openBraces++;
-              else if (char === '}') openBraces--;
-              else if (char === '[') openBrackets++;
-              else if (char === ']') openBrackets--;
-            }
-          }
-          repaired += ']'.repeat(Math.max(0, openBrackets)) + '}'.repeat(Math.max(0, openBraces));
-          rawParsed = JSON.parse(repaired);
-          if (!rawParsed._internalReasoning && extractedScratchpad) {
-            rawParsed._internalReasoning = extractedScratchpad;
-          }
-          addDebugLog(`[JSON Parse Error] Robust truncation repair succeeded.`);
-        } catch (repairErr: any) {
-          addDebugLog(`[JSON Parse Error] Robust truncation repair also failed: ${repairErr.message}.`);
-          throw parseErr;
-        }
+        rawParsed = repairTruncatedJson({ cleanJson, extractedScratchpad, parseErr, onLog: addDebugLog });
       }
       return { textOutput, rawParsed };
     }
     // Pre-dietitian density check: ensure beverage and composite items are rescaled prior to Dietitian prompt payload
-    if (Array.isArray(preCalculatedItems)) {
-      preCalculatedItems.forEach((it: any) => {
-        if (!it || !it.weightGrams || !it.nutrients) return;
-        const cals = Number(it.nutrients.calories || 0);
-        const nameLower = String(it.name || it.keyword || '').toLowerCase();
-        const isBeverage = BEVERAGE_RAW_PATTERN.test(nameLower) || nameLower.includes('latte') || nameLower.includes('coffee') || nameLower.includes('drink');
-        if (isBeverage && it.weightGrams >= 150 && cals > 600) {
-          const maxAllowedCals = Math.round((it.weightGrams / 100) * 110);
-          const factor = maxAllowedCals / cals;
-          addDebugLog(`[Pre-Dietitian Reality Check] Rescaling beverage item "${it.name}" from ${cals} kcal -> ${maxAllowedCals} kcal prior to Dietitian prompt payload.`);
-          NUTRIENT_KEYS.forEach(k => {
-            if (it.nutrients[k] != null && typeof it.nutrients[k] === 'number') {
-              it.nutrients[k] = Math.round(it.nutrients[k] * factor * 10) / 10;
-            }
-          });
-        }
-      });
-      if (preCalculatedItems.length > 0) {
-        if (!aggregatedNutrients || typeof aggregatedNutrients !== 'object') {
-          aggregatedNutrients = {};
-        }
-        NUTRIENT_KEYS.forEach(k => {
-          const sum = preCalculatedItems.reduce((acc: number, item: any) => acc + (Number(item?.nutrients?.[k]) || 0), 0);
-          aggregatedNutrients[k] = Math.round(sum * 10) / 10;
-        });
-      }
-    }
+    aggregatedNutrients = applyPreDietitianDensityCheck({ preCalculatedItems, aggregatedNutrients, beveragePattern: BEVERAGE_RAW_PATTERN, onLog: addDebugLog });
     addDebugLog('[MealBuild] projector dietitian');
     let dietitianTempMeal = buildSavableMealFromParsed(preCalculatedItems || [], activeMeal, aggregatedNutrients, null);
     const lifeStart = beginStage(dietitianTempMeal, 'dietitian', { actor: 'server' });
@@ -1180,29 +1109,7 @@ export async function runFoodAnalyze(req: any, res: any) {
       const header = assembleParsedMealHeader({ rawFoodData, rawParsed, imageDates, message, originalModeIsModify, activeMeal, scoutCookingMethod, scoutConfidenceRating, scoutConfidenceComment, diningEnvironment, language: userProfile?.language });
       const parsedData: any = header.parsedData;
       diningEnvironment = header.diningEnvironment;
-      const useFinalizeDirectMap = Array.isArray(preCalculatedItems) && preCalculatedItems.length > 0;
-      if (useFinalizeDirectMap) {
-        addDebugLog('[Single-Path] Meal items = finalizeDishLedger.');
-        const mapped = buildMealFromFinalizeLedgers(preCalculatedItems, {
-          dietitianItems: rawFoodData.itemsBreakdown,
-          diningEnvironment,
-          mealName: parsedData.name,
-          date: parsedData.date,
-        });
-        parsedData.itemsBreakdown = mapped.items;
-        parsedData.nutrients = mapped.nutrients;
-        parsedData.weightGrams = mapped.weightGrams;
-        parsedData.serving_grams = mapped.weightGrams;
-        parsedData.receiptTable = mapped.receiptTable;
-        parsedData.name = mapped.name || parsedData.name;
-        sendLog('dietitian_answer', 'dietitian', rawParsed?.message || 'Dietitian generated clinical advice.', {
-          mode: rawParsed?.mode
-        });
-      } else {
-        addDebugLog('[Single-Path] No finalize ledger; not inventing a second calorie book.');
-        if (!Array.isArray(parsedData.itemsBreakdown)) parsedData.itemsBreakdown = [];
-        if (!parsedData.nutrients) parsedData.nutrients = {};
-      }
+      mapFinalizeToMeal({ preCalculatedItems, rawFoodData, diningEnvironment, parsedData, rawParsed, onLog: addDebugLog, sendLog });
       // Ensure composition is always derived from the final itemsBreakdown names & visual ingredient breakdown
       if (parsedData.itemsBreakdown && Array.isArray(parsedData.itemsBreakdown)) {
         parsedData.composition = deriveMealComposition(parsedData.itemsBreakdown);

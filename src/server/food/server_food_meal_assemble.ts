@@ -9,6 +9,7 @@ import { extractMostRecentImageDate } from '../../utils/dateUtils.js';
 import { t } from '../../utils/i18n.js';
 import { applyModifierToItemName } from '../../../server_meal_edit.js';
 import { appendHistory } from '../../mealBuild/consolidate.js';
+import { buildMealFromFinalizeLedgers } from '../../../server_meal_from_finalize.js';
 import { mergeScoutItems } from '../../../server_vision_scout.js';
 import { namesReferToSameFood } from '../../../server_scout_reconcile.js';
 
@@ -518,4 +519,45 @@ export function buildNewLogGateInput(args: NewLogGateArgs): any {
     imageCount: (imagePayloads && imagePayloads.length > 0) ? imagePayloads.length : (photoUrl ? 1 : 0),
     narrative,
   };
+}
+
+export interface FinalizeMapArgs {
+  preCalculatedItems: any[];
+  rawFoodData: any;
+  diningEnvironment?: string;
+  parsedData: any;
+  rawParsed: any;
+  onLog: (msg: string) => void;
+  sendLog: (type: string, stage: string, message: string, data?: any) => void;
+}
+
+/**
+ * F-8.10 shard 19 — finalize-to-meal mapping, extracted verbatim from
+ * runFoodAnalyze. Maps precalc ledgers onto parsedData (mutates in place).
+ */
+export function mapFinalizeToMeal(args: FinalizeMapArgs): void {
+  const { preCalculatedItems, rawFoodData, diningEnvironment, parsedData, rawParsed, onLog, sendLog } = args;
+  const useFinalizeDirectMap = Array.isArray(preCalculatedItems) && preCalculatedItems.length > 0;
+  if (useFinalizeDirectMap) {
+    onLog('[Single-Path] Meal items = finalizeDishLedger.');
+    const mapped = buildMealFromFinalizeLedgers(preCalculatedItems, {
+      dietitianItems: rawFoodData.itemsBreakdown,
+      diningEnvironment,
+      mealName: parsedData.name,
+      date: parsedData.date,
+    });
+    parsedData.itemsBreakdown = mapped.items;
+    parsedData.nutrients = mapped.nutrients;
+    parsedData.weightGrams = mapped.weightGrams;
+    parsedData.serving_grams = mapped.weightGrams;
+    parsedData.receiptTable = mapped.receiptTable;
+    parsedData.name = mapped.name || parsedData.name;
+    sendLog('dietitian_answer', 'dietitian', rawParsed?.message || 'Dietitian generated clinical advice.', {
+      mode: rawParsed?.mode
+    });
+  } else {
+    onLog('[Single-Path] No finalize ledger; not inventing a second calorie book.');
+    if (!Array.isArray(parsedData.itemsBreakdown)) parsedData.itemsBreakdown = [];
+    if (!parsedData.nutrients) parsedData.nutrients = {};
+  }
 }
