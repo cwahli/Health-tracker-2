@@ -132,7 +132,8 @@ import { buildMealFromFinalizeLedgers } from './server_meal_from_finalize.js';
 import { applyMealEdits } from './server_meal_edit.js';
 import { matchBrandMenu, isPackagedBindItem } from './server_brand_match.js';
 import { classifyDishAtomic } from './server_dish_classify.js';
-import { t, interpolate } from './src/utils/i18n.js';
+import { t, interpolate, withScoutLanguage } from './src/utils/i18n.js';
+import { scoutSystemInstruction } from './agents/scoutInstructions.js';
 import { takeUnifiedUsage, takeUnifiedTiming, formatUnifiedUsage } from './src/utils/unifiedUsage.js';
 import {
   addDebugLog,
@@ -322,6 +323,11 @@ export async function runFoodAnalyze(req: any, res: any) {
         const scoutPromptText = buildVisualScoutPrompt(message || '', imageCount);
         scoutInstructionForDebug = scoutPromptText;
         sendLog('scout_instruction', 'scout', `Vision Scout Instruction dispatched (model: ${engine || "gemini-3.5-flash-lite"}). Prompt: "${scoutPromptText}"`);
+        // Debug-export fix: the scout SYSTEM instruction (config.systemInstruction:
+        // schema + language layer) never entered the streamed log channel — only
+        // the user promptText above did — so no export could show what schema the
+        // scout was held to. Stream it once, same pattern as dietitian line 785.
+        sendLog('scout_system_instruction', 'scout', `Vision Scout System Instruction (config.systemInstruction): "${withScoutLanguage(scoutSystemInstruction, userProfile?.language)}"`);
         addDebugLog(`[Vision Scout] Running Stage 3 lightweight vision scout with retry protection...`);
         let { scoutResult, lastScoutErr } = await runScoutRetryLoop({
           engine,
