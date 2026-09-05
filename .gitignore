@@ -18,3 +18,6 @@ prototype/compare/images/job_*
 pw-browsers/
 playwright-report/
 test-results/
+
+# Local scratch (live captures, renders, replay scripts) — never commit
+tmp/
