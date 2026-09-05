@@ -16,6 +16,8 @@ import {
   computeScoutRetryDelay,
   applySkipScoutShortcut,
   checkResumedFromImageTurn,
+  applyTextQueryShortcut,
+  checkMenuScaleBypass,
 } from './server_food_scout_source';
 import { visionScoutResponseSchema } from './server_food_analyze_schema';
 
@@ -256,5 +258,26 @@ describe('F-8.10 shard 20 — resumed-turn predicate', () => {
     expect(checkResumedFromImageTurn({ body: {}, visionScoutItems: [{ keyword: 'x' }], history: [] })).toBe(true);
     expect(checkResumedFromImageTurn({ body: {}, visionScoutItems: [], history: [{ data: { photoUrl: 'u' } }] })).toBe(true);
     expect(checkResumedFromImageTurn({ body: { activeScoutItems: [{}] }, visionScoutItems: [], history: [] })).toBe(true);
+  });
+});
+
+describe('F-8.10 shard 22 — text-query branch and menu-scale rule', () => {
+  it('seeds scout items for food text, stays quiet in edit flows', () => {
+    const logs: string[] = [];
+    const out = applyTextQueryShortcut({ message: 'nasi goreng', isExplicitModify: false, isPureWeightModification: false, onLog: (m) => logs.push(m) });
+    expect(out.queriesToSearch).toEqual(['nasi goreng']);
+    expect(out.visionScoutItems).toHaveLength(1);
+    expect(out.scoutRecommendedMode).toBe('new_log');
+    const edit = applyTextQueryShortcut({ message: 'nasi goreng', isExplicitModify: true, isPureWeightModification: false, onLog: () => {} });
+    expect(edit.visionScoutItems).toEqual([]);
+    expect(edit.scoutRecommendedMode).toBeNull();
+    const quiet = applyTextQueryShortcut({ message: 'hello there', isExplicitModify: false, isPureWeightModification: false, onLog: () => {} });
+    expect(quiet.queriesToSearch).toEqual([]);
+  });
+
+  it('skips search only for true browse mode, never for new_log dishes', () => {
+    expect(checkMenuScaleBypass({ visionScoutContentType: 'menu_or_poster', scoutRecommendedMode: 'evaluation' })).toBe(true);
+    expect(checkMenuScaleBypass({ visionScoutContentType: 'menu_or_poster', scoutRecommendedMode: 'new_log' })).toBe(false);
+    expect(checkMenuScaleBypass({ visionScoutContentType: 'visual', scoutRecommendedMode: null })).toBe(false);
   });
 });

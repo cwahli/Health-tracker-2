@@ -4,13 +4,13 @@
  */
 import { Type } from '@google/genai';
 import { z } from 'zod';
-import { formatUSDANutrients, formatOFFNutrients, extractOFFNutrientsPer100g, isFastFoodChain, buildWebSearchQuery, loosenQuery, cleanQuery, detectChainKeyFromText, scoutHasCompletePrintedLabel, enrichScoutComponentsWithMatches, buildPastMealsContext, extractFoodSearchQueriesFromText } from './src/server/food/server_food_analyze_helpers.js';
+import { formatUSDANutrients, formatOFFNutrients, extractOFFNutrientsPer100g, isFastFoodChain, buildWebSearchQuery, loosenQuery, cleanQuery, detectChainKeyFromText, scoutHasCompletePrintedLabel, enrichScoutComponentsWithMatches, buildPastMealsContext } from './src/server/food/server_food_analyze_helpers.js';
 import { visionScoutResponseSchema } from './src/server/food/server_food_analyze_schema.js';
 import { buildUserContext, buildTimeContext, buildImageContext, buildHistoryContext, buildVisionScoutContext, buildDatabaseMatchesContext, buildBiomarkersContext, stitchFoodPrompt, selectSystemInstruction } from './src/server/food/server_food_prompt_context.js';
 import { sanitizeLlmJsonOutput, computeDietitianSkipGates, decideScoutVerdict, decideScoutAdvice, buildDietitianCallArgs, buildPureScaleResponse, sumPrecalcTotals, computeDietitianRetryDelay, repairTruncatedJson, applyPreDietitianDensityCheck } from './src/server/food/server_food_dietitian_dispatch.js';
 import { resolveFoodAnalyzeMode, buildFoodApiCalls, normalizeParsedPostDietitian } from './src/server/food/server_food_mode_routing.js';
 import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput, mapFinalizeToMeal, mergeModifyPathScoutItems } from './src/server/food/server_food_meal_assemble.js';
-import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, mapTextQueriesToScoutItems, buildScoutFailureError, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries, applyWeightModShortcut, restoreTurnOneCandidates, computeScoutRetryDelay, applySkipScoutShortcut, checkResumedFromImageTurn } from './src/server/food/server_food_scout_source.js';
+import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, buildScoutFailureError, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries, applyWeightModShortcut, restoreTurnOneCandidates, computeScoutRetryDelay, applySkipScoutShortcut, checkResumedFromImageTurn, applyTextQueryShortcut, checkMenuScaleBypass } from './src/server/food/server_food_scout_source.js';
 import { collectImagePayloads, decideWeightRefine } from './src/server/food/server_food_session_setup.js';
 import { shouldPauseForPortionClarify, filterPortionCarryCandidates, detectDominantBrand, collectFdcHintTasks, isFdcHintRelevant, mapLedgersToPrecalcItems, applyMealModifiers } from './src/server/food/server_food_precalc.js';
 import { runDatabaseSearchStage } from './src/server/food/server_food_db_search.js';
@@ -224,40 +224,6 @@ export async function runFoodAnalyze(req: any, res: any) {
 
     const imagePayloads: any[] = collectImagePayloads(image, images);
 
-    const analysisNutrientKeys = [
-      'calories',
-      'protein',
-      'carbohydrates',
-      'totalFat',
-      'saturatedFat',
-      'transFat',
-      'unsaturatedFat',
-      'sugar',
-      'totalSugar',
-      'addedSugar',
-      'totalFibre',
-      'solubleFibre',
-      'sodium',
-      'potassium',
-      'magnesium',
-      'calcium',
-      'iron',
-      'zinc',
-      'selenium',
-      'iodine',
-      'phosphorus',
-      'vitaminD',
-      'vitaminB12',
-      'folate',
-      'vitaminC',
-      'vitaminE',
-      'vitaminK',
-      'vitaminA',
-      'vitaminB6',
-      'thiamine',
-      'riboflavin',
-      'niacin',
-    ];
     // B5 — Detect weight/portion refine on prior scout (skip Vision Scout + DB when safe).
     // Path A: text-only refine. Path B: images still attached but printed label locks exist.
     const { priorScoutForRefine, refineDecision, weightRefineIntent, isPureWeightModification } = decideWeightRefine({
@@ -421,18 +387,10 @@ export async function runFoodAnalyze(req: any, res: any) {
           }
           logScoutItemSummaries(visionScoutItems, addDebugLog);
       } else if (message) {
-        addDebugLog(`[Text Search Extraction] No image supplied. Extracting search terms from message: "${message}"`);
-        const extractedQueries = extractFoodSearchQueriesFromText(message);
-        if (extractedQueries.length > 0) {
-          addDebugLog(`[Text Search Extraction] Extracted clean food search queries: ${JSON.stringify(extractedQueries)}`);
-          queriesToSearch.push(...extractedQueries);
-          if (!isExplicitModify && !isPureWeightModification) {
-            scoutRecommendedMode = "new_log";
-            visionScoutItems = mapTextQueriesToScoutItems(extractedQueries);
-          }
-        } else {
-          addDebugLog(`[Text Search Extraction] Message classified as conversational or non-food query. Skipping database matches.`);
-        }
+        const textShortcut = applyTextQueryShortcut({ message, isExplicitModify, isPureWeightModification, onLog: addDebugLog });
+        queriesToSearch.push(...textShortcut.queriesToSearch);
+        if (textShortcut.visionScoutItems.length > 0) visionScoutItems = textShortcut.visionScoutItems;
+        if (textShortcut.scoutRecommendedMode) scoutRecommendedMode = textShortcut.scoutRecommendedMode;
       }
     }
     const bracketItems = parseBracketedFoodItems(message || '');
@@ -448,7 +406,7 @@ export async function runFoodAnalyze(req: any, res: any) {
     // actually recommends evaluation/browsing mode. A menu-board photo taken to log one
     // specific consumed dish (scoutRecommendedMode === "new_log") should still get real
     // nutrition search for that item, even though the source photo is a menu_or_poster.
-    const isMenuScale = (visionScoutContentType === "menu_or_poster" || visionScoutContentType === "text") && scoutRecommendedMode !== "new_log";
+    const isMenuScale = checkMenuScaleBypass({ visionScoutContentType, scoutRecommendedMode });
     if (Array.isArray(req.body.explicitFoodTags) && req.body.explicitFoodTags.length > 0) {
       injectExplicitFoodTags({ visionScoutItems, explicitFoodTags: req.body.explicitFoodTags, onLog: addDebugLog });
     }

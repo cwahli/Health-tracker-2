@@ -9,6 +9,7 @@ import { getFallbackCategoryProfile } from '../../../server_food_catalog.js';
 import { isPackagedBindItem, inferChainNameFromPackageLabel } from '../../../server_brand_match.js';
 import { userSafeScoutFailureMessage } from '../../../server_vision_scout.js';
 import { t } from '../../utils/i18n.js';
+import { extractFoodSearchQueriesFromText } from './server_food_analyze_helpers.js';
 import { applyPortionChoices } from '../../../server_portion_clarify.js';
 import {
   applyWeightRefineToScoutItems,
@@ -566,4 +567,57 @@ export function checkResumedFromImageTurn(args: ResumedTurnArgs): boolean {
     (Array.isArray(visionScoutItems) && visionScoutItems.length > 0) ||
     (Array.isArray(history) && history.some((m: any) => m.data?.photoUrl || m.photoUrl || m.data?.hasImage || m.data?.pendingFoodLog?.imageUrl || m.data?.pendingFoodLog?.imageUrls?.length))
   );
+}
+
+export interface TextQueryShortcutArgs {
+  message?: string;
+  isExplicitModify: boolean;
+  isPureWeightModification: boolean;
+  onLog: (msg: string) => void;
+}
+
+/**
+ * F-8.10 shard 22 — text-query branch, extracted verbatim from
+ * runFoodAnalyze. Splits a text-only message into search queries and,
+ * outside edit flows, seeds scout items + new_log mode.
+ */
+export function applyTextQueryShortcut(args: TextQueryShortcutArgs): {
+  queriesToSearch: string[];
+  visionScoutItems: any[];
+  scoutRecommendedMode: string | null;
+} {
+  const { message, isExplicitModify, isPureWeightModification, onLog } = args;
+  const queriesToSearch: string[] = [];
+  let visionScoutItems: any[] = [];
+  let scoutRecommendedMode: string | null = null;
+  if (message) {
+    onLog(`[Text Search Extraction] No image supplied. Extracting search terms from message: "${message}"`);
+    const extractedQueries = extractFoodSearchQueriesFromText(message);
+    if (extractedQueries.length > 0) {
+      onLog(`[Text Search Extraction] Extracted clean food search queries: ${JSON.stringify(extractedQueries)}`);
+      queriesToSearch.push(...extractedQueries);
+      if (!isExplicitModify && !isPureWeightModification) {
+        scoutRecommendedMode = "new_log";
+        visionScoutItems = mapTextQueriesToScoutItems(extractedQueries);
+      }
+    } else {
+      onLog(`[Text Search Extraction] Message classified as conversational or non-food query. Skipping database matches.`);
+    }
+  }
+  return { queriesToSearch, visionScoutItems, scoutRecommendedMode };
+}
+
+export interface MenuScaleArgs {
+  visionScoutContentType?: string;
+  scoutRecommendedMode?: string | null;
+}
+
+/**
+ * F-8.10 shard 22 — menu-scale bypass rule. A menu-board photo taken to log
+ * one specific dish (scoutRecommendedMode === "new_log") still gets real
+ * nutrition search; only true browse/evaluation mode skips it.
+ */
+export function checkMenuScaleBypass(args: MenuScaleArgs): boolean {
+  const { visionScoutContentType, scoutRecommendedMode } = args;
+  return (visionScoutContentType === "menu_or_poster" || visionScoutContentType === "text") && scoutRecommendedMode !== "new_log";
 }
