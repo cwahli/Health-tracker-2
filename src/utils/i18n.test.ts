@@ -200,6 +200,10 @@ describe('S-1 leftover chrome (LEAK_EN_CHROME)', () => {
     'viewDiagnosticLogs',
     'viewDiagnosticLogsTitle',
     'preparationLabel',
+    'oneServingDefault',
+    'itemSubTotal',
+    'printedPackagingLabel',
+    'genderLabel',
   ] as const;
 
   it('keys the S-1 button/card chrome in en and id with differing copy', () => {
@@ -215,16 +219,7 @@ describe('S-1 leftover chrome (LEAK_EN_CHROME)', () => {
   // pass keys one of these, move it to S1_GREEN_KEYS (the unkeyed assertion
   // below forces the move instead of silently going stale).
   it('documents parked S-1 residuals without keying them yet', () => {
-    const S1_PARKED_RESIDUALS = [
-      '1 serving', // data-token quantity default parsed by portion logic, not chrome
-      'Item Sub-Total', // server ledger internals (server_pure_helpers / portionUtils)
-      'Printed Packaging Label', // server ledger label-source marker
-      'Gender', // BiomarkerRangeBuilder admin widget has no language plumbing yet
-    ];
+    const S1_PARKED_RESIDUALS: string[] = [];
     for (const s of S1_PARKED_RESIDUALS) expect(s.length).toBeGreaterThan(0);
-    const keyedValues = new Set(Object.values(translations.en));
-    for (const s of ['Item Sub-Total', 'Printed Packaging Label']) {
-      expect(keyedValues.has(s), `"${s}" still unkeyed`).toBe(false);
-    }
   });
 });

@@ -43,6 +43,18 @@
       "dir": "7. Compare large set of similar choices",
       "mode": "evaluation",
       "title": "Chip aisle compact compare"
+    },
+    {
+      "id": "G8",
+      "dir": "8. Mie Gacoan",
+      "mode": "new_log",
+      "title": "Mie Gacoan (Mie Suit, Siomay, Es Petak Umpet)"
+    },
+    {
+      "id": "G9",
+      "dir": "9. Beef Hotpot",
+      "mode": "new_log",
+      "title": "Indonesian Beef Hotpot (Barcoded Groceries)"
     }
   ]
 }

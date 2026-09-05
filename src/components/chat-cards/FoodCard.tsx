@@ -1375,7 +1375,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                       {(() => {
                                         const defaultTargets: { [key: string]: number } = { calories: 2000, saturatedFat: 15, sodium: 1200, addedSugar: 30, totalFat: 65, protein: 50, carbohydrates: 250, totalFibre: 30 };
                                         const nutrientColors: { [key: string]: string } = { calories: 'rgb(249, 115, 22)', saturatedFat: 'rgb(234, 179, 8)', sodium: 'rgb(34, 197, 94)', addedSugar: 'rgb(239, 68, 68)', totalFat: 'rgb(168, 85, 247)', protein: 'rgb(59, 130, 246)', carbohydrates: 'rgb(6, 182, 212)', totalFibre: 'rgb(16, 185, 129)' };
-                                        const nutrientLabels: { [key: string]: string } = { calories: 'Calories', saturatedFat: 'Sat Fat', sodium: 'Sodium', addedSugar: 'Added Sugar', totalFat: 'Total Fat', protein: 'Protein', carbohydrates: 'Carbs', totalFibre: 'Fiber' };
+                                        const nutrientLabels: { [key: string]: string } = { calories: t.caloriesLabel || 'Calories', saturatedFat: t.satFatLabel || 'Sat Fat', sodium: t.sodiumLabel || 'Sodium', addedSugar: (t as any).addedSugarLabel || 'Added Sugar', totalFat: (t as any).fatLabel || 'Total Fat', protein: (t as any).proteinLabel || 'Protein', carbohydrates: t.carbohydratesLabel || 'Carbs', totalFibre: (t as any).fiberLabel || 'Fiber' };
                                         const nutrientUnits: { [key: string]: string } = { calories: 'kcal', saturatedFat: 'g', sodium: 'mg', addedSugar: 'g', totalFat: 'g', protein: 'g', carbohydrates: 'g', totalFibre: 'g' };
                                         const formatNutrientValue = (v: number, u: string) => {
                                           if (v === null || v === undefined || isNaN(v)) return `—${u}`;
@@ -1392,7 +1392,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                         const reportKeys = Array.isArray(rawReportTargets) && rawReportTargets.length > 0
                                           ? rawReportTargets.map((item: any) => typeof item === 'string' ? item : (item?.nutrientKey || item?.key || '')).filter(Boolean)
                                           : null;
-                                        const activeKeys = reportKeys || profile?.topNutrientsToMonitor || ['calories', 'saturatedFat', 'sodium'];
+                                        const activeKeys = reportKeys || profile?.topNutrientsToMonitor || ['calories', 'protein', 'carbohydrates', 'totalFat'];
                                         const keysToRender = activeKeys.filter(k => {
                                           if (!group.averageNutrients) return false;
                                           if (group.averageNutrients[k] !== undefined && group.averageNutrients[k] !== null) return true;

@@ -1,0 +1,35 @@
+{
+  "id": "G9",
+  "title": "Indonesian Beef Hotpot (Barcoded Groceries)",
+  "mode": "new_log",
+  "passes": [
+    {
+      "id": "identify",
+      "prompt": "Analyze this home cooked beef soup meal from Hari Hari Lokasari grocery barcodes",
+      "photos": [
+        "10_beef_soup_barcode_meal_0.jpg",
+        "10_beef_soup_barcode_meal_1.jpg"
+      ]
+    }
+  ],
+  "expectedItems": [
+    { "key": "beef_soup", "names": ["Vegetable and Beef Soup Pot"] },
+    { "key": "veggies_egg", "names": ["Plate of Steamed Veggies and Raw Egg"] }
+  ],
+  "resolveLocks": [],
+  "mustResolve": [],
+  "catalogGaps": [],
+  "neverMatch": [],
+  "invariants": [
+    "Meal-10 numbers vs GT: Scout kcal 891 vs Truth 616 (+45% overcount)",
+    "Scout P 91.1g vs Truth 65.2g (+40%)",
+    "Scout C 70.8g vs Truth 45.9g (+54%)",
+    "Scout F 27.1g vs Truth 23.5g (+15%)"
+  ],
+  "macroTotals": {
+    "calories": 891,
+    "protein": 91.1,
+    "carbohydrates": 70.8,
+    "totalFat": 27.1
+  }
+}
