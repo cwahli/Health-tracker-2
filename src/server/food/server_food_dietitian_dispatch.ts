@@ -1,6 +1,6 @@
 import { extractBalancedJson } from '../../../server_pure_helpers.js';
 import { shouldExpandMealAgent } from '../../mealBuild/shouldExpandMealAgent.js';
-import { t } from '../../utils/i18n.js';
+import { t, interpolate } from '../../utils/i18n.js';
 import { foodAnalyzeSchema } from './server_food_analyze_schema.js';
 
 /**
@@ -195,4 +195,58 @@ export function buildDietitianCallArgs(args: DietitianCallArgs): Record<string, 
     // separate native-thinking output stream, which combined with responseSchema
     // was suspected of causing the model to batch output instead of streaming it.
   };
+}
+
+/**
+ * F-8.10 shard 18 — skip-path builders, extracted verbatim from runFoodAnalyze.
+ */
+
+/** Pure-scale refine response: label-locked meal scaled without an LLM call. */
+export function buildPureScaleResponse(args: { targetWeightGrams: number; language?: unknown }): {
+  textOutput: string;
+  rawParsed: any;
+} {
+  const { targetWeightGrams: targetWeight, language } = args;
+  const textOutput = JSON.stringify({
+    _internalReasoning: `[Refine] scale-only: Scaled meal directly to ${targetWeight}g`,
+    verdict: { label: t(language, 'verdictPortionControl'), level: "neutral" },
+    message: interpolate(t(language, 'messageScaledPortion'), { grams: targetWeight }),
+    mode: "modify",
+    modificationCommand: [
+      {
+        action: "update_weight",
+        itemName: "total",
+        newWeightGrams: targetWeight
+      }
+    ]
+  });
+  return { textOutput, rawParsed: JSON.parse(textOutput) };
+}
+
+/** Sums precalc ledgers into create-path totals. */
+export function sumPrecalcTotals(preCalculatedItems: any): {
+  totalGrams: number;
+  totalCals: number;
+  totalP: number;
+  totalC: number;
+  totalF: number;
+  totalSugar: number;
+  totalAddedSugar: number;
+  totalSatFat: number;
+} {
+  return {
+    totalGrams: preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.estimatedWeightGrams) || 0), 0),
+    totalCals: preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.calories) || 0), 0),
+    totalP: preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.protein) || 0), 0),
+    totalC: preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.carbohydrates) || 0), 0),
+    totalF: preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.totalFat) || 0), 0),
+    totalSugar: preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.sugar ?? it.nutrients?.totalSugar ?? it.nutrients?.addedSugar) || 0), 0),
+    totalAddedSugar: preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.addedSugar) || 0), 0),
+    totalSatFat: preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.saturatedFat) || 0), 0),
+  };
+}
+
+/** Dietitian retry backoff: 503/429/UNAVAILABLE waits longer. */
+export function computeDietitianRetryDelay(lastDietitianErr: any): number {
+  return lastDietitianErr?.message?.includes('503') || lastDietitianErr?.message?.includes('429') || lastDietitianErr?.message?.includes('UNAVAILABLE') ? 3000 : 1000;
 }

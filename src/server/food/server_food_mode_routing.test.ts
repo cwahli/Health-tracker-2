@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveFoodAnalyzeMode, buildFoodApiCalls } from './server_food_mode_routing';
+import { resolveFoodAnalyzeMode, buildFoodApiCalls, normalizeParsedPostDietitian } from './server_food_mode_routing';
 
 describe('F-8.10 shard 5 — mode routing matrix', () => {
   const base = {
@@ -69,5 +69,29 @@ describe('F-8.10 shard 5 — apiCalls ledger', () => {
       canSkipDietitianForCreate: true, canSkipDietitianForPureScale: false, engine: 'gemini-x',
     });
     expect(skipped).toEqual([]);
+  });
+});
+
+describe('F-8.10 shard 18 — post-dietitian normalization', () => {
+  it('forces modify for explicit edits and cleans review cards', () => {
+    const raw: any = { mode: 'new_log', comparison: { groups: [] } };
+    normalizeParsedPostDietitian({ rawParsed: raw, isExplicitModify: true, userSelectedMode: 'chat', visionScoutItems: [] });
+    expect(raw.mode).toBe('modify');
+    const review: any = { comparison: { groups: [] } };
+    normalizeParsedPostDietitian({ rawParsed: review, isExplicitModify: false, userSelectedMode: 'review', visionScoutItems: [] });
+    expect(review.mode).toBe('new_log');
+    expect(review.comparison).toBeNull();
+  });
+
+  it('builds comparison breakdown from scout items when the model omits it', () => {
+    const raw: any = {};
+    normalizeParsedPostDietitian({
+      rawParsed: raw, isExplicitModify: false, userSelectedMode: 'compare',
+      visionScoutItems: [{ originalName: 'Oats', keyword: 'oats', estimatedWeightGrams: 60, scoutIndex: 0 }],
+    });
+    expect(raw.mode).toBe('evaluation');
+    expect(raw.foodData.itemsBreakdown).toEqual([
+      { name: 'Oats', originalName: 'Oats', weightGrams: 60, scoutIndex: 0 },
+    ]);
   });
 });

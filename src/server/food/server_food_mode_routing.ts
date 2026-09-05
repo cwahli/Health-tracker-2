@@ -71,3 +71,40 @@ export function buildFoodApiCalls(args: FoodApiCallsArgs): Array<{ type: string;
     ...((canSkipDietitianForCreate || canSkipDietitianForPureScale) ? [] : [{ type: 'gemini', label: `Food nutrition agent - Dietitian (${(typeof engine === 'object' ? engine?.name || engine?.model : engine) || 'gemini-3.5-flash-lite'})` }])
   ];
 }
+
+export interface PostDietitianNormArgs {
+  rawParsed: any;
+  isExplicitModify: boolean;
+  userSelectedMode?: string;
+  visionScoutItems: any;
+}
+
+/**
+ * F-8.10 shard 18 — post-dietitian response normalization, extracted
+ * verbatim from runFoodAnalyze. Mutates rawParsed in place (mode fixups,
+ * comparison breakdown backfill).
+ */
+export function normalizeParsedPostDietitian(args: PostDietitianNormArgs): void {
+  const { rawParsed, isExplicitModify, userSelectedMode, visionScoutItems } = args;
+  if (rawParsed && typeof rawParsed === 'object') {
+    if (isExplicitModify) {
+      rawParsed.mode = 'modify';
+    }
+    if (userSelectedMode === 'review') {
+      if (!rawParsed.mode || rawParsed.mode !== 'modify') rawParsed.mode = isExplicitModify ? 'modify' : 'new_log';
+      rawParsed.comparison = null; // Guaranteed 100% clean review card rendering
+    } else if (userSelectedMode === 'compare') {
+      rawParsed.mode = 'evaluation';
+      const existingFd = rawParsed.foodData && typeof rawParsed.foodData === 'object' ? rawParsed.foodData : {};
+      const breakdown = Array.isArray(existingFd.itemsBreakdown) && existingFd.itemsBreakdown.length
+        ? existingFd.itemsBreakdown
+        : (visionScoutItems || []).map((s: any, idx: number) => ({
+            name: s.originalName || s.keyword || `item ${idx + 1}`,
+            originalName: s.originalName || s.keyword,
+            weightGrams: s.estimatedWeightGrams,
+            scoutIndex: s.scoutIndex ?? idx,
+          }));
+      rawParsed.foodData = { ...existingFd, itemsBreakdown: breakdown };
+    }
+  }
+}

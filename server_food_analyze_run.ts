@@ -7,8 +7,8 @@ import { z } from 'zod';
 import { formatUSDANutrients, formatOFFNutrients, extractOFFNutrientsPer100g, isFastFoodChain, buildWebSearchQuery, loosenQuery, cleanQuery, detectChainKeyFromText, scoutHasCompletePrintedLabel, enrichScoutComponentsWithMatches, buildPastMealsContext } from './src/server/food/server_food_analyze_helpers.js';
 import { visionScoutResponseSchema } from './src/server/food/server_food_analyze_schema.js';
 import { buildUserContext, buildTimeContext, buildImageContext, buildHistoryContext, buildVisionScoutContext, buildDatabaseMatchesContext, buildBiomarkersContext, stitchFoodPrompt, selectSystemInstruction } from './src/server/food/server_food_prompt_context.js';
-import { sanitizeLlmJsonOutput, computeDietitianSkipGates, decideScoutVerdict, decideScoutAdvice, buildDietitianCallArgs } from './src/server/food/server_food_dietitian_dispatch.js';
-import { resolveFoodAnalyzeMode, buildFoodApiCalls } from './src/server/food/server_food_mode_routing.js';
+import { sanitizeLlmJsonOutput, computeDietitianSkipGates, decideScoutVerdict, decideScoutAdvice, buildDietitianCallArgs, buildPureScaleResponse, sumPrecalcTotals, computeDietitianRetryDelay } from './src/server/food/server_food_dietitian_dispatch.js';
+import { resolveFoodAnalyzeMode, buildFoodApiCalls, normalizeParsedPostDietitian } from './src/server/food/server_food_mode_routing.js';
 import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput } from './src/server/food/server_food_meal_assemble.js';
 import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, mapTextQueriesToScoutItems, buildScoutFailureError, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries, applyWeightModShortcut, restoreTurnOneCandidates, computeScoutRetryDelay, applySkipScoutShortcut } from './src/server/food/server_food_scout_source.js';
 import { collectImagePayloads, decideWeightRefine } from './src/server/food/server_food_session_setup.js';
@@ -999,34 +999,16 @@ export async function runFoodAnalyze(req: any, res: any) {
       const targetWeight = weightRefineIntent.weightGrams;
       addDebugLog(`[Refine] skip-dietitian: Scaled label-locked meal directly to ${targetWeight}g without LLM call.`);
       sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'completed', message: interpolate(t(userProfile?.language, 'statusScaledPortion'), { grams: targetWeight }) });
-      textOutput = JSON.stringify({
-        _internalReasoning: `[Refine] scale-only: Scaled meal directly to ${targetWeight}g`,
-        verdict: { label: t(userProfile?.language, 'verdictPortionControl'), level: "neutral" },
-        message: interpolate(t(userProfile?.language, 'messageScaledPortion'), { grams: targetWeight }),
-        mode: "modify",
-        modificationCommand: [
-          {
-            action: "update_weight",
-            itemName: "total",
-            newWeightGrams: targetWeight
-          }
-        ]
-      });
-      rawParsed = JSON.parse(textOutput);
+      const pureScale = buildPureScaleResponse({ targetWeightGrams: targetWeight, language: userProfile?.language });
+      textOutput = pureScale.textOutput;
+      rawParsed = pureScale.rawParsed;
     } else if (canSkipDietitianForCreate) {
       addDebugLog(`[MealAgent] Adaptive single-agent create: skipping Dietitian LLM for ${visionScoutItems.length} dish(es).`);
       sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'completed', message: 'Meal analysis finalized.' });
 
       const mealName = rawScoutData?.mealName || rawScoutData?.name || (visionScoutItems.length === 1 ? (visionScoutItems[0].originalName || visionScoutItems[0].keyword) : t(userProfile?.language, 'balancedMealFallbackName'));
       
-      const totalGrams = preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.estimatedWeightGrams) || 0), 0);
-      const totalCals = preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.calories) || 0), 0);
-      const totalP = preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.protein) || 0), 0);
-      const totalC = preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.carbohydrates) || 0), 0);
-      const totalF = preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.totalFat) || 0), 0);
-      const totalSugar = preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.sugar ?? it.nutrients?.totalSugar ?? it.nutrients?.addedSugar) || 0), 0);
-      const totalAddedSugar = preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.addedSugar) || 0), 0);
-      const totalSatFat = preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.saturatedFat) || 0), 0);
+      const { totalGrams, totalCals, totalP, totalC, totalF, totalSugar, totalAddedSugar, totalSatFat } = sumPrecalcTotals(preCalculatedItems);
 
       let scoutVerdict = decideScoutVerdict({ scoutVerdict: rawScoutData?.verdict, totals: { totalSugar, totalSatFat, totalP }, mealName, language: userProfile?.language });
 
@@ -1074,7 +1056,7 @@ export async function runFoodAnalyze(req: any, res: any) {
         dietitianAttempts++;
         try {
           if (dietitianAttempts > 1) {
-            const delay = lastDietitianErr?.message?.includes('503') || lastDietitianErr?.message?.includes('429') || lastDietitianErr?.message?.includes('UNAVAILABLE') ? 3000 : 1000;
+            const delay = computeDietitianRetryDelay(lastDietitianErr);
             addDebugLog(`[Dietitian] Waiting ${delay}ms before retry...`);
             await new Promise(resolve => setTimeout(resolve, delay));
             addDebugLog(`[Dietitian] Retrying LLM call (Attempt ${dietitianAttempts} of ${maxDietitianAttempts})...`);
@@ -1104,27 +1086,7 @@ export async function runFoodAnalyze(req: any, res: any) {
     }
     const dietitianScratchpad = rawParsed?._internalReasoning || "";
     sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'completed', message: 'Dietitian evaluation completed.' });
-    if (rawParsed && typeof rawParsed === 'object') {
-      if (isExplicitModify) {
-        rawParsed.mode = 'modify';
-      }
-      if (userSelectedMode === 'review') {
-        if (!rawParsed.mode || rawParsed.mode !== 'modify') rawParsed.mode = isExplicitModify ? 'modify' : 'new_log';
-        rawParsed.comparison = null; // Guaranteed 100% clean review card rendering
-      } else if (userSelectedMode === 'compare') {
-        rawParsed.mode = 'evaluation';
-        const existingFd = rawParsed.foodData && typeof rawParsed.foodData === 'object' ? rawParsed.foodData : {};
-        const breakdown = Array.isArray(existingFd.itemsBreakdown) && existingFd.itemsBreakdown.length
-          ? existingFd.itemsBreakdown
-          : (visionScoutItems || []).map((s: any, idx: number) => ({
-              name: s.originalName || s.keyword || `item ${idx + 1}`,
-              originalName: s.originalName || s.keyword,
-              weightGrams: s.estimatedWeightGrams,
-              scoutIndex: s.scoutIndex ?? idx,
-            }));
-        rawParsed.foodData = { ...existingFd, itemsBreakdown: breakdown };
-      }
-    }
+    normalizeParsedPostDietitian({ rawParsed, isExplicitModify, userSelectedMode, visionScoutItems });
     const originalModeIsModify = !!(
       isExplicitModify ||
       userExplicitlySelectedEditMode ||

@@ -5,6 +5,9 @@ import {
   decideScoutVerdict,
   decideScoutAdvice,
   buildDietitianCallArgs,
+  buildPureScaleResponse,
+  sumPrecalcTotals,
+  computeDietitianRetryDelay,
 } from './server_food_dietitian_dispatch';
 
 describe('F-8.10 shard 4 — LLM JSON repair', () => {
@@ -117,5 +120,29 @@ describe('F-8.10 shard 17 — dietitian call args', () => {
     expect(args.responseMimeType).toBe('application/json');
     expect(args.responseSchema.required).toContain('message');
     expect(args.maxOutputTokens).toBe(8192);
+  });
+});
+
+describe('F-8.10 shard 18 — skip-path builders', () => {
+  it('builds the pure-scale refine payload without an LLM call', () => {
+    const { textOutput, rawParsed } = buildPureScaleResponse({ targetWeightGrams: 150, language: 'en' });
+    expect(rawParsed.mode).toBe('modify');
+    expect(rawParsed.modificationCommand[0].newWeightGrams).toBe(150);
+    expect(JSON.parse(textOutput)).toEqual(rawParsed);
+    expect(rawParsed.message).toContain('150');
+  });
+
+  it('sums precalc totals for the create path', () => {
+    const totals = sumPrecalcTotals([
+      { estimatedWeightGrams: 200, nutrients: { calories: 260, protein: 10, carbohydrates: 30, totalFat: 5, sugar: 2, addedSugar: 1, saturatedFat: 1 } },
+      { estimatedWeightGrams: 100, nutrients: { calories: 50, protein: 2, carbohydrates: 10, totalFat: 1, sugar: 8, addedSugar: 8, saturatedFat: 0 } },
+    ]);
+    expect(totals).toEqual({ totalGrams: 300, totalCals: 310, totalP: 12, totalC: 40, totalF: 6, totalSugar: 10, totalAddedSugar: 9, totalSatFat: 1 });
+  });
+
+  it('backs off longer on 503/429/UNAVAILABLE', () => {
+    expect(computeDietitianRetryDelay({ message: '503 boom' })).toBe(3000);
+    expect(computeDietitianRetryDelay({ message: '429 quota' })).toBe(3000);
+    expect(computeDietitianRetryDelay({ message: 'meh' })).toBe(1000);
   });
 });
