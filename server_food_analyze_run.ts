@@ -539,6 +539,7 @@ export async function runFoodAnalyze(req: any, res: any) {
             scoutItems: visionScoutItems,
             portionClarify,
             resolvedDbCandidates,
+            rawScout: rawScoutData,
             agentResult: {
               scoutItems: visionScoutItems,
               activeStage: 'portion_clarify',
@@ -556,6 +557,7 @@ export async function runFoodAnalyze(req: any, res: any) {
         scoutItems: visionScoutItems,
         portionClarify,
         resolvedDbCandidates,
+        rawScout: rawScoutData,
         agentResult: {
           scoutItems: visionScoutItems,
           activeStage: 'portion_clarify',

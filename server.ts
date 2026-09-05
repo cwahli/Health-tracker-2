@@ -2057,13 +2057,19 @@ async function callUnifiedLLMInternal({
   // usageMetadata (stream rebuilds, older models) simply emit no line.
   const logUnifiedUsage = (sdkResponse: any) => {
     try {
+      const stage = (stageTag || '').replace(/^:/, '') || 'unknown';
       const u = sdkResponse?.usageMetadata;
-      if (!u) return;
+      if (!u) {
+        _localAddDebugLog(`[UnifiedLLM-Usage:${stage}] none (response carried no usageMetadata)`);
+        return;
+      }
       const p = Number(u.promptTokenCount) || 0;
       const c = Number(u.candidatesTokenCount) || 0;
       const t = Number(u.totalTokenCount) || (p + c);
-      if (!t) return;
-      const stage = (stageTag || '').replace(/^:/, '') || 'unknown';
+      if (!t) {
+        _localAddDebugLog(`[UnifiedLLM-Usage:${stage}] none (usageMetadata present but total=0)`);
+        return;
+      }
       _localAddDebugLog(`[UnifiedLLM-Usage:${stage}] prompt=${p} completion=${c} total=${t}`);
     } catch { /* usage logging must never break generation */ }
   };

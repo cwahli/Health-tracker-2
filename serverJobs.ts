@@ -777,6 +777,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
                 needsPortionClarify: true,
                 portionClarify: finalData.portionClarify,
                 scoutItems: finalData.scoutItems,
+                rawScout: (finalData as any).rawScout,
                 agentResult: {
                   scoutItems: finalData.scoutItems,
                   activeStage: 'portion_clarify',
