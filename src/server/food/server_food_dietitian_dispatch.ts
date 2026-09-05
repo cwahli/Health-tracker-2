@@ -2,6 +2,7 @@ import { extractBalancedJson } from '../../../server_pure_helpers.js';
 import { shouldExpandMealAgent } from '../../mealBuild/shouldExpandMealAgent.js';
 import { t, interpolate } from '../../utils/i18n.js';
 import { NUTRIENT_KEYS } from '../../utils/nutrients.js';
+import { asyncParseLLMJSON, validateOrFallback, RouteAgentSchema } from '../../../server.js';
 import { foodAnalyzeSchema } from './server_food_analyze_schema.js';
 
 /**
@@ -356,4 +357,30 @@ export function applyPreDietitianDensityCheck(args: DensityCheckArgs): Record<st
     }
   }
   return aggregatedNutrients;
+}
+
+export interface DietitianParseArgs {
+  cleanJson: string;
+  extractedScratchpad: string;
+  language?: unknown;
+}
+
+/**
+ * F-8.10 shard 25 — dietitian parse + validate, extracted verbatim from
+ * runFoodAnalyze. Falls back to a neutral analyzed-log shell on schema
+ * mismatch; throws on unparseable JSON (caller repairs).
+ */
+export async function parseAndValidateDietitian(args: DietitianParseArgs): Promise<any> {
+  const { cleanJson, extractedScratchpad, language } = args;
+  let rawParsed = await asyncParseLLMJSON(cleanJson);
+  rawParsed = validateOrFallback(RouteAgentSchema, rawParsed, cleanJson, "RouteAgent", {
+    _internalReasoning: "",
+    verdict: { label: t(language, 'verdictSupportsMetabolicEnergy'), level: "neutral" },
+    message: t(language, 'fallbackAnalyzedLog'),
+    foodData: { date: new Date().toISOString().split('T')[0], name: "Meal", itemsBreakdown: [] }
+  });
+  if (!rawParsed._internalReasoning && extractedScratchpad) {
+    rawParsed._internalReasoning = extractedScratchpad;
+  }
+  return rawParsed;
 }

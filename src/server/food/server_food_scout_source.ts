@@ -8,8 +8,10 @@
 import { getFallbackCategoryProfile } from '../../../server_food_catalog.js';
 import { isPackagedBindItem, inferChainNameFromPackageLabel } from '../../../server_brand_match.js';
 import { userSafeScoutFailureMessage } from '../../../server_vision_scout.js';
-import { t } from '../../utils/i18n.js';
+import { t, withScoutLanguage } from '../../utils/i18n.js';
 import { extractFoodSearchQueriesFromText } from './server_food_analyze_helpers.js';
+import { scoutSystemInstruction } from '../../../agents/scoutInstructions.js';
+import { visionScoutResponseSchema } from './server_food_analyze_schema.js';
 import { applyPortionChoices } from '../../../server_portion_clarify.js';
 import {
   applyWeightRefineToScoutItems,
@@ -620,4 +622,31 @@ export interface MenuScaleArgs {
 export function checkMenuScaleBypass(args: MenuScaleArgs): boolean {
   const { visionScoutContentType, scoutRecommendedMode } = args;
   return (visionScoutContentType === "menu_or_poster" || visionScoutContentType === "text") && scoutRecommendedMode !== "new_log";
+}
+
+export interface ScoutCallArgs {
+  engine: any;
+  language?: unknown;
+  scoutPromptText: string;
+  imagePayloads: any;
+}
+
+/**
+ * F-8.10 shard 25 — scout LLM call args, extracted verbatim from
+ * runFoodAnalyze. The SSE onStream hookup stays inline (res-bound).
+ */
+export function buildScoutCallArgs(args: ScoutCallArgs): Record<string, any> {
+  const { engine, language, scoutPromptText, imagePayloads } = args;
+  return {
+    modelId: (typeof engine === 'object' ? engine?.name || engine?.model : engine) || "gemini-3.5-flash-lite",
+    systemInstruction: withScoutLanguage(scoutSystemInstruction, language),
+    promptText: scoutPromptText,
+    imagePayloads,
+    responseMimeType: "application/json",
+    maxOutputTokens: 8192,
+    temperature: 0.1,
+    skipThinking: true,
+    logStagePrefix: 'scout',
+    responseSchema: visionScoutResponseSchema,
+  };
 }

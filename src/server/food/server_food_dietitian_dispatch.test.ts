@@ -10,6 +10,7 @@ import {
   computeDietitianRetryDelay,
   repairTruncatedJson,
   applyPreDietitianDensityCheck,
+  parseAndValidateDietitian,
 } from './server_food_dietitian_dispatch';
 
 describe('F-8.10 shard 4 — LLM JSON repair', () => {
@@ -183,5 +184,23 @@ describe('F-8.10 shard 19 — truncation repair and density check', () => {
     expect(items[0].nutrients.calories).toBe(550);
     expect(agg.calories).toBe(550);
     expect(logs.some((m) => m.includes('Reality Check'))).toBe(true);
+  });
+});
+
+describe('F-8.10 shard 25 — dietitian parse and validate', () => {
+  it('parses valid JSON and attaches scratchpad reasoning', async () => {
+    const out = await parseAndValidateDietitian({
+      cleanJson: JSON.stringify({ _internalReasoning: '', verdict: { label: 'Good fuel', level: 'good' }, message: 'Nice meal' }),
+      extractedScratchpad: 'scratch',
+      language: 'en',
+    });
+    expect(out.verdict.label).toBe('Good fuel');
+    expect(out._internalReasoning).toBe('scratch');
+  });
+
+  it('validates leniently and throws on garbage', async () => {
+    const validated = await parseAndValidateDietitian({ cleanJson: JSON.stringify({ nope: 1 }), extractedScratchpad: '', language: 'en' });
+    expect(validated).toBeTruthy();
+    await expect(parseAndValidateDietitian({ cleanJson: 'not json', extractedScratchpad: '', language: 'en' })).rejects.toThrow();
   });
 });

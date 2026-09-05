@@ -18,6 +18,7 @@ import {
   checkResumedFromImageTurn,
   applyTextQueryShortcut,
   checkMenuScaleBypass,
+  buildScoutCallArgs,
 } from './server_food_scout_source';
 import { visionScoutResponseSchema } from './server_food_analyze_schema';
 
@@ -279,5 +280,16 @@ describe('F-8.10 shard 22 — text-query branch and menu-scale rule', () => {
     expect(checkMenuScaleBypass({ visionScoutContentType: 'menu_or_poster', scoutRecommendedMode: 'evaluation' })).toBe(true);
     expect(checkMenuScaleBypass({ visionScoutContentType: 'menu_or_poster', scoutRecommendedMode: 'new_log' })).toBe(false);
     expect(checkMenuScaleBypass({ visionScoutContentType: 'visual', scoutRecommendedMode: null })).toBe(false);
+  });
+});
+
+describe('F-8.10 shard 25 — scout call args', () => {
+  it('pins flash-lite defaults with the scout language block and schema', () => {
+    const args = buildScoutCallArgs({ engine: undefined, language: 'id', scoutPromptText: 'P', imagePayloads: [] });
+    expect(args.modelId).toBe('gemini-3.5-flash-lite');
+    expect(args.systemInstruction).toContain('Bahasa Indonesia');
+    expect(args.responseSchema.required).toEqual(['contentType', 'diningEnvironment', 'dishes']);
+    expect(args.maxOutputTokens).toBe(8192);
+    expect(args.imagePayloads).toEqual([]);
   });
 });

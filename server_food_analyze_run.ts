@@ -5,12 +5,11 @@
 import { Type } from '@google/genai';
 import { z } from 'zod';
 import { formatUSDANutrients, formatOFFNutrients, extractOFFNutrientsPer100g, isFastFoodChain, buildWebSearchQuery, loosenQuery, cleanQuery, detectChainKeyFromText, scoutHasCompletePrintedLabel, enrichScoutComponentsWithMatches, buildPastMealsContext } from './src/server/food/server_food_analyze_helpers.js';
-import { visionScoutResponseSchema } from './src/server/food/server_food_analyze_schema.js';
 import { buildUserContext, buildTimeContext, buildImageContext, buildHistoryContext, buildVisionScoutContext, buildDatabaseMatchesContext, buildBiomarkersContext, stitchFoodPrompt, selectSystemInstruction, assemblePrecalcPromptBlock } from './src/server/food/server_food_prompt_context.js';
-import { sanitizeLlmJsonOutput, computeDietitianSkipGates, decideScoutVerdict, decideScoutAdvice, buildDietitianCallArgs, buildPureScaleResponse, sumPrecalcTotals, computeDietitianRetryDelay, repairTruncatedJson, applyPreDietitianDensityCheck } from './src/server/food/server_food_dietitian_dispatch.js';
+import { sanitizeLlmJsonOutput, computeDietitianSkipGates, decideScoutVerdict, decideScoutAdvice, buildDietitianCallArgs, buildPureScaleResponse, sumPrecalcTotals, computeDietitianRetryDelay, repairTruncatedJson, applyPreDietitianDensityCheck, parseAndValidateDietitian } from './src/server/food/server_food_dietitian_dispatch.js';
 import { resolveFoodAnalyzeMode, buildFoodApiCalls, normalizeParsedPostDietitian } from './src/server/food/server_food_mode_routing.js';
 import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput, mapFinalizeToMeal, mergeModifyPathScoutItems, runEvaluationFinalize } from './src/server/food/server_food_meal_assemble.js';
-import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, buildScoutFailureError, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries, applyWeightModShortcut, restoreTurnOneCandidates, computeScoutRetryDelay, applySkipScoutShortcut, checkResumedFromImageTurn, applyTextQueryShortcut, checkMenuScaleBypass } from './src/server/food/server_food_scout_source.js';
+import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, buildScoutFailureError, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries, applyWeightModShortcut, restoreTurnOneCandidates, computeScoutRetryDelay, applySkipScoutShortcut, checkResumedFromImageTurn, applyTextQueryShortcut, checkMenuScaleBypass, buildScoutCallArgs } from './src/server/food/server_food_scout_source.js';
 import { collectImagePayloads, decideWeightRefine } from './src/server/food/server_food_session_setup.js';
 import { shouldPauseForPortionClarify, filterPortionCarryCandidates, detectDominantBrand, collectFdcHintTasks, isFdcHintRelevant, mapLedgersToPrecalcItems, applyMealModifiers } from './src/server/food/server_food_precalc.js';
 import { runDatabaseSearchStage } from './src/server/food/server_food_db_search.js';
@@ -121,7 +120,6 @@ import {
 import {
   ScoutItemSchema,
   VisionScoutSchema,
-  scoutSystemInstruction,
   mergeScoutItems,
   parseAndHealVisionScout,
   reconcileIngredientsToComponents,
@@ -134,7 +132,7 @@ import { buildMealFromFinalizeLedgers } from './server_meal_from_finalize.js';
 import { applyMealEdits } from './server_meal_edit.js';
 import { matchBrandMenu, isPackagedBindItem } from './server_brand_match.js';
 import { classifyDishAtomic } from './server_dish_classify.js';
-import { withScoutLanguage, t, interpolate } from './src/utils/i18n.js';
+import { t, interpolate } from './src/utils/i18n.js';
 import {
   addDebugLog,
   logSessionStorage,
@@ -142,13 +140,10 @@ import {
   globalDebugLogs,
   sessionDebugLogs,
   callUnifiedLLM,
-  asyncParseLLMJSON,
-  validateOrFallback,
   getGeminiClient,
   getGeminiApiKey,
   BEVERAGE_RAW_PATTERN,
   SINGLE_STAPLE_RE,
-  RouteAgentSchema,
   adminAuth,
   db,
   searchUSDA,
@@ -322,15 +317,7 @@ export async function runFoodAnalyze(req: any, res: any) {
               addDebugLog(`[Vision Scout] Retrying LLM call (Attempt ${scoutAttempts} of ${maxScoutAttempts})...`);
             }
             const scoutOutput = await callUnifiedLLM({
-              modelId: (typeof engine === 'object' ? engine?.name || engine?.model : engine) || "gemini-3.5-flash-lite",
-              systemInstruction: withScoutLanguage(scoutSystemInstruction, userProfile?.language),
-              promptText: scoutPromptText,
-              imagePayloads,
-              responseMimeType: "application/json",
-              maxOutputTokens: 8192,
-              temperature: 0.1,
-              skipThinking: true,
-              logStagePrefix: 'scout',
+              ...buildScoutCallArgs({ engine, language: userProfile?.language, scoutPromptText, imagePayloads }),
               onStream: (chunk: string, isThought?: boolean) => {
                 if (isStream && hasSentHeaders) {
                   try {
@@ -339,7 +326,6 @@ export async function runFoodAnalyze(req: any, res: any) {
                   } catch (e) {}
                 }
               },
-              responseSchema: visionScoutResponseSchema,
             });
             // Yield to the event loop before heavy synchronous parsing
             await new Promise(resolve => setImmediate(resolve));
@@ -793,16 +779,7 @@ export async function runFoodAnalyze(req: any, res: any) {
       const { cleanJson, extractedScratchpad } = sanitizeLlmJsonOutput(textOutput);
       let rawParsed;
       try {
-        rawParsed = await asyncParseLLMJSON(cleanJson);
-        rawParsed = validateOrFallback(RouteAgentSchema, rawParsed, cleanJson, "RouteAgent", {
-          _internalReasoning: "",
-          verdict: { label: t(userProfile?.language, 'verdictSupportsMetabolicEnergy'), level: "neutral" },
-          message: t(userProfile?.language, 'fallbackAnalyzedLog'),
-          foodData: { date: new Date().toISOString().split('T')[0], name: "Meal", itemsBreakdown: [] }
-        });
-        if (!rawParsed._internalReasoning && extractedScratchpad) {
-          rawParsed._internalReasoning = extractedScratchpad;
-        }
+        rawParsed = await parseAndValidateDietitian({ cleanJson, extractedScratchpad, language: userProfile?.language });
       } catch (parseErr: any) {
         addDebugLog(`[JSON Parse Error] JSON parse failed: ${parseErr.message}. Attempting robust truncation repair...`);
         rawParsed = repairTruncatedJson({ cleanJson, extractedScratchpad, parseErr, onLog: addDebugLog });
