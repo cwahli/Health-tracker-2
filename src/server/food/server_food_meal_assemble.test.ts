@@ -13,6 +13,7 @@ import {
   mergeFinalScoutItems,
   buildNewLogGateInput,
   mapFinalizeToMeal,
+  mergeModifyPathScoutItems,
 } from './server_food_meal_assemble';
 
 describe('F-8.10 shard 6 — fallback breakdown', () => {
@@ -244,5 +245,33 @@ describe('F-8.10 shard 19 — finalize-to-meal mapping', () => {
     expect(parsed.nutrients).toEqual({});
     expect(logs.some((m) => m.includes('not inventing a second calorie book'))).toBe(true);
     expect(sent).toEqual([]);
+  });
+});
+
+describe('F-8.10 shard 20 — modify-path scout merge', () => {
+  it('merges dietitian items, prunes to ledger indices, and renames', () => {
+    const out = mergeModifyPathScoutItems({
+      visionScoutItems: [
+        { scoutIndex: 0, keyword: 'rice', originalName: 'Rice', estimatedWeightGrams: 100 },
+        { scoutIndex: 1, keyword: 'soda', originalName: 'Soda', estimatedWeightGrams: 200 },
+      ],
+      activeMealScoutItems: [],
+      dietitianScoutItems: [],
+      itemsBreakdown: [{ scoutIndex: 0, canonicalDbName: 'Steamed Rice', weightGrams: 200 }],
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0].originalName).toBe('Steamed Rice');
+    expect(out[0].estimatedWeightGrams).toBe(200);
+  });
+
+  it('falls back to active-meal scouts when vision is empty', () => {
+    const out = mergeModifyPathScoutItems({
+      visionScoutItems: [],
+      activeMealScoutItems: [{ scoutIndex: 5, keyword: 'tea' }],
+      dietitianScoutItems: [],
+      itemsBreakdown: [],
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0].scoutIndex).toBe(5);
   });
 });

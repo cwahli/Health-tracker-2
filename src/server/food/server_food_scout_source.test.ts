@@ -15,6 +15,7 @@ import {
   restoreTurnOneCandidates,
   computeScoutRetryDelay,
   applySkipScoutShortcut,
+  checkResumedFromImageTurn,
 } from './server_food_scout_source';
 import { visionScoutResponseSchema } from './server_food_analyze_schema';
 
@@ -244,5 +245,16 @@ describe('F-8.10 shard 17 — skipScout shortcut', () => {
     expect(out.ran).toBe(true);
     expect(out.visionScoutContentType).toBe('visual');
     expect(out.diningEnvironment).toBe('home_cooked');
+  });
+});
+
+describe('F-8.10 shard 20 — resumed-turn predicate', () => {
+  it('detects continued image turns across payload shapes', () => {
+    const no = { body: {}, visionScoutItems: [], history: [] };
+    expect(checkResumedFromImageTurn(no)).toBe(false);
+    expect(checkResumedFromImageTurn({ body: { skipScout: true }, visionScoutItems: [], history: [] })).toBe(true);
+    expect(checkResumedFromImageTurn({ body: {}, visionScoutItems: [{ keyword: 'x' }], history: [] })).toBe(true);
+    expect(checkResumedFromImageTurn({ body: {}, visionScoutItems: [], history: [{ data: { photoUrl: 'u' } }] })).toBe(true);
+    expect(checkResumedFromImageTurn({ body: { activeScoutItems: [{}] }, visionScoutItems: [], history: [] })).toBe(true);
   });
 });

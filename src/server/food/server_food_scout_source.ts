@@ -545,3 +545,25 @@ export function applySkipScoutShortcut(args: SkipScoutShortcutArgs): {
   }
   return { visionScoutItems, visionScoutContentType, diningEnvironment, ran };
 }
+
+export interface ResumedTurnArgs {
+  body: any;
+  visionScoutItems: any;
+  history: any;
+}
+
+/**
+ * F-8.10 shard 20 — resumed-image-turn predicate, extracted verbatim from
+ * runFoodAnalyze. True when this turn continues an image-bearing turn.
+ */
+export function checkResumedFromImageTurn(args: ResumedTurnArgs): boolean {
+  const { body, visionScoutItems, history } = args;
+  return !!(
+    body.portionChoices ||
+    body.skipScout ||
+    body.photoUrl ||
+    (Array.isArray(body.activeScoutItems) && body.activeScoutItems.length > 0) ||
+    (Array.isArray(visionScoutItems) && visionScoutItems.length > 0) ||
+    (Array.isArray(history) && history.some((m: any) => m.data?.photoUrl || m.photoUrl || m.data?.hasImage || m.data?.pendingFoodLog?.imageUrl || m.data?.pendingFoodLog?.imageUrls?.length))
+  );
+}

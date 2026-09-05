@@ -561,3 +561,45 @@ export function mapFinalizeToMeal(args: FinalizeMapArgs): void {
     if (!parsedData.nutrients) parsedData.nutrients = {};
   }
 }
+
+export interface ModifyScoutMergeArgs {
+  visionScoutItems: any;
+  activeMealScoutItems: any;
+  dietitianScoutItems: any;
+  itemsBreakdown: any;
+}
+
+/**
+ * F-8.10 shard 20 — modify-path scout merge, extracted verbatim from
+ * runFoodAnalyze. Merges dietitian items over the base list, prunes to
+ * ledger indices, and renames to ledger names.
+ */
+export function mergeModifyPathScoutItems(args: ModifyScoutMergeArgs): any[] {
+  const { visionScoutItems, activeMealScoutItems, dietitianScoutItems, itemsBreakdown } = args;
+  const baseScoutItems = (visionScoutItems && visionScoutItems.length > 0)
+    ? visionScoutItems
+    : (activeMealScoutItems || []);
+  let updatedScoutItems = mergeScoutItems(baseScoutItems, dietitianScoutItems);
+  if (itemsBreakdown && Array.isArray(itemsBreakdown) && itemsBreakdown.length > 0) {
+    const currentScoutIndices = new Set(itemsBreakdown.map((b: any) => b.scoutIndex).filter((i: any) => i !== undefined && i !== null));
+    if (currentScoutIndices.size > 0) {
+      updatedScoutItems = updatedScoutItems.filter((sItem: any) => currentScoutIndices.has(sItem.scoutIndex));
+    }
+    updatedScoutItems = updatedScoutItems.map((sItem: any, sIdx: number) => {
+      const bItem = itemsBreakdown.find((b: any) =>
+        b.scoutIndex !== undefined && b.scoutIndex !== null && b.scoutIndex === sItem.scoutIndex
+      ) || itemsBreakdown.find((b: any) => namesReferToSameFood(b.canonicalDbName || b.name, sItem.originalName || sItem.keyword));
+      if (bItem && (bItem.canonicalDbName || bItem.name)) {
+        const newName = bItem.canonicalDbName || bItem.name;
+        return {
+          ...sItem,
+          originalName: newName,
+          keyword: newName,
+          estimatedWeightGrams: bItem.weightGrams || sItem.estimatedWeightGrams
+        };
+      }
+      return sItem;
+    });
+  }
+  return updatedScoutItems;
+}

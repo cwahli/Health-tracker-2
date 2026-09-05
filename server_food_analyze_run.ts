@@ -9,8 +9,8 @@ import { visionScoutResponseSchema } from './src/server/food/server_food_analyze
 import { buildUserContext, buildTimeContext, buildImageContext, buildHistoryContext, buildVisionScoutContext, buildDatabaseMatchesContext, buildBiomarkersContext, stitchFoodPrompt, selectSystemInstruction } from './src/server/food/server_food_prompt_context.js';
 import { sanitizeLlmJsonOutput, computeDietitianSkipGates, decideScoutVerdict, decideScoutAdvice, buildDietitianCallArgs, buildPureScaleResponse, sumPrecalcTotals, computeDietitianRetryDelay, repairTruncatedJson, applyPreDietitianDensityCheck } from './src/server/food/server_food_dietitian_dispatch.js';
 import { resolveFoodAnalyzeMode, buildFoodApiCalls, normalizeParsedPostDietitian } from './src/server/food/server_food_mode_routing.js';
-import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput, mapFinalizeToMeal } from './src/server/food/server_food_meal_assemble.js';
-import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, mapTextQueriesToScoutItems, buildScoutFailureError, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries, applyWeightModShortcut, restoreTurnOneCandidates, computeScoutRetryDelay, applySkipScoutShortcut } from './src/server/food/server_food_scout_source.js';
+import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput, mapFinalizeToMeal, mergeModifyPathScoutItems } from './src/server/food/server_food_meal_assemble.js';
+import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, mapTextQueriesToScoutItems, buildScoutFailureError, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries, applyWeightModShortcut, restoreTurnOneCandidates, computeScoutRetryDelay, applySkipScoutShortcut, checkResumedFromImageTurn } from './src/server/food/server_food_scout_source.js';
 import { collectImagePayloads, decideWeightRefine } from './src/server/food/server_food_session_setup.js';
 import { shouldPauseForPortionClarify, filterPortionCarryCandidates, detectDominantBrand, collectFdcHintTasks, isFdcHintRelevant, mapLedgersToPrecalcItems, applyMealModifiers } from './src/server/food/server_food_precalc.js';
 import { runDatabaseSearchStage } from './src/server/food/server_food_db_search.js';
@@ -35,7 +35,6 @@ import {
   formatMealReceiptTable,
 } from './server_pure_helpers.js';
 import {
-  namesReferToSameFood,
   matchBreakdownItemToScout,
   breakdownAlreadyHasScoutName,
   applySoftReceiptAlignment,
@@ -1119,31 +1118,7 @@ export async function runFoodAnalyze(req: any, res: any) {
         parsedData.id = req.body.activeMeal?.id;
         if (!parsedData.imageUrl) parsedData.imageUrl = req.body.activeMeal?.imageUrl || req.body.activeMeal?.imageUrls?.[0];
         if (!parsedData.imageUrls || (parsedData.imageUrls.length > 0 && parsedData.imageUrls[0] === "[base64_image_data_truncated]")) parsedData.imageUrls = req.body.activeMeal?.imageUrls;
-        let baseScoutItems = (visionScoutItems && visionScoutItems.length > 0)
-          ? visionScoutItems
-          : (req.body.activeMeal?.scoutItems || []);
-        let updatedScoutItems = mergeScoutItems(baseScoutItems, rawParsed.scoutItems);
-        if (parsedData && Array.isArray(parsedData.itemsBreakdown) && parsedData.itemsBreakdown.length > 0) {
-          const currentScoutIndices = new Set(parsedData.itemsBreakdown.map((b: any) => b.scoutIndex).filter((i: any) => i !== undefined && i !== null));
-          if (currentScoutIndices.size > 0) {
-            updatedScoutItems = updatedScoutItems.filter((sItem: any) => currentScoutIndices.has(sItem.scoutIndex));
-          }
-          updatedScoutItems = updatedScoutItems.map((sItem: any, sIdx: number) => {
-            const bItem = parsedData.itemsBreakdown.find((b: any) =>
-              b.scoutIndex !== undefined && b.scoutIndex !== null && b.scoutIndex === sItem.scoutIndex
-            ) || parsedData.itemsBreakdown.find((b: any) => namesReferToSameFood(b.canonicalDbName || b.name, sItem.originalName || sItem.keyword));
-            if (bItem && (bItem.canonicalDbName || bItem.name)) {
-              const newName = bItem.canonicalDbName || bItem.name;
-              return {
-                ...sItem,
-                originalName: newName,
-                keyword: newName,
-                estimatedWeightGrams: bItem.weightGrams || sItem.estimatedWeightGrams
-              };
-            }
-            return sItem;
-          });
-        }
+        let updatedScoutItems = mergeModifyPathScoutItems({ visionScoutItems, activeMealScoutItems: req.body.activeMeal?.scoutItems, dietitianScoutItems: rawParsed.scoutItems, itemsBreakdown: parsedData.itemsBreakdown });
         addDebugLog('[MealBuild] modify-path');
         const { mealBuild, pendingFoodLog } = attachHappyPathMealBuild({
           parsedData,
@@ -1169,14 +1144,7 @@ export async function runFoodAnalyze(req: any, res: any) {
           apiCalls
         });
       }
-      const isResumedFromImageTurn = !!(
-        req.body.portionChoices ||
-        req.body.skipScout ||
-        req.body.photoUrl ||
-        (Array.isArray(req.body.activeScoutItems) && req.body.activeScoutItems.length > 0) ||
-        (Array.isArray(visionScoutItems) && visionScoutItems.length > 0) ||
-        (Array.isArray(history) && history.some((m: any) => m.data?.photoUrl || m.photoUrl || m.data?.hasImage || m.data?.pendingFoodLog?.imageUrl || m.data?.pendingFoodLog?.imageUrls?.length))
-      );
+      const isResumedFromImageTurn = checkResumedFromImageTurn({ body: req.body, visionScoutItems, history });
       if (!hasImage && !isResumedFromImageTurn && !parsedData.imageUrl && parsedData.name) {
         try {
           // Remove weight/quantity numbers & units for cleaner search query
