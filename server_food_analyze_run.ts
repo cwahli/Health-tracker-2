@@ -13,6 +13,7 @@ import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorS
 import { collectImagePayloads, decideWeightRefine } from './src/server/food/server_food_session_setup.js';
 import { shouldPauseForPortionClarify, filterPortionCarryCandidates, detectDominantBrand, collectFdcHintTasks, isFdcHintRelevant, mapLedgersToPrecalcItems, applyMealModifiers } from './src/server/food/server_food_precalc.js';
 import { runDatabaseSearchStage } from './src/server/food/server_food_db_search.js';
+import { buildDiscussionResponse, buildEvaluationResponse, buildNewLogResponse, buildModifyNoMealResponse, buildModifyResponse } from './src/server/food/server_food_responses.js';
 
 import { executeFoodResolverCurator } from './server_food_resolver_curator.js';
 import {
@@ -919,15 +920,7 @@ export async function runFoodAnalyze(req: any, res: any) {
     // CASE B: discussion mode
     if (mode === "discussion") {
       addDebugLog(`[Mode Routing] DISCUSSION mode triggered (0 database operations).`);
-      return res.json({
-        mode: "discussion",
-        dietitianScratchpad: rawParsed._internalReasoning,
-        text: rawParsed.message || "Here is the details on this meal composition.",
-        message: rawParsed.message || "Here is the details on this meal composition.",
-        data: null,
-        agentPrompt: fullPromptSent,
-        apiCalls
-      });
+      return res.json(buildDiscussionResponse({ rawParsed, fullPromptSent, apiCalls }));
     }
     // CASE D: evaluation mode
     if (mode === "evaluation") {
@@ -942,21 +935,11 @@ export async function runFoodAnalyze(req: any, res: any) {
       const comparisonSet = fromEvaluationComparison(comparisonData, visionScoutItems, {
         id: req.body.jobId || `cmp_${Date.now()}`,
       });
-      const responsePayload = {
-        mode: "evaluation",
-        dietitianScratchpad: rawParsed._internalReasoning,
-        scoutInternalReasoning,
-        rawScout: rawScoutData,
-        comparison: comparisonData,
-        comparisonSet,
+      const responsePayload = buildEvaluationResponse({
+        rawParsed, scoutInternalReasoning, rawScoutData, comparisonData, comparisonSet,
         scoutItems: mergeScoutItems(visionScoutItems, rawParsed.scoutItems),
-        scoutContentType: visionScoutContentType,
-        diningEnvironment,
-        agentPrompt: fullPromptSent,
-        message: rawParsed.message,
-        text: rawParsed.message,
-        apiCalls
-      };
+        scoutContentType: visionScoutContentType, diningEnvironment, fullPromptSent, apiCalls,
+      });
       return res.json(responsePayload);
     }
     // CASE A: NEW FOOD LOGGING
@@ -1033,24 +1016,11 @@ export async function runFoodAnalyze(req: any, res: any) {
       });
       const finalMeal = pendingFoodLog || parsedData;
       const gate = evaluateMealGate(buildNewLogGateInput({ finalMeal, jobId: req.body.jobId, photoUrl: req.body.photoUrl, imagePayloads, narrative: rawParsed.message }));
-      const responsePayload = {
-        mode: "new_log",
-        dietitianScratchpad: rawParsed._internalReasoning,
-        scoutInternalReasoning,
-        rawScout: rawScoutData,
-        scoutContentType: visionScoutContentType,
-        diningEnvironment,
-        text: rawParsed.message || `I have analyzed the food: **${parsedData.name}** (${parsedData.quantity}).`,
-        message: rawParsed.message || `I have analyzed the food: **${parsedData.name}** (${parsedData.quantity}).`,
-        data: pendingFoodLog || parsedData,
-        pendingFoodLog: pendingFoodLog || parsedData,
-        mealBuild,
-        savable: gate.savable,
-        gate,
-        agentPrompt: fullPromptSent,
-        scoutItems: finalScoutItems,
-        apiCalls
-      };
+      const responsePayload = buildNewLogResponse({
+        rawParsed, parsedData, pendingFoodLog, mealBuild, gate, scoutInternalReasoning,
+        rawScoutData, scoutContentType: visionScoutContentType, diningEnvironment, fullPromptSent,
+        scoutItems: finalScoutItems, apiCalls,
+      });
       return res.json(responsePayload);
     }
     // CASE C: modification commands mode (Math-only fallbacks)
@@ -1059,12 +1029,7 @@ export async function runFoodAnalyze(req: any, res: any) {
       let activeMeal = req.body.activeMeal;
       if (!activeMeal) {
         addDebugLog(`[Modify Math Error] No active meal exists in Firestore to modify. jobId=${req.body.jobId || 'n/a'} imageCount=${(imagePayloads && imagePayloads.length) || 0} message="${(message || '').substring(0, 80)}"`);
-        return res.json({
-          text: rawParsed.message || "I couldn't modify the meal because there's no active meal currently logged. Please log a meal first!",
-          message: rawParsed.message || "I couldn't modify the meal because there's no active meal currently logged. Please log a meal first!",
-          data: null,
-          apiCalls
-        });
+        return res.json(buildModifyNoMealResponse({ rawParsed, apiCalls }));
       }
       {
         let editCommands = backfillEditCommandEstimates(rawParsed);
@@ -1134,21 +1099,10 @@ export async function runFoodAnalyze(req: any, res: any) {
           finalMeal, jobId: req.body.jobId, photoUrl: req.body.photoUrl, imagePayloads,
           finalMessage, previousMeal: req.body.activeMeal, editCommands,
         }));
-        return res.json({
-          mode: "modify",
-          dietitianScratchpad: rawParsed._internalReasoning,
-          text: finalMessage,
-          message: finalMessage,
-          data: pendingFoodLog || activeMeal,
-          pendingFoodLog: pendingFoodLog || activeMeal,
-          mealBuild,
-          savable: gate.savable,
-          gate,
-          editApplied: result.changed,
-          agentPrompt: fullPromptSent,
-          scoutItems: syncedScoutItemsForEdit,
-          apiCalls
-        });
+        return res.json(buildModifyResponse({
+          rawParsed, finalMessage, pendingFoodLog, activeMeal, mealBuild, gate,
+          editApplied: result.changed, fullPromptSent, scoutItems: syncedScoutItemsForEdit, apiCalls,
+        }));
       }
     }
   } catch (error: any) {
