@@ -464,9 +464,13 @@ class JobStoreImpl {
     if (job.inFlightTurnAt && (patch.status === 'succeeded' || patch.status === 'awaiting_user')) {
       const incomingKey = mealSnapshotKey(patch.result);
       const existingKey = mealSnapshotKey(job.result);
-      const isSamePriorMeal =
-        !!existingKey && (!patch.result || (incomingKey !== '' && incomingKey === existingKey));
-      if (isSamePriorMeal) {
+      const incomingUpdatedMs = patch.updatedAt ? new Date(patch.updatedAt).getTime() : 0;
+      const isPriorEcho =
+        eventType !== 'AnalyzeFinished' &&
+        !!existingKey &&
+        (!patch.result || (incomingKey !== '' && incomingKey === existingKey)) &&
+        (!incomingUpdatedMs || incomingUpdatedMs < job.inFlightTurnAt);
+      if (isPriorEcho) {
         delete patch.status;
         delete patch.result;
         delete patch.messages;

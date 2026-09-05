@@ -247,15 +247,15 @@ export function applyNutrientModifiers(
   const isBeverage = !isNonBeverageCategory && !isWaterPlant && (
     options.foodType === 'beverage' ||
     options.physicalForm === 'LIQUID_BEVERAGE' ||
-    /\b(tea|coffee|drink|beverage|juice|soda|latte|lemonade|teh|chai|matcha|smoothie|kombucha)\b/i.test(name) ||
+    /\b(tea|coffee|drink|beverage|juice|soda|latte|lemonade|teh|chai|matcha|smoothie|kombucha|es\s*(?:manis|tawar|teh|jeruk|kopi|sirup))\b/i.test(name) ||
     (/\bwater\b/i.test(name) && !/\b(spinach|cress|chestnut|melon|apple|lily)\b/i.test(name))
   );
 
   // If user explicitly named a beverage (e.g. "tea", "coffee"), ensure the item matches that beverage
   const mentionedTea = /\b(tea|teh)\b/i.test(msg);
   const mentionedCoffee = /\b(coffee|kopi)\b/i.test(msg);
-  const isTeaItem = /\b(tea|teh|chai|matcha)\b/i.test(name);
-  const isCoffeeItem = /\b(coffee|kopi|espresso|latte|cappuccino)\b/i.test(name);
+  const isTeaItem = /\b(tea|teh|chai|matcha|es\s*(?:manis|tawar|teh))\b/i.test(name);
+  const isCoffeeItem = /\b(coffee|kopi|espresso|latte|cappuccino|es\s*kopi)\b/i.test(name);
   const beverageMatchesIntent = (!mentionedTea && !mentionedCoffee) || (mentionedTea && isTeaItem) || (mentionedCoffee && isCoffeeItem);
 
   // 1. Zero-Sugar / Unsweetened Modifier

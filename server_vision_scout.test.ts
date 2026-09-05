@@ -761,6 +761,62 @@ describe("server_vision_scout", () => {
       expect(result.items.length).toBe(0);
       expect(result.visionScoutRanAndReturnedItems).toBe(false);
     });
+
+    it("applies unsweetened modifier correctly to Indonesian iced tea (Es Manis / Es Tawar)", async () => {
+      const { applyNutrientModifiers } = await import("./server_derivation");
+      const { applyMealModifiers } = await import("./src/server/food/server_food_precalc");
+
+      const nutrients = {
+        calories: 92,
+        protein: 0,
+        totalFat: 0,
+        saturatedFat: 0,
+        carbohydrates: 23,
+        sugar: 22,
+        addedSugar: 22,
+        sodium: 10
+      };
+
+      const res = applyNutrientModifiers(nutrients, {
+        message: "The tea is unsweetened",
+        name: "Es Manis",
+      });
+
+      expect(res.updatedNutrients.calories).toBe(0);
+      expect(res.updatedNutrients.carbohydrates).toBe(0);
+      expect(res.updatedNutrients.sugar).toBe(0);
+      expect(res.updatedNutrients.addedSugar).toBe(0);
+
+      const precalcItems = [
+        {
+          originalName: "Es Manis",
+          keyword: "Es Manis",
+          foodType: "beverage",
+          nutrients: { ...nutrients },
+          components: [
+            {
+              name: "Teh Manis Dingin",
+              calories: 92,
+              carbohydrates: 23,
+              sugar: 22,
+              addedSugar: 22,
+              nutrients: { ...nutrients }
+            }
+          ]
+        }
+      ];
+
+      applyMealModifiers({
+        preCalculatedItems: precalcItems,
+        message: "The tea is unsweetened",
+        onLog: () => {}
+      });
+
+      expect(precalcItems[0].nutrients.calories).toBe(0);
+      expect(precalcItems[0].nutrients.carbohydrates).toBe(0);
+      expect(precalcItems[0].nutrients.sugar).toBe(0);
+      expect(precalcItems[0].components[0].calories).toBe(0);
+    });
   });
 });
 

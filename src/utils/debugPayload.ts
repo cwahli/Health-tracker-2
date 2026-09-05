@@ -114,8 +114,8 @@ export type DebugReportInput = {
   handoffPayload?: any;
   /** Input payload/context as received by the agent */
   agentPayload?: any;
-  /** Dispatched system instructions (single string or record by agent) */
-  agentInstructions?: Record<string, string> | string[] | string;
+  /** Dispatched system instructions (single string, record by agent, or structured object) */
+  agentInstructions?: Record<string, any> | string[] | string;
   /** Job session event trail (JobStore.apply / JobQueueRunner), forwarded
    * from the client-recorded job.sessionEvents so it survives into
    * server-generated exports. Falls back to the in-process sessionLog map

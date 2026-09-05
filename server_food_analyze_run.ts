@@ -288,46 +288,27 @@ export async function runFoodAnalyze(req: any, res: any) {
       if (compareItems && compareItems.length > 0) {
         visionScoutItems = mapCompareItemsToScoutItems(compareItems);
       }
-    } else if (isWeightModification || refineDecision.skip) {
-      const shortcut = applyWeightModShortcut({
-        activeScoutItems: req.body.activeScoutItems,
-        portionChoices: req.body.portionChoices,
-        weightRefineIntent,
-        scoutContentType: req.body.scoutContentType,
-        refineDecision,
-        priorScoutForRefine,
-        imagePayloads,
-        onLog: addDebugLog,
-      });
-      visionScoutItems = shortcut.visionScoutItems;
-      visionScoutContentType = shortcut.visionScoutContentType;
-      visionScoutRanAndReturnedItems = shortcut.ran;
-    } else if (req.body.skipScout || req.body.portionChoices) {
-      const shortcut = applySkipScoutShortcut({ body: req.body, history, activeMeal, onLog: addDebugLog });
-      visionScoutItems = shortcut.visionScoutItems;
-      visionScoutContentType = shortcut.visionScoutContentType;
-      if (shortcut.diningEnvironment) diningEnvironment = shortcut.diningEnvironment;
-      if (shortcut.ran) visionScoutRanAndReturnedItems = true;
-      // Task 3: Restore pre-resolved DB candidates from turn-1 portionClarify payload.
-      // This prevents the DB search from re-running from scratch and avoids cross-match bugs.
-      restoreTurnOneCandidates({ resolvedDbCandidates: req.body.resolvedDbCandidates, databaseMatchesArray, dbMatchMap, onLog: addDebugLog });
     } else {
       const hasImage = imagePayloads && imagePayloads.length > 0;
-      if (hasImage) {
-        sendStreamEvent({ type: 'status', stage: 'scout', status: 'started', message: 'Reading your photos...' });
+      const isEditOrText = Boolean(message || isModifySession || hasActiveMealDocument);
+
+      if (hasImage || isEditOrText) {
+        sendStreamEvent({ type: 'status', stage: 'scout', status: 'started', message: isModifySession ? 'Refining meal with Scout agent...' : 'Reading your photos...' });
         const imageCount = imagePayloads?.length || 0;
-        const scoutPromptText = buildVisualScoutPrompt(message || '', imageCount);
+        let scoutPromptText = '';
+        if (isModifySession && (activeMeal || (req.body.activeScoutItems && req.body.activeScoutItems.length > 0))) {
+          const priorMealItems = activeMeal?.itemsBreakdown || activeMeal?.items || req.body.activeScoutItems || [];
+          const priorSummary = priorMealItems.map((it: any) => `${it.originalName || it.keyword || it.name || 'Dish'} (${it.estimatedWeightGrams || it.weightGrams || 100}g): ${JSON.stringify(it.components || it.foods || [])}`).join('; ');
+          scoutPromptText = `The user is modifying/refining an existing logged meal.\nPrior Meal Dishes: ${priorSummary}.\nUser modification instruction: "${(message || '').trim()}".\nRe-evaluate and output the complete updated hierarchical dishes, constituent foods, exact weights in grams, and nutritional breakdown reflecting this modification accurately.`;
+        } else {
+          scoutPromptText = buildVisualScoutPrompt(message || '', imageCount);
+        }
         const resolvedScoutSystemInstruction = withScoutLanguage(scoutSystemInstruction, userProfile?.language);
         scoutInstructionForDebug = {
           systemInstruction: resolvedScoutSystemInstruction,
           userPrompt: scoutPromptText,
         };
         sendLog('scout_instruction', 'scout', `Vision Scout Instruction dispatched (model: ${engine || "gemini-3.5-flash-lite"}). Prompt length: ${scoutPromptText.length} chars — see [UnifiedLLM-Prompt:scout] below for full text.`);
-        // The scout SYSTEM instruction and user prompt text are already logged in full
-        // by callUnifiedLLMInternal via [UnifiedLLM-Prompt:scout] System Instruction: / User Prompt:
-        // (server.ts, _localAddDebugLog) — that goes through the same addDebugLog channel
-        // this route uses, so it already reaches the streamed log / debug export. Do not
-        // re-dump the full text here a second time; a short pointer line is enough.
         sendLog('scout_system_instruction', 'scout', `Vision Scout System Instruction dispatched (model: ${engine || "gemini-3.5-flash-lite"}) — see [UnifiedLLM-Prompt:scout] below for full text.`);
         addDebugLog(`[Vision Scout] Running Stage 3 lightweight vision scout with retry protection...`);
         let { scoutResult, lastScoutErr } = await runScoutRetryLoop({
@@ -353,38 +334,33 @@ export async function runFoodAnalyze(req: any, res: any) {
           addDebugLog(`[Vision Scout Failed Permanently] Both attempts failed. Last error: ${lastScoutErr?.message}`);
           throw buildScoutFailureError(lastScoutErr, userProfile?.language);
         }
-          const scoutState = applyScoutResultState({
-            scoutResult,
-            requestedMode: req.body.userSelectedMode,
-            hasActiveMealDocument,
-            activeMealDining: activeMeal?.diningEnvironment,
-            currentRecommendedMode: scoutRecommendedMode,
-            onLog: addDebugLog,
-            onEvent: (type, stage, message, data) => sendLog(type, stage, message, data),
-            onStream: (event) => sendStreamEvent(event),
-          });
-          scoutInternalReasoning = scoutState.scoutInternalReasoning;
-          rawScoutData = scoutState.rawScoutData;
-          visionScoutItems = scoutState.visionScoutItems;
-          scoutConfidenceRating = scoutState.scoutConfidenceRating;
-          scoutConfidenceComment = scoutState.scoutConfidenceComment;
-          scoutCookingMethod = scoutState.scoutCookingMethod;
-          visionScoutContentType = scoutState.visionScoutContentType;
-          diningEnvironment = scoutState.diningEnvironment;
-          scoutRecommendedMode = scoutState.scoutRecommendedMode;
-          queriesToSearch.push(...scoutState.queriesToSearch);
-          scoutOriginalQueries.push(...scoutState.queriesToSearch);
-          visionScoutRanAndReturnedItems = scoutState.visionScoutRanAndReturnedItems;
-          if (hasActiveMealDocument && Array.isArray(activeMeal.itemsBreakdown) && activeMeal.itemsBreakdown.length > 0) {
-            visionScoutItems = mergeScoutIntoActiveMeal({ activeMealItemsBreakdown: activeMeal.itemsBreakdown, visionScoutItems, onLog: addDebugLog });
-          }
-          logScoutItemSummaries(visionScoutItems, addDebugLog);
-          emitStageUsage('scout');
-      } else if (message) {
-        const textShortcut = applyTextQueryShortcut({ message, isExplicitModify, isPureWeightModification, onLog: addDebugLog });
-        queriesToSearch.push(...textShortcut.queriesToSearch);
-        if (textShortcut.visionScoutItems.length > 0) visionScoutItems = textShortcut.visionScoutItems;
-        if (textShortcut.scoutRecommendedMode) scoutRecommendedMode = textShortcut.scoutRecommendedMode;
+        const scoutState = applyScoutResultState({
+          scoutResult,
+          requestedMode: req.body.userSelectedMode,
+          hasActiveMealDocument,
+          activeMealDining: activeMeal?.diningEnvironment,
+          currentRecommendedMode: scoutRecommendedMode,
+          onLog: addDebugLog,
+          onEvent: (type, stage, message, data) => sendLog(type, stage, message, data),
+          onStream: (event) => sendStreamEvent(event),
+        });
+        scoutInternalReasoning = scoutState.scoutInternalReasoning;
+        rawScoutData = scoutState.rawScoutData;
+        visionScoutItems = scoutState.visionScoutItems;
+        scoutConfidenceRating = scoutState.scoutConfidenceRating;
+        scoutConfidenceComment = scoutState.scoutConfidenceComment;
+        scoutCookingMethod = scoutState.scoutCookingMethod;
+        visionScoutContentType = scoutState.visionScoutContentType;
+        diningEnvironment = scoutState.diningEnvironment;
+        scoutRecommendedMode = scoutState.scoutRecommendedMode;
+        queriesToSearch.push(...scoutState.queriesToSearch);
+        scoutOriginalQueries.push(...scoutState.queriesToSearch);
+        visionScoutRanAndReturnedItems = scoutState.visionScoutRanAndReturnedItems;
+        if (hasActiveMealDocument && Array.isArray(activeMeal.itemsBreakdown) && activeMeal.itemsBreakdown.length > 0) {
+          visionScoutItems = mergeScoutIntoActiveMeal({ activeMealItemsBreakdown: activeMeal.itemsBreakdown, visionScoutItems, onLog: addDebugLog, isModify: isModifySession });
+        }
+        logScoutItemSummaries(visionScoutItems, addDebugLog);
+        emitStageUsage('scout');
       }
     }
     const bracketItems = parseBracketedFoodItems(message || '');
@@ -638,7 +614,7 @@ export async function runFoodAnalyze(req: any, res: any) {
     { // F-8.9 always finalize (old aggregation host deleted)
       const ledgers = await Promise.all(
         visionScoutItems.map(async (vItem: any, vIdx: number) => {
-          if (vItem._alreadyFinalized && vItem.nutrients) {
+          if (vItem._alreadyFinalized && vItem.nutrients && !isModifySession) {
             addDebugLog(`[Single-Path] Reusing saved ledger for "${vItem.originalName || vItem.keyword}" (untouched, not re-finalized).`);
             return {
               scoutIndex: vItem.scoutIndex ?? vIdx,
@@ -671,9 +647,6 @@ export async function runFoodAnalyze(req: any, res: any) {
         })
       );
       preCalculatedItems = mapLedgersToPrecalcItems({ ledgers, visionScoutItems, onLog: addDebugLog });
-      if (isModifySession && preCalculatedItems && preCalculatedItems.length > 0) {
-        applyMealModifiers({ preCalculatedItems, message, onLog: addDebugLog });
-      }
     }
     let preCalculatedCtx = "";
     if (preCalculatedItems.length > 0) {

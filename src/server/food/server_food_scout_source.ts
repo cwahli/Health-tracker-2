@@ -301,6 +301,10 @@ export function applyScoutResultState(args: ScoutResultStateArgs): {
   scoutRecommendedMode: string | null;
   queriesToSearch: string[];
   visionScoutRanAndReturnedItems: boolean;
+  verdict?: any;
+  clinicalAdvice?: string | null;
+  message?: string | null;
+  mealName?: string | null;
 } {
   const {
     scoutResult,
@@ -373,6 +377,10 @@ export function applyScoutResultState(args: ScoutResultStateArgs): {
     scoutRecommendedMode,
     queriesToSearch,
     visionScoutRanAndReturnedItems,
+    verdict: scoutResult.verdict || null,
+    clinicalAdvice: scoutResult.clinicalAdvice || scoutResult.message || null,
+    message: scoutResult.message || scoutResult.clinicalAdvice || null,
+    mealName: scoutResult.mealName || null,
   };
 }
 
@@ -383,32 +391,46 @@ export interface ScoutMealMergeArgs {
 }
 
 /** Merges fresh scout dishes into the same meal behind existing items (index offset). */
+export interface ScoutMealMergeArgs {
+  activeMealItemsBreakdown: any[];
+  visionScoutItems: any[];
+  onLog: (msg: string) => void;
+  isModify?: boolean;
+}
+
 export function mergeScoutIntoActiveMeal(args: ScoutMealMergeArgs): any[] {
-  const { activeMealItemsBreakdown, visionScoutItems, onLog } = args;
-  const existing = activeMealItemsBreakdown.map((it: any, idx: number) => ({
-    scoutIndex: it.scoutIndex ?? idx,
-    originalName: it.originalName || it.canonicalDbName || it.name,
-    keyword: it.keyword || it.canonicalDbName || it.name,
-    estimatedWeightGrams: it.weightGrams || it.estimatedWeightGrams,
-    nutrients: it.nutrients || null,
-    boundingBox2D: it.boundingBox2D || null,
-    sourceImageIndex: it.sourceImageIndex,
-    components: it.components || it.componentsDetailList || null,
-    componentsDetailList: it.componentsDetailList || it.components || [],
-    cookingMethod: it.cookingMethod,
-    foodType: it.foodType,
-    dbSource: it.dbSource,
-    dbId: it.dbId,
-    lockedNutrientKeys: it.lockedNutrientKeys,
-    _alreadyFinalized: Boolean(it.nutrients && (it.nutrients.calories != null || it.calories != null)),
-  }));
+  const { activeMealItemsBreakdown, visionScoutItems, onLog, isModify } = args;
+  if (!visionScoutItems || visionScoutItems.length === 0) {
+    return activeMealItemsBreakdown || [];
+  }
+  if (!activeMealItemsBreakdown || activeMealItemsBreakdown.length === 0) {
+    return visionScoutItems;
+  }
+  if (isModify) {
+    onLog(`[Single-Path] Edit turn: updating active meal with ${visionScoutItems.length} refined scout dish(es).`);
+    return visionScoutItems;
+  }
+  const existing = [...activeMealItemsBreakdown];
   const maxIdx = existing.reduce((m: number, it: any) => Math.max(m, Number(it.scoutIndex) || 0), -1);
-  const newcomers = visionScoutItems.map((it: any, i: number) => ({
-    ...it,
-    scoutIndex: (typeof it.scoutIndex === 'number' ? it.scoutIndex : i) + maxIdx + 1,
-  }));
-  const merged = [...existing, ...newcomers];
-  onLog(`[Single-Path] Merged ${newcomers.length} new scout dish(es) into the same meal (${existing.length} existing).`);
+  const additions: any[] = [];
+  for (let i = 0; i < visionScoutItems.length; i++) {
+    const newcomer = visionScoutItems[i];
+    const matchIdx = existing.findIndex(ex => {
+      const exName = (ex.originalName || ex.keyword || ex.name || '').toLowerCase().trim();
+      const newName = (newcomer.originalName || newcomer.keyword || newcomer.name || '').toLowerCase().trim();
+      return exName && newName && (exName === newName || exName.includes(newName) || newName.includes(exName));
+    });
+    if (matchIdx >= 0) {
+      existing[matchIdx] = { ...existing[matchIdx], ...newcomer };
+    } else {
+      additions.push({
+        ...newcomer,
+        scoutIndex: (typeof newcomer.scoutIndex === 'number' ? newcomer.scoutIndex : i) + maxIdx + 1,
+      });
+    }
+  }
+  const merged = [...existing, ...additions];
+  onLog(`[Single-Path] Merged scout items into active meal (${existing.length} updated/existing, ${additions.length} added).`);
   return merged;
 }
 

@@ -271,6 +271,10 @@ export interface VisionScoutResult {
   visionScoutRanAndReturnedItems: boolean;
   diningEnvironment: string;
   internalReasoning?: string | null;
+  verdict?: any;
+  clinicalAdvice?: string | null;
+  message?: string | null;
+  mealName?: string | null;
   rawDishes?: any[];
   rawScoutJson?: any;
 }
@@ -1763,6 +1767,10 @@ export function parseAndHealVisionScout(
     visionScoutRanAndReturnedItems,
     diningEnvironment,
     internalReasoning: parsedScout?._internalReasoning || null,
+    verdict: parsedScout?.verdict || null,
+    clinicalAdvice: parsedScout?.clinicalAdvice || parsedScout?.message || null,
+    message: parsedScout?.message || parsedScout?.clinicalAdvice || null,
+    mealName: parsedScout?.mealName || null,
     rawDishes: parsedScout?.dishes || [],
     rawScoutJson: originalScoutJson || null,
   };
@@ -1779,6 +1787,10 @@ export function parseAndHealVisionScout(
       visionScoutRanAndReturnedItems: false,
       diningEnvironment: "unknown",
       internalReasoning: null,
+      verdict: null,
+      clinicalAdvice: null,
+      message: null,
+      mealName: null,
       rawDishes: [],
       rawScoutJson: null,
     };

@@ -142,17 +142,15 @@ export function applyMealModifiers(args: MealModifiersArgs): void {
     const subComponents: any[] = (pItem.componentsDetailList && pItem.componentsDetailList.length > 0)
       ? pItem.componentsDetailList
       : (pItem.components && pItem.components.length > 0 ? pItem.components : []);
-    if (subComponents.length > 1) {
-      // Composite dish: try the modifier against each individual sub-ingredient
-      // (e.g. "the tea was unsweetened" must target the "Sweet Iced Tea" component,
-      // never the whole parent dish name it happens to be embedded in).
+    if (subComponents.length >= 1) {
+      // Composite or single-component dish: try modifier against each individual sub-ingredient
       let anySubComponentChanged = false;
       subComponents.forEach((sub: any) => {
         const subNutrients = sub.nutrients || sub;
         const modRes = applyNutrientModifiers(subNutrients, {
           message,
-          foodType: sub.foodType || null,
-          name: sub.name || sub.searchQuery || sub.keyword || '',
+          foodType: sub.foodType || pItem.foodType || null,
+          name: sub.name || sub.searchQuery || sub.keyword || pItem.originalName || '',
         });
         if (modRes.lockedKeys.length > 0) {
           anySubComponentChanged = true;
@@ -167,17 +165,44 @@ export function applyMealModifiers(args: MealModifiersArgs): void {
           onLog(`[Nutrient Modifier Matrix] Applied modifiers to sub-component "${sub.name}" inside "${pItem.originalName}": locked keys [${modRes.lockedKeys.join(', ')}]`);
         }
       });
+
+      // Also test the parent dish name directly
+      const parentModRes = applyNutrientModifiers(pItem.nutrients || {}, {
+        message,
+        foodType: pItem.foodType,
+        name: pItem.originalName || pItem.keyword,
+      });
+      if (parentModRes.lockedKeys.length > 0) {
+        anySubComponentChanged = true;
+        pItem.nutrients = { ...(pItem.nutrients || {}), ...parentModRes.updatedNutrients };
+        pItem.lockedNutrientKeys = Array.from(new Set([...(pItem.lockedNutrientKeys || []), ...parentModRes.lockedKeys]));
+        if (subComponents.length === 1) {
+          subComponents[0].calories = pItem.nutrients.calories;
+          subComponents[0].sugar = pItem.nutrients.sugar;
+          subComponents[0].addedSugar = pItem.nutrients.addedSugar;
+          subComponents[0].carbohydrates = pItem.nutrients.carbohydrates;
+          subComponents[0].carbs = pItem.nutrients.carbohydrates;
+          if (subComponents[0].nutrients) {
+            subComponents[0].nutrients.calories = pItem.nutrients.calories;
+            subComponents[0].nutrients.sugar = pItem.nutrients.sugar;
+            subComponents[0].nutrients.addedSugar = pItem.nutrients.addedSugar;
+            subComponents[0].nutrients.carbohydrates = pItem.nutrients.carbohydrates;
+          }
+        }
+        onLog(`[Nutrient Modifier Matrix] Applied modifiers to parent dish "${pItem.originalName}": locked keys [${parentModRes.lockedKeys.join(', ')}]`);
+      }
+
       if (anySubComponentChanged && pItem.nutrients) {
-        // Re-sum parent dish totals from the (possibly modified) sub-components so
-        // the dish-level total reflects the edited ingredient instead of staying frozen.
-        const sumCal = subComponents.reduce((acc, c) => acc + (Number(c.calories) || 0), 0);
-        const sumCarbs = subComponents.reduce((acc, c) => acc + (Number(c.carbohydrates ?? c.carbs) || 0), 0);
-        const sumSugar = subComponents.reduce((acc, c) => acc + (Number(c.sugar ?? c.nutrients?.sugar) || 0), 0);
-        const sumAddedSugar = subComponents.reduce((acc, c) => acc + (Number(c.addedSugar ?? c.nutrients?.addedSugar) || 0), 0);
-        pItem.nutrients.calories = Math.round(sumCal);
-        pItem.nutrients.carbohydrates = Math.round(sumCarbs * 10) / 10;
-        pItem.nutrients.sugar = Math.round(sumSugar * 10) / 10;
-        pItem.nutrients.addedSugar = Math.round(sumAddedSugar * 10) / 10;
+        if (subComponents.length > 1) {
+          const sumCal = subComponents.reduce((acc, c) => acc + (Number(c.calories) || 0), 0);
+          const sumCarbs = subComponents.reduce((acc, c) => acc + (Number(c.carbohydrates ?? c.carbs) || 0), 0);
+          const sumSugar = subComponents.reduce((acc, c) => acc + (Number(c.sugar ?? c.nutrients?.sugar) || 0), 0);
+          const sumAddedSugar = subComponents.reduce((acc, c) => acc + (Number(c.addedSugar ?? c.nutrients?.addedSugar) || 0), 0);
+          pItem.nutrients.calories = Math.round(sumCal);
+          pItem.nutrients.carbohydrates = Math.round(sumCarbs * 10) / 10;
+          pItem.nutrients.sugar = Math.round(sumSugar * 10) / 10;
+          pItem.nutrients.addedSugar = Math.round(sumAddedSugar * 10) / 10;
+        }
         pItem.lockedNutrientKeys = Array.from(new Set([...(pItem.lockedNutrientKeys || []), 'calories', 'carbohydrates', 'sugar', 'addedSugar']));
         pItem.componentsDetailList = subComponents;
         pItem.components = subComponents;
