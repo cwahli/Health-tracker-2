@@ -885,6 +885,10 @@ export function parseAndHealVisionScout(
     { items: [] },
     addDebugLog
   );
+  
+  // Clone the raw JSON from the LLM before we aggressively mutate parsedScout with injected items
+  const originalScoutJson = JSON.parse(JSON.stringify(parsedScout));
+
   let visionScoutItems: any[] = [];
   let scoutConfidenceRating = "High (>90%)";
   let scoutConfidenceComment = "";
@@ -1725,7 +1729,7 @@ export function parseAndHealVisionScout(
     diningEnvironment,
     internalReasoning: parsedScout?._internalReasoning || null,
     rawDishes: parsedScout?.dishes || [],
-    rawScoutJson: parsedScout || null,
+    rawScoutJson: originalScoutJson || null,
   };
   } catch (healErr: any) {
     addDebugLog(`[Vision Scout] Unexpected heal failure (${healErr?.message || healErr}). Returning empty scout.`);
