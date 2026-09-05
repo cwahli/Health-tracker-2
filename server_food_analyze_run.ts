@@ -757,7 +757,13 @@ export async function runFoodAnalyze(req: any, res: any) {
     fullPromptSent = precalcAssembled.fullPromptSent;
     const llmCallArgs = buildDietitianCallArgs({ engine, finalSystemInstruction, promptText });
     sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'started', message: 'Analyzing nutrition payload...' });
-    dietitianInstructionForDebug = `System Instruction: ${finalSystemInstruction}\n\nPrompt: ${fullPromptSent}`;
+    // `fullPromptSent` (built in server_food_prompt_context.ts) already begins
+    // with "System Instruction:\n${finalSystemInstruction}" followed by the
+    // full prompt + precalc block, so it alone is the complete, non-duplicated
+    // text actually sent to the dietitian LLM call. Prepending
+    // finalSystemInstruction again here (as an earlier version of this fix
+    // did) rendered it twice in the debug export.
+    dietitianInstructionForDebug = fullPromptSent;
     sendLog('dietitian_instruction', 'dietitian', `Dietitian Instruction dispatched (model: ${engine || 'gemini-3.5-flash-lite'}). System Instruction: "${finalSystemInstruction}" Prompt: "${fullPromptSent}"`);
     let textOutput: string = "";
     let rawParsed: any;
