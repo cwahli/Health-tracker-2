@@ -152,7 +152,42 @@ export const scoutSystemInstruction = `- HIERARCHY: Group distinct physical plat
 
 === REQUIRED OUTPUT JSON SCHEMA ===
 Output exactly ONE JSON object matching this schema:
-{"_internalReasoning": "string (<15 words)", "contentType": "visual | menu_or_poster | label | text", "diningEnvironment": "home_cooked | casual_restaurant | fast_food_chain | fine_dining | airline | unknown", "verdict": {"label": "Supports Gut Health with Added Sugar", "level": "neutral"}, "clinicalAdvice": "Personalized clinical guidance regarding glycemic, protein, and micronutrient balance.", "dishes": [{"dishName": "Vegetable and Beef Hotpot", "genericEnglishName": "beef and vegetable stew", "chainName": null, "estimatedWeightGrams": 650, "packGrams": 650, "cookingMethod": "raw | baked | grilled | boiled | steamed | deep_fried | pan_fried | stir_fried", "boundingBox2D": [300, 200, 850, 900], "sourceImageIndex": 1, "isStandaloneCondimentPacket": false, "foods": [{"foodName": "Beef Blade", "genericEnglishName": "beef", "packageLabelText": "BEEF BLADE - Berat 0.110", "weightGrams": 110, "packGrams": 110, "sourceImageIndex": 0, "rawNutritionLabel": null, "nutrients": {"protein": 24.0, "saturatedFat": 2.5, "addedSugar": 0, "totalFibre": 0, "sodium": 65, "carbohydrates": 0}}], "dishNutrients": {"saturatedFat": 5.8, "totalFat": 18.2, "totalSugar": 5.0, "potassium": 1450, "omega3": 0.15, "calcium": 190, "iron": 5.5, "magnesium": 120, "vitaminD": 0}}]}
+{
+  "_internalReasoning": "string (<15 words)",
+  "contentType": "visual | menu_or_poster | label | text",
+  "diningEnvironment": "home_cooked | casual_restaurant | fast_food_chain | fine_dining | airline | unknown",
+  "verdict": {
+    "label": "Supports Gut Health with Added Sugar",
+    "level": "neutral"
+  },
+  "clinicalAdvice": "Personalized clinical guidance regarding glycemic, protein, and micronutrient balance.",
+  "dishes": [
+    {
+      "dishName": "Vegetable and Beef Hotpot",
+      "genericEnglishName": "beef and vegetable stew",
+      "chainName": null,
+      "estimatedWeightGrams": 650,
+      "packGrams": 650,
+      "cookingMethod": "raw | baked | grilled | boiled | steamed | deep_fried | pan_fried | stir_fried",
+      "boundingBox2D": [300, 200, 850, 900],
+      "sourceImageIndex": 1,
+      "isStandaloneCondimentPacket": false,
+      "foods": [
+        {
+          "foodName": "Beef Blade",
+          "genericEnglishName": "beef",
+          "packageLabelText": "BEEF BLADE - Berat 0.110",
+          "weightGrams": 110,
+          "packGrams": 110,
+          "sourceImageIndex": 0,
+          "rawNutritionLabel": null,
+          "nutrients": { "protein": 24.0, "saturatedFat": 2.5, "addedSugar": 0, "totalFibre": 0, "sodium": 65, "carbohydrates": 0 }
+        }
+      ],
+      "dishNutrients": { "saturatedFat": 5.8, "totalFat": 18.2, "totalSugar": 5.0, "potassium": 1450, "omega3": 0.15, "calcium": 190, "iron": 5.5, "magnesium": 120, "vitaminD": 0 }
+    }
+  ]
+}
 `;
 function validateOrFallback<T>(
   schema: z.ZodType<T>,

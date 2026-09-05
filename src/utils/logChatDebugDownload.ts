@@ -69,6 +69,7 @@ export async function downloadJobDebugReport(args: {
 
   const pendingFoodLog = msg?.data?.pendingFoodLog || msg?.pendingFoodLog || job?.result?.pendingFoodLog;
   const scoutItems = msg?.data?.scoutItems || msg?.data?.agentResult?.scoutItems || job?.result?.scoutItems;
+  const rawScout = msg?.data?.rawScout || msg?.data?.agentResult?.rawScout || job?.result?.rawScout;
   const receiptTable = msg?.data?.pendingFoodLog?.receiptTable || msg?.data?.receiptTable || job?.result?.receiptTable || job?.result?.pendingFoodLog?.receiptTable;
 
   let initialBackendLogs =
@@ -257,6 +258,7 @@ export async function downloadJobDebugReport(args: {
       backendLogs: finalBackendLogs,
       pendingFoodLog,
       scoutItems,
+      rawScout,
       receiptTable,
       error: job?.error?.message || msg?.data?.error || msg?.data?.originalError || (msg?.isError || msg?.agentUnavailable ? msg?.content : undefined),
       lastUserAction: lastUserAction || job?.result?.lastUserAction || w.__lastUserAction,
@@ -277,6 +279,9 @@ export async function downloadJobDebugReport(args: {
       handoffChain,
       handoffPayload,
       agentPayload,
+      agentInstructions: job?.result?.agentInstructions || msg?.data?.agentInstructions || msg?.data?.agentResult?.agentInstructions || msg?.agentInstructions,
+      photoUrl: job?.result?.photoUrl || msg?.data?.photoUrl || pendingFoodLog?.imageUrl || pendingFoodLog?.imageUrls?.[0],
+      photoUrls: job?.result?.photoUrls || msg?.data?.photoUrls || pendingFoodLog?.imageUrls,
       dialogInventory,
     });
     triggerBlobDownload(new Blob([mdContent], { type: 'text/markdown;charset=utf-8' }), `debug-${resolvedJobId}.md`);

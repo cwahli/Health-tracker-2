@@ -47,6 +47,8 @@ export interface DispatchTrace {
   agent?: string;
   user?: string;
   received?: any;
+  systemInstruction?: string;
+  userPrompt?: string;
   instruction?: string;
   output?: any;
   /** Raw agent emission before pipeline transforms (e.g. scout dishes[]); working copy stays in `output`. */
@@ -279,26 +281,56 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
     const latencyMatch = logs.match(/(?:Vision Scout|UnifiedLLM).*?(\d+(?:\.\d+)?)ms/i);
     const usage = parseUnifiedUsageLines(logs).find(u => u.stage === 'scout');
     const timing = parseUnifiedTimingLines(logs).find(t => t.stage === 'scout');
+
+    let extractedSystemInstruction: string | undefined = undefined;
+    let extractedUserPrompt: string | undefined = undefined;
+
+    if (typeof input.agentInstructions === 'object' && !Array.isArray(input.agentInstructions)) {
+      const s = (input.agentInstructions as any)?.scout;
+      if (typeof s === 'object' && s) {
+        if (s.systemInstruction) extractedSystemInstruction = s.systemInstruction;
+        if (s.userPrompt) extractedUserPrompt = s.userPrompt;
+      } else if (typeof s === 'string' && s.trim()) {
+        extractedUserPrompt = s;
+      }
+    } else if (typeof input.agentInstructions === 'string' && input.agentInstructions.trim()) {
+      extractedUserPrompt = input.agentInstructions;
+    }
+
+    if (!extractedSystemInstruction && logs) {
+      const match = logs.match(/\[UnifiedLLM-Prompt:scout\] System Instruction:\n([\s\S]+?)(?=\n\[UnifiedLLM-Prompt:|\n\[scout_|\n\[dietitian_|\n\[Vision Scout\]|$)/);
+      if (match) {
+        extractedSystemInstruction = match[1].trim();
+      } else {
+        const altMatch = logs.match(/Vision Scout System Instruction \(config\.systemInstruction\):\s*"([\s\S]+?)"(?:\n\[|\n$|$)/);
+        if (altMatch) extractedSystemInstruction = altMatch[1].trim();
+      }
+    }
+    if (!extractedUserPrompt && logs) {
+      const match = logs.match(/\[UnifiedLLM-Prompt:scout\] User Prompt:\n([\s\S]+?)(?=\n\[UnifiedLLM-Prompt:|\n\[scout_|\n\[dietitian_|\n\[Vision Scout\]|$)/);
+      if (match) extractedUserPrompt = match[1].trim();
+    }
+
+    const fullInstruction = extractedSystemInstruction
+      ? (extractedUserPrompt ? `=== SYSTEM INSTRUCTION ===\n${extractedSystemInstruction}\n\n=== USER PROMPT ===\n${extractedUserPrompt}` : extractedSystemInstruction)
+      : extractedUserPrompt;
+
     dispatches.push({
       id: 't1/scout',
       parent: null,
       turn: 1,
       agent: 'scout',
       user: input.lastUserAction?.details?.prompt || input.lastUserAction?.prompt || undefined,
-      received: { photoCount: input.photoUrls?.length || (input.photoUrl ? 1 : 0) },
-      instruction: (() => {
-        if (typeof input.agentInstructions === 'object' && !Array.isArray(input.agentInstructions)) {
-          const s = (input.agentInstructions as any)?.scout;
-          if (s) return s;
-        } else if (typeof input.agentInstructions === 'string' && input.agentInstructions.trim()) {
-          return input.agentInstructions;
-        }
-        if (logs) {
-          const match = logs.match(/Vision Scout System Instruction \(config\.systemInstruction\):\s*"([\s\S]+?)"(?:\n\[|\n$|$)/);
-          if (match) return match[1];
-        }
-        return undefined;
-      })(),
+      received: {
+        photoCount: input.photoUrls?.length || (input.photoUrl ? 1 : 0),
+        ...(input.photoUrls?.length ? { photoUrls: input.photoUrls } : (input.photoUrl ? { photoUrl: input.photoUrl } : {})),
+        ...(input.message ? { userMessage: input.message } : {}),
+        ...(input.mode ? { mode: input.mode } : {}),
+        ...(input.diningEnvironment ? { diningEnvironment: input.diningEnvironment } : {}),
+      },
+      systemInstruction: extractedSystemInstruction,
+      userPrompt: extractedUserPrompt,
+      instruction: fullInstruction,
       output: input.rawScout || input.scoutItems,
       rawEmission: input.rawScout || undefined,
       model: modelMatch ? (modelMatch[1] || modelMatch[2]) : 'gemini-3.5-flash-lite',

@@ -93,7 +93,7 @@ describe('debugPayload', () => {
     expect(md).toContain('[120,50,450,480]');
     expect(md).toContain('CUMI BANGKA - Berat 0.200');
     expect(md).toContain('Itemized Constituent Ingredients & Stickers');
-    expect(md).toContain('Raw Scout Structured JSON');
+    expect(md).toContain('Raw Emission (Verbatim Output)');
   });
 
   it('gate failures are the Errors section — not a "no errors found" grep', () => {
@@ -224,6 +224,43 @@ describe('debugPayload', () => {
     );
     expect(input.rawScout).toEqual(rawScout);
     expect(input.dialogInventory).toEqual({ open: false });
+  });
+
+  it('renders complete Scout received payload (System Instruction, User Prompt, Received) and emitted Raw Emission in markdown', () => {
+    const md = buildDebugMarkdownReport({
+      jobId: 'job_scout_full_audit',
+      status: 'succeeded',
+      agentInstructions: {
+        scout: {
+          systemInstruction: 'You are the Vision Scout. Output strict JSON with schema dishes[].',
+          userPrompt: 'Analyze the provided meal image. Ingest all visible foods.',
+        },
+      },
+      rawScout: {
+        _internalReasoning: 'Observed grilled salmon with asparagus.',
+        dishes: [
+          {
+            dishName: 'Grilled Salmon',
+            estimatedWeightGrams: 180,
+            foods: [{ foodName: 'Salmon Fillet', weightGrams: 180 }],
+          },
+        ],
+      },
+      photoUrls: ['https://example.com/photo1.jpg'],
+      message: 'Logged from dinner',
+    });
+
+    expect(md).toContain('### Dispatch t1/scout');
+    expect(md).toContain('- **System Instruction:**');
+    expect(md).toContain('You are the Vision Scout. Output strict JSON with schema dishes[].');
+    expect(md).toContain('- **User Prompt:**');
+    expect(md).toContain('Analyze the provided meal image. Ingest all visible foods.');
+    expect(md).toContain('- **Received:**');
+    expect(md).toContain('"photoCount":1');
+    expect(md).toContain('https://example.com/photo1.jpg');
+    expect(md).toContain('- **Raw Emission (Verbatim Output):**');
+    expect(md).toContain('Grilled Salmon');
+    expect(md).toContain('Observed grilled salmon with asparagus.');
   });
 });
 

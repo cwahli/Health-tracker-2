@@ -210,13 +210,51 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
         if (text.length <= DISPATCH_FIELD_CHAR_LIMIT) return text;
         return `${text.slice(0, DISPATCH_FIELD_CHAR_LIMIT)}\n... [truncated ${text.length - DISPATCH_FIELD_CHAR_LIMIT} more chars]`;
       };
-      if (d.instruction) {
+      if (d.systemInstruction) {
+        lines.push(`- **System Instruction:**`);
+        lines.push('```');
+        lines.push(capField(d.systemInstruction));
+        lines.push('```');
+      }
+      if (d.userPrompt) {
+        lines.push(`- **User Prompt:**`);
+        lines.push('```');
+        lines.push(capField(d.userPrompt));
+        lines.push('```');
+      } else if (d.instruction && !d.systemInstruction) {
         lines.push(`- **Instruction:**`);
         lines.push('```');
         lines.push(capField(d.instruction));
         lines.push('```');
       }
-      if (d.output) {
+      if (d.rawEmission) {
+        lines.push(`- **Raw Emission (Verbatim Output):**`);
+        let formattedOutput = '';
+        let isJson = false;
+        if (typeof d.rawEmission === 'object') {
+          formattedOutput = JSON.stringify(d.rawEmission, null, 2);
+          isJson = true;
+        } else if (typeof d.rawEmission === 'string') {
+          const trimmed = d.rawEmission.trim();
+          if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+            try {
+              const parsed = JSON.parse(trimmed);
+              formattedOutput = JSON.stringify(parsed, null, 2);
+              isJson = true;
+            } catch {
+              formattedOutput = d.rawEmission;
+            }
+          } else {
+            formattedOutput = d.rawEmission;
+          }
+        } else {
+          formattedOutput = String(d.rawEmission);
+        }
+        lines.push(isJson ? '```json' : '```');
+        lines.push(capField(formattedOutput));
+        lines.push('```');
+      }
+      if (d.output && (!d.rawEmission || JSON.stringify(d.output) !== JSON.stringify(d.rawEmission))) {
         lines.push(`- **Output:**`);
         let formattedOutput = '';
         let isJson = false;
@@ -679,14 +717,6 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
         }
         lines.push('');
       }
-    }
-
-    if (input.rawScout) {
-      lines.push(`### 📋 Raw Scout Structured JSON`);
-      lines.push('```json');
-      lines.push(JSON.stringify(input.rawScout, null, 2).slice(0, 25_000));
-      lines.push('```');
-      lines.push('');
     }
   }
 
@@ -1164,7 +1194,9 @@ export function debugReportFromJobMsg(job: any, msg: any): DebugReportInput {
     report: result.report || msg?.data?.report || msg?.data?.agentResult?.report || job?.clean_result?.report,
     handoffChain: result.handoffChain || msg?.data?.handoffChain || msg?.data?.agentResult?.handoffChain || job?.result?.handoffChain,
     dialogInventory: job?.dialogInventory || msg?.data?.dialogInventory || job?.result?.dialogInventory,
-    dispatches: job?.dispatches || msg?.data?.dispatches || job?.result?.dispatches
+    dispatches: job?.dispatches || msg?.data?.dispatches || job?.result?.dispatches,
+    agentInstructions: result.agentInstructions || msg?.data?.agentInstructions || msg?.data?.agentResult?.agentInstructions || job?.result?.agentInstructions || job?.inputSnapshot?.agentInstructions,
+    photoUrls: result.photoUrls || job?.photoUrls || msg?.data?.photoUrls || (food?.imageUrl ? [food.imageUrl] : undefined),
   };
 }
 

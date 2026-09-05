@@ -192,7 +192,7 @@ export async function runFoodAnalyze(req: any, res: any) {
   // only a local const inside the `if (hasImage)` block and discarded once
   // Scout finished, so the debug export's per-dispatch Instruction field
   // was never populated on the async job-queue path).
-  let scoutInstructionForDebug: string | undefined;
+  let scoutInstructionForDebug: any;
   let apiCalls: any[] = [];
 
   try {
@@ -317,7 +317,11 @@ export async function runFoodAnalyze(req: any, res: any) {
         sendStreamEvent({ type: 'status', stage: 'scout', status: 'started', message: 'Reading your photos...' });
         const imageCount = imagePayloads?.length || 0;
         const scoutPromptText = buildVisualScoutPrompt(message || '', imageCount);
-        scoutInstructionForDebug = scoutPromptText;
+        const resolvedScoutSystemInstruction = withScoutLanguage(scoutSystemInstruction, userProfile?.language);
+        scoutInstructionForDebug = {
+          systemInstruction: resolvedScoutSystemInstruction,
+          userPrompt: scoutPromptText,
+        };
         sendLog('scout_instruction', 'scout', `Vision Scout Instruction dispatched (model: ${engine || "gemini-3.5-flash-lite"}). Prompt length: ${scoutPromptText.length} chars — see [UnifiedLLM-Prompt:scout] below for full text.`);
         // The scout SYSTEM instruction and user prompt text are already logged in full
         // by callUnifiedLLMInternal via [UnifiedLLM-Prompt:scout] System Instruction: / User Prompt:
