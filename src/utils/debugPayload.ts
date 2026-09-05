@@ -116,6 +116,11 @@ export type DebugReportInput = {
   agentPayload?: any;
   /** Dispatched system instructions (single string or record by agent) */
   agentInstructions?: Record<string, string> | string[] | string;
+  /** Full prompt text actually sent to the dietitian LLM call (server routes'
+   * `agentPrompt` field on the job result), used as a fallback source for the
+   * dietitian dispatch's `instruction` when `agentInstructions.dietitian`
+   * was never populated. See debugRunTree.ts extractDispatches(). */
+  agentPromptText?: string;
   /** Job session event trail (JobStore.apply / JobQueueRunner), forwarded
    * from the client-recorded job.sessionEvents so it survives into
    * server-generated exports. Falls back to the in-process sessionLog map

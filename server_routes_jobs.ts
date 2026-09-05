@@ -439,6 +439,7 @@ jobsRouter.all('/api/jobs/debug', async (req, res) => {
       handoffPayload: safePayload.result?.handoffPayload || safePayload.handoffPayload,
       agentPayload: safePayload.inputSnapshot || safePayload.result?.inputSnapshot || safePayload.payload,
       agentInstructions: safePayload.result?.agentInstructions || safePayload.agentInstructions,
+      agentPromptText: safePayload.result?.agentPrompt || safePayload.agentPrompt,
       dialogInventory: effectiveDialogInventory,
       dispatches: effectiveDispatches,
     };

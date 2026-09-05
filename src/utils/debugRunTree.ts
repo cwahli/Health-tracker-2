@@ -243,9 +243,9 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
       agent: 'dietitian',
       user: input.lastUserAction?.details?.prompt || input.lastUserAction?.prompt || undefined,
       received: { scoutItemsCount: input.scoutItems?.length || 0 },
-      instruction: typeof input.agentInstructions === 'object' && !Array.isArray(input.agentInstructions)
+      instruction: (typeof input.agentInstructions === 'object' && !Array.isArray(input.agentInstructions)
         ? (input.agentInstructions as any)?.dietitian
-        : undefined,
+        : undefined) || input.agentPromptText || undefined,
       output: input.pendingFoodLog,
       model: modelMatch ? modelMatch[1] : 'gemini-3.5-flash-lite',
       latency_ms: latencyMatch ? Math.round(Number(latencyMatch[1])) : 2100,
