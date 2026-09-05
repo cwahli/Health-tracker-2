@@ -8,6 +8,8 @@ import {
   buildPureScaleResponse,
   sumPrecalcTotals,
   computeDietitianRetryDelay,
+  repairTruncatedJson,
+  applyPreDietitianDensityCheck,
 } from './server_food_dietitian_dispatch';
 
 describe('F-8.10 shard 4 — LLM JSON repair', () => {
@@ -144,5 +146,42 @@ describe('F-8.10 shard 18 — skip-path builders', () => {
     expect(computeDietitianRetryDelay({ message: '503 boom' })).toBe(3000);
     expect(computeDietitianRetryDelay({ message: '429 quota' })).toBe(3000);
     expect(computeDietitianRetryDelay({ message: 'meh' })).toBe(1000);
+  });
+});
+
+describe('F-8.10 shard 19 — truncation repair and density check', () => {
+  it('repairs truncated JSON and throws the original error when unrepairable', () => {
+    const logs: string[] = [];
+    const out = repairTruncatedJson({
+      cleanJson: '{"mode": "new_log", "message": "hi',
+      extractedScratchpad: 'scratch',
+      parseErr: new Error('orig'),
+      onLog: (m) => logs.push(m),
+    });
+    expect(out.mode).toBe('new_log');
+    expect(out._internalReasoning).toBe('scratch');
+    expect(logs.some((m) => m.includes('repair succeeded'))).toBe(true);
+    expect(() => repairTruncatedJson({
+      cleanJson: 'not json at all {{{',
+      extractedScratchpad: '',
+      parseErr: new Error('orig'),
+      onLog: () => {},
+    })).toThrow(/orig/);
+  });
+
+  it('rescales implausible beverage calories and rolls up aggregates', () => {
+    const logs: string[] = [];
+    const items: any[] = [{
+      name: 'Cola Drink', weightGrams: 500,
+      nutrients: { calories: 2000, protein: 0, carbohydrates: 130, totalFat: 0, sodium: 10 },
+    }];
+    const agg = applyPreDietitianDensityCheck({
+      preCalculatedItems: items, aggregatedNutrients: null,
+      beveragePattern: /cola|drink/i, onLog: (m) => logs.push(m),
+    });
+    // 500g cap: 5 * 110 = 550 kcal
+    expect(items[0].nutrients.calories).toBe(550);
+    expect(agg.calories).toBe(550);
+    expect(logs.some((m) => m.includes('Reality Check'))).toBe(true);
   });
 });

@@ -12,6 +12,7 @@ import {
   resolveMealImageUrls,
   mergeFinalScoutItems,
   buildNewLogGateInput,
+  mapFinalizeToMeal,
 } from './server_food_meal_assemble';
 
 describe('F-8.10 shard 6 — fallback breakdown', () => {
@@ -222,5 +223,26 @@ describe('F-8.10 shard 8 — new_log tail seams', () => {
     expect(gate.narrative).toBe('msg');
     expect(gate).not.toHaveProperty('commands');
     expect(gate).not.toHaveProperty('previousMeal');
+  });
+});
+
+describe('F-8.10 shard 19 — finalize-to-meal mapping', () => {
+  it('maps ledgers onto parsedData and backfills empty meals honestly', () => {
+    const logs: string[] = [];
+    const sent: any[] = [];
+    const parsed: any = { name: 'Draft', date: '2026-09-04' };
+    mapFinalizeToMeal({
+      preCalculatedItems: [],
+      rawFoodData: { itemsBreakdown: [] },
+      diningEnvironment: 'home_cooked',
+      parsedData: parsed,
+      rawParsed: { message: 'hi' },
+      onLog: (m: string) => logs.push(m),
+      sendLog: (t: string, s: string, m: string) => sent.push([t, s, m]),
+    });
+    expect(parsed.itemsBreakdown).toEqual([]);
+    expect(parsed.nutrients).toEqual({});
+    expect(logs.some((m) => m.includes('not inventing a second calorie book'))).toBe(true);
+    expect(sent).toEqual([]);
   });
 });
