@@ -94,6 +94,10 @@ describe('hasCallEvidence', () => {
     expect(hasCallEvidence('[MealBuild] projector dietitian', 'dietitian')).toBe(false);
     expect(hasCallEvidence('', 'scout')).toBe(false);
   });
+  it('does NOT count instruction/answer lines logged on skip paths', () => {
+    expect(hasCallEvidence('[dietitian_answer] Solid protein intake', 'dietitian')).toBe(false);
+    expect(hasCallEvidence('[dietitian_instruction] Dietitian Instruction dispatched (model: x)', 'dietitian')).toBe(false);
+  });
 });
 
 describe('parseUnifiedTimingLines', () => {

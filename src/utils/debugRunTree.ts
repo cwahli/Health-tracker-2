@@ -176,13 +176,18 @@ export function parseUnifiedTimingLines(logs: string): { stage: string; ms: numb
   return [...out.entries()].map(([stage, ms]) => ({ stage, ms }));
 }
 
-/** True when the logs prove the stage dispatched an LLM call (not a projector run) */
+/** True when the logs prove the stage dispatched an LLM call (not a projector run).
+ *  Only call-time lines count: the pipeline also logs instruction/answer lines
+ *  on skip paths (e.g. `[dietitian_answer]` is emitted by the projector too),
+ *  so those are deliberately NOT evidence. `[scout_answer]` is kept as legacy
+ *  evidence: old exports predate usage/timing lines and scout always calls. */
 export function hasCallEvidence(logs: string, stage: 'scout' | 'dietitian'): boolean {
   if (!logs || typeof logs !== 'string') return false;
+  const tag = `\\[UnifiedLLM:${stage}\\]|\\[UnifiedLLM-Prompt:${stage}\\]|\\[UnifiedLLM-Usage:${stage}\\]|\\[UnifiedLLM-Timing:${stage}\\]|\\[UnifiedLLM-Response:${stage}\\]`;
   if (stage === 'scout') {
-    return /\[UnifiedLLM:scout\]|\[UnifiedLLM-Prompt:scout\]|\[UnifiedLLM-Usage:scout\]|\[UnifiedLLM-Timing:scout\]|\[UnifiedLLM-Response:scout\]|\[Vision Scout\] \(|\[scout_answer\]/i.test(logs);
+    return new RegExp(`${tag}|\\[scout_answer\\]|\\[Vision Scout\\] Retrying`).test(logs);
   }
-  return /\[UnifiedLLM:dietitian\]|\[UnifiedLLM-Prompt:dietitian\]|\[UnifiedLLM-Usage:dietitian\]|\[UnifiedLLM-Timing:dietitian\]|\[UnifiedLLM-Response:dietitian\]|\[Dietitian Instruction dispatched|\[dietitian_answer\]/i.test(logs);
+  return new RegExp(`${tag}|\\[Dietitian\\] Retrying LLM call`).test(logs);
 }
 
 /** Prefix a log line with [jobId] unless blank or already tagged (contract §9: joinable lines) */
