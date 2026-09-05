@@ -6,6 +6,7 @@ import {
   scoutHasCompletePrintedLabel,
   enrichScoutComponentsWithMatches,
   buildPastMealsContext,
+  extractFoodSearchQueriesFromText,
 } from './server_food_analyze_helpers';
 
 describe('F-8.10 shard 1 — DB-search query normalization', () => {
@@ -95,5 +96,20 @@ describe('F-8.10 shard 2 — resolver skip gate, component enrichment, past-meal
     expect(logs.some((m) => m.includes('3 past meal(s)'))).toBe(true);
     expect(buildPastMealsContext([], () => {})).toBe('');
     expect(buildPastMealsContext(null, () => {})).toBe('');
+  });
+});
+
+describe('F-8.10 shard 21 — text-query extraction', () => {
+  it('extracts food phrases and rejects greetings and lab queries', () => {
+    expect(extractFoodSearchQueriesFromText('nasi goreng and teh manis')).toEqual(['nasi goreng', 'teh manis']);
+    expect(extractFoodSearchQueriesFromText('hello')).toEqual([]);
+    expect(extractFoodSearchQueriesFromText('my ldl cholesterol')).toEqual([]);
+    expect(extractFoodSearchQueriesFromText('')).toEqual([]);
+    expect(extractFoodSearchQueriesFromText(null as any)).toEqual([]);
+  });
+
+  it('strips weights, units, and stop words', () => {
+    expect(extractFoodSearchQueriesFromText('200g chicken breast')).toEqual(['chicken breast']);
+    expect(extractFoodSearchQueriesFromText('i ate rice')).toEqual(['rice']);
   });
 });

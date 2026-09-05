@@ -4,7 +4,7 @@
  */
 import { Type } from '@google/genai';
 import { z } from 'zod';
-import { formatUSDANutrients, formatOFFNutrients, extractOFFNutrientsPer100g, isFastFoodChain, buildWebSearchQuery, loosenQuery, cleanQuery, detectChainKeyFromText, scoutHasCompletePrintedLabel, enrichScoutComponentsWithMatches, buildPastMealsContext } from './src/server/food/server_food_analyze_helpers.js';
+import { formatUSDANutrients, formatOFFNutrients, extractOFFNutrientsPer100g, isFastFoodChain, buildWebSearchQuery, loosenQuery, cleanQuery, detectChainKeyFromText, scoutHasCompletePrintedLabel, enrichScoutComponentsWithMatches, buildPastMealsContext, extractFoodSearchQueriesFromText } from './src/server/food/server_food_analyze_helpers.js';
 import { visionScoutResponseSchema } from './src/server/food/server_food_analyze_schema.js';
 import { buildUserContext, buildTimeContext, buildImageContext, buildHistoryContext, buildVisionScoutContext, buildDatabaseMatchesContext, buildBiomarkersContext, stitchFoodPrompt, selectSystemInstruction } from './src/server/food/server_food_prompt_context.js';
 import { sanitizeLlmJsonOutput, computeDietitianSkipGates, decideScoutVerdict, decideScoutAdvice, buildDietitianCallArgs, buildPureScaleResponse, sumPrecalcTotals, computeDietitianRetryDelay, repairTruncatedJson, applyPreDietitianDensityCheck } from './src/server/food/server_food_dietitian_dispatch.js';
@@ -162,52 +162,6 @@ import {
   resolveComparisonGroups,
   retrieveFoodImages,
 } from './server.js';
-function extractFoodSearchQueriesFromText(message: string): string[] {
-  if (!message || typeof message !== 'string') return [];
-  let msg = message.trim().toLowerCase();
-  // Non-food / greeting check
-  const nonFoodPatterns = [
-    /^(start|let's start|hello|hi|hey|greetings|help|test|yes|no|ok|okay|clear|reset|menu|why|explain|question|info|please)$/i,
-    /\b(alt|ast|cholesterol|ldl|hdl|egfr|creatinine|bilirubin|triglycerides|platelets|wbc|rbc|hemoglobin|hba1c|glucose|blood pressure|systolic|diastolic)\b/i
-  ];
-  const isNonFood = nonFoodPatterns.some(p => p.test(msg)) && !/\b(eat|ate|eating|had|cooked|fried|grilled|recipe|meal|food|snack|breakfast|lunch|dinner|portion|slice|glass|cup|gram|grams|calorie|calories|nutrient|nutrients)\b/i.test(msg);
-  if (isNonFood) return [];
-  // Remove portion/weight amounts & units: e.g. "200g", "150 grams", "2 oz", "1 serving", "3 pcs", "2 slices", "1/2 cup"
-  msg = msg.replace(/\b\d+(\.\d+)?\s*(g|grams|oz|lbs|kg|servings|serving|pcs|piece|pieces|slice|slices|cup|cups|glass|glasses|tbsp|tsp|bowl|bowls|plate|plates)?\b/gi, ' ');
-  msg = msg.replace(/\b(\d+\/\d+)\s*(g|grams|oz|lbs|kg|servings|serving|pcs|piece|pieces|slice|slices|cup|cups|glass|glasses|tbsp|tsp|bowl|bowls|plate|plates)?\b/gi, ' ');
-  // Remove punctuation (including apostrophes, commas, quotes, hyphens, colons, brackets)
-  msg = msg.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?'"“”\[\]]/g, ' ');
-  // List of conversational stop words/phrases to remove
-  const stopWords = new Set([
-    'it', 'its', 'is', 's', 'that', 'thats', 'this', 'these', 'those', 'there', 'theres', 'they', 'theyre', 'them',
-    'i', 'me', 'my', 'you', 'your', 'we', 'our', 'he', 'she', 'his', 'her',
-    'am', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did',
-    'would', 'should', 'could', 'will', 'can',
-    'a', 'an', 'the', 'and', 'or', 'with', 'for', 'in', 'on', 'at', 'to', 'from', 'by', 'of', 'some', 'about', 'into', 'through',
-    'not', 'no', 'but', 'yes', 'ok', 'okay', 'please', 'thanks', 'thank', 'hello', 'hi', 'hey',
-    'eat', 'ate', 'eating', 'had', 'have', 'having', 'food', 'meal', 'snack', 'dinner', 'lunch', 'breakfast', 'item', 'items',
-    'portion', 'portions', 'dish', 'dishes', 'plate', 'plates',
-    'correction', 'corrections', 'actually', 'instead', 'change', 'modify', 'update', 'correct', 'replace',
-    'rather', 'than', 'think', 'believe', 'cooked', 'made', 'make'
-  ]);
-  // Split into candidate food phrases using conjunctions / separators ("and", ",", "+", ";", "with", "to", "instead of")
-  const rawSegments = msg.split(/\b(?:and|with|to|instead of|\+|;|,)\b/gi);
-  const queries: string[] = [];
-  for (const seg of rawSegments) {
-    const words = seg.trim().split(/\s+/).filter(w => w.length > 0);
-    // Filter out stop words
-    const foodWords = words.filter(w => !stopWords.has(w) && w.length > 1);
-    if (foodWords.length > 0) {
-      const foodPhrase = foodWords.join(' ').trim();
-      if (foodPhrase.length >= 2 && !/^\d+$/.test(foodPhrase)) {
-        if (!queries.includes(foodPhrase)) {
-          queries.push(foodPhrase);
-        }
-      }
-    }
-  }
-  return queries;
-}
 export async function runFoodAnalyze(req: any, res: any) {
   if (!req.headers['x-session-id'] || !req.headers['x-session-id'].toString().startsWith('server-job-')) {
     return res.status(403).json({ error: 'This SSE path is deprecated and strictly reserved for internal loopback execution.' });
