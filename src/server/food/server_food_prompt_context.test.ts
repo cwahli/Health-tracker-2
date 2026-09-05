@@ -9,6 +9,7 @@ import {
   buildBiomarkersContext,
   stitchFoodPrompt,
   selectSystemInstruction,
+  assemblePrecalcPromptBlock,
 } from './server_food_prompt_context';
 import { foodAnalyzeSchema } from './server_food_analyze_schema';
 
@@ -132,5 +133,24 @@ describe('F-8.10 shard 15 — system instruction router', () => {
     expect(selectSystemInstruction({ ...base, userSelectedMode: 'edit', isExplicitModify: true })).toContain('EDIT OR Q&A');
     expect(selectSystemInstruction({ ...base, userSelectedMode: 'compare' })).toContain('PRODUCT EVALUATION');
     expect(selectSystemInstruction({ ...base, userSelectedMode: 'compare', activeComparisonState: { id: 'c' } })).toContain('REFINEMENT');
+  });
+});
+
+describe('F-8.10 shard 23 — precalc prompt block', () => {
+  it('appends the projection block to prompt and full text', () => {
+    const logs: string[] = [];
+    const out = assemblePrecalcPromptBlock({
+      preCalculatedItems: [],
+      activeMeal: null,
+      aggregatedNutrients: {},
+      userProfile: { language: 'en' },
+      promptText: 'PROMPT',
+      fullPromptSent: 'FULL',
+      onLog: (m: string) => logs.push(m),
+    });
+    expect(out.promptText.startsWith('PROMPT')).toBe(true);
+    expect(out.promptText.length).toBeGreaterThan('PROMPT'.length);
+    expect(out.fullPromptSent.startsWith('FULL')).toBe(true);
+    expect(logs.some((m) => m.includes('projector dietitian applied'))).toBe(true);
   });
 });

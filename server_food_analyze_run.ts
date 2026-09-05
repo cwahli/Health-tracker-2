@@ -6,7 +6,7 @@ import { Type } from '@google/genai';
 import { z } from 'zod';
 import { formatUSDANutrients, formatOFFNutrients, extractOFFNutrientsPer100g, isFastFoodChain, buildWebSearchQuery, loosenQuery, cleanQuery, detectChainKeyFromText, scoutHasCompletePrintedLabel, enrichScoutComponentsWithMatches, buildPastMealsContext } from './src/server/food/server_food_analyze_helpers.js';
 import { visionScoutResponseSchema } from './src/server/food/server_food_analyze_schema.js';
-import { buildUserContext, buildTimeContext, buildImageContext, buildHistoryContext, buildVisionScoutContext, buildDatabaseMatchesContext, buildBiomarkersContext, stitchFoodPrompt, selectSystemInstruction } from './src/server/food/server_food_prompt_context.js';
+import { buildUserContext, buildTimeContext, buildImageContext, buildHistoryContext, buildVisionScoutContext, buildDatabaseMatchesContext, buildBiomarkersContext, stitchFoodPrompt, selectSystemInstruction, assemblePrecalcPromptBlock } from './src/server/food/server_food_prompt_context.js';
 import { sanitizeLlmJsonOutput, computeDietitianSkipGates, decideScoutVerdict, decideScoutAdvice, buildDietitianCallArgs, buildPureScaleResponse, sumPrecalcTotals, computeDietitianRetryDelay, repairTruncatedJson, applyPreDietitianDensityCheck } from './src/server/food/server_food_dietitian_dispatch.js';
 import { resolveFoodAnalyzeMode, buildFoodApiCalls, normalizeParsedPostDietitian } from './src/server/food/server_food_mode_routing.js';
 import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput, mapFinalizeToMeal, mergeModifyPathScoutItems } from './src/server/food/server_food_meal_assemble.js';
@@ -90,8 +90,6 @@ import {
 } from './server_meal_orchestrator.js';
 import { toPendingFoodLog, fromEvaluationComparison } from './src/mealBuild/adapters.js';
 import { attachSseJsonResponder } from './server_sse_json.js';
-import { projectDietitianInput } from './src/mealBuild/projectors.js';
-import { beginStage, endStage, formatDietitianProjectionBlock } from './src/mealBuild/stageLifecycle.js';
 import { reconcileMessageWithLedger } from './src/mealBuild/narration.js';
 import {
   getTraceNutrientsForFoodType,
@@ -813,19 +811,9 @@ export async function runFoodAnalyze(req: any, res: any) {
     }
     // Pre-dietitian density check: ensure beverage and composite items are rescaled prior to Dietitian prompt payload
     aggregatedNutrients = applyPreDietitianDensityCheck({ preCalculatedItems, aggregatedNutrients, beveragePattern: BEVERAGE_RAW_PATTERN, onLog: addDebugLog });
-    addDebugLog('[MealBuild] projector dietitian');
-    let dietitianTempMeal = buildSavableMealFromParsed(preCalculatedItems || [], activeMeal, aggregatedNutrients, null);
-    const lifeStart = beginStage(dietitianTempMeal, 'dietitian', { actor: 'server' });
-    if (!lifeStart.allowed) {
-      addDebugLog(`[MealBuild] stage-limits: ${lifeStart.limitReason}`);
-    } else {
-      addDebugLog('[MealBuild] stage dietitian started');
-    }
-    const dietitianProjection = projectDietitianInput(dietitianTempMeal, userProfile);
-    const precalcBlock = formatDietitianProjectionBlock(dietitianProjection);
-    addDebugLog('[MealBuild] projector dietitian applied');
-    promptText = `${promptText}\n\n${precalcBlock}`;
-    fullPromptSent = `${fullPromptSent}\n\n${precalcBlock}`;
+    const precalcAssembled = assemblePrecalcPromptBlock({ preCalculatedItems, activeMeal, aggregatedNutrients, userProfile, promptText, fullPromptSent, onLog: addDebugLog });
+    promptText = precalcAssembled.promptText;
+    fullPromptSent = precalcAssembled.fullPromptSent;
     const llmCallArgs = buildDietitianCallArgs({ engine, finalSystemInstruction, promptText });
     sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'started', message: 'Analyzing nutrition payload...' });
     sendLog('dietitian_instruction', 'dietitian', `Dietitian Instruction dispatched (model: ${engine || 'gemini-3.5-flash-lite'}). System Instruction: "${finalSystemInstruction}" Prompt: "${fullPromptSent}"`);

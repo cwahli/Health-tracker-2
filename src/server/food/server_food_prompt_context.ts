@@ -11,6 +11,9 @@ import {
   buildModeDEditInstruction,
   buildFoodAnalyzeInstruction,
 } from '../../../agents/dietitianInstructions.js';
+import { buildSavableMealFromParsed } from '../../../server_meal_orchestrator.js';
+import { projectDietitianInput } from '../../mealBuild/projectors.js';
+import { beginStage, formatDietitianProjectionBlock } from '../../mealBuild/stageLifecycle.js';
 
 export function buildUserContext(userProfile: any): string {
   let userCtx = "";
@@ -276,4 +279,40 @@ export function selectSystemInstruction(args: SystemInstructionArgs): string {
     });
   }
   return systemInstruction;
+}
+
+export interface PrecalcBlockArgs {
+  preCalculatedItems: any;
+  activeMeal: any;
+  aggregatedNutrients: any;
+  userProfile: any;
+  promptText: string;
+  fullPromptSent: string;
+  onLog: (msg: string) => void;
+}
+
+/**
+ * F-8.10 shard 23 — precalc prompt block, extracted verbatim from
+ * runFoodAnalyze. Projects the finalize ledger into the dietitian prompt.
+ */
+export function assemblePrecalcPromptBlock(args: PrecalcBlockArgs): {
+  promptText: string;
+  fullPromptSent: string;
+} {
+  const { preCalculatedItems, activeMeal, aggregatedNutrients, userProfile, promptText, fullPromptSent, onLog } = args;
+  onLog('[MealBuild] projector dietitian');
+  const dietitianTempMeal = buildSavableMealFromParsed(preCalculatedItems || [], activeMeal, aggregatedNutrients, null);
+  const lifeStart = beginStage(dietitianTempMeal, 'dietitian', { actor: 'server' });
+  if (!lifeStart.allowed) {
+    onLog(`[MealBuild] stage-limits: ${lifeStart.limitReason}`);
+  } else {
+    onLog('[MealBuild] stage dietitian started');
+  }
+  const dietitianProjection = projectDietitianInput(dietitianTempMeal, userProfile);
+  const precalcBlock = formatDietitianProjectionBlock(dietitianProjection);
+  onLog('[MealBuild] projector dietitian applied');
+  return {
+    promptText: `${promptText}\n\n${precalcBlock}`,
+    fullPromptSent: `${fullPromptSent}\n\n${precalcBlock}`,
+  };
 }
