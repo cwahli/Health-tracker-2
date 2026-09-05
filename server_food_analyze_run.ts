@@ -133,7 +133,7 @@ import { applyMealEdits } from './server_meal_edit.js';
 import { matchBrandMenu, isPackagedBindItem } from './server_brand_match.js';
 import { classifyDishAtomic } from './server_dish_classify.js';
 import { t, interpolate } from './src/utils/i18n.js';
-import { takeUnifiedUsage, formatUnifiedUsage } from './src/utils/unifiedUsage.js';
+import { takeUnifiedUsage, takeUnifiedTiming, formatUnifiedUsage } from './src/utils/unifiedUsage.js';
 import {
   addDebugLog,
   logSessionStorage,
@@ -230,6 +230,8 @@ export async function runFoodAnalyze(req: any, res: any) {
       try {
         const u = takeUnifiedUsage(stage);
         if (u) sendLog('info', stage, formatUnifiedUsage(stage, u));
+        const ms = takeUnifiedTiming(stage);
+        if (ms != null) sendLog('info', stage, `[UnifiedLLM-Timing:${stage.toLowerCase()}] ms=${ms}`);
       } catch { /* usage re-emit must never break the meal flow */ }
     };
 

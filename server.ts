@@ -1496,7 +1496,7 @@ export const getGeminiApiKey = (): string => {
 // callUnifiedLLMInternal on every successful call; consumed immediately by
 // the awaiting pipeline stage via takeUnifiedUsage (single-flight per stage).
 // (Store lives in src/utils/unifiedUsage.ts — leaf module, no import cycles.)
-import { recordUnifiedUsage } from './src/utils/unifiedUsage.js';
+import { recordUnifiedUsage, recordUnifiedTiming } from './src/utils/unifiedUsage.js';
 
 // Initialize Gemini SDK with telemetry header
 export const getGeminiClient = () => {
@@ -2085,6 +2085,7 @@ async function callUnifiedLLMInternal({
         return;
       }
       recordUnifiedUsage(stage, p, c, t);
+      recordUnifiedTiming(stage, Date.now() - __callStartMs);
       _localAddDebugLog(`[UnifiedLLM-Usage:${stage}] prompt=${p} completion=${c} total=${t}`);
       _localAddDebugLog(`[UnifiedLLM-Timing:${stage}] ms=${Date.now() - __callStartMs}`);
     } catch { /* usage logging must never break generation */ }
