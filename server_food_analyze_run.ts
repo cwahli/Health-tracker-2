@@ -9,7 +9,7 @@ import { buildUserContext, buildTimeContext, buildImageContext, buildHistoryCont
 import { sanitizeLlmJsonOutput, computeDietitianSkipGates, decideScoutVerdict, decideScoutAdvice, buildDietitianCallArgs, buildPureScaleResponse, sumPrecalcTotals, computeDietitianRetryDelay, repairTruncatedJson, applyPreDietitianDensityCheck, parseAndValidateDietitian, buildCreateSkipResponse, sumSalvagedAggregates } from './src/server/food/server_food_dietitian_dispatch.js';
 import { resolveFoodAnalyzeMode, buildFoodApiCalls, normalizeParsedPostDietitian } from './src/server/food/server_food_mode_routing.js';
 import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput, mapFinalizeToMeal, mergeModifyPathScoutItems, runEvaluationFinalize, assembleEvaluationComparison } from './src/server/food/server_food_meal_assemble.js';
-import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, buildScoutFailureError, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries, applyWeightModShortcut, restoreTurnOneCandidates, computeScoutRetryDelay, applySkipScoutShortcut, checkResumedFromImageTurn, applyTextQueryShortcut, checkMenuScaleBypass, buildScoutCallArgs } from './src/server/food/server_food_scout_source.js';
+import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, buildScoutFailureError, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries, applyWeightModShortcut, restoreTurnOneCandidates, computeScoutRetryDelay, applySkipScoutShortcut, checkResumedFromImageTurn, applyTextQueryShortcut, checkMenuScaleBypass, buildScoutCallArgs, runScoutRetryLoop } from './src/server/food/server_food_scout_source.js';
 import { collectImagePayloads, decideWeightRefine } from './src/server/food/server_food_session_setup.js';
 import { shouldPauseForPortionClarify, filterPortionCarryCandidates, detectDominantBrand, collectFdcHintTasks, isFdcHintRelevant, mapLedgersToPrecalcItems, applyMealModifiers } from './src/server/food/server_food_precalc.js';
 import { runDatabaseSearchStage } from './src/server/food/server_food_db_search.js';
@@ -309,44 +309,25 @@ export async function runFoodAnalyze(req: any, res: any) {
         scoutInstructionForDebug = scoutPromptText;
         sendLog('scout_instruction', 'scout', `Vision Scout Instruction dispatched (model: ${engine || "gemini-3.5-flash-lite"}). Prompt: "${scoutPromptText}"`);
         addDebugLog(`[Vision Scout] Running Stage 3 lightweight vision scout with retry protection...`);
-        let scoutResult: any = null;
-        let scoutAttempts = 0;
-        const maxScoutAttempts = 3;
-        let lastScoutErr: any = null;
-        while (scoutAttempts < maxScoutAttempts) {
-          scoutAttempts++;
-          try {
-            if (scoutAttempts > 1) {
-              if (isGeminiQuotaError(lastScoutErr)) break;
-              const delay = computeScoutRetryDelay(lastScoutErr);
-              addDebugLog(`[Vision Scout] Waiting ${delay}ms before retry...`);
-              await new Promise(resolve => setTimeout(resolve, delay));
-              addDebugLog(`[Vision Scout] Retrying LLM call (Attempt ${scoutAttempts} of ${maxScoutAttempts})...`);
+        let { scoutResult, lastScoutErr } = await runScoutRetryLoop({
+          engine,
+          language: userProfile?.language,
+          scoutPromptText,
+          imagePayloads,
+          isCompare: userSelectedMode === 'compare',
+          message,
+          callUnifiedLLM,
+          sleep: (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms)),
+          onLog: addDebugLog,
+          onStreamChunk: (chunk: string, isThought?: boolean) => {
+            if (isStream && hasSentHeaders) {
+              try {
+                res.write(`data: ${JSON.stringify({ type: 'stream', chunk, stage: 'scout' })}\n\n`);
+                if (typeof (res as any).flush === 'function') (res as any).flush();
+              } catch (e) {}
             }
-            const scoutOutput = await callUnifiedLLM({
-              ...buildScoutCallArgs({ engine, language: userProfile?.language, scoutPromptText, imagePayloads }),
-              onStream: (chunk: string, isThought?: boolean) => {
-                if (isStream && hasSentHeaders) {
-                  try {
-                    res.write(`data: ${JSON.stringify({ type: 'stream', chunk, stage: 'scout' })}\n\n`);
-                    if (typeof (res as any).flush === 'function') (res as any).flush();
-                  } catch (e) {}
-                }
-              },
-            });
-            // Yield to the event loop before heavy synchronous parsing
-            await new Promise(resolve => setImmediate(resolve));
-            scoutResult = parseAndHealVisionScout(scoutOutput, addDebugLog, userSelectedMode === 'compare', message);
-            break; // Success! Break out of the loop
-          } catch (scoutErr: any) {
-            lastScoutErr = scoutErr;
-            addDebugLog(`[Vision Scout Attempt ${scoutAttempts} Failed] Error: ${scoutErr.message}`);
-            if (isGeminiQuotaError(scoutErr)) {
-              addDebugLog(`[Vision Scout] Aborting further scout retries — 429 quota on this model. Switch model or wait.`);
-              break;
-            }
-          }
-        }
+          },
+        });
         if (!scoutResult) {
           addDebugLog(`[Vision Scout Failed Permanently] Both attempts failed. Last error: ${lastScoutErr?.message}`);
           throw buildScoutFailureError(lastScoutErr, userProfile?.language);

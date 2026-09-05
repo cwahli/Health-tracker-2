@@ -19,6 +19,7 @@ import {
   applyTextQueryShortcut,
   checkMenuScaleBypass,
   buildScoutCallArgs,
+  runScoutRetryLoop,
 } from './server_food_scout_source';
 import { visionScoutResponseSchema } from './server_food_analyze_schema';
 
@@ -291,5 +292,81 @@ describe('F-8.10 shard 25 — scout call args', () => {
     expect(args.responseSchema.required).toEqual(['contentType', 'diningEnvironment', 'dishes']);
     expect(args.maxOutputTokens).toBe(8192);
     expect(args.imagePayloads).toEqual([]);
+  });
+});
+
+describe('F-8.10 shard 29 — scout retry loop (stubbed LLM)', () => {
+  const base = {
+    engine: 'test-model',
+    language: 'en' as unknown,
+    scoutPromptText: 'P',
+    imagePayloads: [],
+    isCompare: false,
+    message: 'lunch',
+    onLog: () => {},
+  };
+
+  it('succeeds first try without sleeping', async () => {
+    let calls = 0;
+    const sleeps: number[] = [];
+    const out = await runScoutRetryLoop({
+      ...base,
+      callUnifiedLLM: async () => { calls++; return '{}'; },
+      sleep: async (ms: number) => { sleeps.push(ms); },
+    });
+    expect(out.scoutResult).toBeTruthy();
+    expect(out.attempts).toBe(1);
+    expect(calls).toBe(1);
+    expect(sleeps).toEqual([]);
+    expect(out.lastScoutErr).toBeNull();
+  });
+
+  it('retries once on failure, then succeeds', async () => {
+    let calls = 0;
+    const sleeps: number[] = [];
+    const out = await runScoutRetryLoop({
+      ...base,
+      callUnifiedLLM: async () => {
+        calls++;
+        if (calls === 1) throw new Error('boom');
+        return '{}';
+      },
+      sleep: async (ms: number) => { sleeps.push(ms); },
+    });
+    expect(out.scoutResult).toBeTruthy();
+    expect(out.attempts).toBe(2);
+    expect(sleeps).toEqual([1000]);
+  });
+
+  it('backs off longer on 503 and aborts early on quota errors', async () => {
+    const sleeps503: number[] = [];
+    await runScoutRetryLoop({
+      ...base,
+      callUnifiedLLM: async () => { throw new Error('503 UNAVAILABLE'); },
+      sleep: async (ms: number) => { sleeps503.push(ms); },
+    }).catch(() => {});
+    // 503 is not a quota break: 3 attempts, 2 backoffs of 2000
+    expect(sleeps503).toEqual([2000, 2000]);
+
+    let quotaCalls = 0;
+    const quota = await runScoutRetryLoop({
+      ...base,
+      callUnifiedLLM: async () => { quotaCalls++; throw new Error('429 RESOURCE_EXHAUSTED'); },
+      sleep: async () => {},
+    });
+    expect(quota.scoutResult).toBeNull();
+    expect(quotaCalls).toBe(1);
+    expect(quota.lastScoutErr).toBeTruthy();
+  });
+
+  it('passes the stream hook through to the LLM call', async () => {
+    let seenOnStream: any = 'missing';
+    await runScoutRetryLoop({
+      ...base,
+      callUnifiedLLM: async (a: any) => { seenOnStream = a.onStream; return '{}'; },
+      sleep: async () => {},
+      onStreamChunk: () => {},
+    });
+    expect(typeof seenOnStream).toBe('function');
   });
 });

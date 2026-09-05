@@ -7,7 +7,8 @@
 
 import { getFallbackCategoryProfile } from '../../../server_food_catalog.js';
 import { isPackagedBindItem, inferChainNameFromPackageLabel } from '../../../server_brand_match.js';
-import { userSafeScoutFailureMessage } from '../../../server_vision_scout.js';
+import { userSafeScoutFailureMessage, parseAndHealVisionScout } from '../../../server_vision_scout.js';
+import { isGeminiQuotaError } from '../../../server_gemini_retry.js';
 import { t, withScoutLanguage } from '../../utils/i18n.js';
 import { extractFoodSearchQueriesFromText } from './server_food_analyze_helpers.js';
 import { scoutSystemInstruction } from '../../../agents/scoutInstructions.js';
@@ -649,4 +650,65 @@ export function buildScoutCallArgs(args: ScoutCallArgs): Record<string, any> {
     logStagePrefix: 'scout',
     responseSchema: visionScoutResponseSchema,
   };
+}
+
+export interface ScoutRetryArgs {
+  engine: any;
+  language?: unknown;
+  scoutPromptText: string;
+  imagePayloads: any;
+  isCompare: boolean;
+  message?: string;
+  maxAttempts?: number;
+  callUnifiedLLM: (args: any) => Promise<any>;
+  sleep: (ms: number) => Promise<void>;
+  onLog: (msg: string) => void;
+  onStreamChunk?: (chunk: string, isThought?: boolean) => void;
+}
+
+/**
+ * F-8.10 shard 29 — scout retry loop, extracted verbatim from
+ * runFoodAnalyze. The LLM call and sleep are injected (stubbable);
+ * parsing, quota policy, and logging stay real. The SSE onStream hookup
+ * arrives prebuilt (res-bound) via onStreamChunk.
+ */
+export async function runScoutRetryLoop(args: ScoutRetryArgs): Promise<{
+  scoutResult: any;
+  attempts: number;
+  lastScoutErr: any;
+}> {
+  const {
+    engine, language, scoutPromptText, imagePayloads, isCompare, message,
+    maxAttempts = 3, callUnifiedLLM, sleep, onLog, onStreamChunk,
+  } = args;
+  const callArgs: any = buildScoutCallArgs({ engine, language, scoutPromptText, imagePayloads });
+  if (onStreamChunk) callArgs.onStream = onStreamChunk;
+  let scoutResult: any = null;
+  let attempts = 0;
+  let lastScoutErr: any = null;
+  while (attempts < maxAttempts) {
+    attempts++;
+    try {
+      if (attempts > 1) {
+        if (isGeminiQuotaError(lastScoutErr)) break;
+        const delay = computeScoutRetryDelay(lastScoutErr);
+        onLog(`[Vision Scout] Waiting ${delay}ms before retry...`);
+        await sleep(delay);
+        onLog(`[Vision Scout] Retrying LLM call (Attempt ${attempts} of ${maxAttempts})...`);
+      }
+      const scoutOutput = await callUnifiedLLM(callArgs);
+      // Yield to the event loop before heavy synchronous parsing
+      await new Promise(resolve => setImmediate(resolve));
+      scoutResult = parseAndHealVisionScout(scoutOutput, onLog, isCompare, message);
+      break; // Success! Break out of the loop
+    } catch (scoutErr: any) {
+      lastScoutErr = scoutErr;
+      onLog(`[Vision Scout Attempt ${attempts} Failed] Error: ${scoutErr.message}`);
+      if (isGeminiQuotaError(scoutErr)) {
+        onLog(`[Vision Scout] Aborting further scout retries — 429 quota on this model. Switch model or wait.`);
+        break;
+      }
+    }
+  }
+  return { scoutResult, attempts, lastScoutErr };
 }
