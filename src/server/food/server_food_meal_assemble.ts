@@ -10,6 +10,7 @@ import { t } from '../../utils/i18n.js';
 import { applyModifierToItemName } from '../../../server_meal_edit.js';
 import { appendHistory } from '../../mealBuild/consolidate.js';
 import { buildMealFromFinalizeLedgers } from '../../../server_meal_from_finalize.js';
+import { finalizeDishLedger } from '../../../server_dish_finalize.js';
 import { mergeScoutItems } from '../../../server_vision_scout.js';
 import { namesReferToSameFood } from '../../../server_scout_reconcile.js';
 
@@ -602,4 +603,36 @@ export function mergeModifyPathScoutItems(args: ModifyScoutMergeArgs): any[] {
     });
   }
   return updatedScoutItems;
+}
+
+export interface EvaluationFinalizeArgs {
+  visionScoutItems: any[];
+  diningEnvironment?: string;
+  onLog: (msg: string) => void;
+}
+
+/**
+ * F-8.10 shard 24 — Mode-D evaluation finalize loop, extracted verbatim
+ * from runFoodAnalyze. Finalizes each scout item and indexes nutrients by
+ * position for the comparison resolver.
+ */
+export async function runEvaluationFinalize(args: EvaluationFinalizeArgs): Promise<Record<number, Record<string, number>>> {
+  const { visionScoutItems, diningEnvironment, onLog } = args;
+  const preCalcByScoutIndex: Record<number, Record<string, number>> = {};
+  if (visionScoutItems && visionScoutItems.length > 0) {
+    await Promise.all(
+      visionScoutItems.map(async (sItem: any, idx: number) => {
+        const itemGrams = Number(sItem.weightGrams || sItem.estimatedGrams || sItem.estimatedWeightGrams || sItem.servingGrams || 100) || 100;
+        const ledger = await finalizeDishLedger({
+          item: sItem,
+          nutrientBasisWeight: sItem.nutrientBasisWeight || itemGrams,
+          consumedWeight: itemGrams,
+          diningEnvironment: diningEnvironment || sItem.diningEnvironment,
+        });
+        onLog(`[Budget] mode=D idx=${idx} item="${sItem.originalName || sItem.keyword}" kcal=${ledger.nutrients.calories} source=${ledger.dbSource} scoutEst=${sItem.estimatedCalories ?? 'n/a'}`);
+        preCalcByScoutIndex[idx] = ledger.nutrients as any;
+      })
+    );
+  }
+  return preCalcByScoutIndex;
 }

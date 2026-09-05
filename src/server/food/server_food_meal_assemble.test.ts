@@ -14,6 +14,7 @@ import {
   buildNewLogGateInput,
   mapFinalizeToMeal,
   mergeModifyPathScoutItems,
+  runEvaluationFinalize,
 } from './server_food_meal_assemble';
 
 describe('F-8.10 shard 6 — fallback breakdown', () => {
@@ -273,5 +274,26 @@ describe('F-8.10 shard 20 — modify-path scout merge', () => {
     });
     expect(out).toHaveLength(1);
     expect(out[0].scoutIndex).toBe(5);
+  });
+});
+
+describe('F-8.10 shard 24 — evaluation finalize loop', () => {
+  it('finalizes scout items and indexes nutrients by position', async () => {
+    const logs: string[] = [];
+    const out = await runEvaluationFinalize({
+      visionScoutItems: [
+        {
+          scoutIndex: 0, keyword: 'steamed rice', originalName: 'Steamed Rice',
+          estimatedWeightGrams: 200,
+          nutrients: { calories: 260, protein: 5, carbohydrates: 55, totalFat: 1, sodium: 5 },
+        },
+      ],
+      diningEnvironment: 'home_cooked',
+      onLog: (m: string) => logs.push(m),
+    });
+    // Atwater bottom-up: 4*5 + 4*55 + 9*1 = 249 (fixture kcal is not trusted)
+    expect(out[0].calories).toBe(249);
+    expect(logs.some((m) => m.includes('mode=D idx=0'))).toBe(true);
+    expect(await runEvaluationFinalize({ visionScoutItems: [], onLog: () => {} })).toEqual({});
   });
 });
