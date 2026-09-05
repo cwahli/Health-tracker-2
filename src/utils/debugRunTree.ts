@@ -84,6 +84,7 @@ export interface CanonicalRunTree {
   receiptTable?: any;
   rawScout?: any;
   backendLogs?: string;
+  extractedData?: any;
 }
 
 /** Determines which operational pack this run belongs to */
@@ -173,6 +174,24 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
       received: input.agentPayload,
       instruction: typeof input.agentInstructions === 'string' ? input.agentInstructions : undefined,
       output: input.handoffPayload || input.message,
+      model: 'gemini-3.5-flash-lite',
+      latency_ms: 1200,
+      tokens: undefined,
+      error: null,
+    });
+    return dispatches;
+  }
+
+  if (pack === 'medical' || pack === 'health_coach') {
+    dispatches.push({
+      id: pack === 'medical' ? 't1/medical' : 't1/health_coach',
+      parent: null,
+      turn: 1,
+      agent: pack,
+      user: input.lastUserAction?.details?.prompt || input.lastUserAction?.prompt || undefined,
+      received: input.agentPayload || input.extractedData || input.ingestTrace,
+      instruction: typeof input.agentInstructions === 'string' ? input.agentInstructions : undefined,
+      output: input.extractedData || input.report || input.message,
       model: 'gemini-3.5-flash-lite',
       latency_ms: 1200,
       tokens: undefined,
@@ -272,6 +291,7 @@ export function buildCanonicalRunTree(input: DebugReportInput): CanonicalRunTree
     receiptTable: input.receiptTable,
     rawScout: input.rawScout,
     backendLogs: input.backendLogs,
+    extractedData: input.extractedData,
   };
 
   // Evaluate contracts on the populated tree

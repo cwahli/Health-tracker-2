@@ -38,6 +38,7 @@ export interface MealItem {
   keyword?: string;
   weightGrams: number;
   cookingMethod?: string | null;
+  diningEnvironment?: string;
   dbSource?: string;
   dbId?: string | number | null;
   foodType?: string;
@@ -407,6 +408,7 @@ export async function compileMealState(
       },
       consumedWeight: grams,
       nutrientBasisWeight: it.primaryBase100g ? 100 : grams,
+      diningEnvironment: it.diningEnvironment || options.diningEnvironment,
     });
     finalizedItems.push({
       ...it,

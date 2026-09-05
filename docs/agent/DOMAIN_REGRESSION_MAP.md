@@ -105,7 +105,7 @@ Goldens live in `tests/Golden_biomarker/` (not `Golden_meal/`). Group by **class
 | Image sync / R2 / backlog B11 | `node scripts/assert-backlog-b11-image-sync.mjs` · `assert-b11d-b13-b8c.mjs` if relevant |
 | Jobs / Supabase job sync | `npx vitest run src/jobs/__tests__/JobStore.test.ts src/jobs/__tests__/mergeFoodEditMessages.test.ts` |
 | Job session / preview / edit-in-flight (`STALE_TURN`) | `npx vitest run src/jobs/__tests__/JobStore.test.ts src/jobs/__tests__/mergeFoodEditMessages.test.ts src/jobs/__tests__/JobSession.contract.test.ts` · `node scripts/assert-dev-serves-vite.mjs` |
-| Job **process** golden / debug contract (Q-8, F-8.13) | Law: `docs/agent/domains/debug-contract.md`. `npx vitest run src/utils/dumpContract.test.ts server_gemini_retry.test.ts serverJobs_publish.test.ts src/jobs/__tests__/JobStore.test.ts src/jobs/__tests__/JobQueueRunner.test.ts` · `npx tsx scripts/test-from-debug.ts` on the capture if one exists. Add `debugPayload.test.ts` / `foodProcess.golden.test.ts` when F-8.13 / Q-8.1 name them |
+| Job **process** golden / debug contract (Q-8, F-8.13) | Law: `docs/agent/domains/debug-contract.md`. `npx vitest run tests/foodProcess.golden.test.ts tests/bioProcess.golden.test.ts tests/deskProcess.golden.test.ts src/utils/dumpContract.test.ts src/utils/debugPayload.test.ts server_gemini_retry.test.ts serverJobs_publish.test.ts src/jobs/__tests__/JobStore.test.ts src/jobs/__tests__/JobQueueRunner.test.ts src/jobs/__tests__/JobSession.contract.test.ts server_sse_json.test.ts` · `npx tsx scripts/test-from-debug.ts` on the capture if one exists |
 | Login / identity | `node scripts/assert-login-identity-delta.mjs` |
 
 **Sync smoke:**

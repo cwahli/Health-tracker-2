@@ -25,6 +25,7 @@ export type ScoutEstimate = {
   sugar?: number | null;
   cookingMethod?: string | null;
   foodType?: string | null;
+  diningEnvironment?: string | null;
 };
 
 export type MealEditCommand = {
@@ -155,6 +156,7 @@ async function finalizeFromEstimate(name: string, grams: number, estimate: Scout
     item: { ...estimateToScoutItem(name, grams, estimate, media), scoutIndex },
     nutrientBasisWeight: grams,
     consumedWeight: grams,
+    diningEnvironment: estimate?.diningEnvironment || media?.diningEnvironment,
   });
   const n = { ...(ledger.nutrients || {}) };
   return {

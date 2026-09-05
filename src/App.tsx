@@ -1119,7 +1119,13 @@ export default function App() {
                 throw lastSubmitErr || new Error('Failed to submit job to server after 3 attempts');
               }
 
-              JobStore.updateJob(job.id, { serverSubmittedAt: Date.now(), resumeStage: undefined });
+              JobStore.apply({
+                type: 'ServerStatus',
+                id: job.id,
+                status: (JobStore.getJob(job.id)?.status || 'running') as any,
+                serverSubmittedAt: Date.now(),
+                resumeStage: undefined,
+              });
             }
 
             // Safety guard: if client is actively performing the network submit, wait briefly
@@ -1185,8 +1191,10 @@ export default function App() {
                 let progressVal = serverJob.progress_percent || 5;
                 let statusMsg = serverJob.status_message || 'Analyzing on server...';
 
-                // Update UI with the progress from the server
-                JobStore.updateJob(job.id, {
+                // F-9.5: poller writes status via apply. Do not send currentTurn.
+                JobStore.apply({
+                  type: 'PollerPayload',
+                  id: job.id,
                   status: serverJob.status,
                   statusMessage: statusMsg,
                   progressPercent: progressVal,
@@ -1297,7 +1305,9 @@ export default function App() {
                         },
                       },
                     };
-                  JobStore.updateJob(job.id, {
+                  JobStore.apply({
+                    type: 'PollerPayload',
+                    id: job.id,
                     status: 'awaiting_user',
                     statusMessage: portionStatusMsg,
                     progressPercent: serverJob.progress_percent || 45,
@@ -1420,7 +1430,9 @@ export default function App() {
                   } else {
                     updatedMessages = [...nonLiveMsgs, assistantMsg];
                   }
-                  JobStore.updateJob(job.id, {
+                  JobStore.apply({
+                    type: 'AnalyzeFinished',
+                    id: job.id,
                     status: 'succeeded',
                     inFlightTurnAt: undefined,
                     result: {
@@ -1524,7 +1536,9 @@ export default function App() {
                     },
                   };
 
-                  JobStore.updateJob(job.id, {
+                  JobStore.apply({
+                    type: 'AnalyzeFailed',
+                    id: job.id,
                     status: 'failed',
                     statusMessage: failMsg,
                     finishedAt: new Date().toISOString(),
@@ -1594,7 +1608,9 @@ export default function App() {
                     },
                   },
                 };
-                JobStore.updateJob(job.id, {
+                JobStore.apply({
+                  type: 'AnalyzeFinished',
+                  id: job.id,
                   status: 'succeeded',
                   result: { ...cleanResult, pendingFoodLog },
                   messages: [...nonLiveMsgs, assistantMsg],
@@ -1632,7 +1648,9 @@ export default function App() {
                 });
                 const latestJobState = JobStore.getJob(job.id) || job;
                 const nonLiveMsgs = (latestJobState.messages || job.messages || []).filter((m) => !m.isLive);
-                JobStore.updateJob(job.id, {
+                JobStore.apply({
+                  type: 'AnalyzeFailed',
+                  id: job.id,
                   status: 'failed',
                   statusMessage: failMsg,
                   finishedAt: new Date().toISOString(),
@@ -1676,7 +1694,9 @@ export default function App() {
 
               const latestTimeoutJobState = JobStore.getJob(job.id) || job;
               const nonLiveMsgsTimeout = (latestTimeoutJobState.messages || job.messages || []).filter((m) => !m.isLive);
-              JobStore.updateJob(job.id, {
+              JobStore.apply({
+                type: 'AnalyzeFailed',
+                id: job.id,
                 status: 'failed',
                 statusMessage: timeoutMsg,
                 finishedAt: new Date().toISOString(),

@@ -37,6 +37,9 @@ describe("server_dish_finalize", () => {
     expect(ledger.nutrients.unsaturatedFat).toBe(8); // 10 - (2 + 0)
     expect(ledger.nutrients.salt).toBe(0.76); // 300 * 2.54 / 1000
     expect(ledger.dbSource).toBe("estimated");
+    // No cookingMethod / env → TS prep must not change numbers (method_unknown, composite, or zero add).
+    expect(ledger.prepAddition?.addedFat ?? 0).toBe(0);
+    expect(ledger.prepAddition?.addedSodium ?? 0).toBe(0);
   });
 
   it("handles standalone condiment cap: scales nutrients once based on post-cap weight", async () => {
@@ -101,6 +104,9 @@ describe("server_dish_finalize", () => {
     expect(ledger.nutrients.carbohydrates).toBe(3.2);
     expect(ledger.nutrients.unsaturatedFat).toBe(6.4); // 8.5 - 2.1 = 6.4
     expect(ledger.nutrients.salt).toBe(0.64); // 250 * 2.54 / 1000 = 0.635 -> 0.64
+    expect(ledger.prepAddition?.addedFat ?? 0).toBe(0);
+    expect(ledger.prepAddition?.addedSodium ?? 0).toBe(0);
+    expect(ledger.prepAddition?.reason).toBe("locked_truth");
   });
 
   it("recognizes Gemini totalCarbohydrate alias in OCR label and scales correctly for user portion edit", async () => {
@@ -580,5 +586,108 @@ describe("server_dish_finalize", () => {
     expect(ledger.nutrients.vitaminC).toBeCloseTo(125.4, 1);
     expect(ledger.nutrients.vitaminC).not.toBe(1000);
     expect(ledger.lockedNutrientKeys).toContain("vitaminC");
+  });
+
+  it("adds more fat/Na for fast_food_chain deep_fried than home_cooked and re-derives Atwater (F-10.6)", async () => {
+    // Restaurant fat/Na is directional TS (diningEnvironment × cookingMethod). Residual is named
+    // via prepAddition.reason — do not claim prototype Case 4/9 restaurant meals are 90% correct.
+    const baseItem = {
+      scoutIndex: 0,
+      originalName: "Chicken Breast",
+      keyword: "chicken",
+      cookingMethod: "deep_fried",
+      estimatedWeightGrams: 200,
+      nutrients: {
+        protein: 40,
+        carbohydrates: 0,
+        totalFat: 10,
+        saturatedFat: 2,
+        transFat: 0,
+        sodium: 200,
+      },
+    };
+
+    const home = await finalizeDishLedger({
+      item: { ...baseItem, diningEnvironment: "home_cooked" },
+      nutrientBasisWeight: 200,
+      consumedWeight: 200,
+      diningEnvironment: "home_cooked",
+    });
+    const ff = await finalizeDishLedger({
+      item: { ...baseItem, diningEnvironment: "fast_food_chain" },
+      nutrientBasisWeight: 200,
+      consumedWeight: 200,
+      diningEnvironment: "fast_food_chain",
+    });
+
+    expect(home.dbSource).toBe("estimated");
+    expect(ff.dbSource).toBe("estimated");
+    expect(ff.prepAddition?.reason).toBe("calculated_prep");
+    expect(home.prepAddition?.reason).toBe("calculated_prep");
+    expect(ff.nutrients.totalFat as number).toBeGreaterThan(home.nutrients.totalFat as number);
+    expect(ff.nutrients.sodium as number).toBeGreaterThan(home.nutrients.sodium as number);
+    expect(ff.nutrients.calories).toBe(
+      Math.round(4 * Number(ff.nutrients.protein) + 4 * Number(ff.nutrients.carbohydrates) + 9 * Number(ff.nutrients.totalFat))
+    );
+    expect(home.nutrients.calories).toBe(
+      Math.round(4 * Number(home.nutrients.protein) + 4 * Number(home.nutrients.carbohydrates) + 9 * Number(home.nutrients.totalFat))
+    );
+  });
+
+  it("skips TS prep when OCR/brand locks labelled kcal/fat (F-10.6 locked_truth)", async () => {
+    const item = {
+      scoutIndex: 0,
+      originalName: "Chicken Breast",
+      keyword: "chicken",
+      cookingMethod: "deep_fried",
+      diningEnvironment: "fast_food_chain",
+      estimatedWeightGrams: 200,
+      nutrients: {
+        protein: 40,
+        carbohydrates: 0,
+        totalFat: 10,
+        saturatedFat: 2,
+        sodium: 200,
+      },
+      rawNutritionLabel: {
+        calories: "250",
+        protein: "40g",
+        totalFat: "10g",
+        saturatedFat: "2g",
+        carbohydrates: "0g",
+        sodium: "200mg",
+        basisType: "per_dish",
+      },
+    };
+
+    const ledger = await finalizeDishLedger({
+      item,
+      nutrientBasisWeight: 200,
+      consumedWeight: 200,
+      diningEnvironment: "fast_food_chain",
+    });
+
+    expect(ledger.dbSource).toBe("label");
+    expect(ledger.lockedNutrientKeys).toContain("calories");
+    expect(ledger.nutrients.calories).toBe(250);
+    expect(ledger.nutrients.totalFat).toBe(10);
+    expect(ledger.nutrients.sodium).toBe(200);
+    expect(ledger.prepAddition?.addedFat ?? 0).toBe(0);
+    expect(ledger.prepAddition?.addedSodium ?? 0).toBe(0);
+    expect(ledger.prepAddition?.reason).toBe("locked_truth");
+  });
+
+  it("F-10.8 inner: 11 prototype cases keep restaurant fat/Na residual named (no Gemini, not 90% painted)", async () => {
+    const { readFileSync } = await import("fs");
+    const { fileURLToPath } = await import("url");
+    const { dirname, join } = await import("path");
+    const here = dirname(fileURLToPath(import.meta.url));
+    const rows = JSON.parse(
+      readFileSync(join(here, "prototype/meallog/meal/comparison_1_vs_2_results.json"), "utf8")
+    ) as Array<{ caseId: number; a1?: { acc?: { fAcc?: number; naAcc?: number } } }>;
+    expect(rows).toHaveLength(11);
+    const restaurantFatResidual = rows.filter((r) => (r.a1?.acc?.fAcc ?? 100) < 90).map((r) => r.caseId);
+    // Cases 1 / 4 / 9 (and others) stay residual — F-10.6 is directional, not a 90% claim.
+    expect(restaurantFatResidual).toEqual(expect.arrayContaining([1, 4, 9]));
   });
 });

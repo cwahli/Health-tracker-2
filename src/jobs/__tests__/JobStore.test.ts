@@ -319,4 +319,46 @@ describe('JobStore', () => {
     expect(JobStore.getJob('turn-n')?.status).toBe('queued');
     expect(JobStore.getJob('turn-n')?.currentTurn).toBe(2);
   });
+
+  it('does not let a stale realtime failed echo clobber an in-flight retry', () => {
+    const t0 = Date.now();
+    JobStore.createJob({
+      id: 'echo-fail',
+      status: 'failed',
+      attemptCount: 1,
+      error: { class: 'permanent', message: 'prior attempt failed' },
+    });
+    JobStore.updateJob('echo-fail', {
+      status: 'queued',
+      attemptCount: 2,
+      clientSubmitPending: true,
+      inFlightTurnAt: t0,
+      finishedAt: undefined,
+      error: undefined,
+      statusMessage: 'Retrying...',
+    });
+    JobStore.updateJob('echo-fail', { status: 'running', clientSubmitPending: false });
+
+    JobStore.apply({
+      type: 'RealtimeRow',
+      id: 'echo-fail',
+      status: 'failed',
+      updatedAt: new Date(t0 - 60_000).toISOString(),
+      inFlightTurnAt: undefined,
+      finishedAt: new Date().toISOString(),
+      error: { class: 'permanent', message: 'prior attempt failed' },
+    } as any);
+
+    const job = JobStore.getJob('echo-fail');
+    expect(job?.status).toBe('running');
+    expect(job?.inFlightTurnAt).toBe(t0);
+    expect(job?.attemptCount).toBe(2);
+
+    JobStore.updateJob('echo-fail', {
+      status: 'failed',
+      error: { class: 'permanent', message: 'Invalid JSON from model' },
+    });
+    expect(JobStore.getJob('echo-fail')?.status).toBe('failed');
+    expect(JobStore.getJob('echo-fail')?.error?.message).toContain('Invalid JSON from model');
+  });
 });

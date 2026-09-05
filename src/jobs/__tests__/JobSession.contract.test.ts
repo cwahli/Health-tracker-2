@@ -186,4 +186,83 @@ describe('JobSession contract (STALE_TURN)', () => {
     expect(assistantMessages).toHaveLength(1);
     expect(assistantMessages[0].content).toBe('Meal analyzed: 650 kcal (updated)');
   });
+
+  it('F-9.5 SubmitStarted writes queued + inFlight without updateJob', () => {
+    JobStore.createJob({
+      id: 'sub1',
+      status: 'draft',
+      currentTurn: 1,
+      inputSnapshot: { text: 'Analyze this meal photo.', imageRefs: [], mode: 'review' },
+    });
+    JobStore.apply({
+      type: 'SubmitStarted',
+      id: 'sub1',
+      status: 'queued',
+      clientSubmitPending: true,
+      inFlightTurnAt: Date.now(),
+      currentTurn: 2,
+      statusMessage: 'Uploading to server… Keep this tab open',
+      inputSnapshot: { text: 'Analyze this meal photo.', imageRefs: ['img'], mode: 'review' },
+    });
+    const job = JobStore.getJob('sub1')!;
+    expect(job.status).toBe('queued');
+    expect(job.clientSubmitPending).toBe(true);
+    expect(job.currentTurn).toBe(2);
+    expect(job.inFlightTurnAt).toBeGreaterThan(0);
+    expect(previewStatusLabel(job)).toMatch(/Uploading|Updating|queued|Queued/i);
+  });
+
+  it('F-9.5 PollerPayload progress does not require currentTurn and does not clobber turn', () => {
+    JobStore.createJob({
+      id: 'poll1',
+      status: 'queued',
+      currentTurn: 3,
+      clientSubmitPending: true,
+      inFlightTurnAt: Date.now(),
+    });
+    JobStore.apply({
+      type: 'SubmitStarted',
+      id: 'poll1',
+      status: 'running',
+      clientSubmitPending: false,
+      statusMessage: 'Analyzing on server...',
+    });
+    JobStore.apply({
+      type: 'PollerPayload',
+      id: 'poll1',
+      status: 'running',
+      statusMessage: 'Vision Scout starting...',
+      progressPercent: 15,
+    });
+    const job = JobStore.getJob('poll1')!;
+    expect(job.status).toBe('running');
+    expect(job.currentTurn).toBe(3);
+    expect(job.progressPercent).toBe(15);
+  });
+
+  it('F-9.5 AnalyzeFinished from poller completes with result', () => {
+    JobStore.createJob({
+      id: 'fin1',
+      status: 'running',
+      currentTurn: 1,
+      inFlightTurnAt: Date.now(),
+      messages: [{ role: 'user', content: 'log meal' }],
+    });
+    JobStore.apply({
+      type: 'AnalyzeFinished',
+      id: 'fin1',
+      status: 'succeeded',
+      result: next,
+      messages: [{ role: 'assistant', content: 'done', pendingFoodLog: next.pendingFoodLog }],
+      inFlightTurnAt: undefined,
+      finishedAt: new Date().toISOString(),
+      progressPercent: 100,
+      statusMessage: 'Analysis complete',
+    });
+    const job = JobStore.getJob('fin1')!;
+    expect(job.status).toBe('succeeded');
+    expect(job.currentTurn).toBe(1);
+    expect(job.result?.pendingFoodLog?.nutrients?.calories).toBe(650);
+    expect(previewStatus(job)).toBe('succeeded');
+  });
 });

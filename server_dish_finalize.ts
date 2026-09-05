@@ -21,11 +21,13 @@ import {
 import { backfillSparseMicronutrients } from './server_pure_helpers';
 import { deduceSugarBreakdown } from './server_sugar_engine';
 import { classifyUniversalPhysicalFormV3 } from './server_matching_engine';
+import { decidePrepAddition } from './server_prep_policy';
 
 export interface FinalizeInput {
   item: any;
   nutrientBasisWeight?: number;
   consumedWeight?: number;
+  diningEnvironment?: string;
   storedBrandLock?: {
     id: string;
     basisType: 'per_dish' | 'per_100g' | string;
@@ -66,6 +68,8 @@ export interface DishLedger {
   compositeSiblings?: any[];
   hasComponents?: boolean;
   ingredientsList?: string | null;
+  /** Honest residual from diningEnvironment × cookingMethod (not a second kcal book). */
+  prepAddition?: { addedFat: number; addedSodium: number; addedSaturatedFat: number; addedCalories: number; reason?: string };
 }
 
 const ATWATER_TOLERANCE = 0.35;
@@ -376,6 +380,31 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
     }
   }
 
+  // F-10.6: TS fat/Na critic (diningEnvironment × cookingMethod) before Atwater so kcal re-derives from macros.
+  const env = input.diningEnvironment || item.diningEnvironment || 'unknown';
+  const prep = decidePrepAddition({
+    weightGrams: consumedWeight,
+    cookingMethod: item.cookingMethod,
+    physicalForm: item.physicalForm,
+    dishName: originalName,
+    keyword,
+    canonicalDbName: item.canonicalDbName,
+    foodType: item.foodType,
+    componentCount: (item.componentsDetailList || item.components || []).length,
+    hasLockedTruth: dbSource === 'label' || dbSource === 'brand_official' || lockedNutrientKeys.includes('calories') || lockedNutrientKeys.includes('totalFat'),
+    diningEnvironment: env,
+    dbSource,
+    proteinMassGrams: typeof nutrients.protein === 'number' ? nutrients.protein : null,
+  });
+  if (!lockedNutrientKeys.includes('calories') && (prep.addedFat > 0 || prep.addedSodium > 0)) {
+    const fat = Number(nutrients.totalFat) || 0;
+    const sat = Number(nutrients.saturatedFat) || 0;
+    const na = Number(nutrients.sodium) || 0;
+    nutrients.totalFat = Math.round((fat + prep.addedFat) * 10) / 10;
+    nutrients.saturatedFat = Math.round((sat + prep.addedSaturatedFat) * 10) / 10;
+    nutrients.sodium = Math.round(na + prep.addedSodium);
+  }
+
   // 4. Bottom-Up Calorie Derivation & Atwater Consistency
   if (dbSource === 'estimated' && !lockedNutrientKeys.includes('protein')) {
     const decomp = decomposeSaucedEntree(originalName, consumedWeight, nutrients.protein);
@@ -618,5 +647,6 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
     compositeSiblings: componentsDetailList || undefined,
     hasComponents: Boolean(componentsDetailList && componentsDetailList.length > 1),
     ingredientsList: finalIngredientsList,
+    prepAddition: prep,
   };
 }

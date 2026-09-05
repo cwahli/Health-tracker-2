@@ -63,7 +63,7 @@ npx vitest run src/mealBuild/__tests__/shouldExpandMealAgent.test.ts server_deri
 node scripts/assert-f10-pr1.mjs
 ```
 
-Then start **F-10.3** (same file, F-10 table). Skip **F-10.6** and **F-9.5** (Grok).
+Then start **F-10.3** (same file, F-10 table). **F-10.6** and **F-9.5** are shipped (Grok, 2026-09-05).
 
 ```text
                     ┌─────────────────────┐
@@ -92,7 +92,7 @@ Locked converts never change: `1.293` / `1.411` / `3.362` / `79.56` / `13.68`.
 | If you are… | Do |
 |---|---|
 | **AI Studio / Gemini (default)** | **Current work** above, then the next open F-10 ID. This file only. |
-| **Grok leftover** | **F-9.5:** `App.tsx` poller still `JobStore.updateJob`. Do not mix with F-10. |
+| **Grok leftover** | F-9.5 / F-10.6 / Q-8.1–8.5 shipped. Outer live confirm is **Q-8.6** (human or script, not Grok in the wait loop). |
 | Tests feel huge / every edit runs everything | **Q-7:** named map rows only. Do not `npm test`. Do not recreate missing asserts. |
 | Food create architecture | **F-10** (one Meal Agent + TS expand). Not a Dietitian critic. |
 | Food calories / debug file | **F-8.10, F-8.12, F-8.13** (split, packaged bind, debug). Soak is **F-10.8**, not a replay of always-dietitian. |
@@ -252,7 +252,7 @@ Q-1 (`assert-budgets.mjs`) is **green**. They do **not** rebuild the curator (M3
 | **F-8.10** | Goldilocks-split the pipeline owner | `server_food_analyze_run.ts` (~3560, ceiling 3800) split into 400–600 owners (**Meal Agent dispatch**, optional workers, DB search, prompt assembly). Delete leftover `STANDARD_FOOD_FACTORS` mock table if unused. HTTP adapter stays ≤700. Do this **with** F-10, not as a scout-vs-dietitian file split | 40-line shards; a second kcal writer |
 | **F-8.11** | **Superseded by F-10.8** | Do not soak the old always-dietitian create path. Evidence job still required on the F-10 pipeline | Replay scout+dietitian as “done” |
 | **F-8.12** | Packaged catalog residual | Hemaviton-class drink: vitamin C / labelled kcal from **brand or printed OCR** when those facts exist. Bind-attempt + `BIND_MISS` is already honest. F-10 does not replace catalog bind | Invent 1000 mg vitamin C |
-| **F-8.13** | Debug file = contract report | Matches [RELIABILITY.md](./RELIABILITY.md) **§11** including **§11.12 A–F**: JSON run tree canonical (markdown is a view); `jobId` on console/network/server; **dialog inventory** (not screenshot/HTML); per-dispatch model+latency_ms+tokens; handoff from/to/dropped keys; Contract first; prompts once; matrix matches logs; process dupes scored not stripped. `debugPayload.test.ts` + `dumpContract` on **JSON**. | Hash-only prompts; hide schema; PNG as contract; LangSmith/LLM-judge; regex-md as only scorer |
+| **F-8.13** | **Shipped** | JSON run tree (`debugRunTree.ts`) + `dumpContract` on JSON + Contract-first markdown. Gaps A–F in `docs/agent/domains/debug-contract.md`. | Hash-only prompts; hide schema; PNG as contract; LangSmith/LLM-judge |
 
 Execute **one class** per session. Inner = named vitest. Outer = one frozen example, not meal-green.
 
@@ -271,8 +271,8 @@ F-8 made calories have one owner. F-9 makes “what is on the preview” have on
 | **F-9.1** | **Shipped** | — | Add flags; `npm run build` as sync | — |
 | **F-9.2** | **Shipped** | — | Store-only tests | — |
 | **F-9.3** | **Shipped** (residual) | Session section on **debug download**; log `ignored_stale_turn` (today every commit is `accepted`/`completed`) | New modal | Optional later |
-| **F-9.4** | **Shipped** (residual) | Delete `inFlightTurnAt` / `mealSnapshotKey` only after F-9.5; App poller does not send `currentTurn` | Infer turn from calories | Grok with 9.5 |
-| **F-9.5** | **Partial** | `App.tsx` poller (~15 `updateJob` sites) still writes status/result. LogChat submit still `updateJob` (not `SubmitStarted`). Wrapper `updateJob` → `commit` is OK until those call sites move | God-file rewrite; second merge path | **Grok** |
+| **F-9.4** | **Shipped** (residual) | Flags `inFlightTurnAt` / `mealSnapshotKey` still exist as fallback. App poller does not send `currentTurn`. Delete flags in a later cleanup, not as a god-file rewrite | Infer turn from calories | later |
+| **F-9.5** | **Shipped** | App poller status/result → `JobStore.apply` (`PollerPayload` / `AnalyzeFinished` / `AnalyzeFailed`). LogChat food+medical submit → `SubmitStarted`. Wrapper `updateJob` remains for credits/checkpoint/savedToLog | God-file rewrite; second merge path | **Grok** |
 
 Gemini leftover from PR4 (do not treat as architecture): one-shot `patch_*.mjs` / `fix_*.mjs` at repo root — **deleted in this review**. Do not restore.
 
@@ -294,9 +294,9 @@ Same pattern as biomarkers: one Review for n=1–5; TypeScript decides batch/exp
 | **F-10.3** | **Shipped** | `src/mealBuild/workerMerge.ts` + vitest. Workers receive **locked grams + dish crop**, merged strictly by dishId. | Re-OCR; second kcal book | — |
 | **F-10.4** | **Shipped** | `src/mealBuild/narration.ts` + vitest. Saved message numbers derive from finalize ledger table. | Dietitian `itemsBreakdown` rebuild; narrate from pre-finalize estimates | — |
 | **F-10.5** | **Shipped** | `server_meal_edit.ts` + `ModeDAndEdit.test.ts`. `modificationCommand` / `[]` / `estimate` executor. | New persona; Mode Rewrite | — |
-| **F-10.6** | Fat/Na TS critic | `diningEnvironment` × `cookingMethod` multipliers in finalize (restaurant fry oil, commercial Na). Honest residual on restaurant fat | Default to a second critic LLM; claim 90% fat on Case 4/9 | **Grok** constants |
+| **F-10.6** | **Shipped** | `diningEnvironment` × `cookingMethod` in `finalizeDishLedger` via `decidePrepAddition`. Honest residual named `prepAddition.reason`. | Default to a second critic LLM; claim 90% fat on Case 4/9 | **Grok** constants |
 | **F-10.7** | **Shipped** | `server_food_analyze_run.ts` adaptive create cutover via `shouldExpandMealAgent`. Dietitian LLM skipped on single-agent paths; D8 scale preserved. | Wrap the old dietitian create as fallback forever | — |
-| **F-10.8** | Soak (replaces F-8.11) | Inner: 11 prototype cases, no Gemini. Outer: one live replay of evidence-job class. Restaurant fat/Na residual named, not painted green | `POST /loop`; soak old scout+dietitian | Grok reviews |
+| **F-10.8** | Inner named; outer = Q-8.6 | Inner: 11 prototype cases in `server_dish_finalize.test.ts` (restaurant fat residual on 1/4/9 named, not 90%). Outer: `scripts/soak-q8-tier3.md` | `POST /loop`; soak old scout+dietitian; Grok in the wait loop | Grok reviews / human |
 
 **Do not mix** F-10 with F-9.5 (`App.tsx` collision). Catalog bind (F-8.12) and M30 curator stay — 1-agent OCR is not a replacement for identity.
 
@@ -344,7 +344,7 @@ Rules unchanged: work item = class · inner = vitest · outer = one example · h
 | **Q-5** Delete one-shot patch scripts | Root `patch_*.ts` / `fix-*.ts` residue gone after the last class they served. F-9 `patch_*.mjs` already removed |
 | **Q-6** Unified bug queue | Snap + auto + golden tape are **one `#n`**. Inbox is not a second list. Named bug first; extra tape reds = series remaining (or sibling `#n`). Promote (photos + class test) → official `G*` / G-B fail-safe. No `/loop`. See `QUALITY.md` §14–14.4 |
 | **Q-7** Test + golden hygiene | COMPLETE = `tsc` + matching regression-map rows, not `npm test`. Ghost `assert-*.mjs` citations gone. G1 asserted once (`golden_meals.test.ts`). Frozen create fixture is Meal Agent JSON (no kcal), not scout→dietitian `scout.json`. Inbox / `golden:loop` not on every food PR. See `QUALITY.md` §1.4–1.5 |
-| **Q-8** Process goldens | Three boards (food / biomarker / receptionist). Dummy SSE/status, no Gemini inner loop. Audit every worker exit (§1.3.1) so a dump is an alarm, not the whole suite. See table below. **Grok** (jobs / LogChat / `serverJobs`) |
+| **Q-8** Process goldens | **Shipped 8.1–8.5.** Boards: `tests/foodProcess.golden.test.ts`, `tests/bioProcess.golden.test.ts`, `tests/deskProcess.golden.test.ts`. Q-8.3 Playwright stub already in tree. **Q-8.6** protocol: `scripts/soak-q8-tier3.md` (human/script outer confirm). |
 | **Q-9** Website consolidation | Later **step**, not now. Too many files, `patch_*`, god `LogChat` / `App` / `Header`. Split/fold only with a named gate. Serialize vs F-9.5 / B0 / R-9 (`App.tsx`). **Grok**. Do not start as a rewrite binge |
 | **Q-10** Dependency consolidation | Later **step**, after Q-9. Audit `package.json` / unused imports; remove what we can. **Not** R-7 knip-as-reliability-gate (abandoned). Hygiene only |
 
@@ -352,12 +352,12 @@ Rules unchanged: work item = class · inner = vitest · outer = one example · h
 
 | ID | Do | Done when | Do not |
 |---|---|---|---|
-| **Q-8.1** | Food process **audit**: walk QUALITY.md §1.3.1 exits. Dummy row per exit (including ones this dump did not take). Debug follows RELIABILITY.md **§11** + **§11.12** (JSON tree, dialog inventory, correlation id, dispatch signals, handoff record) | Checklist lists every §1.3.1 row + 11.12 A–F; dummy fixture or named residual; Contract emitted from JSON | Live Gemini; one dump = whole suite; screenshot as scorer; Phoenix/LangSmith |
-| **Q-8.2** | Make Soto classes green on dummy data: `QUEUE_LIE`, `DEGRADE_NOT_TERMINAL`, `DISPLAY_LAG`, `COMPLETE_ONCE`, `STALL_NO_FALLBACK`, `STALE_TURN`. Rewrite tests that encoded the bug (stall ⇒ failed) | Named vitest green; historical dumps still classify red via `test-from-debug` | G8 photos; `POST /loop` |
-| **Q-8.3** | Tier 2 Playwright: stub `/api/jobs/*`. Assert **dialog inventory**: card ≠ Attempt 1/3 / Retry when stub succeeded with kcal; in-flight when running with no meal; composer counts; on_card kcal matches stub ledger | One spec, mocked, that file only. Optional screenshot on FAIL, not the oracle | Live Log Meal; mix with R-3; innerHTML dump |
-| **Q-8.4** | Biomarker process board. Share stall/persist/SSE laws with food. Add Apply/salvage/DIAG5-not-on-lab. **Audit §1.3.1 bio exits first** | Dummy medical stream + Apply row; named vitest | Paint G-B1 all_green |
-| **Q-8.5** | Receptionist process board. Handoff + who owns the next job; specialist then uses food or bio process. **Audit §1.3.1 desk exits first** | Dummy UC + handoff; empty-demo already S-5 | 10 live UC click-through |
-| **Q-8.6** | Tier 3 protocol: one website live **or** API live after 8.2 (food) / 8.4 / 8.5. Script preferred. Grok not in the wait loop | Written soak command + “if dump class already a row, inner failed” | API **and** website for the same meal; Grok bot 3-case loop |
+| **Q-8.1** | **Shipped.** Food process **audit**: walk QUALITY.md §1.3.1 exits. Dummy row per exit (including ones this dump did not take). Debug follows RELIABILITY.md **§11** + **§11.12** (JSON tree, dialog inventory, correlation id, dispatch signals, handoff record) | Checklist lists every §1.3.1 row + 11.12 A–F; dummy fixture or named residual; Contract emitted from JSON | Live Gemini; one dump = whole suite; screenshot as scorer; Phoenix/LangSmith |
+| **Q-8.2** | **Shipped.** Make Soto classes green on dummy data: `QUEUE_LIE`, `DEGRADE_NOT_TERMINAL`, `DISPLAY_LAG`, `COMPLETE_ONCE`, `STALL_NO_FALLBACK`, `STALE_TURN`. Rewrite tests that encoded the bug (stall ⇒ failed) | Named vitest green; historical dumps still classify red via `test-from-debug` | G8 photos; `POST /loop` |
+| **Q-8.3** | **Shipped.** `prototype/tests/dialog-inventory.spec.ts` stubs `/api/jobs/*` | Card ≠ Attempt/Retry when stub succeeded with kcal | Live Log Meal; mix with R-3 |
+| **Q-8.4** | **Shipped.** `tests/bioProcess.golden.test.ts` | Dummy medical SSE + Apply + table abort + DIAG5-off-lab | Paint G-B1 all_green |
+| **Q-8.5** | **Shipped.** `tests/deskProcess.golden.test.ts` | Dummy UC-02 handoff + dropped keys + FD not a meal analyzer | 10 live UC click-through |
+| **Q-8.6** | **Protocol written.** `scripts/soak-q8-tier3.md` | One website **or** API live after 8.2/8.4/8.5. If dump class already a row, inner failed. Grok not in the wait loop | API **and** website for the same meal; Grok bot 3-case loop |
 
 Session replay: **abandoned** (Q-8 is dummy SSE/status, not replaying a browser session).  
 Golden-execution Q work is usually **inside** B2/B4/B6 or F-3.  
@@ -370,12 +370,12 @@ Same reward change as class-first goldens (`QUALITY.md` §0): green means the **
 ```text
 Q-1 + Q-2 + Q-3              ← landed
 F-10.2 then 10.3–10.5, 10.7  ← Gemini from this file (Current work)
-F-9.5 App poller             ← Grok (serialize vs B0/R-9)
-F-10.6 fat/Na TS             ← Grok constants
-F-8.10 + F-8.12 + F-8.13     ← with F-10, not old dietitian
-Q-8.1 → 8.2 → 8.3            ← Grok; food process board + stubbed card
-F-10.8 soak                  ← after 10.7; that soak is Q-8.6 Tier 3 **once**
-Q-8.4 / Q-8.5                ← bio / receptionist process boards
+F-9.5 App poller             ← shipped (Grok)
+F-10.6 fat/Na TS             ← shipped (Grok)
+F-8.13 debug contract        ← shipped
+Q-8.1 → 8.5                  ← shipped (Grok)
+F-8.10 shards                ← Gemini Current work
+Q-8.6 / F-10.8 outer         ← one website Log Meal (human/script)
 B0 / fill-template C1–C7     ← Track B
 Q-9 website consolidation    ← later step (Grok; serialize App.tsx)
 Q-10 dependency audit        ← later step after Q-9
@@ -387,8 +387,8 @@ Do **not** open Q-4 or a Dictionary/FoodCard/`App.tsx` breakup unless Q-1 is red
 
 | | **Gemini** (AI Studio — this ROADMAP) | **Grok** |
 |---|---|---|
-| Prefer | F-10.2–10.5, 10.7; B8.2/8.3; R-9 FIND/REPLACE; F-6 net-zero in existing cards | F-9.5 `App.tsx`; F-10.6 constants; **Q-8** process goldens; Q-4; Q-9 later; any split of `App.tsx` / `LogChat.tsx` / `Header.tsx` |
-| Do not | `App.tsx` poller; `npm test`; critic LLM; USDA; invent a pack file; live Gemini as inner loop | Mix F-10 into an open F-9.5 edit; Grok Bot clicking remaining live cases |
+| Prefer | F-10.2–10.5, 10.7; F-8.10 shards; B8.2/8.3; R-9 FIND/REPLACE; F-6 net-zero in existing cards | Q-4 if Q-1 red on AgentResultTable; Q-9 later; any split of `App.tsx` / `LogChat.tsx` / `Header.tsx` |
+| Do not | `npm test`; critic LLM; USDA; invent a pack file; live Gemini as inner loop | Grok Bot clicking remaining live cases; Q-9 rewrite binge |
 
 ---
 

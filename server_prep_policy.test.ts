@@ -78,4 +78,32 @@ describe('server_prep_policy', () => {
     expect(res.reason).toBe('prep_xor_fat_bearing');
     expect(logged).toBe(true);
   });
+
+  it('applies higher lipid/Na for fast_food_chain vs home_cooked on deep_fried (F-10.6)', () => {
+    const base = {
+      weightGrams: 200,
+      cookingMethod: 'deep_fried',
+      dishName: 'Chicken Breast',
+      keyword: 'chicken',
+      componentCount: 0,
+    };
+    const home = decidePrepAddition({ ...base, diningEnvironment: 'home_cooked' });
+    const ff = decidePrepAddition({ ...base, diningEnvironment: 'fast_food_chain' });
+    expect(home.reason).toBe('calculated_prep');
+    expect(ff.reason).toBe('calculated_prep');
+    expect(ff.addedFat).toBeGreaterThan(home.addedFat);
+    expect(ff.addedSodium).toBeGreaterThan(home.addedSodium);
+  });
+
+  it('zeros prep when cookingMethod is unknown (F-10.6)', () => {
+    const res = decidePrepAddition({
+      weightGrams: 200,
+      dishName: 'Chicken Breast',
+      keyword: 'chicken',
+      componentCount: 0,
+    });
+    expect(res.addedFat).toBe(0);
+    expect(res.addedSodium).toBe(0);
+    expect(res.reason).toBe('method_unknown');
+  });
 });

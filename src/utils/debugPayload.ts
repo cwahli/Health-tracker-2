@@ -126,6 +126,7 @@ export type DebugReportInput = {
   handoffs?: HandoffTrace[];
   pack?: 'food' | 'receptionist' | 'medical' | 'health_coach';
   conversationId?: string | null;
+  extractedData?: any;
 };
 
 /**

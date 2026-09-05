@@ -472,10 +472,27 @@ class JobStoreImpl {
       }
     }
 
+    // Realtime/poller `failed` from a prior attempt must not wipe an in-flight retry.
+    // Local executor fails have no older updatedAt and still apply.
+    if (
+      patch.status === 'failed' &&
+      (job.clientSubmitPending || job.inFlightTurnAt) &&
+      isInFlightJobStatus(job.status)
+    ) {
+      const submittedAt = job.inFlightTurnAt || job.serverSubmittedAt || 0;
+      const incomingUpdatedMs = patch.updatedAt ? new Date(patch.updatedAt).getTime() : 0;
+      if (incomingUpdatedMs && submittedAt && incomingUpdatedMs < submittedAt - 2500) {
+        delete patch.status;
+        delete patch.error;
+        delete patch.finishedAt;
+        delete patch.inFlightTurnAt;
+      }
+    }
+
     const nextStatus = patch.status !== undefined ? patch.status : job.status;
     const alreadySucceededWithMeal = job.status === 'succeeded' && !!job.result?.pendingFoodLog;
     const isPollHeartbeat =
-      eventType === 'updateJob' &&
+      (eventType === 'updateJob' || eventType === 'PollerPayload') &&
       nextStatus === job.status &&
       (job.status === 'running' || job.status === 'queued' || job.status === 'processing');
 

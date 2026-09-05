@@ -144,14 +144,14 @@ export function getInMemoryServerJob(jobId: string) {
   return inMemoryServerJobs.get(jobId) || null;
 }
 
-/** Flip in-memory status to succeeded as soon as pendingFoodLog exists.
+/** Flip in-memory status to succeeded as soon as pendingFoodLog or extractedData exists.
  * Pollers read this map first — do not wait for R2 / Supabase. */
 export function publishResultReady(jobId: string, cleanResult: any): boolean {
   const memJob = inMemoryServerJobs.get(jobId);
   if (!memJob) return false;
-  const meal = cleanResult?.pendingFoodLog || cleanResult?.data;
+  const meal = cleanResult?.pendingFoodLog || cleanResult?.data || cleanResult?.extractedData;
   if (!meal) return false;
-  if (memJob.status === 'succeeded' && memJob.clean_result?.pendingFoodLog) return false;
+  if (memJob.status === 'succeeded' && (memJob.clean_result?.pendingFoodLog || memJob.clean_result?.extractedData)) return false;
   memJob.status = 'succeeded';
   memJob.progress_percent = 100;
   memJob.status_message = 'Analysis complete';

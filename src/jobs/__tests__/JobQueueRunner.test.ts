@@ -121,7 +121,7 @@ describe('JobQueueRunner', () => {
     JobQueueRunner.setExecutor(async (job) => {
       JobStore.updateJob(job.id, {
         status: 'failed',
-        error: { class: 'transient', message: 'Stream stalled: Vision Scout timed out' }
+        error: { class: 'permanent', message: 'Invalid JSON from model' }
       });
     });
 
@@ -129,6 +129,6 @@ describe('JobQueueRunner', () => {
     await new Promise(r => setTimeout(r, 100));
 
     expect(JobStore.getJob('f_executor')?.status).toBe('failed');
-    expect(JobStore.getJob('f_executor')?.error?.message).toContain('Stream stalled');
+    expect(JobStore.getJob('f_executor')?.error?.message).toContain('Invalid JSON from model');
   });
 });

@@ -2547,7 +2547,9 @@ ${logsText}`);
           }
         }
         if (job) {
-          JobStore.updateJob(currentJobId, {
+          JobStore.apply({
+            type: 'SubmitStarted',
+            id: currentJobId,
             status: 'queued',
             progressPercent: 0,
             mode: submissionMode,
@@ -2798,7 +2800,9 @@ ${logsText}`);
           })
           .then(data => {
             console.log('[LogChat] Job successfully submitted to server:', data);
-            JobStore.updateJob(currentJobId, {
+            JobStore.apply({
+              type: 'ServerStatus',
+              id: currentJobId,
               status: 'running',
               statusMessage: submissionMode === 'edit' ? 'Updating meal...' : 'Analyzing on server...',
               serverSubmittedAt: Date.now(),
@@ -2808,7 +2812,9 @@ ${logsText}`);
           })
           .catch(err => {
             console.error('[LogChat] Server submit failed after retries, delegating to JobQueueRunner:', err);
-            JobStore.updateJob(currentJobId, {
+            JobStore.apply({
+              type: 'ServerStatus',
+              id: currentJobId,
               status: 'queued',
               clientSubmitPending: false,
               statusMessage: 'Connection delayed; background runner retrying submit...'
@@ -2828,9 +2834,12 @@ ${logsText}`);
           });
         }).catch(err => {
           console.error('[LogChat] Error converting images:', err);
-          JobStore.updateJob(currentJobId, {
+          JobStore.apply({
+            type: 'AnalyzeFailed',
+            id: currentJobId,
             status: 'failed',
-            statusMessage: 'Submission Failed: Image conversion error'
+            statusMessage: 'Submission Failed: Image conversion error',
+            error: { class: 'transient', message: 'Submission Failed: Image conversion error' },
           });
           clearTimeout(failsafe);
           setIsSubmitting(false);
@@ -3013,7 +3022,9 @@ ${logsText}`);
           }
         }
         if (job) {
-          JobStore.updateJob(currentJobId, {
+          JobStore.apply({
+            type: 'SubmitStarted',
+            id: currentJobId,
             status: 'queued',
             inputSnapshot,
             messages: updatedMessages,
@@ -3021,17 +3032,9 @@ ${logsText}`);
             creditSettled: false,
             requestId: currentReqId,
             serverSubmittedAt: undefined,
-            // FIX: medical jobs are submitted to the server exclusively by
-            // JobQueueRunner's executor (App.tsx), unlike food_log/food_compare
-            // where LogChat calls fetch('/api/jobs/submit') itself right after this.
-            // JobQueueRunner treats clientSubmitPending:true as "the client already
-            // submitted this, don't submit again" (see clientOwnsSubmit in App.tsx).
-            // Leaving this true here made the executor silently skip the submit
-            // fetch on the very first attempt for every medical/biomarker job —
-            // no request ever reached /api/gemini/medical-analyze, no Gemini
-            // usage appeared, and the job just polled a status that never
-            // changed until a retry (isRetryAttempt) forced clientOwnsSubmit
-            // false and the submit finally fired.
+            // Medical jobs are submitted by JobQueueRunner (App.tsx), unlike food
+            // where LogChat POSTs /api/jobs/submit. clientSubmitPending must stay
+            // false so the executor does not skip the first medical submit.
             clientSubmitPending: false,
             statusMessage: t.uploadingKeepTabOpen || 'Uploading to server… Keep this tab open',
             ...(isDifferentBiomarkerAction ? { attemptCount: 1, maxAttempts: 3 } : {}),
@@ -3047,9 +3050,8 @@ ${logsText}`);
             creditSettled: false,
             requestId: currentReqId,
             serverSubmittedAt: undefined,
-            // FIX: see matching comment in the JobStore.updateJob branch above —
-            // medical jobs rely on JobQueueRunner to perform the actual
-            // /api/jobs/submit fetch, so this must be false, not true.
+            // Medical jobs rely on JobQueueRunner for /api/jobs/submit, so this
+            // must be false (see SubmitStarted branch above).
             clientSubmitPending: false,
             statusMessage: t.uploadingKeepTabOpen || 'Uploading to server… Keep this tab open',
           });

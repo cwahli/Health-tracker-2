@@ -137,11 +137,14 @@ export function parseDebugMarkdown(md: string): DumpFacts {
 export function evaluateContracts(tree: CanonicalRunTree): ContractEvaluation[] {
   const evals: ContractEvaluation[] = [];
   const logs = tree.backendLogs || '';
+  const isFoodPack = tree.pack === 'food';
 
   // 1. SSE {final,result}
   const isSucceeded = tree.status === 'succeeded' ||
     tree.sessionEvents.some(e => /AnalyzeFinished succeeded|result_ready|updateJob succeeded/i.test(typeof e === 'string' ? e : e?.message || e?.status || ''));
   const hasLedger = Boolean(tree.pendingFoodLog) || /\[Budget\]\s*Finalized ledger/i.test(logs);
+  const hasExtracted = Boolean(tree.extractedData);
+  const hasLedgerEquiv = hasLedger || (tree.pack === 'medical' && hasExtracted);
 
   if (isSucceeded) {
     evals.push({
@@ -170,7 +173,7 @@ export function evaluateContracts(tree: CanonicalRunTree): ContractEvaluation[] 
         actual: 'Job terminated with failure without final result',
       });
     }
-  } else if (hasLedger && /running|queued|processing/i.test(tree.status)) {
+  } else if (hasLedgerEquiv && /running|queued|processing/i.test(tree.status)) {
     evals.push({
       law: 'SSE {final,result}',
       layer: 'process',
@@ -188,40 +191,50 @@ export function evaluateContracts(tree: CanonicalRunTree): ContractEvaluation[] 
     });
   }
 
-  // 2. AnalyzeFinished count = 1
-  let afCount = 0;
-  for (const e of tree.sessionEvents) {
-    const text = typeof e === 'string' ? e : `${e.status || ''} ${e.message || ''}`;
-    if (/AnalyzeFinished succeeded/i.test(text)) afCount++;
-  }
-  if (afCount === 0 && logs) {
-    afCount = (logs.match(/AnalyzeFinished succeeded/g) || []).length;
-  }
-
-  if (afCount > 1) {
-    evals.push({
-      law: 'AnalyzeFinished count = 1',
-      layer: 'process',
-      fault: 'DUPLICATE',
-      result: 'FAIL',
-      actual: `AnalyzeFinished succeeded x${afCount} (upsert storm)`,
-    });
-  } else if (afCount === 1 || isSucceeded) {
-    evals.push({
-      law: 'AnalyzeFinished count = 1',
-      layer: 'process',
-      fault: 'none',
-      result: 'PASS',
-      actual: 'AnalyzeFinished count = 1',
-    });
-  } else {
+  // 2. AnalyzeFinished count = 1 (food-only)
+  if (!isFoodPack) {
     evals.push({
       law: 'AnalyzeFinished count = 1',
       layer: 'process',
       fault: 'none',
       result: 'n/a',
-      actual: 'Job has not completed AnalyzeFinished',
+      actual: `Food-only law (pack=${tree.pack})`,
     });
+  } else {
+    let afCount = 0;
+    for (const e of tree.sessionEvents) {
+      const text = typeof e === 'string' ? e : `${e.status || ''} ${e.message || ''}`;
+      if (/AnalyzeFinished succeeded/i.test(text)) afCount++;
+    }
+    if (afCount === 0 && logs) {
+      afCount = (logs.match(/AnalyzeFinished succeeded/g) || []).length;
+    }
+
+    if (afCount > 1) {
+      evals.push({
+        law: 'AnalyzeFinished count = 1',
+        layer: 'process',
+        fault: 'DUPLICATE',
+        result: 'FAIL',
+        actual: `AnalyzeFinished succeeded x${afCount} (upsert storm)`,
+      });
+    } else if (afCount === 1 || isSucceeded) {
+      evals.push({
+        law: 'AnalyzeFinished count = 1',
+        layer: 'process',
+        fault: 'none',
+        result: 'PASS',
+        actual: 'AnalyzeFinished count = 1',
+      });
+    } else {
+      evals.push({
+        law: 'AnalyzeFinished count = 1',
+        layer: 'process',
+        fault: 'none',
+        result: 'n/a',
+        actual: 'Job has not completed AnalyzeFinished',
+      });
+    }
   }
 
   // 3. Stall/503/quota -> 3.1 hop, same job
@@ -277,8 +290,16 @@ export function evaluateContracts(tree: CanonicalRunTree): ContractEvaluation[] 
     });
   }
 
-  // 5. pendingFoodLog -> succeeded before R2
-  if (hasLedger && !isSucceeded && /running|queued|processing/i.test(tree.status)) {
+  // 5. pendingFoodLog -> succeeded before R2 (food-only)
+  if (!isFoodPack) {
+    evals.push({
+      law: 'pendingFoodLog -> succeeded before R2',
+      layer: 'process',
+      fault: 'none',
+      result: 'n/a',
+      actual: `Food-only law (pack=${tree.pack})`,
+    });
+  } else if (hasLedger && !isSucceeded && /running|queued|processing/i.test(tree.status)) {
     evals.push({
       law: 'pendingFoodLog -> succeeded before R2',
       layer: 'process',
@@ -365,8 +386,16 @@ export function evaluateContracts(tree: CanonicalRunTree): ContractEvaluation[] 
     }
   }
 
-  // 8. Dialog on_card kcal = ledger
-  if (!tree.dialogInventory?.on_card || tree.dialogInventory.on_card.kcal == null) {
+  // 8. Dialog on_card kcal = ledger (food-only)
+  if (!isFoodPack) {
+    evals.push({
+      law: 'Dialog on_card kcal = ledger',
+      layer: 'ui',
+      fault: 'none',
+      result: 'n/a',
+      actual: `Food-only law (pack=${tree.pack})`,
+    });
+  } else if (!tree.dialogInventory?.on_card || tree.dialogInventory.on_card.kcal == null) {
     evals.push({
       law: 'Dialog on_card kcal = ledger',
       layer: 'ui',
@@ -476,24 +505,34 @@ export function evaluateContracts(tree: CanonicalRunTree): ContractEvaluation[] 
     });
   }
 
-  // 11. Matrix calc matches ledger
-  const matrixStandby = /\*\*5\.\s*Mathematical Calculation Engine\*\*[^\n]*Standby/i.test(logs);
-  if (hasLedger && matrixStandby) {
-    evals.push({
-      law: 'Matrix calc matches ledger',
-      layer: 'content',
-      fault: 'MISSING',
-      result: 'FAIL',
-      actual: 'Pipeline matrix math Standby while logs have Finalized ledger',
-    });
-  } else {
+  // 11. Matrix calc matches ledger (food-only)
+  if (!isFoodPack) {
     evals.push({
       law: 'Matrix calc matches ledger',
       layer: 'content',
       fault: 'none',
-      result: 'PASS',
-      actual: hasLedger ? 'Matrix connected and matches ledger' : 'No meal ledger required',
+      result: 'n/a',
+      actual: `Food-only law (pack=${tree.pack})`,
     });
+  } else {
+    const matrixStandby = /\*\*5\.\s*Mathematical Calculation Engine\*\*[^\n]*Standby/i.test(logs);
+    if (hasLedger && matrixStandby) {
+      evals.push({
+        law: 'Matrix calc matches ledger',
+        layer: 'content',
+        fault: 'MISSING',
+        result: 'FAIL',
+        actual: 'Pipeline matrix math Standby while logs have Finalized ledger',
+      });
+    } else {
+      evals.push({
+        law: 'Matrix calc matches ledger',
+        layer: 'content',
+        fault: 'none',
+        result: 'PASS',
+        actual: hasLedger ? 'Matrix connected and matches ledger' : 'No meal ledger required',
+      });
+    }
   }
 
   // 12. Each dispatch has model + latency_ms
@@ -527,14 +566,28 @@ export function evaluateContracts(tree: CanonicalRunTree): ContractEvaluation[] 
   }
 
   // 13. Handoff from/to + same jobId if transfer
+  const transferImplied =
+    tree.pack === 'receptionist' &&
+    (/ready_for_handoff|handoff to (?:the )?specialist|handoff to (?:Health Coach|medical|food)/i.test(logs) ||
+      tree.dispatches.some((d) => /fd→|handoff/i.test(d.id)));
   if (!tree.handoffs || tree.handoffs.length === 0) {
-    evals.push({
-      law: 'Handoff from/to + same jobId if transfer',
-      layer: 'process',
-      fault: 'none',
-      result: 'n/a',
-      actual: 'No agent handoffs in this run',
-    });
+    if (transferImplied) {
+      evals.push({
+        law: 'Handoff from/to + same jobId if transfer',
+        layer: 'process',
+        fault: 'MISSING',
+        result: 'FAIL',
+        actual: 'Receptionist transfer implied but specialist handoff record is missing',
+      });
+    } else {
+      evals.push({
+        law: 'Handoff from/to + same jobId if transfer',
+        layer: 'process',
+        fault: 'none',
+        result: 'n/a',
+        actual: 'No agent handoffs in this run',
+      });
+    }
   } else {
     const invalid = tree.handoffs.filter(h => !h.from || !h.to || (h.jobId && h.jobId !== tree.jobId));
     if (invalid.length > 0) {
@@ -556,6 +609,31 @@ export function evaluateContracts(tree: CanonicalRunTree): ContractEvaluation[] 
     }
   }
 
+  // 14. Meal scout tape belongs on food pack (WRONG_PLACE on medical / receptionist)
+  if (!isFoodPack) {
+    const hasScoutTape = Boolean(tree.scoutItems?.length) ||
+      Boolean(tree.pendingFoodLog) ||
+      tree.dispatches.some((d) => d.agent === 'scout' || /\/scout$/i.test(d.id || '')) ||
+      /\[Vision Scout\]|\[Budget\]\s*Finalized ledger/i.test(logs);
+    if (hasScoutTape) {
+      evals.push({
+        law: 'Meal scout tape off non-food pack',
+        layer: 'process',
+        fault: 'WRONG_PLACE',
+        result: 'FAIL',
+        actual: `Meal scout/ledger tape present on pack=${tree.pack}`,
+      });
+    } else {
+      evals.push({
+        law: 'Meal scout tape off non-food pack',
+        layer: 'process',
+        fault: 'none',
+        result: 'PASS',
+        actual: `No meal scout tape on pack=${tree.pack}`,
+      });
+    }
+  }
+
   return evals;
 }
 
@@ -571,14 +649,25 @@ export function classifyDump(factsOrTree: DumpFacts | CanonicalRunTree): OracleF
     const logs = tree.backendLogs || '';
     const hasFinalizedLedger = Boolean(tree.pendingFoodLog) || /\[Budget\]\s*Finalized ledger/i.test(logs);
     const dietitianFailedPermanently = /Dietitian Failed Permanently/i.test(logs);
+    const hasExtracted = Boolean(tree.extractedData);
+    const stillRunning = Boolean(tree.status && /running|queued|processing/i.test(tree.status));
 
-    if (hasFinalizedLedger && dietitianFailedPermanently && tree.status && /running|queued|processing/i.test(tree.status)) {
+    if (hasFinalizedLedger && dietitianFailedPermanently && stillRunning) {
       fails.push({
         class: 'DEGRADE_NOT_TERMINAL',
         id: 'JOB_TERMINAL_IF_LEDGER',
         detail: `status=${tree.status} after Finalized ledger + Dietitian Failed Permanently`,
         file: 'server_food_analyze_run.ts, server_sse_json.ts, serverJobs.ts persist',
         doNot: 'expected.json, ReceptionistCard, LogChat rewrite, FoodCard',
+      });
+    }
+    if (tree.pack === 'medical' && hasExtracted && stillRunning) {
+      fails.push({
+        class: 'DEGRADE_NOT_TERMINAL',
+        id: 'JOB_TERMINAL_IF_LEDGER',
+        detail: `status=${tree.status} after extractedData present (medical salvage not terminal)`,
+        file: 'serverJobs.ts publishResultReady, server_sse_json.ts',
+        doNot: 'paint G-B1 all_green, live Gemini',
       });
     }
 
@@ -665,6 +754,22 @@ export function classifyDump(factsOrTree: DumpFacts | CanonicalRunTree): OracleF
           detail: c.actual,
           file: 'src/components/LogChat.tsx, serverJobs.ts',
           doNot: 'Clobber running state',
+        });
+      } else if (c.law === 'SSE {final,result}' && c.fault === 'WRONG_TIME') {
+        fails.push({
+          class: 'DEGRADE_NOT_TERMINAL',
+          id: 'JOB_TERMINAL_IF_LEDGER',
+          detail: c.actual,
+          file: 'server_food_analyze_run.ts, server_sse_json.ts, serverJobs.ts persist',
+          doNot: 'expected.json, ReceptionistCard, LogChat rewrite, FoodCard',
+        });
+      } else if (c.law === 'Meal scout tape off non-food pack') {
+        fails.push({
+          class: 'WRONG_PLACE',
+          id: 'SCOUT_ON_NON_FOOD',
+          detail: c.actual,
+          file: 'src/utils/debugRunTree.ts, src/utils/dumpContract.ts',
+          doNot: 'Score food scout laws on medical/receptionist packs',
         });
       }
     }

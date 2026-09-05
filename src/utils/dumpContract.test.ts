@@ -7,6 +7,7 @@ import { shouldRunHandoffAutoSend } from './chatAutoSend';
 import { buildDebugMarkdownReport } from './debugPayload';
 import { buildCanonicalRunTree } from './debugRunTree';
 import { attachSseJsonResponder, parseSseFinalResult } from '../../server_sse_json';
+import { inMemoryServerJobs, publishResultReady, getInMemoryServerJob } from '../../serverJobs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CAPTURE = path.join(__dirname, '../../tests/captures/job_1788538012316_m9wm9cs9a.md');
@@ -132,8 +133,8 @@ describe('code probes — inner loop (must be green without a new live run)', ()
     expect(src).toMatch(/falling back to \$\{next\} on the same job/);
   });
 
-  it('publishResultReady marks succeeded before R2', async () => {
-    const { inMemoryServerJobs, publishResultReady, getInMemoryServerJob } = await import('../../serverJobs');
+  it('publishResultReady marks succeeded before R2', () => {
+    inMemoryServerJobs.clear();
     inMemoryServerJobs.set('job_lag', { id: 'job_lag', status: 'running', clean_result: null, sessionEvents: [] });
     publishResultReady('job_lag', { pendingFoodLog: { nutrients: { calories: 571 } } });
     expect(getInMemoryServerJob('job_lag').status).toBe('succeeded');
@@ -291,6 +292,37 @@ describe('Canonical JSON Run Tree & Contract Scorer (Q-8 / F-8.13)', () => {
 
     const fails = classifyDump(tree);
     expect(fails.some(f => f.id === 'SUBMIT_NOT_QUEUED')).toBe(true);
+  });
+
+  it('receptionist pack marks food ledger/scout laws n/a (Q-8.5)', () => {
+    const tree = buildCanonicalRunTree({
+      pack: 'receptionist',
+      jobId: 'job_fd_na',
+      status: 'succeeded',
+      agentType: 'front_desk',
+    });
+    expect(tree.pack).toBe('receptionist');
+    expect(tree.dispatches[0]?.id).toBe('fd/front_desk');
+    expect(tree.contract.find(e => e.law === 'pendingFoodLog -> succeeded before R2')?.result).toBe('n/a');
+    expect(tree.contract.find(e => e.law === 'Matrix calc matches ledger')?.result).toBe('n/a');
+    expect(tree.contract.find(e => e.law === 'Dialog on_card kcal = ledger')?.result).toBe('n/a');
+    expect(tree.contract.find(e => e.law === 'AnalyzeFinished count = 1')?.result).toBe('n/a');
+    expect(tree.contract.find(e => e.law === 'Meal scout tape off non-food pack')?.result).toBe('PASS');
+    expect(classifyDump(tree).length).toBe(0);
+  });
+
+  it('medical pack flags meal scout tape as WRONG_PLACE (Q-8.5)', () => {
+    const tree = buildCanonicalRunTree({
+      pack: 'medical',
+      jobId: 'job_med_scout',
+      status: 'succeeded',
+      extractedData: [{ name: 'HDL', value: 50 }],
+      scoutItems: [{ originalName: 'Soto' }],
+    });
+    const law = tree.contract.find(e => e.law === 'Meal scout tape off non-food pack');
+    expect(law?.result).toBe('FAIL');
+    expect(law?.fault).toBe('WRONG_PLACE');
+    expect(classifyDump(tree).some(f => f.id === 'SCOUT_ON_NON_FOOD')).toBe(true);
   });
 });
 

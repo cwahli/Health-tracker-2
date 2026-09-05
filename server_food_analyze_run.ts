@@ -758,6 +758,7 @@ export async function runFoodAnalyze(req: any, res: any) {
             item: { ...vItem, scoutIndex: vItem.scoutIndex ?? vIdx },
             nutrientBasisWeight: vItem.nutrientBasisWeight || vItem.estimatedWeightGrams,
             consumedWeight: vItem.estimatedWeightGrams,
+            diningEnvironment: diningEnvironment || vItem.diningEnvironment,
           });
         })
       );
@@ -1136,6 +1137,7 @@ export async function runFoodAnalyze(req: any, res: any) {
               item: sItem,
               nutrientBasisWeight: sItem.nutrientBasisWeight || itemGrams,
               consumedWeight: itemGrams,
+              diningEnvironment: diningEnvironment || sItem.diningEnvironment,
             });
             addDebugLog(`[Budget] mode=D idx=${idx} item="${sItem.originalName || sItem.keyword}" kcal=${ledger.nutrients.calories} source=${ledger.dbSource} scoutEst=${sItem.estimatedCalories ?? 'n/a'}`);
             preCalcByScoutIndex[idx] = ledger.nutrients as any;
