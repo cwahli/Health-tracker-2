@@ -435,7 +435,7 @@ jobsRouter.all('/api/jobs/debug', async (req, res) => {
 
     const reportInput = {
       jobId: cleanJobId,
-      status: safePayload.status,
+      status: safePayload.status || (job as any)?.status || 'unknown',
       mode: safePayload.mode,
       agentType: safePayload.result?.agentType || safePayload.inputSnapshot?.agentType,
       message: safePayload.result?.message || safePayload.result?.text,
