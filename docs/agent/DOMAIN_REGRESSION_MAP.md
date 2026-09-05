@@ -102,11 +102,11 @@ Goldens live in `tests/Golden_biomarker/` (not `Golden_meal/`). Group by **class
 | `syncUtils.ts` / merge / tombstones / profiles | `npx vitest run src/utils/syncUtils.regression.test.ts` |
 | `SyncService.ts` / firestore sanitize / storage keys | `npx vitest run src/utils/firestoreUtils.test.ts src/utils/storageUtils.test.ts` |
 | Food log dedupe | `npx vitest run src/utils/foodLogDedupe.test.ts` |
-| Image sync / R2 / backlog B11 | `node scripts/assert-backlog-b11-image-sync.mjs` · `assert-b11d-b13-b8c.mjs` if relevant |
+| Image sync / R2 / backlog B11 | `npx vitest run src/utils/firestoreUtils.test.ts` (or relevant tests) |
 | Jobs / Supabase job sync | `npx vitest run src/jobs/__tests__/JobStore.test.ts src/jobs/__tests__/mergeFoodEditMessages.test.ts` |
 | Job session / preview / edit-in-flight (`STALE_TURN`) | `npx vitest run src/jobs/__tests__/JobStore.test.ts src/jobs/__tests__/mergeFoodEditMessages.test.ts src/jobs/__tests__/JobSession.contract.test.ts` · `node scripts/assert-dev-serves-vite.mjs` |
 | Job **process** golden / debug contract (Q-8, F-8.13) | Law: `docs/agent/domains/debug-contract.md`. `npx vitest run tests/foodProcess.golden.test.ts tests/bioProcess.golden.test.ts tests/deskProcess.golden.test.ts src/utils/dumpContract.test.ts src/utils/debugPayload.test.ts server_gemini_retry.test.ts serverJobs_publish.test.ts src/jobs/__tests__/JobStore.test.ts src/jobs/__tests__/JobQueueRunner.test.ts src/jobs/__tests__/JobSession.contract.test.ts server_sse_json.test.ts` · `npx tsx scripts/test-from-debug.ts` on the capture if one exists |
-| Login / identity | `node scripts/assert-login-identity-delta.mjs` |
+| Login / identity | Relevant tests for login/identity |
 
 **Sync smoke:**
 
@@ -129,7 +129,7 @@ Treat silent changes to tombstone / merge semantics as **class X**.
 
 | If you touch… | Run |
 |---------------|-----|
-| Bug snapshot / domain packs | `node scripts/assert-bug-snapshot-triage.mjs` · `node scripts/assert-bug-domain-packs.mjs` · related vitest under `src/utils/bug*.test.ts` |
+| Bug snapshot / domain packs | `npx vitest run src/utils/bug*.test.ts` (or relevant tests) |
 
 ---
 

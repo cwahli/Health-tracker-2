@@ -512,11 +512,16 @@ export default function FoodHistoryTab({
         const isActiveServerJob =
           (job.kind === 'food_log' || job.kind === 'food_compare' || (job as any).kind === 'food' || !job.kind) &&
           ['queued', 'running', 'processing', 'awaiting_user', 'cancel_requested', 'failed'].includes(job.status);
+        const hasMeaningfulMessages = !!(
+          job.messages &&
+          job.messages.length > 0 &&
+          job.messages.some((m: any) => m.content?.trim() || m.pendingFoodLog || m.data?.pendingFoodLog)
+        );
 
-        if (!hasText && !hasImages && !hasServerResult && !isActiveServerJob) return false;
+        if (!hasText && !hasImages && !hasServerResult && !isActiveServerJob && !hasMeaningfulMessages) return false;
 
         if (job.status !== 'succeeded') return true;
-        const pendingFoodLog =
+        let pendingFoodLog =
           job.result?.clean_result?.pendingFoodLog ||
           job.result?.pendingFoodLog ||
           (job.result?.clean_result?.mealBuild ? toPendingFoodLog(job.result.clean_result.mealBuild) : null) ||
@@ -526,24 +531,21 @@ export default function FoodHistoryTab({
           job.result?.raw?.data ||
           job.result?.data ||
           job.result?.foodData ||
+          (job.result?.items ? job.result : null) ||
           job.messages?.slice().reverse().find((m: any) => m.pendingFoodLog)?.pendingFoodLog ||
           job.messages?.slice().reverse().find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog;
 
-        if (!pendingFoodLog) return false;
+        if (pendingFoodLog && typeof pendingFoodLog === 'object' && !pendingFoodLog.id) {
+          pendingFoodLog = { ...pendingFoodLog, id: job.id };
+        }
+
+        if (!pendingFoodLog) return hasMeaningfulMessages;
         return !activeFoodLogs.some(f => {
           if (f.id === pendingFoodLog.id || f.id === job.id || (f as any).jobId === job.id) return true;
-          // Soft match: same fingerprint or same day+name+kcal
+          // Soft match: same fingerprint
           try {
             if (foodLogFingerprint(f as any) === foodLogFingerprint(pendingFoodLog as any)) return true;
           } catch { /* ignore */ }
-          if (
-            f.name &&
-            pendingFoodLog.name &&
-            f.name.toLowerCase().trim() === pendingFoodLog.name.toLowerCase().trim() &&
-            toYYYYMMDD(f.date) === toYYYYMMDD(pendingFoodLog.date)
-          ) {
-            return true;
-          }
           return false;
         });
       })
@@ -578,11 +580,24 @@ export default function FoodHistoryTab({
           return;
         }
         // Hide job cards that soft-match an already shown saved meal
-        const pending =
+        let pending =
           job.result?.clean_result?.pendingFoodLog ||
           job.result?.pendingFoodLog ||
+          (job.result?.clean_result?.mealBuild ? toPendingFoodLog(job.result.clean_result.mealBuild) : null) ||
+          (job.result?.mealBuild ? toPendingFoodLog(job.result.mealBuild) : null) ||
+          job.result?.clean_result?.data ||
+          (job.mealBuild ? toPendingFoodLog(job.mealBuild) : null) ||
+          job.result?.raw?.data ||
           job.result?.data ||
-          job.messages?.slice().reverse().find((m: any) => m.pendingFoodLog)?.pendingFoodLog;
+          job.result?.foodData ||
+          (job.result?.items ? job.result : null) ||
+          job.messages?.slice().reverse().find((m: any) => m.pendingFoodLog)?.pendingFoodLog ||
+          job.messages?.slice().reverse().find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog;
+          
+        if (pending && typeof pending === 'object' && !pending.id) {
+          pending = { ...pending, id: job.id };
+        }
+        
         const jobFp = pending ? foodLogFingerprint(pending as any) : '';
         if (jobFp && seen.has(jobFp)) return;
         deduped.push(item);
@@ -659,7 +674,24 @@ export default function FoodHistoryTab({
         const job = item.data;
         const text = job.inputSnapshot?.text || '';
         const status = job.status || '';
-        const pendingFoodLog = job.messages?.slice().reverse().find(m => m.pendingFoodLog)?.pendingFoodLog || job.result?.pendingFoodLog || job.result?.data;
+        let pendingFoodLog =
+          job.result?.clean_result?.pendingFoodLog ||
+          job.result?.pendingFoodLog ||
+          (job.result?.clean_result?.mealBuild ? toPendingFoodLog(job.result.clean_result.mealBuild) : null) ||
+          (job.result?.mealBuild ? toPendingFoodLog(job.result.mealBuild) : null) ||
+          job.result?.clean_result?.data ||
+          (job.mealBuild ? toPendingFoodLog(job.mealBuild) : null) ||
+          job.result?.raw?.data ||
+          job.result?.data ||
+          job.result?.foodData ||
+          (job.result?.items ? job.result : null) ||
+          job.messages?.slice().reverse().find((m: any) => m.pendingFoodLog)?.pendingFoodLog ||
+          job.messages?.slice().reverse().find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog;
+          
+        if (pendingFoodLog && typeof pendingFoodLog === 'object' && !pendingFoodLog.id) {
+          pendingFoodLog = { ...pendingFoodLog, id: job.id };
+        }
+        
         const mealName = pendingFoodLog?.name || '';
         return text.toLowerCase().includes(searchTerm.toLowerCase()) ||
                status.toLowerCase().includes(searchTerm.toLowerCase()) ||

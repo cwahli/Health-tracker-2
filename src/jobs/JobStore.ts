@@ -98,6 +98,10 @@ export function isJobBlank(job: Partial<AgentJob> | undefined | null): boolean {
 
   // If status is 'succeeded' or 'cancelled' but it has zero food/medical result and zero text/image input -> it's a blank phantom job
   if ((job.status === 'succeeded' || job.status === 'cancelled') && !hasText && !hasImage && !hasResult) {
+    // If it has meaningful messages, it's not a phantom job
+    if (hasMeaningfulMessages) {
+      return false;
+    }
     return true;
   }
 

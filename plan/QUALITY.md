@@ -167,9 +167,9 @@ Execute IDs: [ROADMAP.md](./ROADMAP.md) **Q-8**. F-9 leftover is F-9.5 only (Gro
 
 **Ghost gates — do not recreate, do not cite:** `assert-budget-reconcile.mjs`, `assert-label-truth-locks.mjs`, `assert-false-hard-lock.mjs`, `assert-receipt-dup-rows.mjs`, `assert-food-calc-exact.mjs`, `assert-food-calc-final.mjs`, `assert-backlog-b1-portion-clarify.mjs`, `assert-food-log-identity.mjs`, `assert-unified-modal-*.mjs`, `assert-biomarker-flow.mjs`. They are **not in `scripts/`**. Named vitest files that exist (`server_derivation.test.ts`, …) replace them.
 
-**Landed asserts, run only if you touch that landed code:** `assert-meal-build-m21*.mjs` / `m22`, `assert-free-tier-m23`…`m28` (use `assert-free-tier-complete.mjs` if any), `assert-g1-golden.mjs` (folds into Q-7), `assert-food-curator-m30.mjs`.
+**Landed asserts, run only if you touch that landed code:** `assert-meal-build-m21*.mjs` / `m22`, `assert-free-tier-m23`…`m28` (use `assert-free-tier-complete.mjs` if any), `assert-food-curator-m30.mjs`.
 
-**Duplicates (Q-7):** G1 picnic is asserted in `golden_meals.test.ts` **and** `golden_g1.test.ts` **and** `goldenReplay.test.ts`. Keep Layer B in `golden_meals.test.ts`. Fold or delete the other two as inner COMPLETE. `goldenLoop.test.ts` stays — it is the **stop** guard (L14), not a meal-green runner.
+**Duplicates (Q-7):** G1 picnic is asserted in `golden_meals.test.ts`. `golden_g1.test.ts` and `goldenReplay.test.ts` have been folded into it. `goldenLoop.test.ts` stays — it is the **stop** guard (L14), not a meal-green runner.
 
 ### 1.5 Golden meals after F-10 (no scout → dietitian pass)
 

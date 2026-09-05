@@ -173,7 +173,7 @@ Any UI “remove” must use the **same** delete/tombstone rules as `domains/syn
 - [ ] Same-day merge only same `sourceReportId`; no averaging  
 - [ ] Printed range / lab flag not written onto catalog or overlay  
 - [ ] Instruction pack aliased if an agent name was folded  
-- [ ] `assert-biomarker-flow.mjs` exit 0 if review/apply touched  
+- [ ] `assert-biomarker-lifecycle-m31.mjs` exit 0 if review/apply touched  
 - [ ] Food still read-only on customs  
 
 ---
@@ -210,7 +210,7 @@ Any UI “remove” must use the **same** delete/tombstone rules as `domains/syn
 
 ```bash
 npx vitest run src/utils/biomarkerIdentity.test.ts src/utils/biomarkerSanitize.test.ts src/utils/dataSanitize.test.ts
-node scripts/assert-biomarker-flow.mjs
+node scripts/assert-biomarker-lifecycle-m31.mjs
 ```
 
 ### Backlog (see plan slices)

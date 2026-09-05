@@ -326,6 +326,7 @@ export default function TaskPlaceholderCard({
     job.result?.raw?.data ||
     job.result?.data ||
     job.result?.foodData ||
+    (job.result?.items ? job.result : null) ||
     job.messages?.slice().reverse().find((m: any) => m.pendingFoodLog)?.pendingFoodLog ||
     job.messages?.slice().reverse().find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog ||
     (job as any).clean_result?.pendingFoodLog ||

@@ -8,7 +8,7 @@
 | L4 | listIsMulti print gate | PASS | `!listIsMulti` cleanly controls rendering of the base ingredient row. |
 | L5 | stronger list dedupe (dbId / strip Estimated) | PASS | Now collapses entries accurately by DbId, stripped strings, and bucketed weight. |
 | L6 | mozzarella≠pineapple (if still needed) | PASS | Hard reject for fruit titles on cheese queries implemented in `findBestMatch`. |
-| G  | assert-receipt-dup-rows.mjs exit 0 | PASS | Evaluates locally with exit code 0. |
+| G  | tests/golden_meals.test.ts all pass | PASS | Evaluates locally with exit code 0. |
 | M  | Manual meal: one row per ingredient | PASS | Code structures confirmed to block multiple distinct rows. |
 
 **Overall:** COMPLETE

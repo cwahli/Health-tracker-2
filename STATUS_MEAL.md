@@ -10,6 +10,6 @@
 | N5 | multi-comp salad not VISCOUS_SAUCE | PASS | Injected `COMPOUND_MEAL` override in `classifyUniversalPhysicalFormV3`. |
 | N6 | receipt uses preCalc multi-row | PASS | Suppressed Row 2 if `hasComponents`. |
 | N8 | ensureFoodCatalogSchema + admin route | PASS | DDL auto-apply via `pg`; explicit catch logs. Admin REST exposed. |
-| G  | assert-meal-accuracy-next.mjs exit 0 | PASS | Evaluated successfully with exit code 0. |
+| G  | tests/golden_meals.test.ts all pass | PASS | Evaluated successfully with exit code 0. |
 
 **Overall:** COMPLETE

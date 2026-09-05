@@ -338,15 +338,17 @@ Rules unchanged: work item = class · inner = vitest · outer = one example · h
 
 | Still to do | Done when |
 |---|---|
-| Make G-B2/5/6/7/9 **execute** the helper they name | Tests call `lexTable` / door classifier / completeness path; fixture-label-only tests are not enough |
-| Inbox by class | Biomarkers tab lists examples grouped by class, not a single G-B1 card |
 | **Q-4** `AgentResultTable` thin | Grid behavior only; agent YAML / apply / localStorage missing-keys **out**. Call sites pass data. Grok-owned |
-| **Q-5** Delete one-shot patch scripts | Root `patch_*.ts` / `fix-*.ts` residue gone after the last class they served. F-9 `patch_*.mjs` already removed |
-| **Q-6** Unified bug queue | Snap + auto + golden tape are **one `#n`**. Inbox is not a second list. Named bug first; extra tape reds = series remaining (or sibling `#n`). Promote (photos + class test) → official `G*` / G-B fail-safe. No `/loop`. See `QUALITY.md` §14–14.4 |
-| **Q-7** Test + golden hygiene | COMPLETE = `tsc` + matching regression-map rows, not `npm test`. Ghost `assert-*.mjs` citations gone. G1 asserted once (`golden_meals.test.ts`). Frozen create fixture is Meal Agent JSON (no kcal), not scout→dietitian `scout.json`. Inbox / `golden:loop` not on every food PR. See `QUALITY.md` §1.4–1.5 |
 | **Q-8** Process goldens | **Shipped 8.1–8.5.** Boards: `tests/foodProcess.golden.test.ts`, `tests/bioProcess.golden.test.ts`, `tests/deskProcess.golden.test.ts`. Q-8.3 Playwright stub already in tree. **Q-8.6** protocol: `scripts/soak-q8-tier3.md` (human/script outer confirm). |
 | **Q-9** Website consolidation | Later **step**, not now. Too many files, `patch_*`, god `LogChat` / `App` / `Header`. Split/fold only with a named gate. Serialize vs F-9.5 / B0 / R-9 (`App.tsx`). **Grok**. Do not start as a rewrite binge |
 | **Q-10** Dependency consolidation | Later **step**, after Q-9. Audit `package.json` / unused imports; remove what we can. **Not** R-7 knip-as-reliability-gate (abandoned). Hygiene only |
+
+**Landed — recently completed:**
+- Make G-B2/5/6/7/9 execute the helper they name
+- Inbox by class (Biomarkers tab lists examples grouped by class)
+- **Q-5** Delete one-shot patch scripts
+- **Q-6** Unified bug queue
+- **Q-7** Test + golden hygiene
 
 **Q-8 execute order** (do not skip the audit):
 
