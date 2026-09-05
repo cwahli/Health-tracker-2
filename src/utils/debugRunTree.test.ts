@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseUnifiedUsageLines,
+  parseUnifiedTimingLines,
+  hasCallEvidence,
   tagJobId,
   extractDispatches,
   buildCanonicalRunTree,
@@ -65,6 +67,39 @@ describe('extractDispatches (food)', () => {
   it('leaves tokens undefined when no usage lines exist', () => {
     const d = extractDispatches(foodInput({ backendLogs: '[Vision Scout] done' }));
     expect(d.find(x => x.agent === 'scout')!.tokens).toBeUndefined();
+  });
+  it('prefers measured timing over regex/default latency', () => {
+    const d = extractDispatches(foodInput({
+      backendLogs: '[Vision Scout] done in 1500ms\n[UnifiedLLM-Timing:scout] ms=5231\n[Budget] Finalized ledger',
+    }));
+    expect(d.find(x => x.agent === 'scout')!.latency_ms).toBe(5231);
+  });
+  it('marks a projector dietitian (no call evidence) with called=false and no model/latency', () => {
+    const d = extractDispatches(foodInput({
+      backendLogs: '[Vision Scout] done\n[Budget] Finalized ledger',
+    }));
+    const diet = d.find(x => x.agent === 'dietitian')!;
+    expect(diet.called).toBe(false);
+    expect(diet.model).toBeNull();
+    expect(diet.latency_ms).toBeNull();
+    expect(diet.note).toMatch(/projector/);
+    expect(diet.tokens).toBeUndefined();
+  });
+});
+
+describe('hasCallEvidence', () => {
+  it('detects dispatch/prompt/usage/timing/answer lines per stage', () => {
+    expect(hasCallEvidence('[UnifiedLLM-Prompt:scout] x', 'scout')).toBe(true);
+    expect(hasCallEvidence('[UnifiedLLM-Usage:dietitian] prompt=1 completion=1 total=2', 'dietitian')).toBe(true);
+    expect(hasCallEvidence('[MealBuild] projector dietitian', 'dietitian')).toBe(false);
+    expect(hasCallEvidence('', 'scout')).toBe(false);
+  });
+});
+
+describe('parseUnifiedTimingLines', () => {
+  it('parses ms per stage, last wins', () => {
+    expect(parseUnifiedTimingLines('[UnifiedLLM-Timing:scout] ms=100\n[UnifiedLLM-Timing:scout] ms=5231'))
+      .toEqual([{ stage: 'scout', ms: 5231 }]);
   });
 });
 

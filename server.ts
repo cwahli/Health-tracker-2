@@ -1492,6 +1492,12 @@ export const getGeminiApiKey = (): string => {
   );
 };
 
+// Stage-keyed last-call token usage for the unified LLM. Written by
+// callUnifiedLLMInternal on every successful call; consumed immediately by
+// the awaiting pipeline stage via takeUnifiedUsage (single-flight per stage).
+// (Store lives in src/utils/unifiedUsage.ts — leaf module, no import cycles.)
+import { recordUnifiedUsage } from './src/utils/unifiedUsage.js';
+
 // Initialize Gemini SDK with telemetry header
 export const getGeminiClient = () => {
   const apiKey = getGeminiApiKey();
@@ -2052,12 +2058,19 @@ async function callUnifiedLLMInternal({
 
   let finalResponseText = "{}";
   const stageTag = logStagePrefix ? `:${logStagePrefix}` : '';
+  const __callStartMs = Date.now();
+  // Per-stage token usage, readable by the pipeline right after the awaited
+  // call returns (takeUnifiedUsage). The debug export's log channel only
+  // carries streamed lines, so usage also travels this structured path.
+  const __stage = (stageTag || '').replace(/^:/, '') || 'unknown';
   // Contract §9/§11.12D: log per-stage token usage so the debug run tree can
   // attribute tokens per dispatch. Defensive: SDK responses without
-  // usageMetadata (stream rebuilds, older models) simply emit no line.
+  // usageMetadata (older models) emit a `none` diagnostic instead of silence.
+  // Usage is ALSO stashed in a tiny stage-keyed registry (takeUnifiedUsage)
+  // because the export's log channel only carries streamed lines.
   const logUnifiedUsage = (sdkResponse: any) => {
     try {
-      const stage = (stageTag || '').replace(/^:/, '') || 'unknown';
+      const stage = __stage;
       const u = sdkResponse?.usageMetadata;
       if (!u) {
         const keys = sdkResponse && typeof sdkResponse === 'object' ? Object.keys(sdkResponse).join(',') : typeof sdkResponse;
@@ -2071,7 +2084,9 @@ async function callUnifiedLLMInternal({
         _localAddDebugLog(`[UnifiedLLM-Usage:${stage}] none (usageMetadata present but total=0)`);
         return;
       }
+      recordUnifiedUsage(stage, p, c, t);
       _localAddDebugLog(`[UnifiedLLM-Usage:${stage}] prompt=${p} completion=${c} total=${t}`);
+      _localAddDebugLog(`[UnifiedLLM-Timing:${stage}] ms=${Date.now() - __callStartMs}`);
     } catch { /* usage logging must never break generation */ }
   };
   _localAddDebugLog(`[UnifiedLLM${stageTag}] Dispatching prompt to model: "${targetGeminiModel}". Contents turns: ${contents.length}.`);

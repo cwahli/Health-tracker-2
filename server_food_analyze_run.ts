@@ -133,6 +133,7 @@ import { applyMealEdits } from './server_meal_edit.js';
 import { matchBrandMenu, isPackagedBindItem } from './server_brand_match.js';
 import { classifyDishAtomic } from './server_dish_classify.js';
 import { t, interpolate } from './src/utils/i18n.js';
+import { takeUnifiedUsage, formatUnifiedUsage } from './src/utils/unifiedUsage.js';
 import {
   addDebugLog,
   logSessionStorage,
@@ -219,6 +220,17 @@ export async function runFoodAnalyze(req: any, res: any) {
 
     const sendLog = (type: string, stage: string, message: string, data?: any) => {
       sendStreamEvent({ type: 'log', logType: type, stage, message, data });
+    };
+
+    // Re-emit the stage's token usage into the STREAMED log channel (the only
+    // channel the job runner accumulates for the debug export). takeUnifiedUsage
+    // consumes the record stashed by callUnifiedLLMInternal right after the
+    // awaited call; null = the stage made no LLM call (projector path).
+    const emitStageUsage = (stage: string) => {
+      try {
+        const u = takeUnifiedUsage(stage);
+        if (u) sendLog('info', stage, formatUnifiedUsage(stage, u));
+      } catch { /* usage re-emit must never break the meal flow */ }
     };
 
     const imagePayloads: any[] = collectImagePayloads(image, images);
@@ -358,6 +370,7 @@ export async function runFoodAnalyze(req: any, res: any) {
             visionScoutItems = mergeScoutIntoActiveMeal({ activeMealItemsBreakdown: activeMeal.itemsBreakdown, visionScoutItems, onLog: addDebugLog });
           }
           logScoutItemSummaries(visionScoutItems, addDebugLog);
+          emitStageUsage('scout');
       } else if (message) {
         const textShortcut = applyTextQueryShortcut({ message, isExplicitModify, isPureWeightModification, onLog: addDebugLog });
         queriesToSearch.push(...textShortcut.queriesToSearch);
@@ -516,6 +529,7 @@ export async function runFoodAnalyze(req: any, res: any) {
       // or the detected chain brand), capped at 60 to keep the payload manageable.
       const resolvedDbCandidates = filterPortionCarryCandidates({ visionScoutItems, databaseMatchesArray, detectedChainKey });
       addDebugLog(`[PortionClarify] Embedding ${resolvedDbCandidates.length} pre-resolved DB candidates for turn-2 carry-forward.`);
+      emitStageUsage('scout');
       sendStreamEvent({
         type: 'status',
         stage: 'portion_clarify',
@@ -945,6 +959,7 @@ export async function runFoodAnalyze(req: any, res: any) {
       }
       let finalScoutItems = mergeFinalScoutItems({ visionScoutItems, dietitianScoutItems: rawParsed.scoutItems, preCalculatedItems, itemsBreakdown: parsedData.itemsBreakdown });
       addDebugLog('[MealBuild] happy-path');
+      emitStageUsage('dietitian');
       const { mealBuild, pendingFoodLog } = attachHappyPathMealBuild({
         parsedData,
         jobId: req.body.jobId,

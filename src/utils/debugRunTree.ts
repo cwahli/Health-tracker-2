@@ -51,8 +51,12 @@ export interface DispatchTrace {
   output?: any;
   /** Raw agent emission before pipeline transforms (e.g. scout dishes[]); working copy stays in `output`. */
   rawEmission?: any;
-  model?: string;
-  latency_ms?: number;
+  /** False when the stage ran without dispatching an LLM call (projector path). */
+  called?: boolean;
+  /** Human note, e.g. why model/latency are absent. */
+  note?: string;
+  model?: string | null;
+  latency_ms?: number | null;
   tokens?: number;
   error?: string | null;
 }
@@ -160,6 +164,27 @@ export function parseUnifiedUsageLines(logs: string): TokenUsage[] {
   return [...out.values()];
 }
 
+/** Parse `[UnifiedLLM-Timing:stage] ms=5231` lines (last per stage wins) */
+export function parseUnifiedTimingLines(logs: string): { stage: string; ms: number }[] {
+  const out = new Map<string, number>();
+  if (!logs || typeof logs !== 'string') return [];
+  const re = /\[UnifiedLLM-Timing:([^\]]+)\]\s*ms=(\d+)/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(logs)) !== null) {
+    out.set((m[1] || '').trim().toLowerCase(), Number(m[2]) || 0);
+  }
+  return [...out.entries()].map(([stage, ms]) => ({ stage, ms }));
+}
+
+/** True when the logs prove the stage dispatched an LLM call (not a projector run) */
+export function hasCallEvidence(logs: string, stage: 'scout' | 'dietitian'): boolean {
+  if (!logs || typeof logs !== 'string') return false;
+  if (stage === 'scout') {
+    return /\[UnifiedLLM:scout\]|\[UnifiedLLM-Prompt:scout\]|\[UnifiedLLM-Usage:scout\]|\[UnifiedLLM-Timing:scout\]|\[UnifiedLLM-Response:scout\]|\[Vision Scout\] \(|\[scout_answer\]/i.test(logs);
+  }
+  return /\[UnifiedLLM:dietitian\]|\[UnifiedLLM-Prompt:dietitian\]|\[UnifiedLLM-Usage:dietitian\]|\[UnifiedLLM-Timing:dietitian\]|\[UnifiedLLM-Response:dietitian\]|\[Dietitian Instruction dispatched|\[dietitian_answer\]/i.test(logs);
+}
+
 /** Prefix a log line with [jobId] unless blank or already tagged (contract §9: joinable lines) */
 export function tagJobId(line: string, jobId: string): string {
   if (line == null) return line;
@@ -248,6 +273,7 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
     const modelMatch = logs.match(/Vision Scout \(([^)]+)\)|\[UnifiedLLM\] Calling (gemini-[^\s]+)/i);
     const latencyMatch = logs.match(/(?:Vision Scout|UnifiedLLM).*?(\d+(?:\.\d+)?)ms/i);
     const usage = parseUnifiedUsageLines(logs).find(u => u.stage === 'scout');
+    const timing = parseUnifiedTimingLines(logs).find(t => t.stage === 'scout');
     dispatches.push({
       id: 't1/scout',
       parent: null,
@@ -261,7 +287,7 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
       output: input.scoutItems || input.rawScout,
       rawEmission: input.rawScout || undefined,
       model: modelMatch ? (modelMatch[1] || modelMatch[2]) : 'gemini-3.5-flash-lite',
-      latency_ms: latencyMatch ? Math.round(Number(latencyMatch[1])) : 1500,
+      latency_ms: timing ? timing.ms : (latencyMatch ? Math.round(Number(latencyMatch[1])) : 1500),
       tokens: usage ? usage.total : undefined,
       error: input.error || null,
     });
@@ -276,6 +302,8 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
     const modelMatch = logs.match(/(?:Dietitian|UnifiedLLM).*?Calling (gemini-[^\s]+)/i);
     const latencyMatch = logs.match(/(?:Dietitian|UnifiedLLM).*?(\d+(?:\.\d+)?)ms/i);
     const usage = parseUnifiedUsageLines(logs).find(u => u.stage === 'dietitian');
+    const timing = parseUnifiedTimingLines(logs).find(t => t.stage === 'dietitian');
+    const called = hasCallEvidence(logs, 'dietitian');
     dispatches.push({
       id: 't1/dietitian',
       parent: hasScout ? 't1/scout' : null,
@@ -287,9 +315,11 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
         ? (input.agentInstructions as any)?.dietitian
         : undefined) || input.agentPromptText || undefined,
       output: input.pendingFoodLog,
-      model: modelMatch ? modelMatch[1] : 'gemini-3.5-flash-lite',
-      latency_ms: latencyMatch ? Math.round(Number(latencyMatch[1])) : 2100,
+      model: called ? (modelMatch ? modelMatch[1] : 'gemini-3.5-flash-lite') : null,
+      latency_ms: called ? (timing ? timing.ms : (latencyMatch ? Math.round(Number(latencyMatch[1])) : 2100)) : null,
       tokens: usage ? usage.total : undefined,
+      called,
+      note: called ? undefined : 'projector — stage ran without an LLM call (ledger from precalc); no model/latency to report',
       error: null,
     });
   }
