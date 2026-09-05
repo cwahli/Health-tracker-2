@@ -2060,7 +2060,8 @@ async function callUnifiedLLMInternal({
       const stage = (stageTag || '').replace(/^:/, '') || 'unknown';
       const u = sdkResponse?.usageMetadata;
       if (!u) {
-        _localAddDebugLog(`[UnifiedLLM-Usage:${stage}] none (response carried no usageMetadata)`);
+        const keys = sdkResponse && typeof sdkResponse === 'object' ? Object.keys(sdkResponse).join(',') : typeof sdkResponse;
+        _localAddDebugLog(`[UnifiedLLM-Usage:${stage}] none (no usageMetadata; response keys: ${keys})`);
         return;
       }
       const p = Number(u.promptTokenCount) || 0;
@@ -2091,7 +2092,11 @@ async function callUnifiedLLMInternal({
           config: configObj
         }), { label: "Unified LLM Stream" });
         let fullText = "";
+        let streamUsage: any = null;
         for await (const chunk of stream) {
+          // Stream chunks (usually the final one) carry usageMetadata — capture
+          // it so per-stage token logging works on the streaming path too.
+          if ((chunk as any)?.usageMetadata) streamUsage = (chunk as any).usageMetadata;
           if (chunk.candidates?.[0]?.content?.parts) {
             for (const part of chunk.candidates[0].content.parts) {
               if (part.thought && part.text) {
@@ -2107,7 +2112,7 @@ async function callUnifiedLLMInternal({
             onStream(chunk.text, false);
           }
         }
-        response = { text: fullText, functionCalls: [] };
+        response = { text: fullText, functionCalls: [], usageMetadata: streamUsage };
       } catch (streamErr: any) {
         if (isGeminiQuotaError(streamErr)) {
           noteGeminiQuota(targetGeminiModel, streamErr);

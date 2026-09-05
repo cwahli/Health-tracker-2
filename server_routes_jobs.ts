@@ -398,7 +398,18 @@ jobsRouter.all('/api/jobs/debug', async (req, res) => {
     const mergedBreadcrumbs = [...serverBreadcrumbs, ...userActionBreadcrumbs];
 
     const effectiveLastUserAction = lastUserAction || debugPayload.lastUserAction || debugPayload.result?.lastUserAction;
-    const effectiveDialogInventory = dialogInventory || debugPayload.dialogInventory || debugPayload.result?.dialogInventory;
+    // Merge order: live client body first, then the in-memory job (persisted from
+    // earlier POSTs — see below), then the stored payload / cold copy.
+    let memJobForMerge: any = null;
+    try {
+      const { getInMemoryServerJob: getMem } = await import('./serverJobs.js');
+      memJobForMerge = getMem(cleanJobId) || getMem(rawJobId);
+    } catch { /* best-effort */ }
+    const effectiveDialogInventory = dialogInventory
+      || (memJobForMerge as any)?.dialogInventory
+      || (memJobForMerge as any)?.clean_result?.dialogInventory
+      || debugPayload.dialogInventory
+      || debugPayload.result?.dialogInventory;
     const effectiveDispatches = dispatches || debugPayload.dispatches || debugPayload.result?.dispatches;
 
     // Debug-export fix: the client builds the dialog inventory at download time
@@ -407,8 +418,7 @@ jobsRouter.all('/api/jobs/debug', async (req, res) => {
     // and its clean_result so every subsequent export carries it.
     if (effectiveDialogInventory && typeof effectiveDialogInventory === 'object') {
       try {
-        const { getInMemoryServerJob: getMemJob } = await import('./serverJobs.js');
-        const memJob = getMemJob(cleanJobId) || getMemJob(rawJobId);
+        const memJob = memJobForMerge;
         if (memJob) {
           (memJob as any).dialogInventory = effectiveDialogInventory;
           const cr = (memJob as any).clean_result;
