@@ -299,7 +299,7 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
         }
         return undefined;
       })(),
-      output: input.scoutItems || input.rawScout,
+      output: input.rawScout || input.scoutItems,
       rawEmission: input.rawScout || undefined,
       model: modelMatch ? (modelMatch[1] || modelMatch[2]) : 'gemini-3.5-flash-lite',
       latency_ms: timing ? timing.ms : (latencyMatch ? Math.round(Number(latencyMatch[1])) : 1500),

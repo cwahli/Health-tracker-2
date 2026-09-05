@@ -318,12 +318,13 @@ export async function runFoodAnalyze(req: any, res: any) {
         const imageCount = imagePayloads?.length || 0;
         const scoutPromptText = buildVisualScoutPrompt(message || '', imageCount);
         scoutInstructionForDebug = scoutPromptText;
-        sendLog('scout_instruction', 'scout', `Vision Scout Instruction dispatched (model: ${engine || "gemini-3.5-flash-lite"}). Prompt: "${scoutPromptText}"`);
-        // Debug-export fix: the scout SYSTEM instruction (config.systemInstruction:
-        // schema + language layer) never entered the streamed log channel — only
-        // the user promptText above did — so no export could show what schema the
-        // scout was held to. Stream it once, same pattern as dietitian line 785.
-        sendLog('scout_system_instruction', 'scout', `Vision Scout System Instruction (config.systemInstruction): "${withScoutLanguage(scoutSystemInstruction, userProfile?.language)}"`);
+        sendLog('scout_instruction', 'scout', `Vision Scout Instruction dispatched (model: ${engine || "gemini-3.5-flash-lite"}). Prompt length: ${scoutPromptText.length} chars — see [UnifiedLLM-Prompt:scout] below for full text.`);
+        // The scout SYSTEM instruction and user prompt text are already logged in full
+        // by callUnifiedLLMInternal via [UnifiedLLM-Prompt:scout] System Instruction: / User Prompt:
+        // (server.ts, _localAddDebugLog) — that goes through the same addDebugLog channel
+        // this route uses, so it already reaches the streamed log / debug export. Do not
+        // re-dump the full text here a second time; a short pointer line is enough.
+        sendLog('scout_system_instruction', 'scout', `Vision Scout System Instruction dispatched (model: ${engine || "gemini-3.5-flash-lite"}) — see [UnifiedLLM-Prompt:scout] below for full text.`);
         addDebugLog(`[Vision Scout] Running Stage 3 lightweight vision scout with retry protection...`);
         let { scoutResult, lastScoutErr } = await runScoutRetryLoop({
           engine,

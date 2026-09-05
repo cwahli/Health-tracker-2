@@ -891,6 +891,30 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
     const logLines = logs.split('\n');
     const collapsedLineIndices = new Set<number>();
 
+    // Distinguishes a genuine new top-level log entry (e.g. "[backend] ...",
+    // "[scout_answer] ...", "[UnifiedLLM-Prompt:scout] ...", "[Vision Scout] ...")
+    // from a literal bracket-tag that prompt-building code embeds MID-TEXT for the
+    // LLM's benefit (e.g. "[Context: ...]", "[CRITICAL DATE OVERRIDE: ...]",
+    // "[SERVER BASELINE ESTIMATE — ...]"). Both start a physical line with "[Letter",
+    // so a plain /^\[[A-Za-z]/ check can't tell them apart — it either stops
+    // collecting a block too early (embedded tag mistaken for a new entry) or, if
+    // tightened to "no spaces allowed", fails to recognize genuine short multi-word
+    // tags like "[Vision Scout]" or "[Mode Override]" and swallows too much instead.
+    // Real tags are short, single-clause labels; prompt-embedded annotations are
+    // always full sentences, which in practice means they contain "colon+space",
+    // "em-dash+space", or trail off with "...". None of the genuine tags in this
+    // codebase do any of those inside the brackets, so this is a reliable, general
+    // split that doesn't need a hardcoded, ever-growing allowlist of known tags.
+    const isRealLogTagBoundary = (line: string): boolean => {
+      const m = /^\[([A-Za-z][^\]]{0,49})\]/.exec(line);
+      if (!m) return false;
+      const content = m[1];
+      if (/:\s/.test(content)) return false;
+      if (/—\s/.test(content)) return false;
+      if (/\.\.\.$/.test(content)) return false;
+      return true;
+    };
+
     // Agents whose full instruction already renders inline under their own
     // "### Dispatch <id>" block in the Agent Dispatches section above (§3).
     // Anything covered there must NOT be repeated down here — the whole point
@@ -918,7 +942,7 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
       if (instructionStartPattern.test(logLines[i])) {
         const block: string[] = [logLines[i]];
         let j = i + 1;
-        while (j < logLines.length && !/^\[[A-Za-z]/.test(logLines[j])) {
+        while (j < logLines.length && !isRealLogTagBoundary(logLines[j])) {
           block.push(logLines[j]);
           j++;
         }
@@ -983,7 +1007,7 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
       if (responseStartPattern.test(logLines[i])) {
         const block: string[] = [logLines[i]];
         let j = i + 1;
-        while (j < logLines.length && !/^\[[A-Za-z]/.test(logLines[j])) {
+        while (j < logLines.length && !isRealLogTagBoundary(logLines[j])) {
           block.push(logLines[j]);
           j++;
         }

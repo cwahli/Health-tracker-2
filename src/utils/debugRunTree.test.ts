@@ -57,13 +57,19 @@ describe('tagJobId', () => {
 });
 
 describe('extractDispatches (food)', () => {
-  it('attaches tokens per stage and rawEmission without replacing output', () => {
+  it('attaches tokens per stage and prefers raw scout output over processed items', () => {
     const d = extractDispatches(foodInput());
     const scout = d.find(x => x.agent === 'scout')!;
     const resolver = d.find(x => x.agent === 'resolver')!;
     expect(scout.tokens).toBe(908);
     expect(scout.rawEmission).toEqual(foodInput().rawScout);
-    expect(scout.output).toEqual([{ keyword: 'Steak', name: 'Steak' }]);
+    // "Output:" in the Agent Dispatches card must show the exact raw LLM
+    // response (rawScout), not the fully-processed/merged scoutItems list —
+    // showing the processed list here is what caused "raw and processed
+    // mixed up" in the Sept 5 debug export. rawScout is preferred whenever
+    // it's present; scoutItems remains a fallback for older logs/paths that
+    // never captured a raw emission.
+    expect(scout.output).toEqual(foodInput().rawScout);
     expect(resolver).toBeDefined();
     expect(resolver.tokens).toBe(550);
     expect(resolver.latency_ms).toBe(1200);
