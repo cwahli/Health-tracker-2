@@ -199,6 +199,16 @@ export async function resolveInternalFood(query: string): Promise<InternalFoodMa
       const fi = aliasData.food_items;
       if (fi.status === 'active' || (fi.status === 'candidate' && (fi.confidence || 0.5) >= 0.65 && checkAtwaterValidity(fi.nutrients_per_100g).valid)) {
         console.log(`[AliasHit] Found alias mapping for ${key} -> ${fi.food_id}`);
+        // F-4 alias hit-rate telemetry: count reads (approximate under concurrency).
+        // Fire-and-forget; resolution never waits on or depends on this write.
+        try {
+          const hitUpdate: any = supabaseAdmin.from('food_aliases').update({ hit_count: (aliasData.hit_count || 0) + 1 }).eq('alias_key', key);
+          if (hitUpdate && typeof hitUpdate.catch === 'function') {
+            hitUpdate.catch((err: any) => console.warn('[AliasHit] hit_count increment failed:', err?.message || err));
+          }
+        } catch (err) {
+          console.warn('[AliasHit] hit_count increment failed:', (err as any)?.message || err);
+        }
         return {
           food_id: fi.food_id,
           food_key: fi.food_key,

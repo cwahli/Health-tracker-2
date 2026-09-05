@@ -1,7 +1,44 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { normalizeFoodKey, normalizeDishKey, resolveInternalFood, checkAtwaterValidity, getFallbackCategoryProfile, upsertFoodAlias, mergeFoodCatalogItems } from './server_food_catalog';
 import { applyServerAverageNutrients } from './server_pure_helpers';
 import { NUTRIENT_KEYS } from './src/utils/nutrients';
+
+const aliasHitUpdates: any[] = [];
+vi.mock('./supabaseAdmin', () => {
+  const aliasRow = {
+    hit_count: 4,
+    weight: 1.0,
+    food_items: {
+      food_id: 'f_alias_oats', food_key: 'alias_oats_probe', display_name: 'Alias Oats',
+      nutrients_per_100g: { calories: 350, protein: 10, carbohydrates: 60, totalFat: 8 },
+      status: 'active', confidence: 0.9, fdc_id: 'alias_oats_fdc', form_tags: [], state: null,
+    },
+  };
+  const chain = (data: any) => {
+    const b: any = {};
+    b.select = () => b;
+    b.eq = () => b;
+    b.maybeSingle = async () => ({ data, error: null });
+    return b;
+  };
+  return {
+    isSupabaseConfigured: true,
+    supabaseAdmin: {
+      from: (table: string) => {
+        if (table !== 'food_aliases') return chain(null);
+        const b: any = {};
+        b.select = () => b;
+        b.eq = () => b;
+        b.maybeSingle = async () => ({ data: aliasRow, error: null });
+        b.update = (vals: any) => {
+          aliasHitUpdates.push(vals);
+          return { eq: () => ({ catch: () => {} }) };
+        };
+        return b;
+      },
+    },
+  };
+});
 
 describe('Food Catalog Normalization & Resolution (PASS 2 - R7)', () => {
   it('normalizes mac & cheese synonyms correctly', () => {
@@ -109,5 +146,14 @@ describe('Food Catalog Normalization & Resolution (PASS 2 - R7)', () => {
     });
     expect(mergeRes.success).toBe(false);
     expect(mergeRes.error).toContain('Incompatible physical form tags');
+  });
+
+  it('F-4 increments alias hit_count on alias hits (hit rate becomes measurable)', async () => {
+    aliasHitUpdates.length = 0;
+    const match = await resolveInternalFood('Zxq Jkl Mno');
+    expect(match).not.toBeNull();
+    expect(match?.source).toBe('alias_active');
+    expect(aliasHitUpdates).toHaveLength(1);
+    expect(aliasHitUpdates[0].hit_count).toBe(5);
   });
 });
