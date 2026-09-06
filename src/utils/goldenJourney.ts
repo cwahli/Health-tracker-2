@@ -19,6 +19,7 @@ export type JourneyPhase =
   | 'scouted'
   | 'no_match'
   | 'fallback'
+  | 'estimated'
   | 'mismatch'
   | 'broad_base'
   | 'usda_live'
@@ -55,6 +56,7 @@ export const PHASE_LABEL: Record<JourneyPhase, string> = {
   scouted: 'Scouted only',
   no_match: 'No catalog / USDA match',
   fallback: 'Category fallback',
+  estimated: 'Dish estimate',
   mismatch: 'Matched wrong food',
   broad_base: 'Needs broader basic food',
   usda_live: 'Live USDA/OFF (not catalog)',
@@ -314,7 +316,8 @@ function phaseFrom(diag: Diagnostic | undefined, matchName: string | null): Jour
   if (matchName && isForbiddenName(matchName)) return 'mismatch';
   if (diag.matchId && /^fallback_/i.test(diag.matchId)) return 'fallback';
   const src = (diag.source || '').toLowerCase();
-  if (src === 'category_fallback' || src === 'estimated') return 'fallback';
+  if (src === 'category_fallback') return 'fallback';
+  if (src === 'estimated') return 'estimated';
   if (!src && !diag.canonical) return 'no_match';
   if (matchName && needsBroaderBase(diag.query, matchName, src)) return 'broad_base';
   if (src === 'label' || src === 'brand_official') return 'label_truth';
@@ -340,7 +343,8 @@ function dbSourceToPhase(src: string, hasId: boolean): JourneyPhase | null {
   ) {
     return 'catalog';
   }
-  if (s === 'category_fallback' || s === 'estimated' || s === 'fallback') return 'fallback';
+  if (s === 'category_fallback' || s === 'fallback') return 'fallback';
+  if (s === 'estimated') return 'estimated';
   if (s === 'usda' || s === 'off' || s === 'usda_live') return 'usda_live';
   if (hasId) return 'catalog';
   return null;
@@ -397,7 +401,7 @@ export function journeyPhaseCounts(rows: GoldenJourneyRow[]): {
 }
 
 export function identityOk(phase: JourneyPhase): boolean {
-  return phase === 'catalog' || phase === 'label_truth';
+  return phase === 'catalog' || phase === 'label_truth' || phase === 'estimated';
 }
 
 export function buildJourney(input: { logText?: string; foodLog?: any; scout?: any }): GoldenJourneyRow[] {
@@ -454,7 +458,12 @@ export function buildJourney(input: { logText?: string; foodLog?: any; scout?: a
           diags.find((d) => d.scoutIndex === i && d.componentIndex === cIdx) ||
           diags.find((d) => namesClose(d.query, query) && (d.scoutIndex === i || namesClose(d.dish, dish)));
         const matchName = matchNameFor(query);
+        const compSource = (comp.dbSource || comp.source || '').toLowerCase();
         let phase = phaseFrom(diag, matchName);
+        if (phase === 'scouted' && compSource) {
+          if (compSource === 'estimated') phase = 'estimated';
+          else if (compSource === 'category_fallback') phase = 'fallback';
+        }
         const pickId = curatorPicks.get(query.toLowerCase());
         if (pickId && phase !== 'mismatch') {
           phase = 'catalog';
@@ -468,8 +477,8 @@ export function buildJourney(input: { logText?: string; foodLog?: any; scout?: a
           scoutIndex: i,
           componentIndex: cIdx,
           phase,
-          source: diag?.source || (pickId ? 'internal_catalog' : phase === 'label_truth' ? 'label' : null),
-          matchId: diag?.matchId || pickId || null,
+          source: diag?.source || compSource || (pickId ? 'internal_catalog' : phase === 'label_truth' ? 'label' : null),
+          matchId: diag?.matchId || comp.dbId || pickId || null,
           matchName,
         });
       });
@@ -1100,29 +1109,31 @@ export function buildAutoInvariants(input: {
     });
   }
 
-  const compile = compileGoldenMeal({
-    logText: log,
-    foodLog: input.foodLog,
-    scout: input.scout,
-  });
-  const missingLogBooks = (compile.books || []).filter(
-    (b) => b.kcal == null && (b.id === 'foundation' || b.id === 'reconcile' || b.id === 'dietitian_payload')
-  );
-  const drift = (compile.imbalances || [])[0];
-  add({
-    id: 'math_trial_balance',
-    group: 'math',
-    label:
-      compile.compiler === 'green'
-        ? 'Trial balance books agree'
-        : missingLogBooks.length
-          ? `Trial balance incomplete (${missingLogBooks.map((b) => b.id).join(', ')} not in log)`
-          : `Trial balance drifted: ${drift?.label || 'books disagree'}`,
-    expected: 'foundation, reconcile, dietitian payload, and saved table present and agree',
-    actual: (compile.books || []).map((b) => `${b.id}=${b.kcal ?? '—'}`).join(', '),
-    pass: compile.compiler === 'green',
-    signature: 'trial_balance',
-  });
+  if (foodItems.length > 0 || scoutItems.length > 0 || pipelineLooksComplete(log)) {
+    const compile = compileGoldenMeal({
+      logText: log,
+      foodLog: input.foodLog,
+      scout: input.scout,
+    });
+    const missingLogBooks = (compile.books || []).filter(
+      (b) => b.kcal == null && (b.id === 'foundation' || b.id === 'reconcile' || b.id === 'dietitian_payload')
+    );
+    const drift = (compile.imbalances || [])[0];
+    add({
+      id: 'math_trial_balance',
+      group: 'math',
+      label:
+        compile.compiler === 'green'
+          ? 'Trial balance books agree'
+          : missingLogBooks.length
+            ? `Trial balance incomplete (${missingLogBooks.map((b) => b.id).join(', ')} not in log)`
+            : `Trial balance drifted: ${drift?.label || 'books disagree'}`,
+      expected: 'foundation, reconcile, dietitian payload, and saved table present and agree',
+      actual: (compile.books || []).map((b) => `${b.id}=${b.kcal ?? '—'}`).join(', '),
+      pass: compile.compiler === 'green',
+      signature: 'trial_balance',
+    });
+  }
 
   return inv;
 }

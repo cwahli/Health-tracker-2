@@ -297,4 +297,27 @@ describe('automatic vs human tape review', () => {
       }).pipeline
     ).toBe(false);
   });
+  
+  it('passes id_every_component_resolved for Meal Agent estimates', () => {
+    const old = emptyWorkItem({ remaining: [], queue: 'in_progress' });
+    const journey = [
+      {
+        id: 'j_1',
+        dish: 'Donut Malaysia Matcha',
+        query: 'donut malaysia matcha',
+        scoutIndex: 0,
+        componentIndex: 0,
+        phase: 'estimated' as any,
+        source: 'estimated',
+        matchId: 'none',
+        matchName: 'donut_malaysia_matcha',
+        identityPass: true,
+        blockers: [],
+      }
+    ];
+    const next = restageBoardFromCatalog(old, journey);
+    const byId = Object.fromEntries((next.invariants || []).map((i: any) => [i.id, i]));
+    expect(byId.id_every_component_resolved.pass).toBe(true);
+    expect(byId.id_all_components_identified.pass).toBe(true);
+  });
 });

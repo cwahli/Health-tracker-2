@@ -20,8 +20,7 @@ export function isGeminiStallOrUnavailable(e: any): boolean {
   const s = geminiErrorText(e);
   return (
     isGeminiUnavailableError({ message: s }) ||
-    isGeminiQuotaError({ message: s }) ||
-    /stream stalled|produced no tokens|timed out after 180s|quota cooldown/i.test(s)
+    /stream stalled|produced no tokens|timed out after 180s|quota cooldown|fetch failed|networkerror|econnreset|etimedout/i.test(s)
   );
 }
 

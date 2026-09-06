@@ -415,7 +415,14 @@ export async function runDatabaseSearchStage(
     resItem.brandHits?.forEach((item: any) => {
       candidates.push({ id: String(item.id), name: `${item.chainName || ''} ${item.name || item.dish_name || ''}`.trim(), source: "brand_official" });
     });
-    const { resolveClass, bestMatch, survivors } = rankAndClassifyCandidates(resItem.query, resItem.usda, 85);
+    const cleanedForRank = cleanQuery(resItem.query);
+    let { resolveClass, bestMatch, survivors } = rankAndClassifyCandidates(cleanedForRank, resItem.usda, 85);
+    
+    if (resolveClass === 'MULTI_MATCH' && survivors.length > 0 && survivors[0].score >= 115) {
+      resolveClass = 'HIT_UNIQUE';
+      bestMatch = survivors[0].candidate;
+    }
+
     if (resolveClass === 'HIT_UNIQUE' && bestMatch) {
       addDebugLog(`[ResolveClass] HIT_UNIQUE for "${resItem.query}" -> ${bestMatch.description}`);
       writeAliasIfHitUnique(resolveClass, resItem.query, bestMatch).catch(e => console.error(e));

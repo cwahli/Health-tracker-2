@@ -136,6 +136,8 @@ export type GoldenScoreboard = {
   ledger?: GoldenMealCompile;
   /** Pre-checked remaining suggestions. Not scoreboard outcomes. Not "Scouted only". */
   autoSpot?: AutoSpotHit[];
+  logChars?: number;
+  tapeHydrated?: boolean;
 };
 
 const FORBIDDEN: Array<{ id: string; re: RegExp; label: string; signature: string }> = [
@@ -736,6 +738,8 @@ export function buildScoreboard(input: {
     replayMode: 'log',
     autoSpot: spotted.remaining,
     ledger,
+    logChars: (input.logText || '').length,
+    tapeHydrated: (input.logText || '').length > 0,
   };
 }
 

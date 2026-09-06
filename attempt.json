@@ -1,0 +1,9 @@
+{
+  "line": "Every scout component was resolved (diagnostic, catalog, or printed label)",
+  "hyp": "Use comp.dbSource for phase if diag is missing, fixing estimated phase propagation",
+  "file": "src/utils/goldenJourney.ts",
+  "test": "npx vitest run src/utils/bugTapeReview.test.ts",
+  "result": "pass",
+  "burned": false,
+  "note": "Read compSource from scoutItems when [Diagnostic] log is missing due to Dish Estimate"
+}

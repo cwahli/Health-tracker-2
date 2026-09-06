@@ -63,6 +63,15 @@ describe('nextGeminiFallbackEngine (stall/503 fails the model, not the job)', ()
     ).toBe(GEMINI_FALLBACK_ENGINE);
   });
 
+  it('falls back on fetch failed or network errors', () => {
+    expect(
+      nextGeminiFallbackEngine('gemini-3.5-flash-lite', new Error('TypeError: fetch failed'), false)
+    ).toBe(GEMINI_FALLBACK_ENGINE);
+    expect(
+      nextGeminiFallbackEngine('gemini-3.5-flash-lite', new Error('read ECONNRESET'), false)
+    ).toBe(GEMINI_FALLBACK_ENGINE);
+  });
+
   it('does not hop a second time or when already on 3.1', () => {
     expect(nextGeminiFallbackEngine('gemini-3.5-flash-lite', stall, true)).toBeNull();
     expect(nextGeminiFallbackEngine(GEMINI_FALLBACK_ENGINE, stall, false)).toBeNull();

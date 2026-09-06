@@ -810,13 +810,13 @@ export async function runScoutRetryLoop(args: ScoutRetryArgs): Promise<{
     attempts++;
     try {
       if (attempts > 1) {
-        if (isGeminiQuotaError(lastScoutErr)) break;
-        
         const fallback = nextGeminiFallbackEngine(currentEngine, lastScoutErr, alreadyFellBack);
         if (fallback) {
           onLog(`[Vision Scout] Switching engine from ${currentEngine} to fallback ${fallback} due to stall/unavailable.`);
           currentEngine = fallback;
           alreadyFellBack = true;
+        } else if (isGeminiQuotaError(lastScoutErr)) {
+          break;
         }
 
         const delay = computeScoutRetryDelay(lastScoutErr);
@@ -837,8 +837,11 @@ export async function runScoutRetryLoop(args: ScoutRetryArgs): Promise<{
       lastScoutErr = scoutErr;
       onLog(`[Vision Scout Attempt ${attempts} Failed] Error: ${scoutErr.message}`);
       if (isGeminiQuotaError(scoutErr)) {
-        onLog(`[Vision Scout] Aborting further scout retries — 429 quota on this model. Switch model or wait.`);
-        break;
+        const fallback = nextGeminiFallbackEngine(currentEngine, scoutErr, alreadyFellBack);
+        if (!fallback) {
+          onLog(`[Vision Scout] Aborting further scout retries — 429 quota on this model. Switch model or wait.`);
+          break;
+        }
       }
     }
   }

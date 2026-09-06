@@ -1,0 +1,2 @@
+cat src/utils/bugTapeReview.test.ts >> src/utils/bugTapeReview.test.ts.tmp
+mv src/utils/bugTapeReview.test.ts.tmp src/utils/bugTapeReview.test.ts
