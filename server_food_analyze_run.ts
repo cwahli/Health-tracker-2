@@ -299,7 +299,13 @@ export async function runFoodAnalyze(req: any, res: any) {
         if (isModifySession && (activeMeal || (req.body.activeScoutItems && req.body.activeScoutItems.length > 0))) {
           const priorMealItems = activeMeal?.itemsBreakdown || activeMeal?.items || req.body.activeScoutItems || [];
           const priorSummary = priorMealItems.map((it: any) => `${it.originalName || it.keyword || it.name || 'Dish'} (${it.estimatedWeightGrams || it.weightGrams || 100}g): ${JSON.stringify(it.components || it.foods || [])}`).join('; ');
-          scoutPromptText = `The user is modifying/refining an existing logged meal.\nPrior Meal Dishes: ${priorSummary}.\nUser modification instruction: "${(message || '').trim()}".\nRe-evaluate and output the complete updated hierarchical dishes, constituent foods, exact weights in grams, and nutritional breakdown reflecting this modification accurately.`;
+          scoutPromptText = `The user is modifying/refining an existing logged meal.\n` +
+            `User modification instruction: "${(message || '').trim()}".\n` +
+            `Prior Meal Dishes: ${priorSummary}.\n\n` +
+            `CRITICAL INSTRUCTIONS FOR MODIFICATION:\n` +
+            `1. INGREDIENT & DISH SUBSTITUTION/RENAME: If the user changes, corrects, or substitutes an ingredient or dish (e.g. 'ikan is nila', 'unsweetened tea', 'chicken instead of beef'), you MUST update the dishName, genericEnglishName, and foods[].foodName to the new substituted food (e.g. 'Ikan Nila' / 'tilapia' instead of 'Cakalang' / 'Cendro') and adjust the nutrients (calories, protein, fat, carbs, sugar) accordingly.\n` +
+            `2. SEPARATE DISHES: Keep distinct plated items, sides, and beverages as separate distinct dishes in the dishes[] array. Never merge drinks into food dishes.\n` +
+            `3. COMPLETE BREAKDOWN: Output the full updated meal with exact weights in grams and complete nutritional breakdown reflecting all user modifications.`;
         } else {
           scoutPromptText = buildVisualScoutPrompt(message || '', imageCount);
         }
@@ -368,6 +374,42 @@ export async function runFoodAnalyze(req: any, res: any) {
       addDebugLog(`[Bracket Pre-Extracted] Found ${bracketItems.length} pre-extracted bracket item(s) in message: ${bracketItems.map(b => `"${b.originalName}" (${b.estimatedWeightGrams}g)`).join(', ')}`);
       applyBracketPreExtract({ bracketItems, visionScoutItems, queriesToSearch, onLog: addDebugLog });
       visionScoutRanAndReturnedItems = visionScoutItems.length > 0;
+    }
+
+    const priorDispatches: any[] = Array.isArray(req.body?.dispatches)
+      ? req.body.dispatches
+      : (Array.isArray(activeMeal?.dispatches) ? activeMeal.dispatches : []);
+
+    const accumulatedDispatches: any[] = [...priorDispatches];
+
+    if (scoutInstructionForDebug || rawScoutData) {
+      const scoutTurnNumber = accumulatedDispatches.filter((d: any) => d.agent === 'scout').length + 1;
+      const currentScoutDispatch = {
+        id: `t${scoutTurnNumber}/scout`,
+        parent: scoutTurnNumber > 1 ? `t${scoutTurnNumber - 1}/scout` : null,
+        turn: scoutTurnNumber,
+        agent: 'scout',
+        user: (message && message.trim()) ? message.trim() : (imagePayloads && imagePayloads.length > 0 ? 'Analyze this meal photo.' : 'Text meal entry'),
+        received: {
+          photoCount: imagePayloads?.length || (req.body.photoUrl ? 1 : 0),
+          ...(imagePayloads?.[0]?.photoUrl ? { photoUrl: imagePayloads[0].photoUrl } : (req.body.photoUrl ? { photoUrl: req.body.photoUrl } : {})),
+          ...(message ? { userMessage: message } : {}),
+          mode: isModifySession ? 'edit' : (req.body.userSelectedMode || req.body.mode || 'new_log'),
+          ...(diningEnvironment ? { diningEnvironment } : {}),
+        },
+        systemInstruction: scoutInstructionForDebug?.systemInstruction,
+        userPrompt: scoutInstructionForDebug?.userPrompt,
+        instruction: scoutInstructionForDebug?.systemInstruction
+          ? `=== SYSTEM INSTRUCTION ===\n${scoutInstructionForDebug.systemInstruction}\n\n=== USER PROMPT ===\n${scoutInstructionForDebug.userPrompt || ''}`
+          : scoutInstructionForDebug?.userPrompt,
+        rawEmission: rawScoutData || undefined,
+        output: rawScoutData || visionScoutItems || undefined,
+        model: engine || 'gemini-3.5-flash-lite',
+        latency_ms: undefined,
+        tokens: undefined,
+        error: null,
+      };
+      accumulatedDispatches.push(currentScoutDispatch);
     }
     // Strip parenthetical local-language notes for cleaner USDA/OFF matching
     // e.g. "raw beef slices (daging empal and blade)" → "raw beef slices"
@@ -808,6 +850,7 @@ export async function runFoodAnalyze(req: any, res: any) {
       return res.json(buildDiscussionResponse({
         rawParsed,
         agentInstructions: { scout: scoutInstructionForDebug },
+        dispatches: accumulatedDispatches,
         apiCalls,
       }));
     }
@@ -825,6 +868,7 @@ export async function runFoodAnalyze(req: any, res: any) {
         scoutItems: mergeScoutItems(visionScoutItems, rawParsed.scoutItems),
         scoutContentType: visionScoutContentType, diningEnvironment,
         agentInstructions: { scout: scoutInstructionForDebug },
+        dispatches: accumulatedDispatches,
         apiCalls,
       });
       return res.json(responsePayload);
@@ -873,6 +917,8 @@ export async function runFoodAnalyze(req: any, res: any) {
           gate,
           agentInstructions: { scout: scoutInstructionForDebug },
           scoutItems: updatedScoutItems,
+          rawScout: rawScoutData,
+          dispatches: accumulatedDispatches,
           apiCalls
         });
       }
@@ -907,7 +953,9 @@ export async function runFoodAnalyze(req: any, res: any) {
         rawParsed, parsedData, pendingFoodLog, mealBuild, gate, scoutInternalReasoning,
         rawScoutData, scoutContentType: visionScoutContentType, diningEnvironment,
         agentInstructions: { scout: scoutInstructionForDebug },
-        scoutItems: finalScoutItems, apiCalls,
+        scoutItems: finalScoutItems,
+        dispatches: accumulatedDispatches,
+        apiCalls,
       });
       return res.json(responsePayload);
     }
@@ -991,7 +1039,10 @@ export async function runFoodAnalyze(req: any, res: any) {
           rawParsed, finalMessage, pendingFoodLog, activeMeal, mealBuild, gate,
           editApplied: result.changed,
           agentInstructions: { scout: scoutInstructionForDebug },
-          scoutItems: syncedScoutItemsForEdit, apiCalls,
+          scoutItems: syncedScoutItemsForEdit,
+          rawScoutData,
+          dispatches: accumulatedDispatches,
+          apiCalls,
         }));
       }
     }
@@ -1008,6 +1059,7 @@ export async function runFoodAnalyze(req: any, res: any) {
         payloadData, degradedMeal, visionScoutItems,
         scoutContentType: visionScoutContentType,
         agentInstructions: { scout: scoutInstructionForDebug },
+        dispatches: accumulatedDispatches,
         apiCalls,
       });
       addDebugLog(`[Dietitian Degrade] Emitting salvaged meal (kcal=${payloadData?.nutrients?.calories ?? payloadData?.calories ?? '?'}) as succeeded.`);

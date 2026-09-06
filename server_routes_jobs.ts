@@ -416,7 +416,13 @@ jobsRouter.all('/api/jobs/debug', async (req, res) => {
       || (memJobForMerge as any)?.clean_result?.dialogInventory
       || debugPayload.dialogInventory
       || debugPayload.result?.dialogInventory;
-    const effectiveDispatches = dispatches || debugPayload.dispatches || debugPayload.result?.dispatches;
+    const effectiveDispatches = dispatches
+      || (memJobForMerge as any)?.dispatches
+      || (memJobForMerge as any)?.clean_result?.dispatches
+      || (job as any)?.dispatches
+      || (job as any)?.clean_result?.dispatches
+      || debugPayload.dispatches
+      || debugPayload.result?.dispatches;
 
     // Debug-export fix: the client builds the dialog inventory at download time
     // and POSTs it here, but it was only merged into this response — a later

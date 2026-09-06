@@ -225,21 +225,93 @@ export function extractHandoffs(input: DebugReportInput, jobId: string): Handoff
 
 /** Extract or construct agent dispatches */
 export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
-  if (Array.isArray(input.dispatches) && input.dispatches.length > 0) {
-    return input.dispatches;
-  }
-
-  const dispatches: DispatchTrace[] = [];
   const logs = input.backendLogs || '';
   const pack = determinePack(input);
 
+  if (Array.isArray(input.dispatches) && input.dispatches.length > 0) {
+    const usages = parseUnifiedUsageLines(logs);
+    const timings = parseUnifiedTimingLines(logs);
+    const modelMatch = logs.match(/Vision Scout \(([^)]+)\)|\[UnifiedLLM\] Calling (gemini-[^\s]+)/i);
+
+    const enriched = input.dispatches.map((d, idx) => {
+      const copy = { ...d };
+      if (!copy.model) {
+        copy.model = modelMatch ? (modelMatch[1] || modelMatch[2]) : 'gemini-3.5-flash-lite';
+      }
+      if (copy.tokens == null) {
+        const u = usages.find(x => x.stage === copy.agent || (copy.agent === 'scout' && x.stage === 'scout'));
+        if (u) copy.tokens = u.total;
+      }
+      if (copy.latency_ms == null) {
+        const t = timings.find(x => x.stage === copy.agent || (copy.agent === 'scout' && x.stage === 'scout'));
+        if (t) copy.latency_ms = t.ms;
+      }
+      // Fix user prompt if it was accidentally a UI button label like "Download Debug Logs"
+      if (!copy.user || copy.user === 'Download Debug Logs' || copy.user === 'Flag issue') {
+        if (copy.received?.userMessage) {
+          copy.user = copy.received.userMessage;
+        } else if (idx === 0) {
+          const actionPrompt = input.lastUserAction?.details?.prompt || input.lastUserAction?.prompt;
+          if (actionPrompt && actionPrompt !== 'Download Debug Logs' && actionPrompt !== 'Flag issue') {
+            copy.user = actionPrompt;
+          } else if (input.photoUrl || (input.photoUrls && input.photoUrls.length > 0) || (copy.received && (copy.received as any).photoCount > 0)) {
+            copy.user = 'Analyze this meal photo.';
+          } else if (input.message) {
+            copy.user = input.message;
+          }
+        }
+      }
+      if (idx === input.dispatches.length - 1 && input.rawScout && !copy.rawEmission) {
+        copy.rawEmission = input.rawScout;
+      }
+      if (idx === input.dispatches.length - 1 && input.rawScout && (!copy.output || copy.output === input.scoutItems)) {
+        copy.output = input.rawScout;
+      }
+      return copy;
+    });
+
+    const hasResolver = Boolean(
+      /food_resolver|Food Resolver/i.test(logs) ||
+      usages.some(u => u.stage === 'food_resolver') ||
+      timings.some(t => t.stage === 'food_resolver')
+    );
+    if (hasResolver && !enriched.some(d => d.agent === 'resolver')) {
+      const u = usages.find(x => x.stage === 'food_resolver');
+      const t = timings.find(x => x.stage === 'food_resolver');
+      const rModelMatch = logs.match(/Food Resolver.*?Calling (gemini-[^\s]+)|Calling (gemini-[^\s]+).*?[Rr]esolver/i);
+      enriched.push({
+        id: 't1/resolver',
+        parent: enriched[0]?.id || null,
+        turn: 1,
+        agent: 'resolver',
+        user: undefined,
+        received: { gapItems: true },
+        instruction: undefined,
+        output: undefined,
+        model: rModelMatch ? (rModelMatch[1] || rModelMatch[2]) : 'gemini-3.5-flash-lite',
+        latency_ms: t ? t.ms : undefined,
+        tokens: u ? u.total : undefined,
+        called: true,
+        error: input.error || null,
+      });
+    }
+
+    return enriched;
+  }
+
+  const dispatches: DispatchTrace[] = [];
+
   if (pack === 'receptionist') {
+    const rawActionPrompt = input.lastUserAction?.details?.prompt || input.lastUserAction?.prompt;
+    const userPrompt = (rawActionPrompt && rawActionPrompt !== 'Download Debug Logs' && rawActionPrompt !== 'Flag issue')
+      ? rawActionPrompt
+      : (input.message || undefined);
     dispatches.push({
       id: 'fd/front_desk',
       parent: null,
       turn: 1,
       agent: 'front_desk',
-      user: input.lastUserAction?.details?.prompt || input.lastUserAction?.prompt || undefined,
+      user: userPrompt,
       received: input.agentPayload,
       instruction: typeof input.agentInstructions === 'string' ? input.agentInstructions : undefined,
       output: input.handoffPayload || input.message,
@@ -252,12 +324,16 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
   }
 
   if (pack === 'medical' || pack === 'health_coach') {
+    const rawActionPrompt = input.lastUserAction?.details?.prompt || input.lastUserAction?.prompt;
+    const userPrompt = (rawActionPrompt && rawActionPrompt !== 'Download Debug Logs' && rawActionPrompt !== 'Flag issue')
+      ? rawActionPrompt
+      : (input.message || undefined);
     dispatches.push({
       id: pack === 'medical' ? 't1/medical' : 't1/health_coach',
       parent: null,
       turn: 1,
       agent: pack,
-      user: input.lastUserAction?.details?.prompt || input.lastUserAction?.prompt || undefined,
+      user: userPrompt,
       received: input.agentPayload || input.extractedData || input.ingestTrace,
       instruction: typeof input.agentInstructions === 'string' ? input.agentInstructions : undefined,
       output: input.extractedData || input.report || input.message,
@@ -279,65 +355,128 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
   if (hasScout) {
     const modelMatch = logs.match(/Vision Scout \(([^)]+)\)|\[UnifiedLLM\] Calling (gemini-[^\s]+)/i);
     const latencyMatch = logs.match(/(?:Vision Scout|UnifiedLLM).*?(\d+(?:\.\d+)?)ms/i);
-    const usage = parseUnifiedUsageLines(logs).find(u => u.stage === 'scout');
-    const timing = parseUnifiedTimingLines(logs).find(t => t.stage === 'scout');
+    const usages = parseUnifiedUsageLines(logs);
+    const timings = parseUnifiedTimingLines(logs);
+    const scoutUsages = usages.filter(u => u.stage === 'scout');
+    const scoutTimings = timings.filter(t => t.stage === 'scout');
 
-    let extractedSystemInstruction: string | undefined = undefined;
-    let extractedUserPrompt: string | undefined = undefined;
+    // Check if there are multiple prompt sections in logs
+    const promptSplitRegex = /\[UnifiedLLM-Prompt:scout\] System Instruction:\n/g;
+    const matches = Array.from(logs.matchAll(promptSplitRegex));
 
-    if (typeof input.agentInstructions === 'object' && !Array.isArray(input.agentInstructions)) {
-      const s = (input.agentInstructions as any)?.scout;
-      if (typeof s === 'object' && s) {
-        if (s.systemInstruction) extractedSystemInstruction = s.systemInstruction;
-        if (s.userPrompt) extractedUserPrompt = s.userPrompt;
-      } else if (typeof s === 'string' && s.trim()) {
-        extractedUserPrompt = s;
+    const rawActionPrompt = input.lastUserAction?.details?.prompt || input.lastUserAction?.prompt;
+    const defaultUserPrompt = (rawActionPrompt && rawActionPrompt !== 'Download Debug Logs' && rawActionPrompt !== 'Flag issue')
+      ? rawActionPrompt
+      : ((input.photoUrl || (input.photoUrls && input.photoUrls.length > 0)) ? 'Analyze this meal photo.' : (input.message || undefined));
+
+    if (matches.length > 1) {
+      // Multi-turn run detected in logs!
+      for (let i = 0; i < matches.length; i++) {
+        const turnNum = i + 1;
+        const startIndex = matches[i].index!;
+        const nextIndex = i + 1 < matches.length ? matches[i + 1].index! : logs.length;
+        const turnLogSection = logs.slice(startIndex, nextIndex);
+
+        let turnSysInst = '';
+        let turnUserPrompt = '';
+        const sysMatch = turnLogSection.match(/^([\s\S]+?)(?=\n\[UnifiedLLM-Prompt:scout\] User Prompt:|\n\[scout_|\n\[dietitian_|\n\[Vision Scout\]|$)/);
+        if (sysMatch) turnSysInst = sysMatch[1].trim();
+        const usrMatch = turnLogSection.match(/\[UnifiedLLM-Prompt:scout\] User Prompt:\n([\s\S]+?)(?=\n\[UnifiedLLM-Prompt:|\n\[scout_|\n\[dietitian_|\n\[Vision Scout\]|$)/);
+        if (usrMatch) turnUserPrompt = usrMatch[1].trim();
+
+        const fullInstruction = turnSysInst
+          ? (turnUserPrompt ? `=== SYSTEM INSTRUCTION ===\n${turnSysInst}\n\n=== USER PROMPT ===\n${turnUserPrompt}` : turnSysInst)
+          : turnUserPrompt;
+
+        let turnUserText = turnNum === 1 ? defaultUserPrompt : undefined;
+        if (turnNum > 1 && turnUserPrompt) {
+          const modMatch = turnUserPrompt.match(/User modification instruction:\s*"([^"]+)"/i);
+          if (modMatch) turnUserText = modMatch[1];
+          else if (input.message && turnNum === matches.length) turnUserText = input.message;
+        }
+
+        dispatches.push({
+          id: `t${turnNum}/scout`,
+          parent: turnNum > 1 ? `t${turnNum - 1}/scout` : null,
+          turn: turnNum,
+          agent: 'scout',
+          user: turnUserText,
+          received: {
+            turn: turnNum,
+            mode: turnNum === 1 ? (input.mode || 'new_log') : 'edit',
+            ...(turnNum === 1 ? { photoCount: input.photoUrls?.length || (input.photoUrl ? 1 : 0) } : {}),
+            ...(turnUserText ? { userMessage: turnUserText } : {}),
+          },
+          systemInstruction: turnSysInst || undefined,
+          userPrompt: turnUserPrompt || undefined,
+          instruction: fullInstruction || undefined,
+          output: turnNum === matches.length ? (input.rawScout || input.scoutItems) : undefined,
+          rawEmission: turnNum === matches.length ? (input.rawScout || undefined) : undefined,
+          model: modelMatch ? (modelMatch[1] || modelMatch[2]) : 'gemini-3.5-flash-lite',
+          latency_ms: scoutTimings[i]?.ms || (latencyMatch ? Math.round(Number(latencyMatch[1])) : 1500),
+          tokens: scoutUsages[i]?.total || undefined,
+          error: turnNum === matches.length ? (input.error || null) : null,
+        });
       }
-    } else if (typeof input.agentInstructions === 'string' && input.agentInstructions.trim()) {
-      extractedUserPrompt = input.agentInstructions;
-    }
+    } else {
+      // Single-turn extraction
+      let extractedSystemInstruction: string | undefined = undefined;
+      let extractedUserPrompt: string | undefined = undefined;
 
-    if (!extractedSystemInstruction && logs) {
-      const match = logs.match(/\[UnifiedLLM-Prompt:scout\] System Instruction:\n([\s\S]+?)(?=\n\[UnifiedLLM-Prompt:|\n\[scout_|\n\[dietitian_|\n\[Vision Scout\]|$)/);
-      if (match) {
-        extractedSystemInstruction = match[1].trim();
-      } else {
-        const altMatch = logs.match(/Vision Scout System Instruction \(config\.systemInstruction\):\s*"([\s\S]+?)"(?:\n\[|\n$|$)/);
-        if (altMatch) extractedSystemInstruction = altMatch[1].trim();
+      if (typeof input.agentInstructions === 'object' && !Array.isArray(input.agentInstructions)) {
+        const s = (input.agentInstructions as any)?.scout;
+        if (typeof s === 'object' && s) {
+          if (s.systemInstruction) extractedSystemInstruction = s.systemInstruction;
+          if (s.userPrompt) extractedUserPrompt = s.userPrompt;
+        } else if (typeof s === 'string' && s.trim()) {
+          extractedUserPrompt = s;
+        }
+      } else if (typeof input.agentInstructions === 'string' && input.agentInstructions.trim()) {
+        extractedUserPrompt = input.agentInstructions;
       }
-    }
-    if (!extractedUserPrompt && logs) {
-      const match = logs.match(/\[UnifiedLLM-Prompt:scout\] User Prompt:\n([\s\S]+?)(?=\n\[UnifiedLLM-Prompt:|\n\[scout_|\n\[dietitian_|\n\[Vision Scout\]|$)/);
-      if (match) extractedUserPrompt = match[1].trim();
-    }
 
-    const fullInstruction = extractedSystemInstruction
-      ? (extractedUserPrompt ? `=== SYSTEM INSTRUCTION ===\n${extractedSystemInstruction}\n\n=== USER PROMPT ===\n${extractedUserPrompt}` : extractedSystemInstruction)
-      : extractedUserPrompt;
+      if (!extractedSystemInstruction && logs) {
+        const match = logs.match(/\[UnifiedLLM-Prompt:scout\] System Instruction:\n([\s\S]+?)(?=\n\[UnifiedLLM-Prompt:|\n\[scout_|\n\[dietitian_|\n\[Vision Scout\]|$)/);
+        if (match) {
+          extractedSystemInstruction = match[1].trim();
+        } else {
+          const altMatch = logs.match(/Vision Scout System Instruction \(config\.systemInstruction\):\s*"([\s\S]+?)"(?:\n\[|\n$|$)/);
+          if (altMatch) extractedSystemInstruction = altMatch[1].trim();
+        }
+      }
+      if (!extractedUserPrompt && logs) {
+        const match = logs.match(/\[UnifiedLLM-Prompt:scout\] User Prompt:\n([\s\S]+?)(?=\n\[UnifiedLLM-Prompt:|\n\[scout_|\n\[dietitian_|\n\[Vision Scout\]|$)/);
+        if (match) extractedUserPrompt = match[1].trim();
+      }
 
-    dispatches.push({
-      id: 't1/scout',
-      parent: null,
-      turn: 1,
-      agent: 'scout',
-      user: input.lastUserAction?.details?.prompt || input.lastUserAction?.prompt || undefined,
-      received: {
-        photoCount: input.photoUrls?.length || (input.photoUrl ? 1 : 0),
-        ...(input.photoUrls?.length ? { photoUrls: input.photoUrls } : (input.photoUrl ? { photoUrl: input.photoUrl } : {})),
-        ...(input.message ? { userMessage: input.message } : {}),
-        ...(input.mode ? { mode: input.mode } : {}),
-        ...(input.diningEnvironment ? { diningEnvironment: input.diningEnvironment } : {}),
-      },
-      systemInstruction: extractedSystemInstruction,
-      userPrompt: extractedUserPrompt,
-      instruction: fullInstruction,
-      output: input.rawScout || input.scoutItems,
-      rawEmission: input.rawScout || undefined,
-      model: modelMatch ? (modelMatch[1] || modelMatch[2]) : 'gemini-3.5-flash-lite',
-      latency_ms: timing ? timing.ms : (latencyMatch ? Math.round(Number(latencyMatch[1])) : 1500),
-      tokens: usage ? usage.total : undefined,
-      error: input.error || null,
-    });
+      const fullInstruction = extractedSystemInstruction
+        ? (extractedUserPrompt ? `=== SYSTEM INSTRUCTION ===\n${extractedSystemInstruction}\n\n=== USER PROMPT ===\n${extractedUserPrompt}` : extractedSystemInstruction)
+        : extractedUserPrompt;
+
+      dispatches.push({
+        id: 't1/scout',
+        parent: null,
+        turn: 1,
+        agent: 'scout',
+        user: defaultUserPrompt,
+        received: {
+          photoCount: input.photoUrls?.length || (input.photoUrl ? 1 : 0),
+          ...(input.photoUrls?.length ? { photoUrls: input.photoUrls } : (input.photoUrl ? { photoUrl: input.photoUrl } : {})),
+          ...(input.message ? { userMessage: input.message } : {}),
+          ...(input.mode ? { mode: input.mode } : {}),
+          ...(input.diningEnvironment ? { diningEnvironment: input.diningEnvironment } : {}),
+        },
+        systemInstruction: extractedSystemInstruction,
+        userPrompt: extractedUserPrompt,
+        instruction: fullInstruction,
+        output: input.rawScout || input.scoutItems,
+        rawEmission: input.rawScout || undefined,
+        model: modelMatch ? (modelMatch[1] || modelMatch[2]) : 'gemini-3.5-flash-lite',
+        latency_ms: scoutTimings[0]?.ms || (latencyMatch ? Math.round(Number(latencyMatch[1])) : 1500),
+        tokens: scoutUsages[0]?.total || undefined,
+        error: input.error || null,
+      });
+    }
   }
 
   // Food Resolver: runs inside DB search for gap items (unknown foods needing

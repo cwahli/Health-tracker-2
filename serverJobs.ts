@@ -948,7 +948,9 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           networkErrors: payload.networkErrors || [],
           userActionBreadcrumbs: payload.userActionBreadcrumbs || [],
           dialogInventory: finalPayload?.dialogInventory || (payload as any).dialogInventory || existingMemJob?.dialogInventory || undefined,
-          dispatches: finalPayload?.dispatches || (payload as any).dispatches || existingMemJob?.dispatches || undefined,
+          dispatches: (Array.isArray(finalPayload?.dispatches) && finalPayload.dispatches.length > 0)
+            ? finalPayload.dispatches
+            : ((payload as any).dispatches || existingMemJob?.dispatches || existingMemJob?.clean_result?.dispatches || undefined),
           // M-FIX1: Medical/biomarker agents (agent1_step1 and friends) return these
           // fields directly on finalPayload. They were previously dropped here because
           // this cleanResult builder was written only for the food-log shape. Carrying

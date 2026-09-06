@@ -57,12 +57,15 @@ export function recordBreadcrumb(action: string, target?: string, details?: any)
       window.__userActionBreadcrumbs.shift();
     }
     const promptText = typeof details === 'string' ? details : (details?.prompt || details?.text || details?.label);
-    window.__lastUserAction = {
-      action,
-      prompt: promptText,
-      timestamp: entry.timestamp,
-      details
-    };
+    const isMetaAction = action === 'debug_download' || target === 'debug_download' || action === 'flag_issue' || target === 'flag_issue' || promptText === 'Download Debug Logs' || promptText === 'Flag issue';
+    if (!isMetaAction) {
+      window.__lastUserAction = {
+        action,
+        prompt: promptText,
+        timestamp: entry.timestamp,
+        details
+      };
+    }
   } catch (_) {}
 }
 

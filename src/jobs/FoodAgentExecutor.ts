@@ -148,6 +148,9 @@ export async function* executeFoodAgent(input: FoodAgentExecutorInput): AsyncGen
   if (input.activeScoutItems || input.checkpoint?.scoutItems) {
     bodyData.activeScoutItems = input.activeScoutItems || input.checkpoint?.scoutItems;
   }
+  if ((input as any).dispatches || bodyData.activeMeal?.dispatches) {
+    bodyData.dispatches = (input as any).dispatches || bodyData.activeMeal?.dispatches;
+  }
 
   // Cleanup undefined
   if (photoUrl) bodyData.photoUrl = photoUrl;

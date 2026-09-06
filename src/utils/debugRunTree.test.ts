@@ -121,4 +121,58 @@ describe('buildCanonicalRunTree jobId tagging', () => {
     expect(lines[0]).toBe(`[${JOB}] [UnifiedLLM] Calling gemini-3.5-flash-lite`);
     expect(tree.dispatches.find(x => x.agent === 'scout')!.tokens).toBe(908);
   });
+
+  it('preserves and enriches pre-existing multi-turn dispatches array', () => {
+    const multiTurnInput = foodInput({
+      dispatches: [
+        {
+          id: 't1/scout',
+          turn: 1,
+          agent: 'scout',
+          user: 'Analyze this meal photo.',
+          received: { mode: 'new_log' },
+          systemInstruction: 'Scout Sys 1',
+          userPrompt: 'Scout Usr 1',
+          output: { dishes: [{ dishName: 'Nasi Goreng' }] },
+          rawEmission: { dishes: [{ dishName: 'Nasi Goreng' }] },
+        },
+        {
+          id: 't2/scout',
+          turn: 2,
+          agent: 'scout',
+          user: 'The tea is unsweetened',
+          received: { mode: 'edit', userMessage: 'The tea is unsweetened' },
+          systemInstruction: 'Scout Sys 2',
+          userPrompt: 'User modification instruction: "The tea is unsweetened"',
+          output: { dishes: [{ dishName: 'Nasi Goreng' }, { dishName: 'Teh Tawar' }] },
+          rawEmission: { dishes: [{ dishName: 'Nasi Goreng' }, { dishName: 'Teh Tawar' }] },
+        },
+      ],
+    });
+    const d = extractDispatches(multiTurnInput);
+    expect(d.length).toBe(3); // 2 scout turns + 1 resolver from logs
+    expect(d[0].id).toBe('t1/scout');
+    expect(d[0].user).toBe('Analyze this meal photo.');
+    expect(d[1].id).toBe('t2/scout');
+    expect(d[1].user).toBe('The tea is unsweetened');
+    expect(d[1].rawEmission).toBeDefined();
+  });
+
+  it('filters out UI debug download button text from dispatch user prompt', () => {
+    const inputWithButtonUser = foodInput({
+      lastUserAction: { action: 'debug_download', details: { prompt: 'Download Debug Logs' } },
+      dispatches: [
+        {
+          id: 't1/scout',
+          turn: 1,
+          agent: 'scout',
+          user: 'Download Debug Logs',
+          received: { userMessage: 'Analyze this meal photo.' },
+        },
+      ],
+    });
+    const d = extractDispatches(inputWithButtonUser);
+    expect(d[0].user).toBe('Analyze this meal photo.');
+  });
 });
+

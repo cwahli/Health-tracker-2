@@ -152,6 +152,7 @@ export async function downloadJobDebugReport(args: {
     const clientSessionEvents = getSessionLog(resolvedJobId).length > 0
       ? getSessionLog(resolvedJobId)
       : (job?.sessionEvents || []);
+    const dispatches = msg?.data?.dispatches || msg?.data?.agentResult?.dispatches || job?.result?.dispatches || (job as any)?.clean_result?.dispatches;
     const res = await fetch('/api/jobs/debug', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -165,6 +166,7 @@ export async function downloadJobDebugReport(args: {
         userActionBreadcrumbs,
         lastUserAction,
         dialogInventory,
+        dispatches,
       }),
     });
     if (res.ok) {
@@ -283,6 +285,7 @@ export async function downloadJobDebugReport(args: {
       photoUrl: job?.result?.photoUrl || msg?.data?.photoUrl || pendingFoodLog?.imageUrl || pendingFoodLog?.imageUrls?.[0],
       photoUrls: job?.result?.photoUrls || msg?.data?.photoUrls || pendingFoodLog?.imageUrls,
       dialogInventory,
+      dispatches: msg?.data?.dispatches || msg?.data?.agentResult?.dispatches || job?.result?.dispatches || (job as any)?.clean_result?.dispatches,
     });
     triggerBlobDownload(new Blob([mdContent], { type: 'text/markdown;charset=utf-8' }), `debug-${resolvedJobId}.md`);
   } else {
