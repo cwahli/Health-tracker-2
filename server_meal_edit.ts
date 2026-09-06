@@ -200,6 +200,23 @@ function nextScoutIndex(items: any[]): number {
   return max + 1;
 }
 
+function renameIdentityRows(rows: any, oldNames: string[], newName: string): any[] {
+  if (!Array.isArray(rows)) return rows;
+  const oldSet = new Set(oldNames.filter(Boolean).map((n) => String(n).trim().toLowerCase()));
+  const renameOne = (row: any): any => {
+    if (!row || typeof row !== 'object') return row;
+    const next = { ...row };
+    for (const key of ['name', 'canonicalDbName', 'originalName', 'keyword']) {
+      const val = String(next[key] || '').trim().toLowerCase();
+      if (val && oldSet.has(val)) next[key] = newName;
+    }
+    if (Array.isArray(next.componentsDetailList)) next.componentsDetailList = next.componentsDetailList.map(renameOne);
+    if (Array.isArray(next.components)) next.components = next.components.map(renameOne);
+    return next;
+  };
+  return rows.map(renameOne);
+}
+
 function componentsOf(item: any): any[] {
   const list = item?.componentsDetailList || item?.components || item?.compositeSiblings || [];
   if (!Array.isArray(list)) return [];
@@ -539,14 +556,38 @@ export async function applyMealEdits(opts: {
       };
       const next = await finalizeFromEstimate(newName, grams, raw.estimate, media, prev.scoutIndex ?? nextScoutIndex(items));
       const isSameDishFamily = itemsMatchByName(prev.name || prev.originalName || '', newName);
+      const oldIdentityNames = [prev.name, prev.canonicalDbName, prev.originalName, prev.keyword, itemName, raw.itemName]
+        .filter(Boolean)
+        .map(String);
       if (isSameDishFamily) {
-        next.components = prev.components;
-        next.componentsDetailList = prev.componentsDetailList;
-        next.compositeSiblings = prev.compositeSiblings;
+        const renamedComponents = renameIdentityRows(prev.components, oldIdentityNames, newName);
+        const renamedDetail = renameIdentityRows(prev.componentsDetailList, oldIdentityNames, newName);
+        const renamedSiblings = renameIdentityRows(prev.compositeSiblings, oldIdentityNames, newName);
+        const componentsSource = Array.isArray(renamedComponents) && renamedComponents.length > 0
+          ? renamedComponents
+          : (Array.isArray(renamedDetail) && renamedDetail.length > 0 ? renamedDetail : []);
+        const detailSource = Array.isArray(renamedDetail) && renamedDetail.length > 0
+          ? renamedDetail
+          : (Array.isArray(renamedComponents) && renamedComponents.length > 0 ? renamedComponents : []);
+        next.components = componentsSource;
+        next.componentsDetailList = detailSource;
+        next.compositeSiblings = Array.isArray(renamedSiblings) ? renamedSiblings : [];
         next.hasComponents = prev.hasComponents;
       } else {
-        next.components = [{ name: newName, weightGrams: grams, calories: next.calories, protein: next.protein, totalFat: next.totalFat, carbohydrates: next.carbohydrates, sodium: next.sodium }];
-        next.componentsDetailList = next.components;
+        const component = {
+          name: newName,
+          canonicalDbName: newName,
+          originalName: newName,
+          keyword: newName,
+          weightGrams: grams,
+          calories: next.calories,
+          protein: next.protein,
+          totalFat: next.totalFat,
+          carbohydrates: next.carbohydrates,
+          sodium: next.sodium,
+        };
+        next.components = [component];
+        next.componentsDetailList = [component];
         next.compositeSiblings = [];
         next.hasComponents = false;
       }

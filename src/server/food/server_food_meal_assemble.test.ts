@@ -17,6 +17,7 @@ import {
   runEvaluationFinalize,
   assembleEvaluationComparison,
 } from './server_food_meal_assemble';
+import { applyMealEdits } from '../../../server_meal_edit.js';
 
 describe('F-8.10 shard 6 — fallback breakdown', () => {
   it('builds estimated rows from scout items and logs once', () => {
@@ -314,5 +315,67 @@ describe('F-8.10 shard 27 — evaluation comparison assembly', () => {
     expect(comparisonData.isMenuScale).toBe(false);
     expect(comparisonSet).toBeTruthy();
     expect(logs.some((m) => m.includes('Comparison Resolve'))).toBe(true);
+  });
+});
+
+describe('F-8.10 modify-path rename persistence', () => {
+  it('propagates an identity rename into the next-turn itemsBreakdown components', async () => {
+    const result = await applyMealEdits({
+      items: [
+        {
+          scoutIndex: 0,
+          name: 'Suwir Petai',
+          canonicalDbName: 'Cakalang Suwir Petai',
+          originalName: 'Cakalang Suwir Petai',
+          keyword: 'Cakalang Suwir Petai',
+          weightGrams: 200,
+          nutrients: {
+            calories: 200,
+            protein: 20,
+            carbohydrates: 10,
+            totalFat: 8,
+          },
+          componentsDetailList: [
+            {
+              scoutIndex: 0,
+              name: 'Cakalang Suwir Petai',
+              canonicalDbName: 'Cakalang Suwir Petai',
+              originalName: 'Cakalang Suwir Petai',
+              keyword: 'Cakalang Suwir Petai',
+              weightGrams: 200,
+              nutrients: {
+                calories: 200,
+                protein: 20,
+                carbohydrates: 10,
+                totalFat: 8,
+              },
+            },
+          ],
+          hasComponents: true,
+        },
+      ],
+      commands: [
+        {
+          action: 'replace_identity',
+          itemName: 'Cakalang Suwir Petai',
+          newItemName: 'Ikan Nila Suwir Petai',
+          estimate: {
+            protein: 22,
+            carbohydrates: 0,
+            totalFat: 6,
+            foodType: 'fish',
+            cookingMethod: 'cooked',
+          },
+        },
+      ],
+      userMessage: 'change cakalang to ikan nila',
+    });
+
+    expect(result.items[0]?.name).toBe('Ikan Nila Suwir Petai');
+    expect(result.items[0]?.canonicalDbName).toBe('Ikan Nila Suwir Petai');
+    expect(result.items[0]?.componentsDetailList?.[0]?.canonicalDbName).toBe('Ikan Nila Suwir Petai');
+    expect(result.items[0]?.componentsDetailList?.[0]?.name).toBe('Ikan Nila Suwir Petai');
+    expect(result.items[0]?.components?.[0]?.canonicalDbName).toBe('Ikan Nila Suwir Petai');
+    expect(JSON.stringify(result.items)).not.toContain('Cakalang');
   });
 });
