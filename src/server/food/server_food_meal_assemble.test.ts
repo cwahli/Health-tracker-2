@@ -162,6 +162,28 @@ describe('F-8.10 shard 7 — modify-path seams', () => {
     expect(resolveModifyIncomingTitle(null, 'Projector Name')).toBe('Projector Name');
   });
 
+  it('rebuilds a stale multi-item title from result items when segments no longer match', () => {
+    // Live case 1: scout-level rename with no edit commands — title kept Manis
+    // while every other surface (ledger, chips, receipt) said Tawar.
+    expect(resolveEditedMealTitle({
+      incomingTitle: 'Ikan Cakalang Suwir, Cah Kangkung, and Es Teh Manis',
+      items: [{ name: 'Ikan Cakalang Suwir' }, { name: 'Cah Kangkung' }, { name: 'Es Teh Tawar' }],
+      editCommands: [],
+    })).toBe('Ikan Cakalang Suwir, Cah Kangkung, and Es Teh Tawar');
+    // Live case 2: merge fragment leaked into the title on a zero-image edit.
+    expect(resolveEditedMealTitle({
+      incomingTitle: 'Ikan Cendro Suwir Pete with Teh Tawar and Cah Kangkung',
+      items: [{ name: 'Ikan Cendro Suwir Pete' }, { name: 'Cah Kangkung' }, { name: 'Es Teh Tawar' }],
+      editCommands: [],
+    })).toBe('Ikan Cendro Suwir Pete, Cah Kangkung, and Es Teh Tawar');
+    // Weight-only edit: segments still match, title untouched.
+    expect(resolveEditedMealTitle({
+      incomingTitle: 'Rice, Kangkung, and Tea',
+      items: [{ name: 'Rice' }, { name: 'Kangkung' }, { name: 'Tea' }],
+      editCommands: [],
+    })).toBe('Rice, Kangkung, and Tea');
+  });
+
   it('syncs scout chips with ledger renames and fabricates missing rows', () => {
     const out = syncEditScoutItems({
       baseScoutItems: [{ scoutIndex: 0, originalName: 'Es Teh Manis', keyword: 'Es Teh Manis' }],

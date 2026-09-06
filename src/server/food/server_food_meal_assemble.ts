@@ -236,7 +236,15 @@ export function resolveEditedMealTitle(args: EditedMealTitleArgs): string | null
           }
         }
       }
-      return updatedTitle;
+      // The rename may have landed in the scout re-emission with no edit
+      // commands (or a merge fragment leaked in): if every title segment no
+      // longer matches a result item exactly, the title is stale — rebuild it
+      // from the items rather than keeping the wrong name.
+      const norm = (s: any) => String(s || '').trim().toLowerCase();
+      const itemNames = items.map((it: any) => norm(it.name || it.canonicalDbName)).filter(Boolean);
+      const segments = String(updatedTitle).split(/,|\band\b|\bwith\b/i).map(norm).filter(Boolean);
+      const stale = segments.some((seg) => !itemNames.includes(seg));
+      if (!stale) return updatedTitle;
     }
     return formatMultiItemMealTitle(items);
   }
