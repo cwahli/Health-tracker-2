@@ -545,7 +545,7 @@ describe('golden', () => {
     const items = cakalangKangkungPlate().map((it) => ({
       ...it,
       dbSource: it.scoutIndex === 0 ? 'fdc' : it.dbSource,
-      boundingBox2D: it.scoutIndex === 0 ? [10, 20, 70, 80] : it.boundingBox2D,
+      boundingBox2D: it.scoutIndex === 0 ? [10, 20, 70, 80] : (it as any).boundingBox2D,
     }));
 
     const result = await applyMealEdits({

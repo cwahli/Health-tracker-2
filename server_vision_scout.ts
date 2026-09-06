@@ -148,7 +148,7 @@ export const scoutSystemInstruction = `- HIERARCHY: Group distinct physical plat
 - % AKG / % DV: If nutrition labels state % AKG (Angka Kecukupan Gizi) or % DV for micronutrients (e.g. Vitamin D 8% AKG, Kalsium 2% AKG), preserve the % in rawNutritionLabel.
 - BRANDS & CONDIMENTS: Set 'chainName' for brands. Set 'isStandaloneCondimentPacket' for packets <=30g.
 - COOKING FATS: Include cooking oils/fats in 'dishNutrients.totalFat' based on 'cookingMethod'.
-- CLINICAL VERDICT & ADVICE: Provide a concise biological verdict ('label' with 3-6 words, 'level': 'good' | 'warning' | 'alert' | 'neutral') evaluating metabolic impact, macronutrient balance, and actionable clinical advice in 'clinicalAdvice'.
+- CLINICAL VERDICT & NARRATIVE: Provide a 3-6 word 'verdict' ('level': good|warning|alert|neutral) and a constructive 35-70 word clinical 'clinicalAdvice' in 2nd person ("You got...") covering key nutritional assets, metabolic/glycemic impact, and an actionable next step/movement.
 
 === REQUIRED OUTPUT JSON SCHEMA ===
 Output exactly ONE JSON object matching this schema:
@@ -160,7 +160,7 @@ Output exactly ONE JSON object matching this schema:
     "label": "Supports Gut Health with Added Sugar",
     "level": "neutral"
   },
-  "clinicalAdvice": "Personalized clinical guidance regarding glycemic, protein, and micronutrient balance.",
+  "clinicalAdvice": "You got 42g of clean protein and essential omega-3s supporting satiety and muscle repair. The fiber from kangkung blunts glucose absorption, while unsweetened tea prevents blood sugar spikes. A 10-minute walk will further optimize post-meal digestion.",
   "dishes": [
     {
       "dishName": "Vegetable and Beef Hotpot",

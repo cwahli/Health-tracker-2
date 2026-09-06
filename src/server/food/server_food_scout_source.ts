@@ -407,10 +407,44 @@ export function mergeScoutIntoActiveMeal(args: ScoutMealMergeArgs): any[] {
     return visionScoutItems;
   }
   if (isModify) {
-    onLog(`[Single-Path] Edit turn: updating active meal with ${visionScoutItems.length} refined scout dish(es).`);
-    return visionScoutItems;
+    onLog(`[Single-Path] Edit turn: updating active meal with ${visionScoutItems.length} refined scout dish(es) in same meal.`);
+    return visionScoutItems.map((newcomer, idx) => {
+      const priorMatch = activeMealItemsBreakdown.find((ex: any) => {
+        const exName = (ex.originalName || ex.keyword || ex.canonicalDbName || ex.name || '').toLowerCase().trim();
+        const newName = (newcomer.originalName || newcomer.keyword || newcomer.name || '').toLowerCase().trim();
+        return exName && newName && (exName === newName || exName.includes(newName) || newName.includes(exName));
+      }) || activeMealItemsBreakdown[idx];
+
+      const isDummyBox = !newcomer.boundingBox2D ||
+        (Array.isArray(newcomer.boundingBox2D) &&
+          (newcomer.boundingBox2D.length === 0 || (newcomer.boundingBox2D[0] === 0 && newcomer.boundingBox2D[1] === 0 && newcomer.boundingBox2D[2] === 100 && newcomer.boundingBox2D[3] === 100)));
+
+      const resolvedBox = (isDummyBox && priorMatch?.boundingBox2D)
+        ? priorMatch.boundingBox2D
+        : newcomer.boundingBox2D;
+
+      const resolvedImg = (newcomer.sourceImageIndex == null && priorMatch?.sourceImageIndex != null)
+        ? priorMatch.sourceImageIndex
+        : newcomer.sourceImageIndex;
+
+      const resolvedComponents = (Array.isArray(newcomer.components) && newcomer.components.length > 0)
+        ? newcomer.components
+        : (priorMatch?.components || priorMatch?.componentsDetailList || undefined);
+
+      return {
+        ...priorMatch,
+        ...newcomer,
+        keyword: newcomer.keyword || newcomer.canonicalDbName || newcomer.originalName || priorMatch?.keyword || priorMatch?.canonicalDbName,
+        boundingBox2D: resolvedBox,
+        sourceImageIndex: resolvedImg,
+        ...(resolvedComponents ? { components: resolvedComponents } : {}),
+      };
+    });
   }
-  const existing = [...activeMealItemsBreakdown];
+  const existing = activeMealItemsBreakdown.map((it: any) => ({
+    ...it,
+    keyword: it.keyword || it.canonicalDbName || it.originalName || it.name,
+  }));
   const maxIdx = existing.reduce((m: number, it: any) => Math.max(m, Number(it.scoutIndex) || 0), -1);
   const additions: any[] = [];
   for (let i = 0; i < visionScoutItems.length; i++) {
@@ -430,7 +464,7 @@ export function mergeScoutIntoActiveMeal(args: ScoutMealMergeArgs): any[] {
     }
   }
   const merged = [...existing, ...additions];
-  onLog(`[Single-Path] Merged scout items into active meal (${existing.length} updated/existing, ${additions.length} added).`);
+  onLog(`[Single-Path] Merged scout items into same meal (${existing.length} updated/existing, ${additions.length} added).`);
   return merged;
 }
 

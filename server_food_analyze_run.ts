@@ -194,6 +194,7 @@ export async function runFoodAnalyze(req: any, res: any) {
   // was never populated on the async job-queue path).
   let scoutInstructionForDebug: any;
   let apiCalls: any[] = [];
+  let accumulatedDispatches: any[] = [];
 
   try {
     const {
@@ -305,7 +306,8 @@ export async function runFoodAnalyze(req: any, res: any) {
             `CRITICAL INSTRUCTIONS FOR MODIFICATION:\n` +
             `1. INGREDIENT & DISH SUBSTITUTION/RENAME: If the user changes, corrects, or substitutes an ingredient or dish (e.g. 'ikan is nila', 'unsweetened tea', 'chicken instead of beef'), you MUST update the dishName, genericEnglishName, and foods[].foodName to the new substituted food (e.g. 'Ikan Nila' / 'tilapia' instead of 'Cakalang' / 'Cendro') and adjust the nutrients (calories, protein, fat, carbs, sugar) accordingly.\n` +
             `2. SEPARATE DISHES: Keep distinct plated items, sides, and beverages as separate distinct dishes in the dishes[] array. Never merge drinks into food dishes.\n` +
-            `3. COMPLETE BREAKDOWN: Output the full updated meal with exact weights in grams and complete nutritional breakdown reflecting all user modifications.`;
+            `3. COMPLETE BREAKDOWN: Output the full updated meal with exact weights in grams and complete nutritional breakdown reflecting all user modifications.\n` +
+            `4. CLINICAL ADVICE & NARRATIVE: Provide an updated constructive 35-70 word clinicalAdvice in 2nd person ("You got...") covering key nutritional assets of the updated meal, metabolic/glycemic impact of the change, and actionable next steps/movement.`;
         } else {
           scoutPromptText = buildVisualScoutPrompt(message || '', imageCount);
         }
@@ -380,7 +382,7 @@ export async function runFoodAnalyze(req: any, res: any) {
       ? req.body.dispatches
       : (Array.isArray(activeMeal?.dispatches) ? activeMeal.dispatches : []);
 
-    const accumulatedDispatches: any[] = [...priorDispatches];
+    accumulatedDispatches = [...priorDispatches];
 
     if (scoutInstructionForDebug || rawScoutData) {
       const scoutTurnNumber = accumulatedDispatches.filter((d: any) => d.agent === 'scout').length + 1;

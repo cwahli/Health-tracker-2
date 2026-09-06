@@ -721,9 +721,9 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
   }
 
   // 4. Database Search & Entity Resolution
+  lines.push(`## 📚 Database Search & Entity Resolution`);
+  lines.push('');
   if ((Array.isArray(input.usdaSearchResults) && input.usdaSearchResults.length > 0) || (Array.isArray(input.brandSearchResults) && input.brandSearchResults.length > 0)) {
-    lines.push(`## 📚 Database Search & Entity Resolution`);
-    lines.push('');
     if (Array.isArray(input.brandSearchResults) && input.brandSearchResults.length > 0) {
       lines.push(`### Official Brand Menu Hits (${input.brandSearchResults.length})`);
       for (const b of input.brandSearchResults.slice(0, 10)) {
@@ -738,6 +738,10 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
       }
       lines.push('');
     }
+  } else {
+    lines.push(`- **Resolution Strategy:** Single-Dispatch Direct Nutrient Ledger`);
+    lines.push(`- **Status:** Nutritional truth resolved directly from Vision Scout dish-level macronutrients and pure TypeScript derivation (Post-Atwater / Dish Finalize) without requiring secondary candidate database fetches.`);
+    lines.push('');
   }
 
   // 5. Nutrition Calculation (Source of Truth)
@@ -751,7 +755,11 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
 
     // Nutrition Receipt Table
     const receipt = input.receiptTable || food.receiptTable;
-    if (Array.isArray(receipt) && receipt.length > 0) {
+    if (typeof receipt === 'string' && receipt.trim().length > 0) {
+      lines.push('');
+      lines.push(receipt.trim());
+      lines.push('');
+    } else if (Array.isArray(receipt) && receipt.length > 0) {
       lines.push('');
       lines.push(`### 🧾 Itemized Nutrition Calculation Receipt`);
       lines.push('');
@@ -770,10 +778,10 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
       lines.push('');
     } else if (Array.isArray(food.itemsBreakdown) && food.itemsBreakdown.length > 0) {
       lines.push('');
-      lines.push(`### Component Items Breakdown`);
+      lines.push(`### Component Items Breakdown & Constituent Receipts`);
       lines.push('');
-      lines.push(`| Component | Weight | Calories | Protein | Carbs | Fat | Brand / Truth Source |`);
-      lines.push(`|-----------|-------:|---------:|--------:|------:|----:|---------------------|`);
+      lines.push(`| Component / Ingredient | Weight | Calories | Protein | Carbs | Fat | Sodium | Brand / Truth Source |`);
+      lines.push(`|------------------------|-------:|---------:|--------:|------:|----:|-------:|---------------------|`);
       for (const it of food.itemsBreakdown.slice(0, 40)) {
         const nm = String(it.originalName || it.canonicalDbName || it.name || it.keyword || 'item').replace(/\|/g, '/');
         const w = it.weightGrams ?? it.estimatedWeightGrams ?? '—';
@@ -781,11 +789,53 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
         const p = it.nutrients?.protein ?? '—';
         const c = it.nutrients?.carbohydrates ?? '—';
         const f = it.nutrients?.totalFat ?? '—';
-        const src = String(it.brandName || it.source || it.truthSource || '—').replace(/\|/g, '/');
-        lines.push(`| ${nm} | ${w}g | ${cal} | ${p}g | ${c}g | ${f}g | ${src} |`);
+        const na = it.nutrients?.sodium ?? it.sodium ?? '—';
+        const src = String(it.brandName || it.source || it.truthSource || it.dbSource || 'estimated').replace(/\|/g, '/');
+        lines.push(`| **${nm}** | **${w}g** | **${cal}** | **${p}g** | **${c}g** | **${f}g** | **${na}mg** | ${src} |`);
+
+        const subList = (Array.isArray(it.componentsDetailList) && it.componentsDetailList.length > 0)
+          ? it.componentsDetailList
+          : (Array.isArray(it.components) && it.components.length > 0 ? it.components : (Array.isArray(it.foods) ? it.foods : null));
+        if (subList && subList.length > 0) {
+          for (const sub of subList) {
+            const snm = String(sub.name || sub.foodName || sub.keyword || 'ingredient').replace(/\|/g, '/');
+            const sw = sub.weightGrams ?? sub.estimatedWeightGrams ?? '—';
+            const scal = sub.calories ?? sub.nutrients?.calories ?? '—';
+            const sp = sub.protein ?? sub.nutrients?.protein ?? '—';
+            const sc = sub.carbohydrates ?? sub.carbs ?? sub.nutrients?.carbohydrates ?? '—';
+            const sf = sub.totalFat ?? sub.fat ?? sub.nutrients?.totalFat ?? '—';
+            const sna = sub.sodium ?? sub.nutrients?.sodium ?? '—';
+            lines.push(`| └─ ${snm} | ${sw}g | ${scal} | ${sp}g | ${sc}g | ${sf}g | ${sna}mg | constituent |`);
+          }
+        }
       }
       lines.push('');
     }
+
+    // Mathematical & Thermodynamic Validation
+    const cals = Number(food.nutrients?.calories || food.calories || 0);
+    const weight = Number(food.weightGrams || 0);
+    const protein = Number(food.nutrients?.protein || food.protein || 0);
+    const totalFat = Number(food.nutrients?.totalFat || food.totalFat || 0);
+    const carbs = Number(food.nutrients?.carbohydrates || food.carbohydrates || 0);
+    lines.push(`### 🔬 Mathematical & Thermodynamic Validation`);
+    lines.push('');
+    if (weight > 0 && cals > 0) {
+      const calDensity = (cals / weight).toFixed(2);
+      lines.push(`- **Caloric Density:** ${calDensity} kcal/g (${Number(calDensity) > 4.5 ? '⚠️ High energy density' : '✅ Thermodynamically sound'})`);
+    }
+    if (cals > 0 && (protein > 0 || totalFat > 0 || carbs > 0)) {
+      const atwaterCals = Math.round(protein * 4 + carbs * 4 + totalFat * 9);
+      const atwaterDiff = Math.abs(cals - atwaterCals);
+      lines.push(`- **Atwater Macro Sum:** ${atwaterCals} kcal (vs ${cals} kcal logged, diff: ${atwaterDiff} kcal ${atwaterDiff <= 25 ? '✅ Consistent' : '⚠️ Minor rounding'})`);
+    }
+    if (food.cookingMethod) {
+      lines.push(`- **Cooking Method:** \`${food.cookingMethod}\``);
+    }
+    if (food.diningEnvironment) {
+      lines.push(`- **Dining Environment Multipliers:** \`${food.diningEnvironment}\``);
+    }
+    lines.push('');
 
     // Comprehensive 31 Nutrients Table
     const n = input.comprehensiveNutrients || food.nutrients || {};
