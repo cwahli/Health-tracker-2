@@ -10,13 +10,14 @@ import {
 } from './server_food_precalc';
 
 describe('F-8.10 shard 12 — portion pause and carry candidates', () => {
-  it('pauses only when no choices, no skip, no refine, and scout ran', () => {
+  it('does not pause by default: computes from start with advice finalized', () => {
     const base = {
       portionChoices: undefined, skipPortionClarify: undefined,
       isWeightModification: false, compareOnly: false, isExplicitModify: false,
       visionScoutRanAndReturnedItems: true,
     };
-    expect(shouldPauseForPortionClarify(base)).toBe(true);
+    expect(shouldPauseForPortionClarify(base)).toBe(false);
+    expect(shouldPauseForPortionClarify({ ...base, forcePortionClarify: true } as any)).toBe(true);
     expect(shouldPauseForPortionClarify({ ...base, portionChoices: [{}] })).toBe(false);
     expect(shouldPauseForPortionClarify({ ...base, isWeightModification: true })).toBe(false);
     expect(shouldPauseForPortionClarify({ ...base, visionScoutRanAndReturnedItems: false })).toBe(false);

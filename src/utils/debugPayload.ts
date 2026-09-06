@@ -86,6 +86,9 @@ export type DebugReportInput = {
   photoUrl?: string;
   photoUrls?: string[];
   exportedAt?: string;
+  userPrompt?: string;
+  prompt?: string;
+  userMessage?: string;
   mode?: string;
   agentType?: string;
   savable?: boolean;
@@ -193,6 +196,18 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
     lines.push('');
   }
 
+  // 2b. Portion Adjustment Audit (if portion was adjusted)
+  if (tree.portionAdjustment) {
+    lines.push(`## ⚖️ Portion Adjustment Audit`);
+    lines.push('');
+    lines.push(`- **Adjustment Type:** ${tree.portionAdjustment.type === 'local_math' ? 'Local Mathematical Recalculation (⚡ Instant, 0 extra LLM calls)' : 'Agent Review Edit (🤖 Turn 2 LLM Call)'}`);
+    lines.push(`- **Portion Difference:** ${tree.portionAdjustment.diffPercent}% (${tree.portionAdjustment.diffPercent > 30 ? '> 30% threshold' : '<= 30% threshold'})`);
+    lines.push(`- **Weight Transition:** ${tree.portionAdjustment.fromWeight}g ➔ ${tree.portionAdjustment.toWeight}g`);
+    lines.push(`- **Agent Invoked:** ${tree.portionAdjustment.agentCalled ? 'Yes (Triggered agent review)' : 'No (Calculated directly via exact proportional scaling)'}`);
+    lines.push(`- **Audit Summary:** ${tree.portionAdjustment.reason}`);
+    lines.push('');
+  }
+
   // 3. Agent Dispatches — once per dispatch that ran (§7)
   if (tree.dispatches && tree.dispatches.length > 0) {
     lines.push(`## 📡 Agent Dispatches (${tree.dispatches.length})`);
@@ -254,7 +269,22 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
         lines.push(capField(formattedOutput));
         lines.push('```');
       }
-      if (d.output && (!d.rawEmission || JSON.stringify(d.output) !== JSON.stringify(d.rawEmission))) {
+      let isDuplicateOutput = false;
+      if (d.rawEmission && d.output) {
+        if (d.output === d.rawEmission || JSON.stringify(d.output) === JSON.stringify(d.rawEmission)) {
+          isDuplicateOutput = true;
+        } else if (typeof d.rawEmission === 'string') {
+          try {
+            const parsed = JSON.parse(d.rawEmission.trim());
+            if (JSON.stringify(d.output) === JSON.stringify(parsed)) {
+              isDuplicateOutput = true;
+            }
+          } catch {
+            // not valid JSON
+          }
+        }
+      }
+      if (d.output && !isDuplicateOutput) {
         lines.push(`- **Output:**`);
         let formattedOutput = '';
         let isJson = false;
@@ -1206,7 +1236,7 @@ export function debugReportFromJobMsg(job: any, msg: any): DebugReportInput {
     msg?.data?.agentResult?.globalLiveLogs ||
     job?.liveThoughts?.backendLogs ||
     '';
-  return {
+  const debugReport: DebugReportInput = {
     jobId: job?.id || msg?.id,
     status: job?.status,
     mode: result.mode || job?.inputSnapshot?.mode,
@@ -1279,8 +1309,8 @@ export function debugReportFromJobMsg(job: any, msg: any): DebugReportInput {
             d.systemInstruction = agentInstructions;
           } else if (Array.isArray(agentInstructions) && agentInstructions.length > 0) {
             d.systemInstruction = agentInstructions.join('\n');
-          } else if (typeof agentInstructions === 'object' && agentInstructions.scout) {
-            d.systemInstruction = agentInstructions.scout;
+          } else if (typeof agentInstructions === 'object' && !Array.isArray(agentInstructions) && (agentInstructions as any).scout) {
+            d.systemInstruction = (agentInstructions as any).scout;
           }
         }
         if (d.instruction || d.rawEmission || d.systemInstruction) {
@@ -1315,8 +1345,8 @@ export function debugReportFromJobMsg(job: any, msg: any): DebugReportInput {
         syntheticScoutDispatch.systemInstruction = agentInstructions;
       } else if (Array.isArray(agentInstructions) && agentInstructions.length > 0) {
         syntheticScoutDispatch.systemInstruction = agentInstructions.join('\n');
-      } else if (typeof agentInstructions === 'object' && agentInstructions.scout) {
-        syntheticScoutDispatch.systemInstruction = agentInstructions.scout;
+      } else if (typeof agentInstructions === 'object' && !Array.isArray(agentInstructions) && (agentInstructions as any).scout) {
+        syntheticScoutDispatch.systemInstruction = (agentInstructions as any).scout;
       }
     }
 

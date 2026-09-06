@@ -109,8 +109,19 @@ export function diffScoutToEditCommands(args: {
     if (priorIdx < 0) {
       priorIdx = priorItems.findIndex((p, i) => !usedPrior.has(i) && namesReferSame(displayName(p), sName));
     }
-    if (priorIdx < 0 && sIdx < priorItems.length && !usedPrior.has(sIdx)) {
+    // Only fall back to positional match if scoutItems has the SAME length as priorItems (full meal re-emission),
+    // OR if the user message specifically indicates replacement/substitution of a prior item.
+    if (priorIdx < 0 && scoutItems.length === priorItems.length && sIdx < priorItems.length && !usedPrior.has(sIdx)) {
       priorIdx = sIdx;
+    } else if (priorIdx < 0 && args.userMessage) {
+      const msg = args.userMessage.toLowerCase();
+      const hasReplaceWord = /\b(replace|substitute|instead of|change .* to|switch)\b/i.test(msg);
+      if (hasReplaceWord) {
+        const replaceIdx = priorItems.findIndex((p, i) => !usedPrior.has(i) && msg.includes(displayName(p).toLowerCase()));
+        if (replaceIdx >= 0) {
+          priorIdx = replaceIdx;
+        }
+      }
     }
     if (priorIdx < 0) {
       // New dish from scout — add_item when estimate available

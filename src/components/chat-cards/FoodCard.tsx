@@ -614,14 +614,42 @@ export const FoodCard: React.FC<AgentCardProps & {
   // Portion Scaling State
   const [portionScale, setPortionScale] = React.useState<number>(msg.data?.pendingFoodLog?.portionRatio || 1.0);
   const [portionAccepted, setPortionAccepted] = React.useState<boolean>(Boolean(msg.data?.pendingFoodLog?.portionAccepted));
+  const [showPortionAdjuster, setShowPortionAdjuster] = React.useState<boolean>(false);
+  const [customPortionInput, setCustomPortionInput] = React.useState<string>("");
 
-  const handleScalePortion = (ratio: number) => {
-    setPortionScale(ratio);
-    setPortionAccepted(true);
-    setPortionLogVersion((v) => v + 1);
+  const handleScalePortion = (ratio: number, explicitGrams?: number) => {
     const currentLog = msg.data?.pendingFoodLog || msg.pendingFoodLog;
     if (!currentLog) return;
-    const updatedLog = scaleMealPortion(currentLog, ratio);
+
+    const initialWeight = currentLog.initialWeightGrams || currentLog.weightGrams || 100;
+    if (!currentLog.initialWeightGrams && currentLog.weightGrams) {
+      currentLog.initialWeightGrams = currentLog.weightGrams;
+    }
+
+    const targetWeight = explicitGrams != null && explicitGrams > 0 ? explicitGrams : Math.round(initialWeight * ratio);
+    const effectiveRatio = targetWeight / initialWeight;
+    const diffRatio = Math.abs(targetWeight - initialWeight) / initialWeight;
+    const diffPercent = Math.round(diffRatio * 100);
+    const isOverThreshold = diffRatio > 0.30;
+
+    setPortionScale(effectiveRatio);
+    setPortionAccepted(true);
+    setPortionLogVersion((v) => v + 1);
+
+    const updatedLog = scaleMealPortion(currentLog, effectiveRatio);
+    updatedLog.initialWeightGrams = initialWeight;
+    updatedLog.weightGrams = targetWeight;
+    updatedLog.portionAdjustment = {
+      type: isOverThreshold ? 'agent_edit' : 'local_math',
+      diffPercent,
+      fromWeight: initialWeight,
+      toWeight: targetWeight,
+      agentCalled: isOverThreshold,
+      reason: isOverThreshold
+        ? `Portion change of ${diffPercent}% (> 30%) triggered an agent review edit.`
+        : `Portion change of ${diffPercent}% (<= 30%) recalculated locally without extra agent call.`,
+    };
+
     const logId = currentLog.id || (msg as any).loggedFoodId;
     if (logId) {
       updatedLog.id = logId;
@@ -643,14 +671,46 @@ export const FoodCard: React.FC<AgentCardProps & {
     if ((isAlreadyLogged || (loggedMessageIds && loggedMessageIds.includes(msg.id))) && onLogFood) {
       onLogFood(updatedLog as any);
     }
+
+    // Over 30% threshold: triggers agent review call (similar to an edit)
+    if (isOverThreshold && handleSend) {
+      const diffSign = targetWeight > initialWeight ? `+${diffPercent}%` : `-${diffPercent}%`;
+      handleSend({
+        text: `Adjust total meal portion from ${initialWeight}g to ${targetWeight}g (${diffSign}). Please review the nutrition breakdown, macros, and dietary advice for this updated portion.`,
+        overrideMode: 'edit',
+        sourceMsgId: msg.id,
+      });
+    }
   };
 
   const handleScaleSingleDish = (dishIdx: number, ratio: number) => {
-    setPortionAccepted(true);
-    setPortionLogVersion((v) => v + 1);
     const currentLog = msg.data?.pendingFoodLog || msg.pendingFoodLog;
     if (!currentLog) return;
+    const initialWeight = currentLog.initialWeightGrams || currentLog.weightGrams || 100;
+    if (!currentLog.initialWeightGrams && currentLog.weightGrams) {
+      currentLog.initialWeightGrams = currentLog.weightGrams;
+    }
+
     const updatedLog = scaleSingleDishPortion(currentLog, dishIdx, ratio);
+    updatedLog.initialWeightGrams = initialWeight;
+    const newTotalWeight = updatedLog.weightGrams || initialWeight;
+    const diffRatio = Math.abs(newTotalWeight - initialWeight) / initialWeight;
+    const diffPercent = Math.round(diffRatio * 100);
+    const isOverThreshold = diffRatio > 0.30;
+
+    updatedLog.portionAdjustment = {
+      type: isOverThreshold ? 'agent_edit' : 'local_math',
+      diffPercent,
+      fromWeight: initialWeight,
+      toWeight: newTotalWeight,
+      agentCalled: isOverThreshold,
+      reason: isOverThreshold
+        ? `Dish portion scaled total meal weight by ${diffPercent}% (> 30%). Triggered agent review edit.`
+        : `Dish portion scaled total meal weight by ${diffPercent}% (<= 30%). Recalculated locally without extra agent call.`,
+    };
+
+    setPortionAccepted(true);
+    setPortionLogVersion((v) => v + 1);
     const logId = currentLog.id || (msg as any).loggedFoodId;
     if (logId) {
       updatedLog.id = logId;
@@ -674,6 +734,17 @@ export const FoodCard: React.FC<AgentCardProps & {
 
     if ((isAlreadyLogged || (loggedMessageIds && loggedMessageIds.includes(msg.id))) && onLogFood) {
       onLogFood(updatedLog as any);
+    }
+
+    // Over 30% threshold: triggers agent review call
+    if (isOverThreshold && handleSend) {
+      const dishName = updatedLog.itemsBreakdown?.[dishIdx]?.name || `dish #${dishIdx + 1}`;
+      const diffSign = newTotalWeight > initialWeight ? `+${diffPercent}%` : `-${diffPercent}%`;
+      handleSend({
+        text: `Adjust portion of ${dishName} (total meal now ${newTotalWeight}g vs initial ${initialWeight}g, ${diffSign}). Please review the nutrition breakdown and dietary advice.`,
+        overrideMode: 'edit',
+        sourceMsgId: msg.id,
+      });
     }
   };
 
@@ -778,8 +849,8 @@ export const FoodCard: React.FC<AgentCardProps & {
       }
     }
 
-    // If portion clarification is currently pending user selection, do not synthesize a premature pendingFoodLog
-    if (msg.data?.portionClarify || msg.data?.needsPortionClarify || (msg as any).portionClarify || (msg as any).needsPortionClarify) {
+    // Only return null if there is no completed meal data available
+    if ((msg.data?.needsPortionClarify || (msg as any).needsPortionClarify) && !msg.data?.pendingFoodLog && !raw.name && !raw.title) {
       return null;
     }
 
@@ -2269,8 +2340,8 @@ export const FoodCard: React.FC<AgentCardProps & {
                         <div className="flex items-center justify-between w-full">
                           <h4 className="font-bold text-theme-text text-sm font-display leading-tight">
                             {(() => {
-                              if (msg.data?.portionClarify || msg.data?.needsPortionClarify) {
-                                return msg.data?.pendingFoodLog.name?.includes('?') ? 'Meal Analysis' : (msg.data?.pendingFoodLog.name || 'Meal Analysis');
+                              if ((msg.data?.needsPortionClarify || (msg as any).needsPortionClarify) && !msg.data?.pendingFoodLog) {
+                                return msg.data?.pendingFoodLog?.name?.includes('?') ? 'Meal Analysis' : (msg.data?.pendingFoodLog?.name || 'Meal Analysis');
                               }
                               const itemsBreakdown = msg.data?.pendingFoodLog?.itemsBreakdown || msg.data?.agentResult?.itemsBreakdown;
                               if (Array.isArray(itemsBreakdown) && itemsBreakdown.length > 1) {
@@ -2297,7 +2368,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                           </h4>
                         </div>
                         {(() => {
-                          const isPortionClarifying = !!(msg.data?.portionClarify || msg.data?.needsPortionClarify || (msg as any).portionClarify || (msg as any).needsPortionClarify);
+                          const isPortionClarifying = !!((msg.data?.needsPortionClarify || (msg as any).needsPortionClarify) && !msg.data?.pendingFoodLog);
                           if (isPortionClarifying) return null;
                           const desc = msg.data?.pendingFoodLog?.message || msg.data?.agentResult?.message || msg.data?.pendingFoodLog?.description || msg.data?.agentResult?.description || (msg.data?.pendingFoodLog?.healthImpact && !msg.data.pendingFoodLog.healthImpact.includes("Contributes to daily macro") ? msg.data.pendingFoodLog.healthImpact : null);
                           if (!desc) return null;
@@ -2308,28 +2379,157 @@ export const FoodCard: React.FC<AgentCardProps & {
                           );
                         })()}
                         {(() => {
-                          const wGrams = msg.data?.pendingFoodLog?.weightGrams;
+                          const currentLog = msg.data?.pendingFoodLog || msg.pendingFoodLog;
+                          const wGrams = currentLog?.weightGrams;
                           const hasWeight = wGrams != null && !isNaN(Number(wGrams)) && Number(wGrams) > 0;
-                          const rawQty = msg.data?.pendingFoodLog?.quantity;
+                          const rawQty = currentLog?.quantity;
                           const hasQty = !!rawQty && String(rawQty).trim() !== '' && String(rawQty).trim() !== 'undefined' && String(rawQty).trim() !== 'null';
-                          const dt = msg.data?.pendingFoodLog?.date;
+                          const dt = currentLog?.date;
                           if (!hasWeight && !hasQty && !dt) return null;
+
+                          const baseWeight = currentLog?.initialWeightGrams || currentLog?.weightGrams || 100;
+                          const currentWeight = Number(wGrams || baseWeight);
+                          const inputWeightNum = customPortionInput ? Number(customPortionInput) : currentWeight;
+                          const liveDiffRatio = baseWeight > 0 ? Math.abs(inputWeightNum - baseWeight) / baseWeight : 0;
+                          const isLiveOver = liveDiffRatio > 0.30;
+                          const livePct = Math.round(liveDiffRatio * 100);
+
                           return (
-                            <div className="flex flex-wrap items-center gap-2">
-                              {(hasWeight || hasQty) && (
-                                <span className="text-[11px] bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 px-2.5 py-0.5 rounded-full font-bold font-sans">
-                                  {hasWeight ? `${wGrams}g` : ''}
-                                  {hasQty ? (hasWeight ? ` (${rawQty})` : `${rawQty}`) : ''}
-                                </span>
+                            <div className="flex flex-col gap-2 w-full my-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                {(hasWeight || hasQty) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setShowPortionAdjuster(!showPortionAdjuster);
+                                      if (!customPortionInput) setCustomPortionInput(String(currentWeight));
+                                    }}
+                                    className="group inline-flex items-center gap-1.5 text-[11px] bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 px-2.5 py-1 rounded-full font-bold font-sans transition-colors cursor-pointer border border-indigo-200/60 dark:border-indigo-800/40 shadow-xs"
+                                    title="Click to adjust total meal portion size"
+                                  >
+                                    <span>{hasWeight ? `${wGrams}g` : ''}</span>
+                                    {hasQty && <span className="opacity-80 font-normal">({rawQty})</span>}
+                                    <span className="text-[10px] text-indigo-500 group-hover:text-indigo-700 dark:text-indigo-400 font-medium">✏️ Adjust portion</span>
+                                  </button>
+                                )}
+                                {dt && <span className="font-mono text-[10px] text-slate-400">{dt}</span>}
+                              </div>
+
+                              {showPortionAdjuster && (
+                                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 text-xs space-y-3 animation-fade-in w-full text-left shadow-xs">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                                      Adjust Total Portion (Baseline: {baseWeight}g)
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowPortionAdjuster(false)}
+                                      className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-bold px-1 cursor-pointer"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <div className="flex items-center gap-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1">
+                                      <input
+                                        type="number"
+                                        min="10"
+                                        max="5000"
+                                        step="5"
+                                        value={customPortionInput || currentWeight}
+                                        onChange={(e) => setCustomPortionInput(e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            const g = Number(customPortionInput);
+                                            if (g > 0) {
+                                              handleScalePortion(g / baseWeight, g);
+                                              setShowPortionAdjuster(false);
+                                            }
+                                          }
+                                        }}
+                                        className="w-20 bg-transparent text-slate-900 dark:text-slate-100 font-mono font-bold focus:outline-none text-xs"
+                                      />
+                                      <span className="text-slate-500 dark:text-slate-400 text-xs">g</span>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const g = Number(customPortionInput);
+                                        if (g > 0) {
+                                          handleScalePortion(g / baseWeight, g);
+                                          setShowPortionAdjuster(false);
+                                        }
+                                      }}
+                                      className="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs shadow-xs transition-colors cursor-pointer"
+                                    >
+                                      Apply
+                                    </button>
+                                  </div>
+
+                                  {/* Quick multiplier presets */}
+                                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                    {[
+                                      { label: '0.5x', ratio: 0.5, tag: '-50%' },
+                                      { label: '0.75x', ratio: 0.75, tag: '-25%' },
+                                      { label: '1.0x', ratio: 1.0, tag: 'Orig' },
+                                      { label: '1.25x', ratio: 1.25, tag: '+25%' },
+                                      { label: '1.5x', ratio: 1.5, tag: '+50%' },
+                                      { label: '2.0x', ratio: 2.0, tag: '+100%' },
+                                    ].map((preset) => {
+                                      const presetW = Math.round(baseWeight * preset.ratio);
+                                      const isCurrent = Math.abs(currentWeight - presetW) <= 5;
+                                      const isPresetOver = Math.abs(preset.ratio - 1.0) > 0.30;
+                                      return (
+                                        <button
+                                          key={preset.label}
+                                          type="button"
+                                          onClick={() => {
+                                            setCustomPortionInput(String(presetW));
+                                            handleScalePortion(preset.ratio, presetW);
+                                            setShowPortionAdjuster(false);
+                                          }}
+                                          className={`px-2 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer border ${
+                                            isCurrent
+                                              ? 'bg-indigo-600 text-white border-indigo-600'
+                                              : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+                                          }`}
+                                          title={`${presetW}g (${preset.tag}) — ${isPresetOver ? '>30% triggers agent review' : '<=30% instant math'}`}
+                                        >
+                                          {preset.label} ({presetW}g)
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+
+                                  {/* Dynamic status feedback */}
+                                  <div className="pt-1 text-[11px]">
+                                    {isLiveOver ? (
+                                      <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-2 rounded-lg border border-amber-200 dark:border-amber-900/40">
+                                        <span>🤖</span>
+                                        <span>
+                                          <strong>{livePct}% portion difference (&gt;30%):</strong> Will trigger AI agent review to re-evaluate macros, micronutrients, and dietary advice.
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 p-2 rounded-lg border border-emerald-200 dark:border-emerald-900/40">
+                                        <span>⚡</span>
+                                        <span>
+                                          <strong>{livePct}% portion difference (≤30%):</strong> Instant nutrient recalculation across all 33 nutrients without calling the agent.
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
                               )}
-                              {dt && <span className="font-mono text-[10px] text-slate-400">{dt}</span>}
                             </div>
                           );
                         })()}
                       </div>
 
                       {(() => {
-                        if (msg.data?.portionClarify || msg.data?.needsPortionClarify) return null;
+                        if ((msg.data?.needsPortionClarify || (msg as any).needsPortionClarify) && !msg.data?.pendingFoodLog) return null;
                         const desc = msg.data?.pendingFoodLog?.message || msg.data?.agentResult?.message || msg.data?.pendingFoodLog?.description || msg.data?.agentResult?.description || (msg.data?.pendingFoodLog?.healthImpact && !msg.data.pendingFoodLog.healthImpact.includes("Contributes to daily macro") ? msg.data.pendingFoodLog.healthImpact : null);
                         const rawMsgContent = msg.content !== 'null' ? msg.content : msg.data?.agentResult?.message;
                         if (!rawMsgContent || rawMsgContent === 'null') return null;
@@ -2563,8 +2763,8 @@ export const FoodCard: React.FC<AgentCardProps & {
                         </div>
                       )}
 
-                      {/* Log Action Button — hidden when portion clarification is pending user confirmation */}
-                      {!(msg.data?.portionClarify || msg.data?.needsPortionClarify || (msg as any).portionClarify || (msg as any).needsPortionClarify) && (() => {
+                      {/* Log Action Button */}
+                      {!((msg.data?.needsPortionClarify || (msg as any).needsPortionClarify) && !msg.data?.pendingFoodLog) && (() => {
                         const gate = msg.data?.gate || msg.data?.agentResult?.gate || msg.data?.pendingFoodLog?.gate || (msg as any).gate;
                         const isSavable = gate ? gate.savable !== false : (
                           msg.data?.savable !== false &&

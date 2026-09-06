@@ -7,6 +7,7 @@ import {
   tagJobId,
   extractDispatches,
   extractHandoffs,
+  extractPortionAdjustment,
   buildCanonicalRunTree,
   deduplicateBreadcrumbs,
   deduplicateSessionEvents,
@@ -587,5 +588,84 @@ describe('extractHandoffs', () => {
       keysDropped: [],
     });
     expect(extractHandoffs({} as any, JOB)).toEqual([]);
+  });
+});
+
+describe('extractPortionAdjustment', () => {
+  it('extracts local_math adjustment when portion diff is <= 30%', () => {
+    const input: any = {
+      pendingFoodLog: {
+        weightGrams: 360,
+        initialWeightGrams: 400,
+        portionAdjustment: {
+          type: 'local_math',
+          diffPercent: 10,
+          fromWeight: 400,
+          toWeight: 360,
+          agentCalled: false,
+          reason: 'Portion change of 10% (<= 30%) recalculated locally without extra agent call.',
+        },
+      },
+    };
+
+    const adj = extractPortionAdjustment(input);
+    expect(adj).not.toBeNull();
+    expect(adj?.type).toBe('local_math');
+    expect(adj?.diffPercent).toBe(10);
+    expect(adj?.fromWeight).toBe(400);
+    expect(adj?.toWeight).toBe(360);
+    expect(adj?.agentCalled).toBe(false);
+
+    const tree = buildCanonicalRunTree(input);
+    expect(tree.portionAdjustment).toEqual(adj);
+  });
+
+  it('extracts agent_edit adjustment when portion diff is > 30%', () => {
+    const input: any = {
+      pendingFoodLog: {
+        weightGrams: 600,
+        initialWeightGrams: 400,
+        portionAdjustment: {
+          type: 'agent_edit',
+          diffPercent: 50,
+          fromWeight: 400,
+          toWeight: 600,
+          agentCalled: true,
+          reason: 'Portion change of 50% (> 30%) triggered an agent review edit.',
+        },
+      },
+    };
+
+    const adj = extractPortionAdjustment(input);
+    expect(adj).not.toBeNull();
+    expect(adj?.type).toBe('agent_edit');
+    expect(adj?.diffPercent).toBe(50);
+    expect(adj?.fromWeight).toBe(400);
+    expect(adj?.toWeight).toBe(600);
+    expect(adj?.agentCalled).toBe(true);
+  });
+
+  it('extracts portion adjustment from breadcrumbs fallback if not on pendingFoodLog', () => {
+    const input: any = {
+      userActionBreadcrumbs: [
+        {
+          action: 'portion_adjust_local',
+          details: {
+            fromWeight: 500,
+            toWeight: 600,
+            diffPercent: 20,
+            agentCalled: false,
+          },
+        },
+      ],
+    };
+
+    const adj = extractPortionAdjustment(input);
+    expect(adj).not.toBeNull();
+    expect(adj?.type).toBe('local_math');
+    expect(adj?.diffPercent).toBe(20);
+    expect(adj?.fromWeight).toBe(500);
+    expect(adj?.toWeight).toBe(600);
+    expect(adj?.agentCalled).toBe(false);
   });
 });

@@ -15,16 +15,12 @@ export interface PortionPauseArgs {
   visionScoutRanAndReturnedItems: boolean;
 }
 
-/** Whether to pause for portion clarification before nutrient calculation. */
+/** Whether to pause for portion clarification before nutrient calculation.
+ * Standard food logging computes all nutrients and finalized advice from the start.
+ * Portions are estimated by Scout on Turn 1; user can adjust portions afterwards.
+ */
 export function shouldPauseForPortionClarify(args: PortionPauseArgs): boolean {
-  return Boolean(
-    !args.portionChoices &&
-    !args.skipPortionClarify &&
-    !args.isWeightModification &&
-    !args.compareOnly &&
-    !args.isExplicitModify &&
-    args.visionScoutRanAndReturnedItems
-  );
+  return Boolean((args as any)?.forcePortionClarify);
 }
 
 export interface CarryCandidatesArgs {

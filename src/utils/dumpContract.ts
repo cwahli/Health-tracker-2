@@ -244,9 +244,9 @@ export function evaluateContracts(tree: CanonicalRunTree): ContractEvaluation[] 
   }
 
   // 3. Stall/503/quota -> 3.1 hop, same job
-  const hasStall = /Stream stalled:.*produced no tokens for 90s|503 Service Unavailable|RESOURCE_EXHAUSTED|quota exceeded/i.test(logs) ||
-    tree.console.some(c => /stalled|503|quota/i.test(c)) ||
-    tree.network.some(n => /503|quota/i.test(n));
+  const hasStall = /Stream stalled:.*produced no tokens for 90s|HTTP\s*503\b|status(?:Code)?":?\s*503\b|503 Service Unavailable|RESOURCE_EXHAUSTED|\bquota\s*exceeded\b/i.test(logs) ||
+    tree.console.some(c => /Stream stalled|\b(?:HTTP\s*503|status 503|RESOURCE_EXHAUSTED|quota exceeded)\b/i.test(c)) ||
+    tree.network.some(n => /\b503\b/i.test(n) && !/\b(?:200|201|204)\b/i.test(n) && /error|failed/i.test(n));
   const hasFallback = /falling back to gemini-3\.1-flash-lite/i.test(logs) ||
     tree.dispatches.some(d => d.model?.includes('3.1'));
 

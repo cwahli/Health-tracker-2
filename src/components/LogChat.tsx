@@ -31,6 +31,7 @@ import FullScreenInstructionViewer from './FullScreenInstructionViewer';
 import { NutritionLabelTable } from './chat-cards/NutritionLabelTable';
 import { InteractivePlacesMap } from './InteractivePlacesMap';
 import { PortionClarifyCard } from './PortionClarifyCard';
+import { applyPortionChoicesToLog } from '../utils/portionUtils';
 import exifr from 'exifr';
 import { auth, db } from '../firebase';
 import { getAgentCalibration, getAllAgentCalibrations } from '../utils/agentCalibration';
@@ -6213,54 +6214,126 @@ ${logsText}`);
                           autoSendMessage={autoSendMessage}
                           type={type}
                         />
-                        {msg.data?.portionClarify && (
-                          <PortionClarifyCard
-                            portionClarify={msg.data.portionClarify}
-                            language={profile?.language || "en"}
-                            onConfirm={(choices: any) => {
-                              if (typeof handleSend === 'function') {
-                                // Pass the scout item(s) straight from this message with full fallback,
-                                // ensuring portion-confirm resume never loses OCR label truth.
-                                const activeMeal = [...messages].reverse().find(m => m.data?.pendingFoodLog)?.data?.pendingFoodLog || [...messages].reverse().find(m => m.pendingFoodLog)?.pendingFoodLog;
-                                const clarifyScoutItems = (Array.isArray(msg.data?.scoutItems) && msg.data.scoutItems.length > 0)
-                                  ? msg.data.scoutItems
-                                  : (Array.isArray(msg.data?.portionClarify?.scoutItems) && msg.data.portionClarify.scoutItems.length > 0 ? msg.data.portionClarify.scoutItems
-                                  : (Array.isArray(msg.data?.agentResult?.scoutItems) && msg.data.agentResult.scoutItems.length > 0 ? msg.data.agentResult.scoutItems
-                                  : (Array.isArray(msg.data?.portionClarify?.items) && msg.data.portionClarify.items.length > 0 ? msg.data.portionClarify.items
-                                  : (Array.isArray(activeMeal?.scoutItems) && activeMeal.scoutItems.length > 0 ? activeMeal.scoutItems : []))));
-                                // Task 8: Carry pre-resolved DB candidates and prior logs URL from the
-                                // awaiting_user job so turn-2 skips the DB re-scan and shows full logs.
-                                const currentJob = jobId ? JobStore.getJob(jobId) : undefined;
-                                const resolvedDbCandidates =
-                                  msg.data?.resolvedDbCandidates ||
-                                  currentJob?.result?.resolvedDbCandidates ||
-                                  currentJob?.result?.clean_result?.resolvedDbCandidates ||
-                                  [];
-                                const priorLogsUrl =
-                                  msg.data?.agentResult?.backendLogsUrl ||
-                                  currentJob?.result?.backendLogsUrl ||
-                                  currentJob?.result?.clean_result?.backendLogsUrl ||
-                                  '';
-                                const effectivePhotoUrl = currentJob?.photoUrl || currentJob?.result?.photoUrl || msg.data?.photoUrl || msg.data?.pendingFoodLog?.imageUrl || activeMeal?.imageUrl || (msg.data?.imageUrls && msg.data.imageUrls[0]);
-                                const effectiveImageUrls = (msg.data?.imageUrls && msg.data.imageUrls.length > 0) ? msg.data.imageUrls : (activeMeal?.imageUrls || (effectivePhotoUrl ? [effectivePhotoUrl] : undefined));
-                                recordBreadcrumb('confirm_portions', 'portion_clarify_card', { choices, inPlaceMsgId: msg.id });
-                                handleSend(JSON.stringify(choices), [], {
-                                  portionChoices: choices,
-                                  skipScout: true,
-                                  scoutItems: clarifyScoutItems,
-                                  activeScoutItems: clarifyScoutItems,
-                                  resolvedDbCandidates,
-                                  priorLogsUrl,
-                                  photoUrl: effectivePhotoUrl,
-                                  imageUrl: effectivePhotoUrl,
-                                  imageUrls: effectiveImageUrls,
-                                  requestId: currentJob?.requestId || activeReqId,
-                                  inPlaceMsgId: msg.id,  // update this message slot in-place
-                                });
-                              }
-                            }}
-                          />
-                        )}
+                        {(() => {
+                          const clarifyData = msg.data?.portionClarify || (msg as any).portionClarify || msg.pendingFoodLog?.portionClarify;
+                          if (!clarifyData) return null;
+                          return (
+                            <PortionClarifyCard
+                              portionClarify={clarifyData}
+                              language={profile?.language || "en"}
+                              onConfirm={(choices: any) => {
+                                const activeMeal = msg.data?.pendingFoodLog || msg.pendingFoodLog || [...messages].reverse().find(m => m.data?.pendingFoodLog)?.data?.pendingFoodLog || [...messages].reverse().find(m => m.pendingFoodLog)?.pendingFoodLog;
+                                if (!activeMeal) {
+                                  return;
+                                }
+
+                                const { updatedLog, isOverThreshold, maxDiffPercent, changesSummary } = applyPortionChoicesToLog(activeMeal, choices);
+
+                                if (!isOverThreshold) {
+                                  // <= 30% difference: apply changes directly without calling agent again
+                                  recordBreadcrumb('portion_clarify_local', 'portion_clarify_card', { choices, maxDiffPercent, inPlaceMsgId: msg.id });
+                                  setMessages(prev => prev.map(m => {
+                                    if (m.id === msg.id) {
+                                      const nextData = {
+                                        ...m.data,
+                                        pendingFoodLog: updatedLog,
+                                        data: updatedLog,
+                                        portionClarify: null,
+                                        needsPortionClarify: false,
+                                        scoutItems: updatedLog.scoutItems || m.data?.scoutItems,
+                                        receiptTable: updatedLog.receiptTable || m.data?.receiptTable,
+                                      };
+                                      return {
+                                        ...m,
+                                        pendingFoodLog: updatedLog,
+                                        data: nextData,
+                                        portionClarify: null,
+                                        needsPortionClarify: false,
+                                      };
+                                    }
+                                    return m;
+                                  }));
+                                  if (jobId) {
+                                    const cur = JobStore.getJob(jobId);
+                                    if (cur) {
+                                      JobStore.updateJob(jobId, {
+                                        result: {
+                                          ...cur.result,
+                                          pendingFoodLog: updatedLog,
+                                          data: updatedLog,
+                                          portionClarify: null,
+                                          needsPortionClarify: false,
+                                        }
+                                      });
+                                    }
+                                  }
+                                  return;
+                                }
+
+                                // > 30% difference: treated like an edit with the agent reviewing the data and providing a new verdict
+                                recordBreadcrumb('portion_clarify_agent_edit', 'portion_clarify_card', { choices, maxDiffPercent, inPlaceMsgId: msg.id });
+                                setMessages(prev => prev.map(m => {
+                                  if (m.id === msg.id) {
+                                    return {
+                                      ...m,
+                                      pendingFoodLog: updatedLog,
+                                      data: {
+                                        ...m.data,
+                                        pendingFoodLog: updatedLog,
+                                        data: updatedLog,
+                                        portionClarify: null,
+                                        needsPortionClarify: false,
+                                      },
+                                      portionClarify: null,
+                                      needsPortionClarify: false,
+                                    };
+                                  }
+                                  return m;
+                                }));
+
+                                if (typeof handleSend === 'function') {
+                                  const clarifyScoutItems = (Array.isArray(msg.data?.scoutItems) && msg.data.scoutItems.length > 0)
+                                    ? msg.data.scoutItems
+                                    : (Array.isArray(msg.data?.portionClarify?.scoutItems) && msg.data.portionClarify.scoutItems.length > 0 ? msg.data.portionClarify.scoutItems
+                                    : (Array.isArray(msg.data?.agentResult?.scoutItems) && msg.data.agentResult.scoutItems.length > 0 ? msg.data.agentResult.scoutItems
+                                    : (Array.isArray(msg.data?.portionClarify?.items) && msg.data.portionClarify.items.length > 0 ? msg.data.portionClarify.items
+                                    : (Array.isArray(activeMeal?.scoutItems) && activeMeal.scoutItems.length > 0 ? activeMeal.scoutItems : []))));
+                                  const currentJob = jobId ? JobStore.getJob(jobId) : undefined;
+                                  const resolvedDbCandidates =
+                                    msg.data?.resolvedDbCandidates ||
+                                    currentJob?.result?.resolvedDbCandidates ||
+                                    currentJob?.result?.clean_result?.resolvedDbCandidates ||
+                                    [];
+                                  const priorLogsUrl =
+                                    msg.data?.agentResult?.backendLogsUrl ||
+                                    currentJob?.result?.backendLogsUrl ||
+                                    currentJob?.result?.clean_result?.backendLogsUrl ||
+                                    '';
+                                  const effectivePhotoUrl = currentJob?.photoUrl || currentJob?.result?.photoUrl || msg.data?.photoUrl || msg.data?.pendingFoodLog?.imageUrl || activeMeal?.imageUrl || (msg.data?.imageUrls && msg.data.imageUrls[0]);
+                                  const effectiveImageUrls = (msg.data?.imageUrls && msg.data.imageUrls.length > 0) ? msg.data.imageUrls : (activeMeal?.imageUrls || (effectivePhotoUrl ? [effectivePhotoUrl] : undefined));
+
+                                  handleSend({
+                                    text: `Please update my meal portions: ${changesSummary}. Because the portion difference exceeds 30%, please review the nutritional calculation, macro distribution, and provide an updated clinical evaluation and verdict.`,
+                                    overrideMode: 'edit',
+                                    activeMeal: updatedLog,
+                                    sourceMsgId: msg.id,
+                                    portionChoices: choices,
+                                    skipScout: true,
+                                    scoutItems: clarifyScoutItems,
+                                    activeScoutItems: clarifyScoutItems,
+                                    resolvedDbCandidates,
+                                    priorLogsUrl,
+                                    photoUrl: effectivePhotoUrl,
+                                    imageUrl: effectivePhotoUrl,
+                                    imageUrls: effectiveImageUrls,
+                                    requestId: currentJob?.requestId || activeReqId,
+                                    inPlaceMsgId: msg.id,
+                                  });
+                                }
+                              }}
+                            />
+                          );
+                        })()}
                         <div className="hidden scale-hint">{msg.data?.agentResult?.scoutItems && msg.data.agentResult.scoutItems.map(si => si.estimatedWeightGrams).join(',')}</div>
                         </div>
                       </>
@@ -6996,8 +7069,5 @@ ${logsText}`);
     </div>
   );
 }
-  // B5
-  // skipScout = true
-  // skipScout: skipScout === true
 /* PortionClarifyCard portionChoices: choices skipScout: true */
 /* handleDownloadDebugReport Download full report.md report- */

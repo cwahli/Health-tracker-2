@@ -71,6 +71,15 @@ export interface HandoffTrace {
   jobId: string;
 }
 
+export type PortionAdjustmentTrace = {
+  type: 'local_math' | 'agent_edit';
+  diffPercent: number;
+  fromWeight: number;
+  toWeight: number;
+  agentCalled: boolean;
+  reason: string;
+};
+
 export interface CanonicalRunTree {
   jobId: string;
   conversationId?: string | null;
@@ -86,6 +95,7 @@ export interface CanonicalRunTree {
   handoffs: HandoffTrace[];
   dispatches: DispatchTrace[];
   contract: ContractEvaluation[];
+  portionAdjustment?: PortionAdjustmentTrace | null;
   // Retained payload attributes for tooling / views
   pendingFoodLog?: any;
   scoutItems?: any[];
@@ -236,10 +246,25 @@ function resolveLastUserActionPrompt(action: any): string | undefined {
   if (!action || typeof action !== 'object') return undefined;
 
   const details = action.details && typeof action.details === 'object' ? action.details : {};
-  const rawPrompt = details.prompt || action.prompt;
+  const rawPrompt = details.prompt || action.prompt || details.label;
   if (typeof rawPrompt === 'string' && rawPrompt.trim()) {
     const trimmed = rawPrompt.trim();
-    if (trimmed !== 'Download Debug Logs' && trimmed !== 'Flag issue') return trimmed;
+    // Reject CSS class names, tailwind strings, and UI control artifacts
+    if (
+      /^(?:p-|m-|bg-|text-|rounded|flex|inline|w-|h-|border|shadow|cursor|hover:|dark:|gap-|items-|justify-|scale-)/.test(trimmed) ||
+      trimmed.includes('rounded-full') ||
+      trimmed.includes('bg-slate') ||
+      trimmed.includes('bg-indigo') ||
+      trimmed.includes('cursor-pointer') ||
+      trimmed.includes('hover:scale') ||
+      trimmed.includes('shadow-') ||
+      trimmed === 'Download Debug Logs' ||
+      trimmed === 'Flag issue' ||
+      trimmed === 'Scroll to top'
+    ) {
+      return undefined;
+    }
+    return trimmed;
   }
 
   if (String(action.action || '').toLowerCase() === 'add_item') {
@@ -303,18 +328,27 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
         const pick = cands[sameAgentIdx] ?? cands[cands.length - 1] ?? timings.find(x => x.stage === copy.agent);
         if (pick) copy.latency_ms = pick.ms;
       }
-      // Fix user prompt if it was accidentally a UI button label like "Download Debug Logs"
-      if (!copy.user || copy.user === 'Download Debug Logs' || copy.user === 'Flag issue') {
-        if (copy.received?.userMessage) {
+      const hasPhotos = Boolean(
+        input.photoUrl ||
+        (input.photoUrls && input.photoUrls.length > 0) ||
+        (copy.received && (copy.received as any).photoCount > 0)
+      );
+      // Fix user prompt if it was accidentally a UI button label or CSS class
+      if (!copy.user || copy.user === 'Download Debug Logs' || copy.user === 'Flag issue' || /^(?:p-|bg-|text-|rounded)/.test(copy.user)) {
+        if (copy.received?.userMessage && !/^(?:p-|bg-|text-|rounded)/.test(copy.received.userMessage)) {
           copy.user = copy.received.userMessage;
         } else if (idx === 0) {
-          const actionPrompt = resolveLastUserActionPrompt(input.lastUserAction);
-          if (actionPrompt) {
-            copy.user = actionPrompt;
-          } else if (input.photoUrl || (input.photoUrls && input.photoUrls.length > 0) || (copy.received && (copy.received as any).photoCount > 0)) {
+          if (hasPhotos) {
             copy.user = 'Analyze this meal photo.';
-          } else if (input.message) {
-            copy.user = input.message;
+          } else {
+            const actionPrompt = resolveLastUserActionPrompt(input.lastUserAction);
+            if (actionPrompt) {
+              copy.user = actionPrompt;
+            } else if (input.userPrompt || input.prompt) {
+              copy.user = input.userPrompt || input.prompt;
+            } else if (input.message) {
+              copy.user = input.message;
+            }
           }
         }
       }
@@ -415,9 +449,11 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
     const promptSplitRegex = /\[UnifiedLLM-Prompt:scout\] System Instruction:\n/g;
     const matches = Array.from(logs.matchAll(promptSplitRegex));
 
+    const hasPhotos = Boolean(input.photoUrl || (input.photoUrls && input.photoUrls.length > 0));
     const rawActionPrompt = resolveLastUserActionPrompt(input.lastUserAction);
-    const defaultUserPrompt = rawActionPrompt
-      || ((input.photoUrl || (input.photoUrls && input.photoUrls.length > 0)) ? 'Analyze this meal photo.' : (input.message || undefined));
+    const defaultUserPrompt = hasPhotos
+      ? 'Analyze this meal photo.'
+      : (rawActionPrompt || input.userPrompt || input.prompt || (input.mode === 'new_log' ? input.message : undefined));
 
     if (matches.length > 1) {
       // Multi-turn run detected in logs!
@@ -512,7 +548,7 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
         received: {
           photoCount: input.photoUrls?.length || (input.photoUrl ? 1 : 0),
           ...(input.photoUrls?.length ? { photoUrls: input.photoUrls } : (input.photoUrl ? { photoUrl: input.photoUrl } : {})),
-          ...(input.message ? { userMessage: input.message } : {}),
+          ...(input.userPrompt ? { userMessage: input.userPrompt } : (input.userMessage ? { userMessage: input.userMessage } : (!hasPhotos && input.message ? { userMessage: input.message } : {}))),
           ...(input.mode ? { mode: input.mode } : {}),
           ...(input.diningEnvironment ? { diningEnvironment: input.diningEnvironment } : {}),
         },
@@ -561,6 +597,57 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
   return dispatches;
 }
 
+/** Extract portion adjustment traces from pendingFoodLog or user breadcrumbs */
+export function extractPortionAdjustment(input: DebugReportInput): PortionAdjustmentTrace | null {
+  // 1. Check pendingFoodLog explicit attribute or ratio
+  const pfl = input.pendingFoodLog;
+  if (pfl && typeof pfl === 'object') {
+    if (pfl.portionAdjustment && typeof pfl.portionAdjustment === 'object') {
+      return pfl.portionAdjustment;
+    }
+    if (typeof pfl.portionRatio === 'number' && Math.abs(pfl.portionRatio - 1.0) > 0.001) {
+      const diffPct = Math.round(Math.abs(pfl.portionRatio - 1.0) * 100);
+      const toW = Math.round(pfl.weightGrams || 0);
+      const fromW = Math.round(pfl.initialWeightGrams || (pfl.portionRatio ? toW / pfl.portionRatio : toW));
+      const agentCalled = diffPct > 30;
+      return {
+        type: agentCalled ? 'agent_edit' : 'local_math',
+        diffPercent: diffPct,
+        fromWeight: fromW,
+        toWeight: toW,
+        agentCalled,
+        reason: agentCalled
+          ? `Portion difference of ${diffPct}% (> 30%) triggered an agent review edit.`
+          : `Portion difference of ${diffPct}% (<= 30%) recalculated locally without extra agent call.`,
+      };
+    }
+  }
+
+  // 2. Check breadcrumbs
+  if (Array.isArray(input.userActionBreadcrumbs)) {
+    for (let i = input.userActionBreadcrumbs.length - 1; i >= 0; i--) {
+      const b = input.userActionBreadcrumbs[i];
+      if (b && typeof b === 'object' && (b.action === 'portion_adjust_local' || b.action === 'portion_adjust_edit')) {
+        const details = b.details || {};
+        const agentCalled = b.action === 'portion_adjust_edit' || Boolean(details.agentCalled);
+        const diffPct = details.diffPercent ?? Math.round((details.diffRatio ?? 0) * 100);
+        return {
+          type: agentCalled ? 'agent_edit' : 'local_math',
+          diffPercent: diffPct,
+          fromWeight: Math.round(details.fromWeight ?? 0),
+          toWeight: Math.round(details.toWeight ?? 0),
+          agentCalled,
+          reason: agentCalled
+            ? `Portion difference of ${diffPct}% (> 30%) triggered an agent review edit.`
+            : `Portion difference of ${diffPct}% (<= 30%) recalculated locally without extra agent call.`,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
 /**
  * Builds the canonical JSON run tree from raw debug report input.
  * Evaluates contract laws across process, ui, and content layers.
@@ -576,6 +663,7 @@ export function buildCanonicalRunTree(input: DebugReportInput): CanonicalRunTree
     .map(l => tagJobId(typeof l === 'string' ? l : JSON.stringify(l), jobId));
   const handoffs = extractHandoffs(input, jobId);
   const dispatches = extractDispatches(input);
+  const portionAdjustment = extractPortionAdjustment(input);
 
   const tree: CanonicalRunTree = {
     jobId,
@@ -592,6 +680,7 @@ export function buildCanonicalRunTree(input: DebugReportInput): CanonicalRunTree
     handoffs,
     dispatches,
     contract: [],
+    portionAdjustment,
     pendingFoodLog: input.pendingFoodLog,
     scoutItems: input.scoutItems,
     receiptTable: input.receiptTable,

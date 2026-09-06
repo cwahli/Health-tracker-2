@@ -263,6 +263,7 @@ export function scaleMealPortion<T extends FoodLogLike>(currentLog: T, ratio: nu
 
   const resLog: T = {
     ...currentLog,
+    initialWeightGrams: currentLog.initialWeightGrams || currentLog.weightGrams,
     weightGrams: updatedWeight,
     calories: updatedCalories,
     nutrients: updatedNutrients,
@@ -386,6 +387,7 @@ export function scaleSingleDishPortion<T extends FoodLogLike>(currentLog: T, dis
 
   const resLog: T = {
     ...currentLog,
+    initialWeightGrams: currentLog.initialWeightGrams || currentLog.weightGrams,
     weightGrams: newTotalWeight,
     calories: newTotalCalories,
     nutrients: aggregateNutrients,
@@ -415,5 +417,79 @@ export function scaleSingleDishPortion<T extends FoodLogLike>(currentLog: T, dis
   }
 
   return resLog;
+}
+
+export interface PortionChoicesResult<T> {
+  updatedLog: T;
+  isOverThreshold: boolean;
+  maxDiffPercent: number;
+  changesSummary: string;
+}
+
+/**
+ * Applies serving size clarification choices (e.g. from PortionClarifyCard) to a food log.
+ * Evaluates whether any adjusted item deviates by more than 30% from its original estimated weight.
+ * If <= 30%: re-scales the dishes and meal totals locally without needing an agent call.
+ * If > 30%: re-scales dishes locally and flags isOverThreshold=true so an agent edit review can be triggered.
+ */
+export function applyPortionChoicesToLog<T extends FoodLogLike>(
+  currentLog: T,
+  choices: Record<string, number>
+): PortionChoicesResult<T> {
+  let log = { ...currentLog };
+  let maxDiffPercent = 0;
+  let isOverThreshold = false;
+  const changeDescriptions: string[] = [];
+
+  const items = Array.isArray(log.itemsBreakdown) ? [...log.itemsBreakdown] : [];
+
+  for (const [key, targetWeight] of Object.entries(choices)) {
+    const targetGrams = Math.round(Number(targetWeight));
+    if (!targetGrams || targetGrams <= 0) continue;
+
+    // Match dish by scoutIndex or array index
+    const targetIdx = items.findIndex((it: any, idx: number) => {
+      if (it.scoutIndex != null && String(it.scoutIndex) === String(key)) return true;
+      return String(idx) === String(key);
+    });
+
+    if (targetIdx >= 0) {
+      const it = items[targetIdx];
+      const initialWeight = Math.round(Number(it.initialWeightGrams || it.estimatedWeightGrams || it.weightGrams || 100));
+      const ratio = targetGrams / initialWeight;
+      const diffRatio = Math.abs(targetGrams - initialWeight) / initialWeight;
+      const diffPercent = Math.round(diffRatio * 100);
+
+      if (diffPercent > maxDiffPercent) {
+        maxDiffPercent = diffPercent;
+      }
+      if (diffRatio > 0.30) {
+        isOverThreshold = true;
+      }
+
+      const itemName = it.name || it.originalName || it.keyword || `Item #${targetIdx + 1}`;
+      changeDescriptions.push(`${itemName}: ${initialWeight}g ➔ ${targetGrams}g (${diffPercent > 0 ? (targetGrams > initialWeight ? `+${diffPercent}%` : `-${diffPercent}%`) : '0%'})`);
+
+      log = scaleSingleDishPortion(log, targetIdx, ratio);
+    }
+  }
+
+  (log as any).portionAdjustment = {
+    type: isOverThreshold ? 'agent_edit' : 'local_math',
+    diffPercent: maxDiffPercent,
+    fromWeight: log.initialWeightGrams || log.weightGrams || 0,
+    toWeight: log.weightGrams || 0,
+    agentCalled: isOverThreshold,
+    reason: isOverThreshold
+      ? `Portion selection changed item by ${maxDiffPercent}% (> 30%). Triggered agent review edit.`
+      : `Portion selection changed item by ${maxDiffPercent}% (<= 30%). Recalculated locally without extra agent call.`,
+  };
+
+  return {
+    updatedLog: log,
+    isOverThreshold,
+    maxDiffPercent,
+    changesSummary: changeDescriptions.join(', '),
+  };
 }
 

@@ -57,17 +57,40 @@ export function PortionClarifyCard({ portionClarify, onConfirm, disabled, langua
 
   if (!items.length) return null;
 
+  const isAnyOverThreshold = items.some((it) => {
+    const key = String(it.scoutIndex);
+    const chosen = selected[key] || it.estimatedWeightGrams;
+    const base = it.estimatedWeightGrams || 100;
+    return Math.abs(chosen - base) / base > 0.30;
+  });
+
   return (
     <div className="mt-3 rounded-2xl border border-indigo-200 dark:border-indigo-800/60 bg-indigo-50/60 dark:bg-indigo-950/30 p-3 space-y-3">
-      <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-        {portionClarify.promptMessage}
-      </p>
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+          {portionClarify.promptMessage}
+        </p>
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300">
+          Serving size check
+        </span>
+      </div>
       {items.map((it) => {
         const key = String(it.scoutIndex);
+        const chosen = selected[key] || it.estimatedWeightGrams;
+        const base = it.estimatedWeightGrams || 100;
+        const diffRatio = Math.abs(chosen - base) / base;
+        const diffPct = Math.round(diffRatio * 100);
+        const isItemOver = diffRatio > 0.30;
+
         return (
           <div key={key} className="space-y-2">
-            <div className="text-xs font-bold text-indigo-700 dark:text-indigo-300 uppercase tracking-wide">
-              {it.name}
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-bold text-indigo-700 dark:text-indigo-300 uppercase tracking-wide">
+                {it.name}
+              </div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                Estimated: <span className="font-semibold text-slate-700 dark:text-slate-200">{it.estimatedWeightGrams}g</span>
+              </div>
             </div>
             {it.reason && (
               <p className="text-[11px] text-slate-500 dark:text-slate-400">{it.reason}</p>
@@ -126,6 +149,21 @@ export function PortionClarifyCard({ portionClarify, onConfirm, disabled, langua
                 <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">g</span>
               </div>
             )}
+            <div className="text-[11px] pt-0.5">
+              {diffPct === 0 ? (
+                <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                  ✓ Matches estimated portion ({it.estimatedWeightGrams}g)
+                </span>
+              ) : !isItemOver ? (
+                <span className="text-blue-600 dark:text-blue-400 font-medium">
+                  ⚡ {chosen > base ? `+${diffPct}%` : `-${diffPct}%`} difference (≤ 30%): instant local recalculation without extra agent call
+                </span>
+              ) : (
+                <span className="text-amber-600 dark:text-amber-400 font-medium">
+                  🤖 {chosen > base ? `+${diffPct}%` : `-${diffPct}%`} difference (&gt; 30%): triggers an agent review to re-evaluate verdict and advice
+                </span>
+              )}
+            </div>
           </div>
         );
       })}
@@ -136,9 +174,11 @@ export function PortionClarifyCard({ portionClarify, onConfirm, disabled, langua
           items.some((it) => !(selected[String(it.scoutIndex)] > 0))
         }
         onClick={() => onConfirm(selected)}
-        className="w-full sm:w-auto px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-bold cursor-pointer shadow-md"
+        className="w-full sm:w-auto px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-bold cursor-pointer shadow-md transition-colors"
       >
-        {t.continueWithThesePortions || 'Continue with these portions'}
+        {isAnyOverThreshold
+          ? (t.continueWithAgentReview || 'Confirm portions (Agent Review)')
+          : (t.continueWithInstantPortions || 'Confirm portions (Instant Update)')}
       </button>
     </div>
   );

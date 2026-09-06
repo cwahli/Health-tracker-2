@@ -370,3 +370,60 @@ describe('F-8.10 shard 29 — scout retry loop (stubbed LLM)', () => {
     expect(typeof seenOnStream).toBe('function');
   });
 });
+
+describe('Turn 2 Portion Selection — multi-dish preservation', () => {
+  it('preserves non-selected items when user chooses portion for one dish', () => {
+    const turn1ScoutItems = [
+      { scoutIndex: 0, originalName: 'Fried Chicken Meal', keyword: 'fried chicken', estimatedWeightGrams: 550 },
+      { scoutIndex: 1, originalName: 'Instant Oatmeal', keyword: 'instant oatmeal', estimatedWeightGrams: 100 },
+      { scoutIndex: 2, originalName: 'Öbalab Cake', keyword: 'cake', estimatedWeightGrams: 80 },
+    ];
+
+    const logs: string[] = [];
+    const out = applySkipScoutShortcut({
+      body: {
+        activeScoutItems: turn1ScoutItems,
+        portionChoices: { '1': 130 },
+        skipScout: true,
+      },
+      history: [],
+      activeMeal: null,
+      onLog: (m) => logs.push(m),
+    });
+
+    expect(out.ran).toBe(true);
+    expect(out.visionScoutItems).toHaveLength(3);
+    // Fried chicken is preserved at 550g
+    expect(out.visionScoutItems[0].originalName).toBe('Fried Chicken Meal');
+    expect(out.visionScoutItems[0].estimatedWeightGrams).toBe(550);
+    // Instant oatmeal is updated to 130g
+    expect(out.visionScoutItems[1].originalName).toBe('Instant Oatmeal');
+    expect(out.visionScoutItems[1].estimatedWeightGrams).toBe(130);
+    expect(out.visionScoutItems[1].portionChoiceApplied).toBe(130);
+    // Cake is preserved at 80g
+    expect(out.visionScoutItems[2].originalName).toBe('Öbalab Cake');
+    expect(out.visionScoutItems[2].estimatedWeightGrams).toBe(80);
+  });
+
+  it('restores Turn 1 candidates into databaseMatchesArray and dbMatchMap', () => {
+    const turn1Candidates = [
+      { id: 'usda_1', name: 'Fried Chicken', query: 'fried chicken' },
+      { id: 'usda_2', name: 'Instant Oatmeal', query: 'instant oatmeal' },
+      { id: 'usda_3', name: 'Cake', query: 'cake' },
+    ];
+    const databaseMatchesArray: any[] = [];
+    const dbMatchMap = new Map<string, any>();
+    const logs: string[] = [];
+
+    restoreTurnOneCandidates({
+      resolvedDbCandidates: turn1Candidates,
+      databaseMatchesArray,
+      dbMatchMap,
+      onLog: (m) => logs.push(m),
+    });
+
+    expect(databaseMatchesArray).toHaveLength(3);
+    expect(dbMatchMap.get('usda_2')?.name).toBe('Instant Oatmeal');
+    expect(dbMatchMap.get('usda_1')?.name).toBe('Fried Chicken');
+  });
+});

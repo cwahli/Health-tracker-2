@@ -32,6 +32,7 @@ import {
   synchronizeNarrativeText,
   build31NutrientsMarkdownServer,
   formatMealReceiptTable,
+  sanitizeVerdictLabel,
 } from './server_pure_helpers.js';
 import {
   matchBreakdownItemToScout,
@@ -306,17 +307,66 @@ export async function runFoodAnalyze(req: any, res: any) {
     const dbMatchMap = new Map<string, any>();
     const queriesToSearch: string[] = [];
     const scoutOriginalQueries: string[] = [];
+
+    if (req.body.resolvedDbCandidates) {
+      restoreTurnOneCandidates({
+        resolvedDbCandidates: req.body.resolvedDbCandidates,
+        databaseMatchesArray,
+        dbMatchMap,
+        onLog: addDebugLog,
+      });
+    }
+
     if (compareOnly) {
       addDebugLog(`[Shortcut] Compare mode detected. Skipping Vision Scout and DB Search.`);
       if (compareItems && compareItems.length > 0) {
         visionScoutItems = mapCompareItemsToScoutItems(compareItems);
       }
     } else {
-      const hasImage = imagePayloads && imagePayloads.length > 0;
-      const isEditOrText = Boolean(message || isModifySession || hasActiveMealDocument);
+      let skipScoutApplied = false;
+      if (req.body.skipScout || req.body.portionChoices) {
+        const skipOut = applySkipScoutShortcut({
+          body: req.body,
+          history,
+          activeMeal,
+          onLog: addDebugLog,
+        });
+        if (skipOut.ran) {
+          visionScoutItems = skipOut.visionScoutItems;
+          visionScoutContentType = skipOut.visionScoutContentType;
+          if (skipOut.diningEnvironment) diningEnvironment = skipOut.diningEnvironment;
+          visionScoutRanAndReturnedItems = true;
+          logScoutItemSummaries(visionScoutItems, addDebugLog);
+          skipScoutApplied = true;
+        }
+      }
 
-      if (hasImage || isEditOrText) {
-        sendStreamEvent({ type: 'status', stage: 'scout', status: 'started', message: isModifySession ? 'Refining meal with Scout agent...' : 'Reading your photos...' });
+      if (!skipScoutApplied && isWeightModification && visionScoutItems.length > 0) {
+        const weightModOut = applyWeightModShortcut({
+          activeScoutItems: visionScoutItems,
+          portionChoices: req.body.portionChoices,
+          weightRefineIntent,
+          scoutContentType: req.body.scoutContentType,
+          refineDecision,
+          priorScoutForRefine: visionScoutItems,
+          imagePayloads,
+          onLog: addDebugLog,
+        });
+        if (weightModOut.ran) {
+          visionScoutItems = weightModOut.visionScoutItems;
+          visionScoutContentType = weightModOut.visionScoutContentType;
+          visionScoutRanAndReturnedItems = true;
+          logScoutItemSummaries(visionScoutItems, addDebugLog);
+          skipScoutApplied = true;
+        }
+      }
+
+      if (!skipScoutApplied) {
+        const hasImage = imagePayloads && imagePayloads.length > 0;
+        const isEditOrText = Boolean(message || isModifySession || hasActiveMealDocument);
+
+        if (hasImage || isEditOrText) {
+          sendStreamEvent({ type: 'status', stage: 'scout', status: 'started', message: isModifySession ? 'Refining meal with Scout agent...' : 'Reading your photos...' });
         const imageCount = imagePayloads?.length || 0;
         let scoutPromptText = '';
         if (isModifySession && (activeMeal || (req.body.activeScoutItems && req.body.activeScoutItems.length > 0))) {
@@ -327,9 +377,9 @@ export async function runFoodAnalyze(req: any, res: any) {
             `User modification instruction: "${(message || '').trim()}".\n` +
             `Prior Meal Dishes: ${priorSummary}.\n` + (lockPrompt || '') + `\n` +
             `CRITICAL INSTRUCTIONS FOR MODIFICATION:\n` +
-            `1. INGREDIENT & DISH SUBSTITUTION/RENAME: If the user changes, corrects, or substitutes an ingredient or dish (e.g. 'ikan is nila', 'unsweetened tea', 'chicken instead of beef'), you MUST update the dishName, genericEnglishName, and foods[].foodName to the new substituted food (e.g. 'Ikan Nila' / 'tilapia' instead of 'Cakalang' / 'Cendro') and adjust the nutrients (calories, protein, fat, carbs, sugar) accordingly.\n` +
-            `2. SEPARATE DISHES: Keep distinct plated items, sides, and beverages as separate distinct dishes in the dishes[] array. Never merge drinks into food dishes.\n` +
-            `3. COMPLETE BREAKDOWN: Output the full updated meal with exact weights in grams and complete nutritional breakdown reflecting all user modifications.\n` +
+            `1. TARGETED DISH UPDATE ONLY: Follow the prototype model where only the edited, added, or substituted food item is returned in the dishes[] array. DO NOT re-emit unchanged dishes from the prior meal. If the user adds an item (e.g. 'There was also an es teh tawar'), output ONLY that new dish in dishes[]. If the user modifies an item portion or substitutes an item, output ONLY that modified/substituted dish in dishes[]. If the user asks to remove an item, emit an empty dishes[] array.\n` +
+            `2. INGREDIENT & DISH SUBSTITUTION/RENAME: If the user changes, corrects, or substitutes an ingredient or dish (e.g. 'ikan is nila', 'unsweetened tea', 'chicken instead of beef'), you MUST update the dishName, genericEnglishName, and foods[].foodName to the new substituted food (e.g. 'Ikan Nila' / 'tilapia' instead of 'Cakalang' / 'Cendro') and adjust the nutrients (calories, protein, fat, carbs, sugar) accordingly.\n` +
+            `3. SEPARATE DISHES: Keep distinct plated items, sides, and beverages as separate distinct dishes in the dishes[] array. Never merge drinks into food dishes.\n` +
             `4. CLINICAL ADVICE & NARRATIVE: Provide an updated constructive 35-70 word clinicalAdvice in 2nd person ("You got...") covering key nutritional assets of the updated meal, metabolic/glycemic impact of the change, and actionable next steps/movement.`;
         } else {
           scoutPromptText = buildVisualScoutPrompt(message || '', imageCount);
@@ -392,6 +442,7 @@ export async function runFoodAnalyze(req: any, res: any) {
         }
         logScoutItemSummaries(visionScoutItems, addDebugLog);
         emitStageUsage('scout');
+      }
       }
     }
     const bracketItems = parseBracketedFoodItems(message || '');
@@ -564,71 +615,16 @@ export async function runFoodAnalyze(req: any, res: any) {
     // Task 2: portionClarify check — now placed AFTER DB search and Resolver so ALL candidates are available.
     // B1 — Pause before nutrient calculation when multi-serve pack portion is ambiguous.
     // Resume path: skipScout + activeScoutItems + portionChoices + resolvedDbCandidates (no second scout/DB).
-    const portionClarify =
-      shouldPauseForPortionClarify({
-        portionChoices: req.body.portionChoices,
-        skipPortionClarify: req.body.skipPortionClarify,
-        isWeightModification, compareOnly, isExplicitModify, visionScoutRanAndReturnedItems,
-      })
-        ? buildPortionClarifyPayload(visionScoutItems)
-        : null;
+    // Non-blocking serving size check:
+    // When packGrams and weightGrams differ (or portion is ambiguous), compute clarification payload
+    // to attach to the final meal. The pipeline does NOT block — full nutrient calculation, pre-calc,
+    // clinical advice, and final verdict complete immediately. The user can confirm or adjust serving
+    // sizes on the completed card.
+    const portionClarify = buildPortionClarifyPayload(visionScoutItems);
     if (portionClarify) {
       addDebugLog(
-        `[PortionClarify] Pausing for user input on: ${portionClarify.items.map((i) => i.name).join('; ')}`
+        `[PortionClarify] Non-blocking clarification check attached for: ${portionClarify.items.map((i) => i.name).join('; ')}`
       );
-      // Carry the resolved DB candidates so turn 2 does not re-run DB search from empty.
-      // Filter to the meal-relevant candidates only (those belonging to the current scout items
-      // or the detected chain brand), capped at 60 to keep the payload manageable.
-      const resolvedDbCandidates = filterPortionCarryCandidates({ visionScoutItems, databaseMatchesArray, detectedChainKey });
-      addDebugLog(`[PortionClarify] Embedding ${resolvedDbCandidates.length} pre-resolved DB candidates for turn-2 carry-forward.`);
-      emitStageUsage('scout');
-      sendStreamEvent({
-        type: 'status',
-        stage: 'portion_clarify',
-        status: 'awaiting_user',
-        message: portionClarify.promptMessage,
-      });
-      sendLog(
-        'status',
-        'scout',
-        `[PortionClarify] ${portionClarify.promptMessage}`
-      );
-      if (isStream && hasSentHeaders) {
-        sendStreamEvent({
-          type: 'done',
-          final: true,
-          result: {
-            needsPortionClarify: true,
-            mode: 'portion_clarify',
-            message: portionClarify.promptMessage,
-            text: portionClarify.promptMessage,
-            scoutItems: visionScoutItems,
-            portionClarify,
-            resolvedDbCandidates,
-            rawScout: rawScoutData,
-            agentResult: {
-              scoutItems: visionScoutItems,
-              activeStage: 'portion_clarify',
-            },
-          }
-        });
-        res.end();
-        return;
-      }
-      return res.json({
-        needsPortionClarify: true,
-        mode: 'portion_clarify',
-        message: portionClarify.promptMessage,
-        text: portionClarify.promptMessage,
-        scoutItems: visionScoutItems,
-        portionClarify,
-        resolvedDbCandidates,
-        rawScout: rawScoutData,
-        agentResult: {
-          scoutItems: visionScoutItems,
-          activeStage: 'portion_clarify',
-        },
-      });
     }
     // Brand Environment Locking logic
     let dominantBrand = detectDominantBrand({ message, visionScoutItems, onLog: addDebugLog });
@@ -1003,6 +999,10 @@ ${textOutput}`);
           scoutItems: updatedScoutItems,
           diningEnvironment,
         });
+        if (portionClarify) {
+          if (pendingFoodLog) (pendingFoodLog as any).portionClarify = portionClarify;
+          parsedData.portionClarify = portionClarify;
+        }
         const finalMeal = pendingFoodLog || parsedData;
         const gate = evaluateMealGate(buildNewLogGateInput({ finalMeal, jobId: req.body.jobId, photoUrl: req.body.photoUrl, imagePayloads, narrative: rawParsed.message }));
         return res.json({
@@ -1019,7 +1019,8 @@ ${textOutput}`);
           scoutItems: updatedScoutItems,
           rawScout: rawScoutData,
           dispatches: accumulatedDispatches,
-          apiCalls
+          apiCalls,
+          portionClarify: portionClarify || null,
         });
       }
       const isResumedFromImageTurn = checkResumedFromImageTurn({ body: req.body, visionScoutItems, history });
@@ -1047,6 +1048,10 @@ ${textOutput}`);
         scoutItems: finalScoutItems,
         diningEnvironment,
       });
+      if (portionClarify) {
+        if (pendingFoodLog) (pendingFoodLog as any).portionClarify = portionClarify;
+        parsedData.portionClarify = portionClarify;
+      }
       const finalMeal = pendingFoodLog || parsedData;
       const gate = evaluateMealGate(buildNewLogGateInput({ finalMeal, jobId: req.body.jobId, photoUrl: req.body.photoUrl, imagePayloads, narrative: rawParsed.message }));
       const responsePayload = buildNewLogResponse({
@@ -1056,6 +1061,7 @@ ${textOutput}`);
         scoutItems: finalScoutItems,
         dispatches: accumulatedDispatches,
         apiCalls,
+        portionClarify,
       });
       return res.json(responsePayload);
     }
@@ -1094,6 +1100,26 @@ ${textOutput}`);
         const incomingTitle = resolveModifyIncomingTitle(activeMeal.name, rawParsed.foodData?.name);
         const resolvedTitle = resolveEditedMealTitle({ incomingTitle, items: result.items, editCommands });
         if (resolvedTitle) activeMeal.name = resolvedTitle;
+
+        // Clinical verdict preservation & consistency:
+        // If prior meal had a warning/alert level, and the edited meal still exceeds
+        // metabolic warning thresholds (saturated fat >= 8g, sodium >= 1000mg, calories >= 900kcal),
+        // preserve the warning level and sanitize the label for the updated nutrients.
+        const priorVerdict = activeMeal.verdict || req.body.activeMeal?.verdict;
+        const isHighSatFat = (result.nutrients?.saturatedFat || 0) >= 8;
+        const isHighSodium = (result.nutrients?.sodium || 0) >= 1000;
+        const isHighCalories = (result.nutrients?.calories || 0) >= 900;
+        const shouldWarn = isHighSatFat || isHighSodium || isHighCalories;
+        const priorLevel = priorVerdict?.level || 'neutral';
+        const effectiveLevel = ((priorLevel === 'warning' || priorLevel === 'alert') && shouldWarn)
+          ? priorLevel
+          : (rawParsed.verdict?.level || priorLevel);
+        const effectiveRawLabel = rawParsed.verdict?.label || priorVerdict?.label || (effectiveLevel === 'warning' ? 'Elevated saturated fat impact' : 'Mindful balance');
+        const sanitizedVerdictLabel = sanitizeVerdictLabel(effectiveRawLabel, effectiveLevel, result.nutrients, userProfile?.language);
+        activeMeal.verdict = {
+          label: sanitizedVerdictLabel,
+          level: effectiveLevel,
+        };
         // Sync scoutItems (used by the "Meal composition" chips/gallery in the UI)
         // with any name changes applied to itemsBreakdown by this edit. Without this,
         // renames from set_modifier/replace_identity (e.g. "Es Teh Manis" -> "Unsweetened

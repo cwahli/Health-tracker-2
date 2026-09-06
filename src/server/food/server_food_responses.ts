@@ -72,11 +72,12 @@ export function buildNewLogResponse(args: {
   scoutItems: any;
   apiCalls: any;
   dispatches?: any[];
+  portionClarify?: any;
 }): Record<string, any> {
   const {
     rawParsed, parsedData, pendingFoodLog, mealBuild, gate, scoutInternalReasoning,
     rawScoutData, scoutContentType, diningEnvironment, agentInstructions, scoutItems, apiCalls,
-    dispatches,
+    dispatches, portionClarify,
   } = args;
   return {
     mode: "new_log",
@@ -95,7 +96,8 @@ export function buildNewLogResponse(args: {
     agentInstructions,
     scoutItems,
     dispatches,
-    apiCalls
+    apiCalls,
+    portionClarify: portionClarify || null,
   };
 }
 

@@ -91,25 +91,36 @@ export interface PriorScoutArgs {
 }
 
 /** Resolves prior-run scout items across activeScoutItems / scoutItems / meal / history. */
-export function resolvePriorScoutItems(args: PriorScoutArgs): any[] {  const { body, history, activeMeal } = args;
+export function resolvePriorScoutItems(args: PriorScoutArgs): any[] {
+  const { body, history, activeMeal } = args;
   let priorScout = (Array.isArray(body.activeScoutItems) && body.activeScoutItems.length > 0)
     ? body.activeScoutItems
     : ((Array.isArray(body.scoutItems) && body.scoutItems.length > 0)
       ? body.scoutItems
-      : (Array.isArray(activeMeal?.scoutItems) && activeMeal.scoutItems.length > 0 ? activeMeal.scoutItems : []));
+      : (Array.isArray(activeMeal?.scoutItems) && activeMeal.scoutItems.length > 0
+        ? activeMeal.scoutItems
+        : (Array.isArray(activeMeal?.itemsBreakdown) && activeMeal.itemsBreakdown.length > 0
+          ? activeMeal.itemsBreakdown
+          : (Array.isArray(activeMeal?.items) && activeMeal.items.length > 0
+            ? activeMeal.items
+            : []))));
   if (priorScout.length === 0 && Array.isArray(history) && history.length > 0) {
     // Fallback: search history messages for scoutItems or portionClarify items
     const clarifyMsg = [...history].reverse().find((m: any) =>
       (m.data?.scoutItems && m.data.scoutItems.length > 0) ||
       (m.data?.portionClarify?.scoutItems && m.data.portionClarify.scoutItems.length > 0) ||
       (m.data?.portionClarify?.items && m.data.portionClarify.items.length > 0) ||
-      (m.data?.agentResult?.scoutItems && m.data.agentResult.scoutItems.length > 0)
+      (m.data?.agentResult?.scoutItems && m.data.agentResult.scoutItems.length > 0) ||
+      (m.data?.clean_result?.scoutItems && m.data.clean_result.scoutItems.length > 0) ||
+      (m.data?.result?.scoutItems && m.data.result.scoutItems.length > 0)
     );
     if (clarifyMsg?.data) {
       priorScout = clarifyMsg.data.scoutItems ||
         clarifyMsg.data.portionClarify?.scoutItems ||
         clarifyMsg.data.portionClarify?.items ||
-        clarifyMsg.data.agentResult?.scoutItems || [];
+        clarifyMsg.data.agentResult?.scoutItems ||
+        clarifyMsg.data.clean_result?.scoutItems ||
+        clarifyMsg.data.result?.scoutItems || [];
     }
   }
   return priorScout;
@@ -396,7 +407,7 @@ export interface ScoutMealMergeArgs {
 }
 
 export function mergeScoutIntoActiveMeal(args: ScoutMealMergeArgs): any[] {
-  const { activeMealItemsBreakdown, onLog, isModify } = args;
+  const { activeMealItemsBreakdown, onLog, isModify, userMessage } = args;
   let visionScoutItems = args.visionScoutItems;
   if (isModify && args.userLockedSlots && args.userLockedSlots.length > 0) {
     const locked = applyUserLockedSlots({
@@ -415,41 +426,82 @@ export function mergeScoutIntoActiveMeal(args: ScoutMealMergeArgs): any[] {
   }
   if (isModify) {
     onLog(`[Single-Path] Edit turn: updating active meal with ${visionScoutItems.length} refined scout dish(es) in same meal.`);
-    return visionScoutItems.map((newcomer, idx) => {
-      const priorMatch = activeMealItemsBreakdown.find((ex: any) => {
+    const result = activeMealItemsBreakdown.map((ex: any) => ({ ...ex }));
+    const matchedPriorIndices = new Set<number>();
+
+    for (let i = 0; i < visionScoutItems.length; i++) {
+      const newcomer = visionScoutItems[i];
+      const newName = (newcomer.originalName || newcomer.keyword || newcomer.name || '').toLowerCase().trim();
+
+      // Check for matching prior item by name
+      let matchIdx = result.findIndex((ex, idx) => {
+        if (matchedPriorIndices.has(idx)) return false;
         const exName = (ex.originalName || ex.keyword || ex.canonicalDbName || ex.name || '').toLowerCase().trim();
-        const newName = (newcomer.originalName || newcomer.keyword || newcomer.name || '').toLowerCase().trim();
         return exName && newName && (exName === newName || exName.includes(newName) || newName.includes(exName));
-      }) || activeMealItemsBreakdown[idx];
+      });
+
+      // Check if userMessage explicitly asked to replace/substitute a prior item
+      if (matchIdx < 0 && userMessage) {
+        const msg = userMessage.toLowerCase();
+        if (/\b(replace|substitute|instead of|change .* to|switch)\b/i.test(msg)) {
+          matchIdx = result.findIndex((ex, idx) => {
+            if (matchedPriorIndices.has(idx)) return false;
+            const exName = (ex.originalName || ex.keyword || ex.canonicalDbName || ex.name || '').toLowerCase().trim();
+            return exName && msg.includes(exName);
+          });
+        }
+      }
+
+      // If full meal re-emission (same length), allow positional fallback
+      if (matchIdx < 0 && visionScoutItems.length === result.length && !matchedPriorIndices.has(i)) {
+        matchIdx = i;
+      }
 
       const isDummyBox = !newcomer.boundingBox2D ||
         (Array.isArray(newcomer.boundingBox2D) &&
           (newcomer.boundingBox2D.length === 0 || (newcomer.boundingBox2D[0] === 0 && newcomer.boundingBox2D[1] === 0 && newcomer.boundingBox2D[2] === 100 && newcomer.boundingBox2D[3] === 100)));
 
-      const resolvedBox = (isDummyBox && priorMatch?.boundingBox2D)
-        ? priorMatch.boundingBox2D
-        : newcomer.boundingBox2D;
-
-      const resolvedImg = (newcomer.sourceImageIndex == null && priorMatch?.sourceImageIndex != null)
-        ? priorMatch.sourceImageIndex
-        : newcomer.sourceImageIndex;
-
-      const resolvedComponents = (Array.isArray(newcomer.components) && newcomer.components.length > 0)
-        ? newcomer.components
-        : (priorMatch?.components || priorMatch?.componentsDetailList || undefined);
-
       const scoutW = Number(newcomer.estimatedWeightGrams ?? newcomer.weightGrams);
       const adoptedWeight = (Number.isFinite(scoutW) && scoutW > 0) ? scoutW : undefined;
-      return {
-        ...priorMatch,
-        ...newcomer,
-        keyword: newcomer.keyword || newcomer.canonicalDbName || newcomer.originalName || priorMatch?.keyword || priorMatch?.canonicalDbName,
-        boundingBox2D: resolvedBox,
-        sourceImageIndex: resolvedImg,
-        ...(resolvedComponents ? { components: resolvedComponents } : {}),
-        ...(adoptedWeight != null ? { estimatedWeightGrams: adoptedWeight, weightGrams: adoptedWeight } : {}),
-      };
-    });
+
+      if (matchIdx >= 0) {
+        matchedPriorIndices.add(matchIdx);
+        const priorMatch = result[matchIdx];
+        const resolvedBox = (isDummyBox && priorMatch?.boundingBox2D)
+          ? priorMatch.boundingBox2D
+          : newcomer.boundingBox2D;
+
+        const resolvedImg = (newcomer.sourceImageIndex == null && priorMatch?.sourceImageIndex != null)
+          ? priorMatch.sourceImageIndex
+          : newcomer.sourceImageIndex;
+
+        const resolvedComponents = (Array.isArray(newcomer.components) && newcomer.components.length > 0)
+          ? newcomer.components
+          : (priorMatch?.components || priorMatch?.componentsDetailList || undefined);
+
+        result[matchIdx] = {
+          ...priorMatch,
+          ...newcomer,
+          keyword: newcomer.keyword || newcomer.canonicalDbName || newcomer.originalName || priorMatch?.keyword || priorMatch?.canonicalDbName,
+          boundingBox2D: resolvedBox,
+          sourceImageIndex: resolvedImg,
+          ...(resolvedComponents ? { components: resolvedComponents } : {}),
+          ...(adoptedWeight != null ? { estimatedWeightGrams: adoptedWeight, weightGrams: adoptedWeight } : {}),
+        };
+      } else {
+        // New item added in this edit turn
+        const maxIdx = result.reduce((m: number, it: any) => Math.max(m, Number(it.scoutIndex) || 0), -1);
+        result.push({
+          ...newcomer,
+          scoutIndex: maxIdx + 1,
+          keyword: newcomer.keyword || newcomer.canonicalDbName || newcomer.originalName || newcomer.name,
+          boundingBox2D: isDummyBox ? null : newcomer.boundingBox2D,
+          sourceImageIndex: newcomer.sourceImageIndex ?? null,
+          ...(adoptedWeight != null ? { estimatedWeightGrams: adoptedWeight, weightGrams: adoptedWeight } : {}),
+        });
+      }
+    }
+    return result;
   }
   const existing = activeMealItemsBreakdown.map((it: any) => ({
     ...it,

@@ -145,17 +145,35 @@ export function assembleParsedMealHeader(args: ParsedMealHeaderArgs): {
   parsedData.recommendation = sanitizeString(rawFoodData.recommendation, "");
   parsedData.message = sanitizeString(rawParsed.message || rawFoodData.message || "", "");
   const rawVerdict = rawParsed.verdict || rawFoodData.verdict;
+  const priorVerdict = activeMeal?.verdict;
+  const isHighSatFat = (parsedData.nutrients?.saturatedFat || 0) >= 8;
+  const isHighSodium = (parsedData.nutrients?.sodium || 0) >= 1000;
+  const isHighCalories = (parsedData.nutrients?.calories || 0) >= 900;
+  const shouldWarn = isHighSatFat || isHighSodium || isHighCalories;
+  const priorLevel = priorVerdict?.level;
+  const rawLevel = rawVerdict?.level || 'neutral';
+  const effectiveLevel = (originalModeIsModify && (priorLevel === 'warning' || priorLevel === 'alert') && shouldWarn)
+    ? priorLevel
+    : rawLevel;
+
   if (rawVerdict && typeof rawVerdict === 'object') {
-    const sanitizedLabel = sanitizeVerdictLabel(rawVerdict.label || t(language, 'verdictSupportsMetabolicEnergy'), rawVerdict.level, parsedData.nutrients, language);
+    const rawLabel = rawVerdict.label || (effectiveLevel === 'warning' ? priorVerdict?.label : null) || t(language, 'verdictSupportsMetabolicEnergy');
+    const sanitizedLabel = sanitizeVerdictLabel(rawLabel, effectiveLevel, parsedData.nutrients, language);
     parsedData.verdict = {
       label: sanitizedLabel,
-      level: String(rawVerdict.level || 'neutral')
+      level: String(effectiveLevel)
     };
   } else if (rawFoodData.recommendation && typeof rawFoodData.recommendation === 'string' && rawFoodData.recommendation.trim().length > 0) {
-    const sanitizedLabel = sanitizeVerdictLabel(rawFoodData.recommendation, 'neutral', parsedData.nutrients, language);
+    const sanitizedLabel = sanitizeVerdictLabel(rawFoodData.recommendation, effectiveLevel, parsedData.nutrients, language);
     parsedData.verdict = {
       label: sanitizedLabel,
-      level: 'neutral'
+      level: String(effectiveLevel)
+    };
+  } else if (originalModeIsModify && priorVerdict) {
+    const sanitizedLabel = sanitizeVerdictLabel(priorVerdict.label || t(language, 'verdictSupportsMetabolicEnergy'), effectiveLevel, parsedData.nutrients, language);
+    parsedData.verdict = {
+      label: sanitizedLabel,
+      level: String(effectiveLevel)
     };
   }
   parsedData.cookingMethod = sanitizeString(rawFoodData.cookingMethod, scoutCookingMethod || t(language, 'cookingMethodUnknown'));
@@ -198,7 +216,11 @@ export function backfillEditCommandEstimates(rawParsed: any): any[] {
 
 export function formatMultiItemMealTitle(items: any[]): string {
   if (!items || items.length === 0) return 'Meal';
-  const names = items.map((it: any) => it.name || it.canonicalDbName || 'Item').filter(Boolean);
+  const names = items.map((it: any) => {
+    let n = String(it.name || it.canonicalDbName || 'Item');
+    n = n.replace(/,\s*(with|and)\b/gi, ' $1').trim();
+    return n;
+  }).filter(Boolean);
   if (names.length === 1) return names[0];
   if (names.length === 2) return `${names[0]} and ${names[1]}`;
   return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
