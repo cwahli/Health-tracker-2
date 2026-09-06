@@ -8,7 +8,7 @@
 import { getFallbackCategoryProfile } from '../../../server_food_catalog.js';
 import { isPackagedBindItem, inferChainNameFromPackageLabel } from '../../../server_brand_match.js';
 import { userSafeScoutFailureMessage, parseAndHealVisionScout } from '../../../server_vision_scout.js';
-import { isGeminiQuotaError } from '../../../server_gemini_retry.js';
+import { isGeminiQuotaError, nextGeminiFallbackEngine } from '../../../server_gemini_retry.js';
 import { t, withScoutLanguage } from '../../utils/i18n.js';
 import { extractFoodSearchQueriesFromText } from './server_food_analyze_helpers.js';
 import { scoutSystemInstruction } from '../../../agents/scoutInstructions.js';
@@ -747,8 +747,10 @@ export async function runScoutRetryLoop(args: ScoutRetryArgs): Promise<{
     engine, language, scoutPromptText, imagePayloads, isCompare, message,
     maxAttempts = 3, callUnifiedLLM, sleep, onLog, onStreamChunk,
   } = args;
-  const callArgs: any = buildScoutCallArgs({ engine, language, scoutPromptText, imagePayloads });
-  if (onStreamChunk) callArgs.onStream = onStreamChunk;
+  
+  let currentEngine = (typeof engine === 'object' ? engine?.name || engine?.model : engine) || "gemini-3.5-flash-lite";
+  let alreadyFellBack = false;
+
   let scoutResult: any = null;
   let attempts = 0;
   let lastScoutErr: any = null;
@@ -757,11 +759,23 @@ export async function runScoutRetryLoop(args: ScoutRetryArgs): Promise<{
     try {
       if (attempts > 1) {
         if (isGeminiQuotaError(lastScoutErr)) break;
+        
+        const fallback = nextGeminiFallbackEngine(currentEngine, lastScoutErr, alreadyFellBack);
+        if (fallback) {
+          onLog(`[Vision Scout] Switching engine from ${currentEngine} to fallback ${fallback} due to stall/unavailable.`);
+          currentEngine = fallback;
+          alreadyFellBack = true;
+        }
+
         const delay = computeScoutRetryDelay(lastScoutErr);
         onLog(`[Vision Scout] Waiting ${delay}ms before retry...`);
         await sleep(delay);
-        onLog(`[Vision Scout] Retrying LLM call (Attempt ${attempts} of ${maxAttempts})...`);
+        onLog(`[Vision Scout] Retrying LLM call (Attempt ${attempts} of ${maxAttempts}) using engine ${currentEngine}...`);
       }
+      
+      const callArgs: any = buildScoutCallArgs({ engine: currentEngine, language, scoutPromptText, imagePayloads });
+      if (onStreamChunk) callArgs.onStream = onStreamChunk;
+
       const scoutOutput = await callUnifiedLLM(callArgs);
       // Yield to the event loop before heavy synchronous parsing
       await new Promise(resolve => setImmediate(resolve));
