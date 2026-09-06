@@ -59,7 +59,7 @@ export const AGENT_REGISTRY: Record<AgentType, AgentConfig> = {
     description: 'Extracts biomarkers from raw text or reports into a structured format.',
     capabilities: ['vision', 'medical_extraction', 'biomarker_table_view'],
     welcomeMessage: 'Hello! I am the Clinical Data Parser. I extract biomarkers and readings from raw text or reports into a structured format.',
-    rolloutStatus: 'legacy',
+    rolloutStatus: 'unified',
   },
   data_review: {
     id: 'data_review',

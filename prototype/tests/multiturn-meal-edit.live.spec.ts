@@ -85,32 +85,105 @@ test.describe('Live multiturn meal edit (demo)', () => {
 
   test('optional live meal edits when LIVE_MEAL_EDIT=1', async ({ page }) => {
     test.skip(process.env.LIVE_MEAL_EDIT !== '1', 'Set LIVE_MEAL_EDIT=1 to run photo+edit soak');
+    test.setTimeout(900000);
+    // Local soak infra: gemini-3.8-flash uses standardCost (20) and Demo quota is tiny.
+    await page.addInitScript(() => {
+      localStorage.setItem('admin_agent_settings', JSON.stringify({
+        flashLiteCost: 1,
+        standardCost: 1,
+        quotaDemo: 500,
+        quotaStandard: 500,
+        quotaAdmin: 500,
+      }));
+    });
+    // If already on origin from beforeEach login, set immediately too.
+    await page.evaluate(() => {
+      localStorage.setItem('admin_agent_settings', JSON.stringify({
+        flashLiteCost: 1,
+        standardCost: 1,
+        quotaDemo: 500,
+        quotaStandard: 500,
+        quotaAdmin: 500,
+      }));
+    }).catch(() => {});
     const photo = process.env.LIVE_MEAL_PHOTO || '/workspace/meal-tawar-nilai-web.jpg';
-    const send = () => first(page, ['#food-chat-send-btn', 'button[title="Send"]', 'button:has-text("Send")']);
+    const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL || 'http://127.0.0.1:3000';
+    // Prefer strict food-chat ids: broad input[placeholder] matches Food History search first in DOM.
+    const send = () => page.locator('#food-chat-send-btn');
     const analyzing = () => page.getByText(/Updating|Analyzing|Menganalisis|Memperbarui/i).first();
-    const input = first(page, ['#food-chat-input', 'input[name="food-chat-input"]', 'input[placeholder]']);
+    const input = page.locator('#food-chat-input');
+    const jobIds: string[] = [];
+
+    const waitJobSucceeded = async (jobId: string, notBeforeMs: number) => {
+      const deadline = Date.now() + 240000;
+      let sawRunning = false;
+      while (Date.now() < deadline) {
+        const res = await page.request.get(`${baseURL}/api/jobs/status?jobId=${jobId}`);
+        const data = await res.json().catch(() => ({} as any));
+        const job = (data?.jobs && data.jobs[0]) || data?.job || data;
+        const status = job?.status;
+        const updatedRaw = job?.updated_at || job?.updatedAt || job?.finished_at || job?.completedAt || '';
+        const updatedMs = updatedRaw ? Date.parse(String(updatedRaw)) : 0;
+        if (status === 'running' || status === 'queued') sawRunning = true;
+        const freshEnough = !updatedMs || updatedMs >= notBeforeMs - 2000;
+        if ((sawRunning || freshEnough) && (status === 'succeeded' || status === 'failed' || status === 'error')) {
+          // Avoid resolving the previous turn's succeeded before this submit's run starts.
+          if (status === 'succeeded' && !sawRunning && updatedMs && updatedMs < notBeforeMs - 2000) {
+            await page.waitForTimeout(1500);
+            continue;
+          }
+          expect(status, `job ${jobId} terminal`).toBe('succeeded');
+          return job;
+        }
+        await page.waitForTimeout(2000);
+      }
+      throw new Error(`Timed out waiting for job ${jobId}`);
+    };
+
+    const sendAndAwaitJob = async () => {
+      const submitWait = page.waitForResponse(
+        (r) => r.url().includes('/api/jobs/submit') && r.request().method() === 'POST',
+        { timeout: 120000 },
+      );
+      const clickedAt = Date.now();
+      await expect(send()).toBeEnabled({ timeout: 15000 });
+      await send().click();
+      const submitRes = await submitWait;
+      const body = await submitRes.json().catch(() => ({} as any));
+      const jobId = String(body?.jobId || '');
+      expect(jobId, 'submit returns jobId').toMatch(/^job_/);
+      jobIds.push(jobId);
+      await analyzing().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
+      await expect(analyzing()).toBeHidden({ timeout: 240000 });
+      await expect(input).toBeEnabled({ timeout: 240000 });
+      await waitJobSucceeded(jobId, clickedAt);
+      return jobId;
+    };
 
     await first(page, ['button[title="Open quick actions"]', 'button.w-14.h-14', '[aria-label*="quick"]']).click();
     await first(page, ['button:has-text("Catat Makanan")', 'button:has-text("Log meal")', 'button:has-text("Log Meal")']).click();
     await expect(input).toBeVisible({ timeout: 15000 });
 
-    await page.locator('input[type="file"]').first().setInputFiles(photo);
-    await send().click();
-    await expect(analyzing()).toBeHidden({ timeout: 180000 }).catch(() => {});
-    await expect(input).toBeEnabled({ timeout: 180000 });
+    await expect(input).toBeVisible({ timeout: 15000 });
+    await page.locator('#food-chat-container input[type="file"], #food-chat-photo-btn ~ input[type="file"], input[type="file"]').first().setInputFiles(photo);
+    await sendAndAwaitJob();
+    await expect(input).toBeVisible({ timeout: 15000 });
 
+    await input.click({ timeout: 15000 });
     await input.fill('the tea is tawar and the fish is nilai');
-    await send().click();
-    await expect(analyzing()).toBeHidden({ timeout: 180000 }).catch(() => {});
-    await expect(input).toBeEnabled({ timeout: 180000 });
+    await sendAndAwaitJob();
     await expectResultContainsIfPresent(page, /Nila|Ikan Nila|Tilapia|fish|Cakalang/i);
     await expectResultContainsIfPresent(page, /tawar|tea|Teh|flat/i);
 
+    await input.click({ timeout: 15000 });
     await input.fill('the kangkung is 100g');
-    await send().click();
-    await expect(analyzing()).toBeHidden({ timeout: 180000 }).catch(() => {});
-    await expect(input).toBeEnabled({ timeout: 180000 });
+    await sendAndAwaitJob();
     await expectResultContainsIfPresent(page, /Kangkung|water spinach|sayur|100\s?g/i);
     await expectResultContainsIfPresent(page, /tawar|tea|Teh|flat/i);
+
+    // Persist job id for downstream debug export (same id reused across multiturn edits).
+    const fs = await import('node:fs');
+    fs.writeFileSync('/workspace/gemini38-meal-review-round2/pw_jobid.txt', jobIds[jobIds.length - 1] || jobIds[0] || '');
+    fs.writeFileSync('/workspace/gemini38-meal-review-round2/pw_jobids.json', JSON.stringify(jobIds, null, 2));
   });
 });

@@ -34,6 +34,9 @@ export function fromPendingFoodLog(log: any, meta?: Partial<MealBuild>): MealBui
     historyLog: log.historyLog || meta?.historyLog || [],
     ...meta
   };
+  if (log.userLockedSlots || (meta as any)?.userLockedSlots) {
+    (meal as any).userLockedSlots = log.userLockedSlots || (meta as any).userLockedSlots;
+  }
   
   return migrateMealSchema(meal);
 }
@@ -68,6 +71,7 @@ export function toPendingFoodLog(meal: MealBuild): any {
     date: meal.date,
     scoutItems: meal.scoutSnapshot || [],
     historyLog: meal.historyLog || [],
+    userLockedSlots: (meal as any).userLockedSlots || [],
   };
 }
 

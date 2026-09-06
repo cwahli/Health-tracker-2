@@ -2317,7 +2317,7 @@ ${logsText}`);
     if (profile) {
       const creditInfo = getAvailableCredits(profile);
       const settings = getAdminSettings();
-      const isFlashLite = selectedModelId === 'gemini-3.5-flash-lite' || selectedModelId.toLowerCase().includes('flash-lite');
+      const isFlashLite = selectedModelId === 'gemini-3.5-flash-lite' || selectedModelId === 'gemini-3.8-flash' || selectedModelId.toLowerCase().includes('flash-lite');
       const cost = isFlashLite ? settings.flashLiteCost : settings.standardCost;
       if (creditInfo.total < cost) {
         const errorMsg: ChatMessage = {

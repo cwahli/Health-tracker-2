@@ -1500,6 +1500,27 @@ import { recordUnifiedUsage, recordUnifiedTiming } from './src/utils/unifiedUsag
 
 // Initialize Gemini SDK with telemetry header
 export const getGeminiClient = () => {
+  const useVertex =
+    process.env.GOOGLE_GENAI_USE_VERTEXAI === 'true' ||
+    process.env.GOOGLE_GENAI_USE_VERTEXAI === '1';
+  if (useVertex) {
+    const project = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || '';
+    const location = process.env.GOOGLE_CLOUD_LOCATION || process.env.VERTEXAI_LOCATION || 'global';
+    if (!project) {
+      console.warn('WARNING: Vertex mode set but GOOGLE_CLOUD_PROJECT is missing.');
+    }
+    return new GoogleGenAI({
+      vertexai: true,
+      project,
+      location,
+      httpOptions: {
+        timeout: 150000,
+        headers: {
+          'User-Agent': 'vertex-sa-build',
+        },
+      },
+    } as any);
+  }
   const apiKey = getGeminiApiKey();
   if (!apiKey) {
     console.warn("WARNING: GEMINI_API_KEY / GOOGLE_API_KEY is not defined in the environment.");

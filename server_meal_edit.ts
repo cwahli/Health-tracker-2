@@ -11,6 +11,14 @@ import { applyNutrientModifiers, computeCaloriesFromMacros, computeSolubleFibre 
 import { findItemIndexInList, formatMealReceiptTable, synthesizeEditCommandsFromBreakdown, itemsMatchByName } from './server_pure_helpers.js';
 import { NUTRIENT_KEYS } from './src/utils/nutrients.js';
 import { sumItemNutrients } from './server_meal_from_finalize.js';
+import {
+  applyUserLockedSlots,
+  diffScoutToEditCommands,
+  invalidateStaleIdentityMetadata,
+  mergeLocksFromCommands,
+  reaggregateDishWeightFromComponents,
+  type UserLockedSlot,
+} from './server_edit_patch_ledger.js';
 
 export const CONDIMENT_NAME_RE = /\b(sauce|dressing|dip|mayo|mayonnaise|ketchup|vinaigrette|gravy|sambal|sos)\b/i;
 
@@ -400,7 +408,10 @@ export async function applyMealEdits(opts: {
   items: any[];
   commands: MealEditCommand[] | null | undefined;
   userMessage?: string;
-}): Promise<MealEditResult> {
+  scoutItems?: any[] | null;
+  priorLocks?: UserLockedSlot[] | null;
+  turn?: number;
+}): Promise<MealEditResult & { userLockedSlots?: UserLockedSlot[]; appliedCommands?: MealEditCommand[] }> {
   const notes: string[] = [];
   const snapshotOf = (rows: any[]) =>
     JSON.stringify(
@@ -420,7 +431,29 @@ export async function applyMealEdits(opts: {
   const original = Array.isArray(opts.items) ? opts.items.map((it) => ({ ...it, nutrients: { ...(it.nutrients || {}) } })) : [];
   let commandsIn = Array.isArray(opts.commands) ? opts.commands : [];
 
-  // Synthesize edit commands from natural language user message if model outputted empty commands
+  // Structural patch: prefer index-aligned scout↔ledger diff over empty commands.
+  // User-message synthesis remains as a secondary fallback for modifier-only turns.
+  let scoutForDiff = Array.isArray(opts.scoutItems) ? opts.scoutItems : [];
+  if (scoutForDiff.length > 0 && Array.isArray(opts.priorLocks) && opts.priorLocks.length > 0) {
+    const locked = applyUserLockedSlots({
+      scoutItems: scoutForDiff,
+      locks: opts.priorLocks,
+      userMessage: opts.userMessage,
+    });
+    scoutForDiff = locked.items;
+    notes.push(...locked.notes);
+  }
+  if (commandsIn.length === 0 && scoutForDiff.length > 0) {
+    const fromDiff = diffScoutToEditCommands({
+      priorItems: original,
+      scoutItems: scoutForDiff,
+      userMessage: opts.userMessage,
+    });
+    if (fromDiff.length > 0) {
+      commandsIn = fromDiff as MealEditCommand[];
+      notes.push(`PatchLedger: synthesized ${fromDiff.length} edit command(s) from scout↔ledger diff`);
+    }
+  }
   if (commandsIn.length === 0 && opts.userMessage) {
     const synthesized = synthesizeEditCommandsFromBreakdown({ itemsBreakdown: original }, [], opts.userMessage);
     if (synthesized && synthesized.length > 0) {
@@ -440,6 +473,8 @@ export async function applyMealEdits(opts: {
       qa: true,
       receiptTable: formatMealReceiptTable(original, nutrients, weightGrams),
       notes: ['Q&A: modificationCommand empty — meal unchanged'],
+      userLockedSlots: Array.isArray(opts.priorLocks) ? opts.priorLocks : [],
+      appliedCommands: [],
     };
   }
 
@@ -498,6 +533,8 @@ export async function applyMealEdits(opts: {
         item.lockedNutrientKeys = Array.from(new Set([...(item.lockedNutrientKeys || []), ...modRes.lockedKeys]));
       }
       const newName = raw.newItemName || applyModifierToItemName(item.name || item.canonicalDbName || itemName, modifier);
+      const purged = invalidateStaleIdentityMetadata(item, newName);
+      Object.assign(item, purged);
       item.name = newName;
       item.canonicalDbName = newName;
       item.originalName = newName;
@@ -568,7 +605,8 @@ export async function applyMealEdits(opts: {
         boundingBox2D: prev.boundingBox2D || raw.boundingBox2D || null,
         sourceImageIndex: typeof prev.sourceImageIndex === 'number' ? prev.sourceImageIndex : (raw.sourceImageIndex ?? null),
       };
-      const next = await finalizeFromEstimate(newName, grams, raw.estimate, media, prev.scoutIndex ?? nextScoutIndex(items));
+      let next = await finalizeFromEstimate(newName, grams, raw.estimate, media, prev.scoutIndex ?? nextScoutIndex(items));
+      next = invalidateStaleIdentityMetadata(next, newName);
       const isSameDishFamily = itemsMatchByName(prev.name || prev.originalName || '', newName);
       const oldIdentityNames = [prev.name, prev.canonicalDbName, prev.originalName, prev.keyword, itemName, raw.itemName]
         .filter(Boolean)
@@ -709,9 +747,7 @@ export async function applyMealEdits(opts: {
       comps[cIdx] = scaleItemNutrients(comp, newW / oldW, newW);
       item.components = comps;
       item.componentsDetailList = comps;
-      const sum = comps.reduce((acc, c) => acc + (Number(c.weightGrams) || 0), 0);
-      const ratio = sum > 0 && Number(item.weightGrams) > 0 ? sum / Number(item.weightGrams) : 1;
-      items[idx] = scaleItemNutrients({ ...item, components: comps, componentsDetailList: comps }, ratio, sum);
+      items[idx] = reaggregateDishWeightFromComponents({ ...item, components: comps, componentsDetailList: comps, hasComponents: true });
       notes.push(`update_component_weight "${raw.componentName}" ${oldW}g → ${newW}g`);
     } else if (action === 'rename_alias') {
       if (idx < 0) continue;
@@ -725,6 +761,13 @@ export async function applyMealEdits(opts: {
 
   const nutrients = sumItemNutrients(items);
   const weightGrams = Math.round(items.reduce((a, it) => a + (Number(it.weightGrams) || 0), 0));
+  const userLockedSlots = mergeLocksFromCommands({
+    priorLocks: opts.priorLocks || [],
+    commands,
+    itemsAfter: items,
+    turn: opts.turn || 1,
+    userMessage: opts.userMessage,
+  });
   return {
     items,
     nutrients,
@@ -734,6 +777,8 @@ export async function applyMealEdits(opts: {
     receiptTable: formatMealReceiptTable(items, nutrients, weightGrams),
     notes,
     beforeItems: original,
+    userLockedSlots,
+    appliedCommands: commands,
   };
 }
 

@@ -1,0 +1,8 @@
+model: gemini/gemini-3.8-flash
+reasoning-effort: high
+auto-commits: false
+dirty-commits: false
+attribute-author: false
+attribute-committer: false
+gitignore: false
+map-tokens: 1024

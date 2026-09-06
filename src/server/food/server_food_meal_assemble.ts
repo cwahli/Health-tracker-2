@@ -316,23 +316,34 @@ export function syncEditScoutItems(args: EditScoutSyncArgs): any[] {
     );
     const newName = bItem.canonicalDbName || bItem.name || sItem?.originalName || 'Item';
     if (sItem) {
-      return {
+      const renamed = newName !== (sItem.originalName || sItem.keyword || sItem.name);
+      const synced: any = {
         ...sItem,
+        name: newName,
         originalName: newName,
         keyword: newName,
         estimatedWeightGrams: bItem.weightGrams || sItem.estimatedWeightGrams,
         packGrams: bItem.packGrams ?? sItem.packGrams ?? null,
-        components: bItem.components || sItem.components,
+        components: bItem.componentsDetailList || bItem.components || sItem.components,
         componentsDetailList: bItem.componentsDetailList || sItem.componentsDetailList,
         nutrients: bItem.nutrients || sItem.nutrients,
+        ingredientsList: bItem.ingredientsList || (renamed ? [newName] : sItem.ingredientsList),
+        visualIngredients: bItem.visualIngredients || (renamed ? [newName] : sItem.visualIngredients),
         sourceImageIndex: bItem.sourceImageIndex ?? sItem.sourceImageIndex,
         boundingBox2D: !isDummyBoundingBox(bItem.boundingBox2D)
           ? (bItem.boundingBox2D ?? sItem.boundingBox2D)
           : (sItem.boundingBox2D ?? bItem.boundingBox2D),
       };
+      if (renamed) {
+        delete synced.preCalcNutrients;
+        delete synced.genericEnglishName;
+        delete synced.englishName;
+      }
+      return synced;
     }
     return {
       scoutIndex: bItem.scoutIndex,
+      name: newName,
       originalName: newName,
       keyword: newName,
       estimatedWeightGrams: bItem.weightGrams || 100,
@@ -340,6 +351,8 @@ export function syncEditScoutItems(args: EditScoutSyncArgs): any[] {
       components: bItem.components || [],
       componentsDetailList: bItem.componentsDetailList || [],
       nutrients: bItem.nutrients || {},
+      ingredientsList: [newName],
+      visualIngredients: [newName],
       sourceImageIndex: bItem.sourceImageIndex ?? null,
       boundingBox2D: bItem.boundingBox2D ?? null,
       cookingMethod: bItem.cookingMethod || 'raw',

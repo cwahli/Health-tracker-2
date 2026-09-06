@@ -110,7 +110,7 @@ export function deductAgentCredits(profile: UserProfile, modelId: string, custom
     ? settings.quotaAdmin 
     : (userType === 'Demo' ? settings.quotaDemo : settings.quotaStandard);
 
-  const isFlashLite = modelId === 'gemini-3.5-flash-lite' || modelId.toLowerCase().includes('flash-lite');
+  const isFlashLite = modelId === 'gemini-3.5-flash-lite' || modelId === 'gemini-3.8-flash' || modelId.toLowerCase().includes('flash-lite');
   const cost = isFlashLite ? settings.flashLiteCost : settings.standardCost;
 
   const updated = { ...profile };

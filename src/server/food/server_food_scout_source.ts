@@ -19,6 +19,7 @@ import {
   priorScoutHasLabelLocks,
   REFINE_SCALE_ONLY_LOG,
 } from '../../../server_refine_scale.js';
+import { applyUserLockedSlots, type UserLockedSlot } from '../../../server_edit_patch_ledger.js';
 
 export interface ScoutInheritArgs {
   isModifySession: boolean;
@@ -384,22 +385,28 @@ export function applyScoutResultState(args: ScoutResultStateArgs): {
   };
 }
 
-export interface ScoutMealMergeArgs {
-  activeMealItemsBreakdown: any[];
-  visionScoutItems: any[];
-  onLog: (msg: string) => void;
-}
-
 /** Merges fresh scout dishes into the same meal behind existing items (index offset). */
 export interface ScoutMealMergeArgs {
   activeMealItemsBreakdown: any[];
   visionScoutItems: any[];
   onLog: (msg: string) => void;
   isModify?: boolean;
+  userLockedSlots?: UserLockedSlot[] | null;
+  userMessage?: string;
 }
 
 export function mergeScoutIntoActiveMeal(args: ScoutMealMergeArgs): any[] {
-  const { activeMealItemsBreakdown, visionScoutItems, onLog, isModify } = args;
+  const { activeMealItemsBreakdown, onLog, isModify } = args;
+  let visionScoutItems = args.visionScoutItems;
+  if (isModify && args.userLockedSlots && args.userLockedSlots.length > 0) {
+    const locked = applyUserLockedSlots({
+      scoutItems: visionScoutItems || [],
+      locks: args.userLockedSlots,
+      userMessage: args.userMessage,
+    });
+    for (const n of locked.notes) onLog(n);
+    visionScoutItems = locked.items;
+  }
   if (!visionScoutItems || visionScoutItems.length === 0) {
     return activeMealItemsBreakdown || [];
   }
@@ -431,6 +438,8 @@ export function mergeScoutIntoActiveMeal(args: ScoutMealMergeArgs): any[] {
         ? newcomer.components
         : (priorMatch?.components || priorMatch?.componentsDetailList || undefined);
 
+      const scoutW = Number(newcomer.estimatedWeightGrams ?? newcomer.weightGrams);
+      const adoptedWeight = (Number.isFinite(scoutW) && scoutW > 0) ? scoutW : undefined;
       return {
         ...priorMatch,
         ...newcomer,
@@ -438,6 +447,7 @@ export function mergeScoutIntoActiveMeal(args: ScoutMealMergeArgs): any[] {
         boundingBox2D: resolvedBox,
         sourceImageIndex: resolvedImg,
         ...(resolvedComponents ? { components: resolvedComponents } : {}),
+        ...(adoptedWeight != null ? { estimatedWeightGrams: adoptedWeight, weightGrams: adoptedWeight } : {}),
       };
     });
   }

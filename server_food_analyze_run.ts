@@ -129,6 +129,11 @@ import { finalizeDishLedger } from './server_dish_finalize.js';
 import { evaluateMealGate } from './server_meal_gate.js';
 import { buildMealFromFinalizeLedgers } from './server_meal_from_finalize.js';
 import { applyMealEdits } from './server_meal_edit.js';
+import { getInMemoryServerJob } from './serverJobs.js';
+import {
+  buildEditExpertDispatch,
+  formatLockedSlotsForPrompt,
+} from './server_edit_patch_ledger.js';
 import { matchBrandMenu, isPackagedBindItem } from './server_brand_match.js';
 import { classifyDishAtomic } from './server_dish_classify.js';
 import { t, interpolate, withScoutLanguage } from './src/utils/i18n.js';
@@ -256,6 +261,22 @@ export async function runFoodAnalyze(req: any, res: any) {
     // One modal = one document. If this modal already has a meal, every later
     // submit (text, extra photos, refine) is edit/merge — never a second new_log.
     const isExplicitModify = !!hasActiveMealDocument;
+    // Hydrate patch-ledger locks from prior turn result / in-memory job when the client omits them.
+    if (activeMeal && (!Array.isArray(activeMeal.userLockedSlots) || activeMeal.userLockedSlots.length === 0)) {
+      const memJob = req.body.jobId ? getInMemoryServerJob(String(req.body.jobId)) : null;
+      const priorLocks =
+        req.body?.pendingFoodLog?.userLockedSlots ||
+        req.body?.activeMeal?.mealBuild?.userLockedSlots ||
+        req.body?.priorUserLockedSlots ||
+        memJob?.userLockedSlots ||
+        memJob?.clean_result?.pendingFoodLog?.userLockedSlots ||
+        memJob?.clean_result?.userLockedSlots ||
+        null;
+      if (Array.isArray(priorLocks) && priorLocks.length > 0) {
+        activeMeal.userLockedSlots = priorLocks;
+        addDebugLog(`[PatchLedger] hydrated ${priorLocks.length} lock(s) from prior result/job`);
+      }
+    }
     addDebugLog(`[Edit Gate] userSelectedMode="${req.body.userSelectedMode || 'undefined'}" | userExplicitlySelectedEditMode=${userExplicitlySelectedEditMode} | activeMeal=${!!activeMeal} | hasImages=${!!(imagePayloads && imagePayloads.length > 0)} | message="${(message || '').substring(0, 50)}" | isExplicitModify=${isExplicitModify} | refineSkip=${refineDecision.skip} reason=${refineDecision.reason}`);
     const isWeightModification = isPureWeightModification || refineDecision.skip;
     const compareOnly = req.body.compareOnly === true;
@@ -300,9 +321,10 @@ export async function runFoodAnalyze(req: any, res: any) {
         if (isModifySession && (activeMeal || (req.body.activeScoutItems && req.body.activeScoutItems.length > 0))) {
           const priorMealItems = activeMeal?.itemsBreakdown || activeMeal?.items || req.body.activeScoutItems || [];
           const priorSummary = priorMealItems.map((it: any) => `${it.originalName || it.keyword || it.name || 'Dish'} (${it.estimatedWeightGrams || it.weightGrams || 100}g): ${JSON.stringify(it.components || it.foods || [])}`).join('; ');
+          const lockPrompt = formatLockedSlotsForPrompt(activeMeal?.userLockedSlots);
           scoutPromptText = `The user is modifying/refining an existing logged meal.\n` +
             `User modification instruction: "${(message || '').trim()}".\n` +
-            `Prior Meal Dishes: ${priorSummary}.\n\n` +
+            `Prior Meal Dishes: ${priorSummary}.\n` + (lockPrompt || '') + `\n` +
             `CRITICAL INSTRUCTIONS FOR MODIFICATION:\n` +
             `1. INGREDIENT & DISH SUBSTITUTION/RENAME: If the user changes, corrects, or substitutes an ingredient or dish (e.g. 'ikan is nila', 'unsweetened tea', 'chicken instead of beef'), you MUST update the dishName, genericEnglishName, and foods[].foodName to the new substituted food (e.g. 'Ikan Nila' / 'tilapia' instead of 'Cakalang' / 'Cendro') and adjust the nutrients (calories, protein, fat, carbs, sugar) accordingly.\n` +
             `2. SEPARATE DISHES: Keep distinct plated items, sides, and beverages as separate distinct dishes in the dishes[] array. Never merge drinks into food dishes.\n` +
@@ -365,7 +387,7 @@ export async function runFoodAnalyze(req: any, res: any) {
         scoutOriginalQueries.push(...scoutState.queriesToSearch);
         visionScoutRanAndReturnedItems = scoutState.visionScoutRanAndReturnedItems;
         if (hasActiveMealDocument && Array.isArray(activeMeal.itemsBreakdown) && activeMeal.itemsBreakdown.length > 0) {
-          visionScoutItems = mergeScoutIntoActiveMeal({ activeMealItemsBreakdown: activeMeal.itemsBreakdown, visionScoutItems, onLog: addDebugLog, isModify: isModifySession });
+          visionScoutItems = mergeScoutIntoActiveMeal({ activeMealItemsBreakdown: activeMeal.itemsBreakdown, visionScoutItems, onLog: addDebugLog, isModify: isModifySession, userLockedSlots: activeMeal?.userLockedSlots, userMessage: message });
         }
         logScoutItemSummaries(visionScoutItems, addDebugLog);
         emitStageUsage('scout');
@@ -971,12 +993,19 @@ export async function runFoodAnalyze(req: any, res: any) {
       }
       {
         let editCommands = backfillEditCommandEstimates(rawParsed);
+        const scoutTurnNumberForEdit = accumulatedDispatches.filter((d: any) => d.agent === 'scout').length || 1;
         const result = await applyMealEdits({
           items: Array.isArray(activeMeal.itemsBreakdown) ? activeMeal.itemsBreakdown : [],
           commands: Array.isArray(editCommands) ? editCommands : [],
           userMessage: message || '',
+          scoutItems: visionScoutItems || preCalculatedItems || [],
+          priorLocks: activeMeal?.userLockedSlots || [],
+          turn: scoutTurnNumberForEdit,
         });
         for (const note of result.notes) addDebugLog(`[Single-Path Edit] ${note}`);
+        if (Array.isArray((result as any).appliedCommands) && (result as any).appliedCommands.length > 0) {
+          editCommands = (result as any).appliedCommands;
+        }
         if (result.changed) {
           appendEditHistoryEntry({ activeMeal, message, result, onLog: addDebugLog });
         }
@@ -1029,6 +1058,10 @@ export async function runFoodAnalyze(req: any, res: any) {
         activeMeal.healthImpact = finalMessage;
 
         addDebugLog('[MealBuild] edit-path (finalize executor)');
+        if (Array.isArray((result as any).userLockedSlots)) {
+          activeMeal.userLockedSlots = (result as any).userLockedSlots;
+          addDebugLog(`[PatchLedger] userLockedSlots=${JSON.stringify(activeMeal.userLockedSlots)}`);
+        }
         const { mealBuild, pendingFoodLog } = attachHappyPathMealBuild({
           parsedData: activeMeal,
           jobId: req.body.jobId,
@@ -1037,11 +1070,57 @@ export async function runFoodAnalyze(req: any, res: any) {
           diningEnvironment: activeMeal?.diningEnvironment,
         });
         mealBuild.staleDietitianNarrative = false;
+        if (pendingFoodLog && Array.isArray(activeMeal.userLockedSlots)) {
+          pendingFoodLog.userLockedSlots = activeMeal.userLockedSlots;
+          (mealBuild as any).userLockedSlots = activeMeal.userLockedSlots;
+        }
+        if (req.body.jobId && Array.isArray(activeMeal.userLockedSlots)) {
+          const memJob = getInMemoryServerJob(String(req.body.jobId));
+          if (memJob) {
+            memJob.userLockedSlots = activeMeal.userLockedSlots;
+            if (memJob.clean_result && typeof memJob.clean_result === 'object') {
+              memJob.clean_result.userLockedSlots = activeMeal.userLockedSlots;
+              if (memJob.clean_result.pendingFoodLog) {
+                memJob.clean_result.pendingFoodLog.userLockedSlots = activeMeal.userLockedSlots;
+              }
+            }
+            addDebugLog(`[PatchLedger] persisted ${activeMeal.userLockedSlots.length} lock(s) on job ${req.body.jobId}`);
+          }
+        }
+        if (pendingFoodLog) {
+          pendingFoodLog.itemsBreakdown = result.items;
+          pendingFoodLog.items = result.items;
+          pendingFoodLog.nutrients = result.nutrients;
+          pendingFoodLog.weightGrams = result.weightGrams;
+        }
         const finalMeal = pendingFoodLog || activeMeal;
         const gate = evaluateMealGate(buildGateInput({
           finalMeal, jobId: req.body.jobId, photoUrl: req.body.photoUrl, imagePayloads,
           finalMessage, previousMeal: req.body.activeMeal, editCommands,
         }));
+        // Pipeline parity: emit dietitian/expert dispatch I/O on every edit turn
+        // (projector narrative — same contract as create's dietitian_answer).
+        const expertTurn = accumulatedDispatches.filter((d: any) => d.agent === 'scout').length || 1;
+        const effectiveEditCommands = (Array.isArray((result as any).appliedCommands) && (result as any).appliedCommands.length > 0)
+          ? (result as any).appliedCommands
+          : (Array.isArray(editCommands) ? editCommands : []);
+        const expertDispatch = buildEditExpertDispatch({
+          turn: expertTurn,
+          userMessage: message || '',
+          finalMessage,
+          editCommands: effectiveEditCommands,
+          items: result.items,
+          nutrients: result.nutrients,
+          skipped: false,
+          model: 'projector',
+        });
+        accumulatedDispatches.push(expertDispatch);
+        sendLog('dietitian_answer', 'dietitian', finalMessage, {
+          mode: 'modify',
+          turn: expertTurn,
+          editApplied: result.changed,
+        });
+        addDebugLog(`[PatchLedger] expert dispatch t${expertTurn}/dietitian recorded (edit parity).`);
         return res.json(buildModifyResponse({
           rawParsed, finalMessage, pendingFoodLog, activeMeal, mealBuild, gate,
           editApplied: result.changed,
