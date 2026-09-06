@@ -28,6 +28,12 @@ describe('F-8.10 shard 1 — DB-search query normalization', () => {
     expect(cleanQuery('grilled salmon')).toBe('raw salmon');
   });
 
+  it('cleanQuery translates new specific Indonesian ingredients correctly', () => {
+    expect(cleanQuery('donut malaysia matcha')).toBe('donut');
+    expect(cleanQuery('santan')).toBe('coconut milk');
+    expect(cleanQuery('tomat dan daun bawang')).toBe('tomato');
+  });
+
   it('detectChainKeyFromText matches static chain patterns and passes plain food through', () => {
     expect(detectChainKeyFromText("Sainsbury's Scottish Oats")).toBe('sainsbury');
     expect(detectChainKeyFromText('Yolk steak bowl')).toBe('yolk');

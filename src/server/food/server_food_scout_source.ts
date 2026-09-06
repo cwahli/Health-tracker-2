@@ -274,7 +274,7 @@ export function buildScoutFailureError(lastScoutErr: any, language?: unknown): E
   const raw = userSafeScoutFailureMessage(lastScoutErr);
   const msg = String(lastScoutErr?.message || '');
   const isQuota = /429|RESOURCE_EXHAUSTED|quota exceeded/i.test(msg);
-  const isUnavailable = /503|UNAVAILABLE|overloaded/i.test(msg);
+  const isUnavailable = /503|UNAVAILABLE|overloaded|fetch failed|stalled/i.test(msg);
   if (/Vision Scout Corrupted/i.test(msg)) {
     throw new Error(t(language, 'analysisFailed'));
   }

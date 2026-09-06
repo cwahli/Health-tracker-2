@@ -128,6 +128,8 @@ describe('F-8.10 shard 11 — scout result handling', () => {
   it('classifies dead scout runs into quota/503/corrupt/generic errors', () => {
     expect(() => buildScoutFailureError({ message: '429 RESOURCE_EXHAUSTED' }, 'en')).toThrow(/quota \(429\)/);
     expect(() => buildScoutFailureError({ message: '503 UNAVAILABLE' }, 'en')).toThrow(/503/);
+    expect(() => buildScoutFailureError({ message: 'fetch failed' }, 'en')).toThrow(/503/);
+    expect(() => buildScoutFailureError({ message: 'Stream stalled: Vision Scout' }, 'en')).toThrow(/503/);
     expect(() => buildScoutFailureError({ message: 'Vision Scout Corrupted output' }, 'en')).toThrow();
     expect(() => buildScoutFailureError({ message: 'weird' }, 'en')).toThrow(/re-upload/);
   });

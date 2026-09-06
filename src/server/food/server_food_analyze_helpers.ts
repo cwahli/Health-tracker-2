@@ -165,7 +165,13 @@ export const cleanQuery = (raw: string) => {
     "tempe": "tempeh",
     "tahu": "tofu",
     "kentang": "potato",
-    "wortel": "carrot"
+    "wortel": "carrot",
+    "santan": "coconut milk",
+    "tomat dan daun bawang": "tomato",
+    "tomat": "tomato",
+    "daun bawang": "scallion",
+    "donut malaysia matcha": "donut",
+    "donut malaysia": "donut"
   };
   for (const [indo, eng] of Object.entries(indonesianToEnglish)) {
     const regex = new RegExp(`\\b${indo}\\b`, 'g');
