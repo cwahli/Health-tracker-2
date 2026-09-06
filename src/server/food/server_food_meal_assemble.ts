@@ -210,6 +210,14 @@ export interface EditedMealTitleArgs {
   editCommands: any;
 }
 
+/** Baseline title for the modify path: the stable active-meal title wins over the
+ *  projector's re-derived name. On zero-image edits the scout re-observation is
+ *  ungrounded (spatial clustering can merge dishes, e.g. "Fish with Teh Tawar"),
+ *  so re-deriving the title from it corrupts a title that was correct. */
+export function resolveModifyIncomingTitle(activeMealName: any, projectorName: any): any {
+  return activeMealName || projectorName;
+}
+
 /** Resolves the post-edit meal title, syncing renames from edit commands. */
 export function resolveEditedMealTitle(args: EditedMealTitleArgs): string | null {
   const { incomingTitle, items, editCommands } = args;

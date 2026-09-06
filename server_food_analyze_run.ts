@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { formatUSDANutrients, formatOFFNutrients, extractOFFNutrientsPer100g, isFastFoodChain, buildWebSearchQuery, loosenQuery, cleanQuery, detectChainKeyFromText, scoutHasCompletePrintedLabel, enrichScoutComponentsWithMatches, buildPastMealsContext } from './src/server/food/server_food_analyze_helpers.js';
 import { computeDietitianSkipGates, decideScoutVerdict, decideScoutAdvice, buildPureScaleResponse, sumPrecalcTotals, buildCreateSkipResponse, sumSalvagedAggregates, applyPreDietitianDensityCheck, resolveCreateMealTitle } from './src/server/food/server_food_dietitian_dispatch.js';
 import { resolveFoodAnalyzeMode, buildFoodApiCalls, normalizeParsedPostDietitian } from './src/server/food/server_food_mode_routing.js';
-import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput, mapFinalizeToMeal, mergeModifyPathScoutItems, runEvaluationFinalize, assembleEvaluationComparison } from './src/server/food/server_food_meal_assemble.js';
+import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, resolveModifyIncomingTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput, mapFinalizeToMeal, mergeModifyPathScoutItems, runEvaluationFinalize, assembleEvaluationComparison } from './src/server/food/server_food_meal_assemble.js';
 import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, buildScoutFailureError, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries, applyWeightModShortcut, restoreTurnOneCandidates, computeScoutRetryDelay, applySkipScoutShortcut, checkResumedFromImageTurn, applyTextQueryShortcut, checkMenuScaleBypass, buildScoutCallArgs, runScoutRetryLoop } from './src/server/food/server_food_scout_source.js';
 import { collectImagePayloads, decideWeightRefine } from './src/server/food/server_food_session_setup.js';
 import { shouldPauseForPortionClarify, filterPortionCarryCandidates, detectDominantBrand, collectFdcHintTasks, isFdcHintRelevant, mapLedgersToPrecalcItems, applyMealModifiers } from './src/server/food/server_food_precalc.js';
@@ -986,7 +986,7 @@ export async function runFoodAnalyze(req: any, res: any) {
         activeMeal.serving_grams = result.weightGrams;
         activeMeal.receiptTable = result.receiptTable;
         activeMeal.composition = result.items.map((it: any) => it.name).join(', ');
-        const incomingTitle = rawParsed.foodData?.name;
+        const incomingTitle = resolveModifyIncomingTitle(activeMeal.name, rawParsed.foodData?.name);
         const resolvedTitle = resolveEditedMealTitle({ incomingTitle, items: result.items, editCommands });
         if (resolvedTitle) activeMeal.name = resolvedTitle;
         // Sync scoutItems (used by the "Meal composition" chips/gallery in the UI)

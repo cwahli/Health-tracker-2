@@ -5,6 +5,7 @@ import {
   backfillEditCommandEstimates,
   formatMultiItemMealTitle,
   resolveEditedMealTitle,
+  resolveModifyIncomingTitle,
   appendEditHistoryEntry,
   syncEditScoutItems,
   buildGateInput,
@@ -141,6 +142,23 @@ describe('F-8.10 shard 7 — modify-path seams', () => {
     expect(renamed).toBe('Rice and Unsweetened Tea');
     expect(resolveEditedMealTitle({ incomingTitle: 'Lunch', items: [{ name: 'Rice' }], editCommands: [] })).toBe('Lunch');
     expect(resolveEditedMealTitle({ incomingTitle: null, items: [], editCommands: [] })).toBeNull();
+  });
+
+  it('keeps the stable active-meal title over a corrupted edit-turn re-observation', () => {
+    // Live case: zero-image "drink is unsweetened" edit merged the tea into the
+    // fish dish at scout level ("Ikan Cendro Suwir Pete with Teh Tawar").
+    const incomingTitle = resolveModifyIncomingTitle(
+      'Ikan Cendro Suwir Pete, Cah Kangkung, and Es Teh Manis',
+      'Ikan Cendro Suwir Pete with Teh Tawar and Cah Kangkung',
+    );
+    expect(incomingTitle).toBe('Ikan Cendro Suwir Pete, Cah Kangkung, and Es Teh Manis');
+    const resolved = resolveEditedMealTitle({
+      incomingTitle,
+      items: [{ name: 'Ikan Cendro Suwir Pete' }, { name: 'Cah Kangkung' }, { name: 'Es Teh Tawar' }],
+      editCommands: [{ action: 'set_modifier', itemName: 'Es Teh Manis', newItemName: 'Es Teh Tawar' }],
+    });
+    expect(resolved).toBe('Ikan Cendro Suwir Pete, Cah Kangkung, and Es Teh Tawar');
+    expect(resolveModifyIncomingTitle(null, 'Projector Name')).toBe('Projector Name');
   });
 
   it('syncs scout chips with ledger renames and fabricates missing rows', () => {
