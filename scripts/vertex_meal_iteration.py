@@ -19,6 +19,7 @@ import os
 import shutil
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -203,7 +204,7 @@ def run_playwright_soak(step_name: str) -> subprocess.CompletedProcess:
 
     env_overrides = {
         "LIVE_MEAL_EDIT": "1",
-        "MEAL_PHOTO_PATH": str(MEAL_PHOTO_PATH),
+        "LIVE_MEAL_PHOTO": str(MEAL_PHOTO_PATH),
         "DEBUG_OUTPUT_DIR": str(step_out_dir),
         "PLAYWRIGHT_HTML_REPORT": str(step_out_dir / "playwright-report"),
     }
@@ -213,11 +214,10 @@ def run_playwright_soak(step_name: str) -> subprocess.CompletedProcess:
         "npx",
         "playwright",
         "test",
-        "-g",
-        "LIVE_MEAL_EDIT",
-        "--reporter=list,json",
-        f"--output={step_out_dir}/traces",
+        "prototype/tests/multiturn-meal-edit.live.spec.ts",
+        "--reporter=line",
     ]
+    env_overrides["PLAYWRIGHT_BASE_URL"] = "http://127.0.0.1:3000"
 
     res = run_command(cmd, env=env_overrides)
 
@@ -237,6 +237,22 @@ def run_playwright_soak(step_name: str) -> subprocess.CompletedProcess:
                 shutil.copy2(src_p, dest_p)
             except Exception:
                 pass
+
+    # Prefer canonical job debug export when jobId appears in logs
+    import re as _re
+    blob = (res.stdout or "") + (res.stderr or "")
+    jobs = _re.findall(r"job_[0-9]+_[A-Za-z0-9]+", blob)
+    if jobs:
+        job = jobs[-1]
+        (step_out_dir / "jobid.txt").write_text(job)
+        for fmt, ext in (("markdown", "md"), ("json", "json")):
+            try:
+                urllib.request.urlretrieve(
+                    f"http://127.0.0.1:3000/api/jobs/debug?jobId={job}&format={fmt}",
+                    step_out_dir / f"debug.{ext}",
+                )
+            except Exception as e:
+                print(f"[WARN] debug fetch {fmt}: {e}")
 
     return res
 
@@ -265,15 +281,13 @@ def diagnose_with_gemini(client_info: Optional[dict], debug_context: str) -> str
     print(f"\n[DIAGNOSE] Querying {DIAGNOSTIC_MODEL} for failure root cause & structural fix recommendation...")
 
     prompt = (
-        "You are an expert full-stack Playwright and TypeScript/React developer inspecting a failure "
-        "in the LIVE_MEAL_EDIT Playwright soak test.\n\n"
-        f"Input meal image: {MEAL_PHOTO_PATH}\n"
-        "Here are the test artifacts and logs:\n\n"
-        f"{debug_context}\n\n"
-        "Please provide a precise diagnosis:\n"
-        "1. Identify the structural root cause of any failures, UI synchronization issues, or assertion mismatches.\n"
-        "2. Provide concrete structural fixes only (architecture, race conditions, selectors, type definitions, modal handling).\n"
-        "3. Specify exact files and code adjustments required for Aider to implement."
+        "There is NO dietitian agent — only scout. Bug: debug export must include FULL raw scout "
+        "input/output on EDIT turns the same as the first meal-log turn (userPrompt, systemInstruction, "
+        "instruction, rawEmission, output). Compare turn1 vs edit turns in dispatches.\n\n"
+        f"Meal photo: {MEAL_PHOTO_PATH}\n"
+        f"Artifacts:\n{debug_context}\n\n"
+        "Output: structural root cause in debugPayload/debugRunTree/dispatch attachment, exact files, "
+        "and a concrete aider fix instruction. No regex/keyword hacks. No dietitian work."
     )
 
     diagnosis = generate_content(client_info, DIAGNOSTIC_MODEL, prompt)

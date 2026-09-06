@@ -1248,6 +1248,85 @@ export function debugReportFromJobMsg(job: any, msg: any): DebugReportInput {
     agentInstructions: result.agentInstructions || msg?.data?.agentInstructions || msg?.data?.agentResult?.agentInstructions || job?.result?.agentInstructions || job?.inputSnapshot?.agentInstructions,
     photoUrls: result.photoUrls || job?.photoUrls || msg?.data?.photoUrls || (food?.imageUrl ? [food.imageUrl] : undefined),
   };
+
+  // Ensure dispatches is an array, and attempt to augment it for 'EDIT' turns
+  // where raw LLM dispatch fields might be omitted or stripped.
+  let dispatches = debugReport.dispatches;
+  if (!Array.isArray(dispatches)) {
+    dispatches = [];
+  }
+
+  // Check if there's a scout dispatch that might be missing raw fields, or create one.
+  let scoutDispatchAugmented = false;
+  for (const d of dispatches) {
+    // Heuristic: if a dispatch has 'scout' in its agent name or ID, it's a scout dispatch
+    if ((d.agent && d.agent.toLowerCase().includes('scout')) || (d.id && d.id.toLowerCase().includes('scout'))) {
+      // If it's a scout dispatch but missing raw fields, try to augment it
+      if (!d.systemInstruction && !d.userPrompt && !d.rawEmission && !d.output && !d.instruction) {
+        const scoutInternalReasoning = debugReport.scoutInternalReasoning;
+        if (scoutInternalReasoning) {
+          d.instruction = scoutInternalReasoning;
+        }
+        const rawScout = debugReport.rawScout;
+        if (rawScout) {
+          d.rawEmission = rawScout;
+          d.output = rawScout;
+        }
+        // Also check agentInstructions for system/user prompt
+        const agentInstructions = debugReport.agentInstructions;
+        if (agentInstructions) {
+          if (typeof agentInstructions === 'string') {
+            d.systemInstruction = agentInstructions;
+          } else if (Array.isArray(agentInstructions) && agentInstructions.length > 0) {
+            d.systemInstruction = agentInstructions.join('\n');
+          } else if (typeof agentInstructions === 'object' && agentInstructions.scout) {
+            d.systemInstruction = agentInstructions.scout;
+          }
+        }
+        if (d.instruction || d.rawEmission || d.systemInstruction) {
+          scoutDispatchAugmented = true;
+          break; // Augmented an existing scout dispatch
+        }
+      } else {
+        scoutDispatchAugmented = true; // Found a complete scout dispatch
+        break;
+      }
+    }
+  }
+
+  // If no scout dispatch was found or augmented, and we have scout-specific data, create a new one.
+  if (!scoutDispatchAugmented && (debugReport.scoutItems?.length || debugReport.rawScout || debugReport.scoutInternalReasoning || debugReport.agentInstructions)) {
+    const syntheticScoutDispatch: Partial<DispatchTrace> = {
+      id: 'synthetic-scout-dispatch',
+      agent: 'scout',
+      received: new Date().toISOString(),
+    };
+
+    if (debugReport.scoutInternalReasoning) {
+      syntheticScoutDispatch.instruction = debugReport.scoutInternalReasoning;
+    }
+    if (debugReport.rawScout) {
+      syntheticScoutDispatch.rawEmission = debugReport.rawScout;
+      syntheticScoutDispatch.output = debugReport.rawScout;
+    }
+    const agentInstructions = debugReport.agentInstructions;
+    if (agentInstructions) {
+      if (typeof agentInstructions === 'string') {
+        syntheticScoutDispatch.systemInstruction = agentInstructions;
+      } else if (Array.isArray(agentInstructions) && agentInstructions.length > 0) {
+        syntheticScoutDispatch.systemInstruction = agentInstructions.join('\n');
+      } else if (typeof agentInstructions === 'object' && agentInstructions.scout) {
+        syntheticScoutDispatch.systemInstruction = agentInstructions.scout;
+      }
+    }
+
+    if (syntheticScoutDispatch.instruction || syntheticScoutDispatch.rawEmission || syntheticScoutDispatch.systemInstruction) {
+      dispatches.push(syntheticScoutDispatch as DispatchTrace);
+    }
+  }
+
+  debugReport.dispatches = dispatches;
+  return debugReport;
 }
 
 /* export function stripHeavyImages export function coldDebugR2Key debug/${uid}/${jid}.json export function buildDebugMarkdownReport */
