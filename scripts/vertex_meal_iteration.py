@@ -148,9 +148,11 @@ def generate_content(client_info: Optional[dict], model_name: str, prompt: str) 
     if not access_token:
         raise RuntimeError("Unable to acquire Vertex access token via SDK or gcloud auth.")
 
+    # Gemini 3.x on Vertex is global generateContent (not regional :predict)
+    location = "global"
     url = (
-        f"https://{location}-aiplatform.googleapis.com/v1/projects/{project}/"
-        f"locations/{location}/publishers/google/models/{model_name}:predict"
+        f"https://aiplatform.googleapis.com/v1/projects/{project}/"
+        f"locations/{location}/publishers/google/models/{model_name}:generateContent"
     )
 
     req_body = {
@@ -159,7 +161,8 @@ def generate_content(client_info: Optional[dict], model_name: str, prompt: str) 
                 "role": "user",
                 "parts": [{"text": prompt}],
             }
-        ]
+        ],
+        "generationConfig": {"maxOutputTokens": 8192, "temperature": 0.2},
     }
 
     import urllib.request
