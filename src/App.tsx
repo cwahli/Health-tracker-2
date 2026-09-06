@@ -7873,7 +7873,8 @@ export default function App() {
         selectedModelId={selectedModelId}
         onChangeModelId={setSelectedModelId}
         onJobEnqueued={(id, kind) => {
-          setActiveJobId(null);
+          // Keep activeJobId so follow-up edits reuse the same job (submissionMode=edit)
+          // and accumulate dispatches for multi-turn debug. Front Desk already keeps its job open.
           setActiveTab('food');
         }}
         onClose={async () => {

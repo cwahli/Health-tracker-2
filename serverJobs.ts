@@ -494,6 +494,12 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         resolvedDbCandidates: payload.resolvedDbCandidates || [],
         imageDates: payload.imageDates || [],
         ingestTrace: prebuiltIngestTrace,
+        // Multi-turn debug: forward prior agent dispatches into food-analyze so
+        // accumulatedDispatches keeps every turn's full I/O (not just the latest).
+        dispatches: (payload as any).dispatches
+          || existingMemJob?.clean_result?.dispatches
+          || (existingMemJob as any)?.dispatches
+          || undefined,
       };
       // Note: priorLogsUrl is kept in payload separately for log stitching in persistSucceeded.
 

@@ -2789,7 +2789,8 @@ ${logsText}`);
             userActionBreadcrumbs: (window.__userActionBreadcrumbs || []).filter((b: any) => !b.jobId || b.jobId === currentJobId),
             lastUserAction: window.__lastUserAction || { action: 'chat_submit', prompt: userContent || textToSend, timestamp: new Date().toISOString() },
             sessionEvents: getSessionLog(currentJobId).length > 0 ? getSessionLog(currentJobId) : (job?.sessionEvents || undefined),
-            explicitFoodTags: explicitFoodTags.length > 0 ? explicitFoodTags : undefined
+            explicitFoodTags: explicitFoodTags.length > 0 ? explicitFoodTags : undefined,
+          dispatches: (job as any)?.result?.dispatches || (job as any)?.dispatches || (job as any)?.clean_result?.dispatches || prunedMealForJob?.dispatches || undefined
           };
           setActiveJobScope(currentJobId);
           fetchSubmitWithRetry('/api/jobs/submit', submitPayload)
@@ -3376,8 +3377,11 @@ ${logsText}`);
             id: `food_${Date.now()}`,
             imageUrl: tempImages.length > 0 ? tempImages[0] : resData.data.imageUrl,
             imageUrls: tempImages.length > 0 ? tempImages : resData.data.imageUrls,
-            chatTranscript: currentTranscript
+            chatTranscript: currentTranscript,
+            dispatches: resData.dispatches || resData.data?.dispatches || lastFoodLog?.dispatches,
+            jobId: jobId || executorInput.jobId || lastFoodLog?.jobId
           };
+          if (resData.dispatches) assistantMsg.data.dispatches = resData.dispatches;
           assistantMsg.data.pendingFoodLog = newFoodLog;
           assistantMsg.pendingFoodLog = newFoodLog;
         } else if (resData.mode === 'evaluation') {
