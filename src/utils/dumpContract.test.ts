@@ -191,6 +191,34 @@ describe('Canonical JSON Run Tree & Contract Scorer (Q-8 / F-8.13)', () => {
     expect(fails.length).toBe(0);
   });
 
+  it('food pack AnalyzeFinished count = 1 PASSes when succeeded with a single AnalyzeFinished', () => {
+    const tree = buildCanonicalRunTree({
+      pack: 'food',
+      jobId: 'job_analyze_finished_once',
+      status: 'succeeded',
+      backendLogs: 'AnalyzeFinished succeeded',
+      pendingFoodLog: { nutrients: { calories: 420 } },
+    });
+
+    const law = tree.contract.find((e) => e.law === 'AnalyzeFinished count = 1');
+    expect(law?.result).toBe('PASS');
+    expect(classifyDump(tree).some((f) => f.id === 'ANALYZE_FINISHED_ONCE')).toBe(false);
+  });
+
+  it('flags stall/503 without a 3.1 hop as MISSING on food pack', () => {
+    const tree = buildCanonicalRunTree({
+      pack: 'food',
+      jobId: 'job_stall_no_hop',
+      status: 'failed',
+      backendLogs: '[error] Stream stalled: Vision Scout (gemini-3.5-flash-lite) produced no tokens for 90s after the prompt. [error] 503 Service Unavailable',
+    });
+
+    const stallLaw = tree.contract.find(e => e.law === 'Stall/503/quota -> 3.1 hop, same job');
+    expect(stallLaw?.result).toBe('FAIL');
+    expect(stallLaw?.fault).toBe('MISSING');
+    expect(classifyDump(tree).some(f => f.id === 'STALL_FALLBACK_SAME_JOB')).toBe(true);
+  });
+
   it('detects dialog on_card kcal mismatch with ledger', () => {
     const tree = buildCanonicalRunTree({
       jobId: 'job_card_mismatch',
@@ -248,6 +276,24 @@ describe('Canonical JSON Run Tree & Contract Scorer (Q-8 / F-8.13)', () => {
     expect(fails.some(f => f.id === 'UI_COMPOSER_CONTROLS')).toBe(true);
   });
 
+  it('flags missing composer control as MISSING (RELIABILITY §11 WRONG_COUNT)', () => {
+    const tree = buildCanonicalRunTree({
+      jobId: 'job_missing_composer_control',
+      status: 'running',
+      dialogInventory: {
+        open: true,
+        composer: { photo: 1, send: 0 }, // send control missing
+      },
+    });
+
+    const composerLaw = tree.contract.find(e => e.law === 'Composer controls count = 1');
+    expect(composerLaw?.result).toBe('FAIL');
+    expect(composerLaw?.fault).toBe('MISSING');
+
+    const fails = classifyDump(tree);
+    expect(fails.some(f => f.id === 'UI_COMPOSER_CONTROLS')).toBe(true);
+  });
+
   it('detects dispatch missing model or latency telemetry', () => {
     const tree = buildCanonicalRunTree({
       jobId: 'job_missing_telemetry',
@@ -279,6 +325,22 @@ describe('Canonical JSON Run Tree & Contract Scorer (Q-8 / F-8.13)', () => {
     expect(handoffLaw?.result).toBe('PASS');
   });
 
+  it('food pack without handoffChain marks handoff law n/a (not FAIL)', () => {
+    const tree = buildCanonicalRunTree({
+      pack: 'food',
+      jobId: 'job_food_no_handoff',
+      status: 'succeeded',
+      backendLogs: '[Budget] Finalized ledger: 420 kcal\nAnalyzeFinished succeeded',
+      pendingFoodLog: { nutrients: { calories: 420 } },
+    });
+
+    expect(tree.handoffs.length).toBe(0);
+    const handoffLaw = tree.contract.find(e => e.law === 'Handoff from/to + same jobId if transfer');
+    expect(handoffLaw?.result).toBe('n/a');
+    expect(handoffLaw?.fault).toBe('none');
+    expect(classifyDump(tree).some(f => f.id === 'HANDOFF_CONTRACT_MISSING')).toBe(false);
+  });
+
   it('detects QUEUE_LIE when submit reports queued instead of running', () => {
     const tree = buildCanonicalRunTree({
       jobId: 'job_queue_lie',
@@ -292,6 +354,19 @@ describe('Canonical JSON Run Tree & Contract Scorer (Q-8 / F-8.13)', () => {
 
     const fails = classifyDump(tree);
     expect(fails.some(f => f.id === 'SUBMIT_NOT_QUEUED')).toBe(true);
+  });
+
+  it('passes Submit JSON running when submit reports status=running', () => {
+    const tree = buildCanonicalRunTree({
+      jobId: 'job_submit_running',
+      status: 'running',
+      backendLogs: 'Submit JSON running: status=running',
+    });
+
+    const submitLaw = tree.contract.find(e => e.law === 'Submit JSON running');
+    expect(submitLaw?.result).toBe('PASS');
+    expect(submitLaw?.fault).toBe('none');
+    expect(classifyDump(tree).some(f => f.id === 'SUBMIT_NOT_QUEUED')).toBe(false);
   });
 
   it('receptionist pack marks food ledger/scout laws n/a (Q-8.5)', () => {
@@ -323,6 +398,142 @@ describe('Canonical JSON Run Tree & Contract Scorer (Q-8 / F-8.13)', () => {
     expect(law?.result).toBe('FAIL');
     expect(law?.fault).toBe('WRONG_PLACE');
     expect(classifyDump(tree).some(f => f.id === 'SCOUT_ON_NON_FOOD')).toBe(true);
+  });
+
+  it('medical pack without scout tape marks Meal scout tape off non-food pack PASS (Q-8.5 contrast)', () => {
+    const tree = buildCanonicalRunTree({
+      pack: 'medical',
+      jobId: 'job_med_no_scout',
+      status: 'succeeded',
+      extractedData: [{ name: 'HDL', value: 50 }],
+      scoutItems: [],
+    });
+
+    const law = tree.contract.find(e => e.law === 'Meal scout tape off non-food pack');
+    expect(law?.result).toBe('PASS');
+    expect(law?.fault).toBe('none');
+    expect(classifyDump(tree).some(f => f.id === 'SCOUT_ON_NON_FOOD')).toBe(false);
+  });
+
+  it('multi-dispatch telemetry golden (RELIABILITY §11)', () => {
+    const complete = buildCanonicalRunTree({
+      jobId: 'job_dispatch_ok',
+      status: 'succeeded',
+      dispatches: [
+        { id: 't1/scout', agent: 'scout', model: 'gemini-3.5-flash-lite', latency_ms: 1200 },
+        { id: 't1/dietitian', agent: 'dietitian', model: 'gemini-3.5-flash-lite', latency_ms: 2100 },
+        { id: 't1/dietitian-2', agent: 'dietitian', model: 'gemini-3.5-flash-lite', latency_ms: 900 },
+      ],
+    });
+
+    const completeLaw = complete.contract.find(e => e.law === 'Each dispatch has model + latency_ms');
+    expect(completeLaw?.result).toBe('PASS');
+    expect(classifyDump(complete).some(f => f.id === 'DISPATCH_SIGNALS_MISSING')).toBe(false);
+
+    const missing = buildCanonicalRunTree({
+      jobId: 'job_dispatch_missing',
+      status: 'succeeded',
+      dispatches: [
+        { id: 't1/scout', agent: 'scout', model: 'gemini-3.5-flash-lite', latency_ms: 1200 },
+        { id: 't1/dietitian', agent: 'dietitian', model: 'gemini-3.5-flash-lite' },
+        { id: 't1/dietitian-2', agent: 'dietitian', model: 'gemini-3.5-flash-lite', latency_ms: 900 },
+      ],
+    });
+
+    const missingLaw = missing.contract.find(e => e.law === 'Each dispatch has model + latency_ms');
+    expect(missingLaw?.result).toBe('FAIL');
+    expect(missingLaw?.fault).toBe('MISSING');
+    expect(classifyDump(missing).some(f => f.id === 'DISPATCH_SIGNALS_MISSING')).toBe(true);
+  });
+
+  it('food pack with finalized ledger passes Matrix calc matches ledger', () => {
+    const tree = buildCanonicalRunTree({
+      pack: 'food',
+      jobId: 'job_matrix_calc_ok',
+      status: 'succeeded',
+      backendLogs: '[Budget] Finalized ledger: 420 kcal',
+      pendingFoodLog: { nutrients: { calories: 420 } },
+    });
+
+    const law = tree.contract.find(e => e.law === 'Matrix calc matches ledger');
+    expect(law?.result).toBe('PASS');
+    expect(classifyDump(tree).some(f => f.id === 'DEBUG_MATCHES_LOG')).toBe(false);
+  });
+
+  it('food pack pendingFoodLog + succeeded keeps pendingFoodLog -> succeeded before R2 non-FAIL without R2 evidence', () => {
+    const tree = buildCanonicalRunTree({
+      pack: 'food',
+      jobId: 'job_pending_foodlog_succeeded_no_r2',
+      status: 'succeeded',
+      pendingFoodLog: { nutrients: { calories: 512 } },
+    });
+
+    const law = evaluateContracts(tree).find((e) => e.law === 'pendingFoodLog -> succeeded before R2');
+    const result = law?.result;
+    const fault = law?.fault;
+
+    expect(law).toBeDefined();
+    expect(result).not.toBe('FAIL');
+    expect(['PASS', 'n/a']).toContain(result);
+    expect(fault).not.toBe('WRONG_TIME');
+    if (result === 'n/a') {
+      expect(fault).toBe('none');
+    }
+  });
+
+  it('returns contract laws for a minimal succeeded food tree with pendingFoodLog', () => {
+    const tree = buildCanonicalRunTree({
+      pack: 'food',
+      jobId: 'job_minimal_food_contracts',
+      status: 'succeeded',
+      pendingFoodLog: { nutrients: { calories: 420 } },
+    });
+
+    const evals = evaluateContracts(tree);
+    expect(evals.length).toBeGreaterThan(0);
+    expect(evals.some((e) => e.law === 'AnalyzeFinished count = 1')).toBe(true);
+    expect(evals.some((e) => e.result === 'PASS' || e.result === 'n/a')).toBe(true);
+  });
+
+  it('classifyDump returns empty fails for a clean succeeded food tree with dispatch telemetry', () => {
+    const tree = buildCanonicalRunTree({
+      pack: 'food',
+      jobId: 'job_clean_food_tree',
+      status: 'succeeded',
+      backendLogs: '[Budget] Finalized ledger: 420 kcal\nAnalyzeFinished succeeded',
+      pendingFoodLog: { nutrients: { calories: 420, protein: 30 } },
+      dispatches: [
+        { id: 't1/scout', agent: 'scout', model: 'gemini-3.5-flash-lite', latency_ms: 1200 },
+        { id: 't1/dietitian', agent: 'dietitian', model: 'gemini-3.5-flash-lite', latency_ms: 2100 },
+      ],
+    });
+
+    const fails = classifyDump(tree);
+    expect(fails.some((f) => f.id === 'DISPATCH_SIGNALS_MISSING')).toBe(false);
+    expect(fails.length).toBe(0);
+  });
+});
+
+describe('parseDebugMarkdown — identity jobId extraction', () => {
+  it('extracts jobId from a minimal Identity markdown fixture', () => {
+    const facts = parseDebugMarkdown(`
+## Identity
+- **Job ID:** \`job_identity_probe\`
+- **Status:** \`running\`
+`);
+
+    expect(facts.jobId).toBe('job_identity_probe');
+    expect(Array.isArray(classifyDump(facts))).toBe(true);
+  });
+});
+
+describe('dumpContract — empty facts', () => {
+  it('classifyDump on empty facts object returns an array (possibly with misses) and does not throw', () => {
+    let fails: unknown;
+    expect(() => {
+      fails = classifyDump({} as any);
+    }).not.toThrow();
+    expect(Array.isArray(fails)).toBe(true);
   });
 });
 

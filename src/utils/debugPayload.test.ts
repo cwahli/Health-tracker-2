@@ -6,6 +6,7 @@ import {
   coldDebugR2Key,
   COLD_DEBUG_LOG,
 } from './debugPayload';
+import { buildCanonicalRunTree } from './debugRunTree';
 
 describe('debugPayload', () => {
   it('strips base64 images and keeps https urls', () => {
@@ -18,6 +19,28 @@ describe('debugPayload', () => {
     expect(String(out.photoUrl)).toMatch(/image omitted/);
     expect(out.keep).toContain('https://');
     expect(String(out.nested.imageUrl)).toMatch(/image omitted/);
+  });
+
+  it('leaves non-image strings and numbers untouched', () => {
+    const input = {
+      message: 'plain text',
+      count: 42,
+      nested: { label: 'hello', value: 0 },
+    };
+    expect(stripHeavyImages(input)).toEqual(input);
+  });
+
+  it('recurses into arrays, omits base64 photoUrl, and keeps https photoUrl', () => {
+    const base64 = 'data:image/png;base64,' + 'B'.repeat(9000);
+    const out = stripHeavyImages({
+      items: [
+        { photoUrl: base64 },
+        { photoUrl: 'https://cdn.example.com/photos/ok.jpg' },
+      ],
+    });
+
+    expect(String(out.items[0].photoUrl)).toMatch(/image omitted/);
+    expect(out.items[1].photoUrl).toContain('https://');
   });
 
   it('builds markdown report with macros and logs, no base64', () => {
@@ -48,6 +71,100 @@ describe('debugPayload', () => {
   it('cold key is user-scoped', () => {
     expect(coldDebugR2Key('job_abc', 'user_1')).toBe('debug/user_1/job_abc.json');
     expect(COLD_DEBUG_LOG).toContain('ColdDebug');
+  });
+
+  it('coldDebugR2Key returns a stable unknown jobId key for empty jobId', () => {
+    expect(coldDebugR2Key('', 'user_1')).toBe('debug/user_1/unknown.json');
+    expect(coldDebugR2Key('')).toBe('debug/anonymous/unknown.json');
+  });
+
+  it('coldDebugR2Key sanitizes weird characters in jobId/userId to underscore-safe path segments', () => {
+    const key = coldDebugR2Key('job/../weird?id', 'user/../weird@email');
+    expect(key).toBe('debug/user_.._weird@email/job____weird_id.json');
+  });
+
+  it('markdown dispatch heading matches canonical tree.dispatches length after enrichment', () => {
+    const input = {
+      jobId: 'job_dispatch_parity',
+      status: 'succeeded',
+      message: 'Parity check',
+      dispatches: [
+        { id: 't1/scout', agent: 'scout' },
+        { id: 't2/scout', agent: 'scout' },
+        { id: 't3/scout', agent: 'scout' },
+      ],
+    };
+
+    const tree = buildCanonicalRunTree(input);
+    const md = buildDebugMarkdownReport(input);
+    const heading = md.match(/## 📡 Agent Dispatches \((\d+)\)/);
+
+    expect(heading).not.toBeNull();
+    expect(Number(heading![1])).toBe(tree.dispatches.length);
+    expect(tree.dispatches.length).toBe(3);
+  });
+
+  it('renders exactly one per-dispatch heading for each of 3 prior dispatches', () => {
+    const input = {
+      jobId: 'job_dispatch_heading_parity',
+      status: 'succeeded',
+      message: 'Heading parity',
+      dispatches: [
+        { id: 't1/scout', agent: 'scout' },
+        { id: 't2/scout', agent: 'scout' },
+        { id: 't3/scout', agent: 'scout' },
+      ],
+    };
+
+    const tree = buildCanonicalRunTree(input);
+    const md = buildDebugMarkdownReport(input);
+    const headings = md.match(/^### Dispatch /gm) || [];
+
+    expect(tree.dispatches.length).toBe(3);
+    expect(headings.length).toBe(tree.dispatches.length);
+  });
+
+  it('locks cold debug JSON path triple parity for three dispatches', () => {
+    const input = {
+      jobId: 'job_cold_debug_triple_parity',
+      status: 'succeeded',
+      message: 'Triple parity',
+      dispatches: [
+        { id: 't1/scout', agent: 'scout' },
+        { id: 't2/scout', agent: 'scout' },
+        { id: 't3/scout', agent: 'scout' },
+      ],
+    };
+
+    const tree = buildCanonicalRunTree(input);
+    const md = buildDebugMarkdownReport(input);
+    const heading = md.match(/## 📡 Agent Dispatches \((\d+)\)/);
+    const dispatchHeadings = md.match(/^### Dispatch /gm) || [];
+
+    expect(heading).not.toBeNull();
+    expect(Number(heading![1])).toBe(3);
+    expect(dispatchHeadings.length).toBe(3);
+    expect(tree.dispatches.length).toBe(3);
+  });
+
+  it('uses tree.dispatches.length for heading when empty prior dispatches and logs invent scout only', () => {
+    const input = {
+      jobId: 'job_empty_dispatches_invented_scout',
+      status: 'succeeded',
+      message: 'Invented scout parity',
+      dispatches: [],
+      backendLogs: '[Vision Scout] ok\n[UnifiedLLM-Prompt:scout] System Instruction:\nYou are scout.',
+    };
+
+    const tree = buildCanonicalRunTree(input);
+    const md = buildDebugMarkdownReport(input);
+    const heading = md.match(/## 📡 Agent Dispatches \((\d+)\)/);
+    const dispatchHeadings = md.match(/^### Dispatch /gm) || [];
+
+    expect(tree.dispatches.length).toBe(1);
+    expect(heading).not.toBeNull();
+    expect(Number(heading![1])).toBe(tree.dispatches.length);
+    expect(dispatchHeadings.length).toBe(tree.dispatches.length);
   });
 
   it('renders vision scout internal reasoning, bounding boxes, and sticker labels', () => {
@@ -261,6 +378,75 @@ describe('debugPayload', () => {
     expect(md).toContain('- **Raw Emission (Verbatim Output):**');
     expect(md).toContain('Grilled Salmon');
     expect(md).toContain('Observed grilled salmon with asparagus.');
+  });
+
+  it('does not invent food scout dispatches for receptionist pack', () => {
+    const md = buildDebugMarkdownReport({
+      jobId: 'job_receptionist_no_scout',
+      status: 'succeeded',
+      pack: 'receptionist',
+      agentType: 'front_desk',
+      message: 'Please schedule my lab review.',
+      backendLogs: '[Vision Scout] should not create food dispatch\n[UnifiedLLM-Prompt:scout] System Instruction:\nfood scout',
+    });
+
+    expect(md).toContain('### Dispatch fd/front_desk');
+    expect(md).not.toMatch(/### Dispatch t\d+\/scout/);
+    expect(md).not.toContain('### Dispatch t1/resolver');
+  });
+
+  it('uses a medical dispatch heading for medical pack instead of scout', () => {
+    const md = buildDebugMarkdownReport({
+      jobId: 'job_medical_pack_dispatch',
+      status: 'succeeded',
+      pack: 'medical',
+      agentType: 'medical',
+      message: 'Review my lab panel.',
+      dispatches: [{ id: 't1/medical', agent: 'medical' }],
+      backendLogs: '[UnifiedLLM-Prompt:scout] System Instruction:\nfood scout',
+    });
+
+    const dispatchHeadings = md.match(/^### Dispatch .*$/gm) || [];
+    expect(dispatchHeadings.some((h) => /medical/i.test(h))).toBe(true);
+    expect(dispatchHeadings.every((h) => !/scout/i.test(h))).toBe(true);
+  });
+
+  it('maps minimal job-like input into markdown DebugReportInput fields', () => {
+    const input = debugReportFromJobMsg({ id: 'job_minimal', status: 'succeeded' }, {});
+    expect(input.jobId).toBeTruthy();
+    expect(input.jobId).toBe('job_minimal');
+    expect(input.status).toBe('succeeded');
+  });
+
+  it('renders identity/jobId heading with zero dispatches and empty food without crashing', () => {
+    const md = buildDebugMarkdownReport({
+      jobId: 'job_zero_dispatch_empty_food',
+      status: 'succeeded',
+      dispatches: [],
+      pendingFoodLog: {},
+    });
+
+    expect(md).toContain('# Health Tracker —');
+    expect(md).toContain('**Job ID:** `job_zero_dispatch_empty_food`');
+    expect(md).not.toContain('## 📡 Agent Dispatches');
+  });
+
+  it('includes Contract table section heading when canonical run tree produces contract evals', () => {
+    const input = {
+      jobId: 'job_contract_evals_heading',
+      status: 'succeeded',
+      backendLogs: '[Budget] Finalized ledger: 520 kcal',
+      pendingFoodLog: {
+        name: 'Chicken Rice',
+        nutrients: { calories: 520 },
+      },
+    };
+
+    const tree = buildCanonicalRunTree(input);
+    const md = buildDebugMarkdownReport(input);
+
+    expect(tree.contract.length).toBeGreaterThan(0);
+    expect(md).toContain('## ⚖️ Contract Evaluation');
   });
 });
 

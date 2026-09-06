@@ -644,6 +644,10 @@ function isCanonicalRunTree(obj: any): obj is CanonicalRunTree {
 export function classifyDump(factsOrTree: DumpFacts | CanonicalRunTree): OracleFail[] {
   const fails: OracleFail[] = [];
 
+  if (!factsOrTree || typeof factsOrTree !== 'object') {
+    return fails;
+  }
+
   if (isCanonicalRunTree(factsOrTree)) {
     const tree = factsOrTree;
     const logs = tree.backendLogs || '';
@@ -806,7 +810,7 @@ export function classifyDump(factsOrTree: DumpFacts | CanonicalRunTree): OracleF
       doNot: 'G1 expected.json',
     });
   }
-  if (facts.headingDup.length) {
+  if (Array.isArray(facts.headingDup) && facts.headingDup.length) {
     fails.push({
       class: 'DEBUG_DUP',
       id: 'HEADING_ONCE',
