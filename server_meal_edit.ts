@@ -402,7 +402,21 @@ export async function applyMealEdits(opts: {
   userMessage?: string;
 }): Promise<MealEditResult> {
   const notes: string[] = [];
-  const originalSnapshot = JSON.stringify(Array.isArray(opts.items) ? opts.items.map((i) => [i.name, i.weightGrams, i.calories ?? i.nutrients?.calories, i.nutrients?.addedSugar ?? 0]) : []);
+  const snapshotOf = (rows: any[]) =>
+    JSON.stringify(
+      Array.isArray(rows)
+        ? rows.map((i) => [
+            i.name,
+            i.canonicalDbName || i.name || null,
+            i.weightGrams,
+            i.calories ?? i.nutrients?.calories,
+            i.nutrients?.addedSugar ?? 0,
+            i.count ?? null,
+            i.pieceCount ?? null,
+          ])
+        : [],
+    );
+  const originalSnapshot = snapshotOf(opts.items);
   const original = Array.isArray(opts.items) ? opts.items.map((it) => ({ ...it, nutrients: { ...(it.nutrients || {}) } })) : [];
   let commandsIn = Array.isArray(opts.commands) ? opts.commands : [];
 
@@ -606,6 +620,10 @@ export async function applyMealEdits(opts: {
       const parent = items[idx];
       const comps = componentsOf(parent);
       const into = Array.isArray(raw.into) ? raw.into : [];
+      if (into.length === 0) {
+        notes.push(`split_item "${itemName}" ignored (empty into)`);
+        continue;
+      }
       const created: any[] = [];
       const claimedGrams = new Map<string, number>();
 
@@ -711,7 +729,7 @@ export async function applyMealEdits(opts: {
     items,
     nutrients,
     weightGrams,
-    changed: JSON.stringify(items.map((i) => [i.name, i.weightGrams, i.calories ?? i.nutrients?.calories, i.nutrients?.addedSugar ?? 0])) !== originalSnapshot,
+    changed: snapshotOf(items) !== originalSnapshot,
     qa: false,
     receiptTable: formatMealReceiptTable(items, nutrients, weightGrams),
     notes,

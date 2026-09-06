@@ -13,17 +13,65 @@ const expectResultContainsIfPresent = async (page: Page, pattern: RegExp, timeou
 
 test.describe('Live multiturn meal edit (demo)', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    const LOGIN_TIMEOUT = 45000;
+    const HOME_SELECTORS = ['#nav-tab-home', 'button:has-text("Beranda")', '[role="tab"]:has-text("Beranda")'];
+    const DEMO_SELECTORS = ['#demo-login-btn', 'button:has-text("Demo")', 'button:has-text("Sign in as demo")'];
 
-    const homeTab = first(page, ['#nav-tab-home', 'button:has-text("Beranda")', '[role="tab"]:has-text("Beranda")']);
-    const demoBtn = first(page, ['#demo-login-btn', 'button:has-text("Demo")', 'button:has-text("Sign in as demo")']);
+    try {
+      await page.goto('/', { waitUntil: 'networkidle', timeout: 15000 });
+    } catch {
+      try {
+        await page.goto('/', { waitUntil: 'load', timeout: 15000 });
+      } catch {
+        await page.goto('/', { waitUntil: 'domcontentloaded', timeout: LOGIN_TIMEOUT });
+      }
+    }
 
-    await Promise.race([
-      homeTab.waitFor({ state: 'attached', timeout: 20000 }),
-      demoBtn.waitFor({ state: 'visible', timeout: 20000 }).then(() => demoBtn.click({ timeout: 5000 })),
+    const homeTab = first(page, HOME_SELECTORS);
+    const demoBtn = first(page, DEMO_SELECTORS);
+
+    await Promise.any([
+      homeTab.waitFor({ state: 'attached', timeout: LOGIN_TIMEOUT }),
+      demoBtn.waitFor({ state: 'visible', timeout: LOGIN_TIMEOUT }),
     ]).catch(() => {});
 
-    await expect(homeTab).toBeAttached({ timeout: 20000 });
+    const isHomeAttached = async () =>
+      homeTab.waitFor({ state: 'attached', timeout: 1000 }).then(() => true).catch(() => false);
+
+    if (await isHomeAttached()) {
+      await expect(homeTab).toBeAttached({ timeout: LOGIN_TIMEOUT });
+      return;
+    }
+
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      if (!(await demoBtn.isVisible().catch(() => false))) {
+        await Promise.any([
+          homeTab.waitFor({ state: 'attached', timeout: 10000 }),
+          demoBtn.waitFor({ state: 'visible', timeout: 10000 }),
+        ]).catch(() => {});
+      }
+
+      if (await isHomeAttached()) {
+        await expect(homeTab).toBeAttached({ timeout: LOGIN_TIMEOUT });
+        return;
+      }
+
+      if (await demoBtn.isVisible().catch(() => false)) {
+        await demoBtn.click({ timeout: 10000 }).catch(() => {});
+      }
+
+      try {
+        await homeTab.waitFor({ state: 'attached', timeout: 15000 });
+        await expect(homeTab).toBeAttached({ timeout: 15000 });
+        return;
+      } catch {
+        if (attempt === 3) {
+          throw new Error('Demo login did not reach home tab after 3 attempts');
+        }
+      }
+    }
+
+    await expect(homeTab).toBeAttached({ timeout: LOGIN_TIMEOUT });
   });
 
   test('demo shell loads and food chat opens (multiturn-meal-edit.live)', async ({ page }) => {

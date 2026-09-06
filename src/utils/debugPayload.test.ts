@@ -9,6 +9,38 @@ import {
 import { buildCanonicalRunTree } from './debugRunTree';
 
 describe('debugPayload', () => {
+  it('buildDebugMarkdownReport includes Identity heading', () => {
+    const md = buildDebugMarkdownReport({
+      jobId: 'job_identity_heading',
+      status: 'succeeded',
+      pack: 'food',
+    });
+
+    expect(md).toMatch(/^# Health Tracker .* Report$/m);
+    expect(md).toContain('**Job ID:** `job_identity_heading`');
+    expect(md).toContain('**Status:** succeeded');
+    expect(md).toContain('**Pack:** food');
+  });
+
+  it('buildDebugMarkdownReport includes a Dispatches or similar heading when dispatches provided', () => {
+    const md = buildDebugMarkdownReport({
+      jobId: 'job_dispatch_heading',
+      status: 'succeeded',
+      message: 'Dispatch heading check',
+      dispatches: [{ id: 't1/scout', agent: 'scout' }],
+    });
+
+    expect(md).toMatch(/## 📡 Agent Dispatches|Dispatches/i);
+  });
+
+  it('passes through nullish and primitive values without throwing', () => {
+    expect(() => stripHeavyImages(null)).not.toThrow();
+    expect(() => stripHeavyImages(undefined)).not.toThrow();
+    expect(stripHeavyImages(null)).toBeNull();
+    expect(stripHeavyImages(undefined)).toBeUndefined();
+    expect(stripHeavyImages(42)).toBe(42);
+  });
+
   it('strips base64 images and keeps https urls', () => {
     const heavy = 'data:image/jpeg;base64,' + 'A'.repeat(9000);
     const out = stripHeavyImages({
@@ -21,12 +53,31 @@ describe('debugPayload', () => {
     expect(String(out.nested.imageUrl)).toMatch(/image omitted/);
   });
 
+  it('stripHeavyImages on shallow object with imageBase64 long string redacts it; sibling keys preserved', () => {
+    const heavy = 'data:image/png;base64,' + 'A'.repeat(9000);
+    const out = stripHeavyImages({
+      imageBase64: heavy,
+      title: 'Meal photo',
+      count: 42,
+    });
+
+    expect(String(out.imageBase64)).toMatch(/image omitted/);
+    expect(out.title).toBe('Meal photo');
+    expect(out.count).toBe(42);
+  });
+
   it('leaves non-image strings and numbers untouched', () => {
     const input = {
       message: 'plain text',
       count: 42,
       nested: { label: 'hello', value: 0 },
     };
+    expect(stripHeavyImages(input)).toEqual(input);
+  });
+
+  it('handles Buffer-like non-image objects without throwing', () => {
+    const input = { type: 'Buffer', data: [1, 2] };
+    expect(() => stripHeavyImages(input)).not.toThrow();
     expect(stripHeavyImages(input)).toEqual(input);
   });
 
@@ -73,6 +124,24 @@ describe('debugPayload', () => {
     expect(COLD_DEBUG_LOG).toContain('ColdDebug');
   });
 
+  it('coldDebugR2Key includes both jobId and userId when provided, and jobId when userId is omitted', () => {
+    expect(coldDebugR2Key('abc', 'user1')).toContain('abc');
+    expect(coldDebugR2Key('abc', 'user1')).toContain('user1');
+    expect(coldDebugR2Key('abc')).toContain('abc');
+  });
+
+  it('coldDebugR2Key locks debug prefix, jobId inclusion, and stable null/undefined userId', () => {
+    const key = coldDebugR2Key('job_shape_1', 'user_shape');
+    expect(key.startsWith('debug/')).toBe(true);
+    expect(key).toContain('job_shape_1');
+    expect(key).toBe('debug/user_shape/job_shape_1.json');
+
+    expect(() => coldDebugR2Key('job_shape_1', null)).not.toThrow();
+    expect(() => coldDebugR2Key('job_shape_1', undefined)).not.toThrow();
+    expect(coldDebugR2Key('job_shape_1', null)).toBe('debug/anonymous/job_shape_1.json');
+    expect(coldDebugR2Key('job_shape_1', undefined)).toBe(coldDebugR2Key('job_shape_1', null));
+  });
+
   it('coldDebugR2Key returns a stable unknown jobId key for empty jobId', () => {
     expect(coldDebugR2Key('', 'user_1')).toBe('debug/user_1/unknown.json');
     expect(coldDebugR2Key('')).toBe('debug/anonymous/unknown.json');
@@ -81,6 +150,25 @@ describe('debugPayload', () => {
   it('coldDebugR2Key sanitizes weird characters in jobId/userId to underscore-safe path segments', () => {
     const key = coldDebugR2Key('job/../weird?id', 'user/../weird@email');
     expect(key).toBe('debug/user_.._weird@email/job____weird_id.json');
+  });
+
+  it('coldDebugR2Key never returns a leading slash, never doubles slashes, and always ends in .json', () => {
+    const keys = [
+      coldDebugR2Key('job_1', 'user_1'),
+      coldDebugR2Key('/job/../weird?id', '/user/../weird@email'),
+      coldDebugR2Key('//job//1', '//user//1'),
+      coldDebugR2Key('job/../..', 'user/../..'),
+      coldDebugR2Key('', ''),
+      coldDebugR2Key('unknown', null),
+      coldDebugR2Key('unknown', undefined),
+    ];
+
+    for (const key of keys) {
+      expect(key.startsWith('/')).toBe(false);
+      expect(key).not.toContain('//');
+      expect(key.endsWith('.json')).toBe(true);
+      expect(key).toMatch(/^debug\/[^/]+\/[^/]+\.json$/);
+    }
   });
 
   it('markdown dispatch heading matches canonical tree.dispatches length after enrichment', () => {
@@ -418,6 +506,17 @@ describe('debugPayload', () => {
     expect(input.status).toBe('succeeded');
   });
 
+  it('debugReportFromJobMsg returns jobId j1 for succeeded job with msg stub', () => {
+    const input = debugReportFromJobMsg({ id: 'j1', status: 'succeeded' }, {});
+    expect(input.jobId).toBe('j1');
+  });
+
+  it('includes jobId in markdown for minimal DebugReportInput', () => {
+    const jobId = 'job_minimal_debug_markdown';
+    const md = buildDebugMarkdownReport({ jobId });
+    expect(md).toContain(jobId);
+  });
+
   it('renders identity/jobId heading with zero dispatches and empty food without crashing', () => {
     const md = buildDebugMarkdownReport({
       jobId: 'job_zero_dispatch_empty_food',
@@ -447,6 +546,33 @@ describe('debugPayload', () => {
 
     expect(tree.contract.length).toBeGreaterThan(0);
     expect(md).toContain('## ⚖️ Contract Evaluation');
+  });
+
+  it('recursively strips nested heavy image fields while preserving non-image data', () => {
+    const heavy = `data:image/png;base64,${'A'.repeat(9000)}`;
+    const out = stripHeavyImages({
+      nested: {
+        imageBase64: heavy,
+        photoDataUrl: heavy,
+        ok: true,
+        arr: [{ dataUrl: heavy }],
+      },
+    });
+
+    expect(out.nested.ok).toBe(true);
+    expect(out.nested.arr).toHaveLength(1);
+    expect(String(out.nested.imageBase64)).toMatch(/image omitted/);
+    expect(String(out.nested.photoDataUrl)).toMatch(/image omitted/);
+    expect(String(out.nested.arr[0].dataUrl)).toMatch(/image omitted/);
+    expect(JSON.stringify(out)).not.toContain('AAAA');
+  });
+
+  it('extractDispatches empty => []', () => {
+    const tree = buildCanonicalRunTree({
+      jobId: 'job_extract_dispatches_empty',
+      dispatches: [],
+    });
+    expect(tree.dispatches).toEqual([]);
   });
 });
 

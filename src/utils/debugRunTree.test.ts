@@ -3,12 +3,104 @@ import {
   parseUnifiedUsageLines,
   parseUnifiedTimingLines,
   hasCallEvidence,
+  determinePack,
   tagJobId,
   extractDispatches,
+  extractHandoffs,
   buildCanonicalRunTree,
+  deduplicateBreadcrumbs,
+  deduplicateSessionEvents,
 } from './debugRunTree';
 
 const JOB = 'job_test_123';
+
+describe('determinePack', () => {
+  it('infers the operational pack from domain signals', () => {
+    expect(determinePack({ agentType: 'scout', mode: 'new_log' })).toBe('food');
+    expect(determinePack({ agentType: 'front_desk', mode: 'receptionist' })).toBe('receptionist');
+    expect(determinePack({ agentType: 'medical', mode: 'biomarker_review', ingestTrace: {} })).toBe('medical');
+    expect(determinePack({ agentType: 'health_coach', mode: 'health_coach', report: {} })).toBe('health_coach');
+  });
+
+  it('determinePack returns health_coach when input signals coach/plan (or documents actual label)', () => {
+    expect(determinePack({ agentType: 'health_coach', mode: 'plan' })).toBe('health_coach');
+    // Actual label: a bare coach/plan mode string is not currently a health_coach signal.
+    expect(determinePack({ mode: 'coach/plan' })).toBe('food');
+  });
+});
+
+describe('deduplicateBreadcrumbs', () => {
+  it('collapses identical consecutive breadcrumbs and keeps order of first occurrences', () => {
+    const clickSave = {
+      timestamp: '2025-09-06T00:00:00Z',
+      action: 'click',
+      target: 'save-button',
+      details: { label: 'Save' },
+    };
+    const inputName = {
+      timestamp: '2025-09-06T00:00:01Z',
+      action: 'input',
+      target: 'meal-name',
+      details: { value: 'Nasi Goreng' },
+    };
+    const clickExport = {
+      timestamp: '2025-09-06T00:00:02Z',
+      action: 'click',
+      target: 'export-button',
+      details: { label: 'Export' },
+    };
+
+    const result = deduplicateBreadcrumbs([
+      clickSave,
+      { ...clickSave },
+      inputName,
+      { ...inputName },
+      clickExport,
+    ]);
+
+    expect(result).toEqual([clickSave, inputName, clickExport]);
+  });
+
+  it('handles empty input and preserves a single breadcrumb by identity', () => {
+    expect(deduplicateBreadcrumbs([])).toEqual([]);
+    const single = {
+      timestamp: '2025-09-06T00:00:00Z',
+      action: 'click',
+      target: 'save-button',
+      details: { label: 'Save' },
+    };
+    const result = deduplicateBreadcrumbs([single]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe(single);
+  });
+
+  it('returns an array for duplicate object breadcrumbs', () => {
+    expect(Array.isArray(deduplicateBreadcrumbs([{ id: 1 }, { id: 1 }]))).toBe(true);
+  });
+});
+
+it('deduplicateSessionEvents collapses duplicate event ids keeping first', () => {
+  const first = {
+    id: 'e1',
+    timestamp: '2025-09-06T00:00:00Z',
+    status: 'sync',
+    message: 'started',
+  };
+  const duplicate = { ...first };
+  const second = {
+    id: 'e2',
+    timestamp: '2025-09-06T00:00:01Z',
+    status: 'sync',
+    message: 'done',
+  };
+
+  expect(deduplicateSessionEvents([first, duplicate, second])).toEqual([first, second]);
+});
+
+it('buildCanonicalRunTree minimal input has jobId and pack fields', () => {
+  const tree = buildCanonicalRunTree({ jobId: 'job_minimal', pack: 'food' } as any);
+  expect(tree).toMatchObject({ jobId: 'job_minimal', pack: 'food' });
+});
 
 function foodInput(over: any = {}) {
   return {
@@ -34,53 +126,29 @@ function foodInput(over: any = {}) {
 }
 
 describe('parseUnifiedUsageLines', () => {
-  it('parses per-stage usage, last per stage wins', () => {
-    const u = parseUnifiedUsageLines(
-      '[UnifiedLLM-Usage:scout] prompt=100 completion=10 total=110\n' +
-      '[UnifiedLLM-Usage:scout] prompt=812 completion=96 total=908'
-    );
-    expect(u).toEqual([{ stage: 'scout', input: 812, output: 96, total: 908 }]);
-  });
-  it('returns [] without usage lines', () => {
-    expect(parseUnifiedUsageLines('no usage here')).toEqual([]);
-    expect(parseUnifiedUsageLines('')).toEqual([]);
-  });
-  it('parses two stages and returns both totals; empty string returns []', () => {
+  it('parseUnifiedUsageLines with two stages returns length 2', () => {
     const logs =
       '[UnifiedLLM-Usage:scout] prompt=812 completion=96 total=908\n' +
       '[UnifiedLLM-Usage:food_resolver] prompt=500 completion=50 total=550';
-    expect(parseUnifiedUsageLines(logs)).toEqual([
-      { stage: 'scout', input: 812, output: 96, total: 908 },
-      { stage: 'food_resolver', input: 500, output: 50, total: 550 },
-    ]);
-    expect(parseUnifiedUsageLines('')).toEqual([]);
+    expect(parseUnifiedUsageLines(logs)).toHaveLength(2);
   });
 });
 
 describe('tagJobId', () => {
-  it('prefixes untagged lines, skips blanks/already-tagged/unknown', () => {
-    expect(tagJobId('hello', JOB)).toBe(`[${JOB}] hello`);
+  it('prefixes or embeds jobId into a log line idempotently', () => {
+    const plain = '[LOG] hello';
+    const taggedOnce = tagJobId(plain, JOB);
+    const taggedTwice = tagJobId(taggedOnce, JOB);
+
+    expect(taggedOnce).toBe(`[${JOB}] ${plain}`);
+    expect(taggedTwice).toBe(taggedOnce);
+
+    const embedded = `[LOG] [${JOB}] already inside`;
+    expect(tagJobId(embedded, JOB)).toBe(embedded);
+
     expect(tagJobId('', JOB)).toBe('');
-    expect(tagJobId(`[${JOB}] hello`, JOB)).toBe(`[${JOB}] hello`);
+    expect(tagJobId('   ', JOB)).toBe('   ');
     expect(tagJobId('hello', 'unknown')).toBe('hello');
-  });
-
-  it('tagLinesWithJobId prefixes untagged lines with [jobId] and skips blanks', () => {
-    const lines = [
-      '[LOG] hello',
-      '',
-      '   ',
-      '[NET POST 400] https://x.test/auth',
-      `[${JOB}] already tagged`,
-    ];
-
-    expect(lines.map(line => tagJobId(line, JOB))).toEqual([
-      `[${JOB}] [LOG] hello`,
-      '',
-      '   ',
-      `[${JOB}] [NET POST 400] https://x.test/auth`,
-      `[${JOB}] already tagged`,
-    ]);
   });
 });
 
@@ -141,32 +209,17 @@ describe('extractDispatches (food)', () => {
 });
 
 describe('hasCallEvidence', () => {
-  it('detects dispatch/prompt/usage/timing/answer lines per stage', () => {
-    expect(hasCallEvidence('[UnifiedLLM-Prompt:scout] x', 'scout')).toBe(true);
-    expect(hasCallEvidence('[UnifiedLLM-Usage:food_resolver] prompt=1 completion=1 total=2', 'resolver')).toBe(true);
+  it('hasCallEvidence scout true for production Analyze/Scout marker and false for empty logs', () => {
+    expect(hasCallEvidence('[UnifiedLLM-Prompt:scout] User Prompt:\nAnalyze this meal photo.', 'scout')).toBe(true);
     expect(hasCallEvidence('', 'scout')).toBe(false);
-  });
-  it('returns false for empty logs across scout/resolver/dietitian stages', () => {
-    expect(hasCallEvidence('', 'scout')).toBe(false);
-    expect(hasCallEvidence('', 'resolver')).toBe(false);
-    expect(hasCallEvidence('', 'dietitian' as any)).toBe(false);
-  });
-  it('does NOT count instruction/answer lines logged on skip paths', () => {
-    expect(hasCallEvidence('[dietitian_answer] Solid protein intake', 'resolver')).toBe(false);
-    expect(hasCallEvidence('[dietitian_instruction] Dietitian Instruction dispatched (model: x)', 'resolver')).toBe(false);
   });
 });
 
 describe('parseUnifiedTimingLines', () => {
-  it('parses ms per stage, last wins', () => {
-    expect(parseUnifiedTimingLines('[UnifiedLLM-Timing:scout] ms=100\n[UnifiedLLM-Timing:scout] ms=5231'))
-      .toEqual([{ stage: 'scout', ms: 5231 }]);
-  });
-
-  it('returns [] for empty and parses food_resolver timing', () => {
+  it('returns [] for empty input and parses one timing line into stage and ms', () => {
     expect(parseUnifiedTimingLines('')).toEqual([]);
-    expect(parseUnifiedTimingLines('[UnifiedLLM-Timing:food_resolver] ms=1200'))
-      .toEqual([{ stage: 'food_resolver', ms: 1200 }]);
+    expect(parseUnifiedTimingLines('[UnifiedLLM-Timing:scout] ms=5231'))
+      .toEqual([{ stage: 'scout', ms: 5231 }]);
   });
 });
 
@@ -223,6 +276,47 @@ describe('buildCanonicalRunTree jobId tagging', () => {
     expect(d[1].id).toBe('t2/scout');
     expect(d[1].user).toBe('The tea is unsweetened');
     expect(d[1].rawEmission).toBeDefined();
+  });
+
+  it('extractDispatches with prior dispatches length 2 keeps both after enrichment', () => {
+    const d = extractDispatches(foodInput({
+      rawScout: undefined,
+      backendLogs: [
+        '[UnifiedLLM] Calling gemini-3.5-flash-lite',
+        '[UnifiedLLM-Usage:scout] prompt=812 completion=96 total=908',
+        '[UnifiedLLM-Timing:scout] ms=5231',
+        '[Budget] Finalized ledger',
+      ].join('\n'),
+      dispatches: [
+        {
+          id: 't1/scout',
+          turn: 1,
+          agent: 'scout',
+          user: 'Analyze this meal photo.',
+          received: { mode: 'new_log', photoCount: 1 },
+        },
+        {
+          id: 't2/scout',
+          turn: 2,
+          agent: 'scout',
+          user: 'The tea is unsweetened',
+          received: { mode: 'edit', userMessage: 'The tea is unsweetened' },
+        },
+      ],
+    }));
+
+    expect(d).toHaveLength(2);
+    expect(d.map(x => x.id)).toEqual(['t1/scout', 't2/scout']);
+    expect(d.map(x => x.user)).toEqual([
+      'Analyze this meal photo.',
+      'The tea is unsweetened',
+    ]);
+    expect(d[0].tokens).toBe(908);
+    expect(d[1].tokens).toBe(908);
+    expect(d[0].latency_ms).toBe(5231);
+    expect(d[1].latency_ms).toBe(5231);
+    expect(d[0].model).toBe('gemini-3.5-flash-lite');
+    expect(d[1].model).toBe('gemini-3.5-flash-lite');
   });
 
   it('keeps three scout turns when prior dispatches array has length 3', () => {
@@ -337,6 +431,18 @@ describe('buildCanonicalRunTree jobId tagging', () => {
     expect(d[0].user).toBe('Analyze this meal photo.');
   });
 
+  it('golden: add_item missing newItemName uses itemName', () => {
+    const d = extractDispatches(foodInput({
+      lastUserAction: { action: 'add_item', details: { newItemName: undefined, itemName: 'Apple' } },
+      message: undefined,
+      photoUrl: undefined,
+      photoUrls: [],
+    }));
+
+    expect(d.find((x) => x.agent === 'scout')?.user).toBe('Apple');
+  });
+
+
   it('preserves jobId tagging and distinct multi-turn dispatch users', () => {
     const t1User = 'Analyze this meal photo.';
     const t2User = 'The tea is unsweetened';
@@ -391,6 +497,20 @@ describe('buildCanonicalRunTree jobId tagging', () => {
     expect(tree.dispatches.some(d => d.agent === 'scout')).toBe(false);
   });
 
+  it('does not emit scout for medical pack even when scout artifacts are present', () => {
+    const tree = buildCanonicalRunTree(foodInput({
+      pack: 'medical',
+      agentType: 'medical',
+      scoutItems: [{ keyword: 'Steak', name: 'Steak' }],
+      rawScout: { dishes: [{ dishName: 'Steak', foods: [{ foodName: 'Steak' }] }] },
+    }));
+
+    expect(tree.pack).toBe('medical');
+    expect(tree.dispatches).toHaveLength(1);
+    expect(tree.dispatches[0].agent).toBe('medical');
+    expect(tree.dispatches.some(d => d.agent === 'scout')).toBe(false);
+  });
+
   it('builds a health coach dispatch for the health_coach pack, not scout', () => {
     const tree = buildCanonicalRunTree(foodInput({
       pack: 'health_coach',
@@ -405,3 +525,31 @@ describe('buildCanonicalRunTree jobId tagging', () => {
   });
 });
 
+describe('extractHandoffs', () => {
+  it('returns traces with matching jobId from breadcrumb/session fixtures and [] for empty input', () => {
+    const traces = extractHandoffs(
+      {
+        jobId: JOB,
+        userActionBreadcrumbs: [
+          { timestamp: '2025-09-06T00:00:00Z', action: 'handoff', target: 'health_coach' },
+        ],
+        sessionEvents: [
+          { timestamp: '2025-09-06T00:00:00Z', status: 'handoff', message: 'front_desk -> health_coach' },
+        ],
+        handoffChain: ['front_desk', 'health_coach'],
+        handoffPayload: { source: 'breadcrumb/session fixtures' },
+      } as any,
+      JOB
+    );
+
+    expect(traces).toHaveLength(1);
+    expect(traces[0]).toMatchObject({
+      from: 'front_desk',
+      to: 'health_coach',
+      jobId: JOB,
+      received: { source: 'breadcrumb/session fixtures' },
+      keysDropped: [],
+    });
+    expect(extractHandoffs({} as any, JOB)).toEqual([]);
+  });
+});

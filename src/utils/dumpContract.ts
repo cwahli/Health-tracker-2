@@ -44,7 +44,13 @@ export type OracleFail = {
 
 export function parseDebugMarkdown(md: string): DumpFacts {
   const text = String(md || '');
-  const jobId = text.match(/\*\*Job ID:\*\*\s*`([^`]+)`/)?.[1] || null;
+  let jobId = text.match(/\*\*Job ID:\*\*\s*`([^`]+)`/)?.[1] || null;
+
+  if (!jobId) {
+    const identitySection = text.match(/^##\s*Identity\s*\n([\s\S]*?)(?=\n##\s|$)/im)?.[1] || '';
+    jobId = identitySection.match(/^\s*[-*]?\s*jobId:\s*`?([^`\r\n]+)`?\s*$/im)?.[1]?.trim() || null;
+  }
+
   const status = text.match(/\*\*Status:\*\*\s*(\S+)/)?.[1] || null;
   const hasFinalizedLedger = /\[Budget\]\s*Finalized ledger/i.test(text);
   const dietitianFailedPermanently = /Dietitian Failed Permanently/i.test(text);

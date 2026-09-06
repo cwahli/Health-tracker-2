@@ -201,6 +201,24 @@ export function tagJobId(line: string, jobId: string): string {
   return `[${jobId}] ${s}`;
 }
 
+function resolveLastUserActionPrompt(action: any): string | undefined {
+  if (!action || typeof action !== 'object') return undefined;
+
+  const details = action.details && typeof action.details === 'object' ? action.details : {};
+  const rawPrompt = details.prompt || action.prompt;
+  if (typeof rawPrompt === 'string' && rawPrompt.trim()) {
+    const trimmed = rawPrompt.trim();
+    if (trimmed !== 'Download Debug Logs' && trimmed !== 'Flag issue') return trimmed;
+  }
+
+  if (String(action.action || '').toLowerCase() === 'add_item') {
+    const name = details.newItemName || details.itemName;
+    if (typeof name === 'string' && name.trim()) return name.trim();
+  }
+
+  return undefined;
+}
+
 /** Extract or construct handoff records */
 export function extractHandoffs(input: DebugReportInput, jobId: string): HandoffTrace[] {
   if (Array.isArray(input.handoffs) && input.handoffs.length > 0) {
@@ -251,8 +269,8 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
         if (copy.received?.userMessage) {
           copy.user = copy.received.userMessage;
         } else if (idx === 0) {
-          const actionPrompt = input.lastUserAction?.details?.prompt || input.lastUserAction?.prompt;
-          if (actionPrompt && actionPrompt !== 'Download Debug Logs' && actionPrompt !== 'Flag issue') {
+          const actionPrompt = resolveLastUserActionPrompt(input.lastUserAction);
+          if (actionPrompt) {
             copy.user = actionPrompt;
           } else if (input.photoUrl || (input.photoUrls && input.photoUrls.length > 0) || (copy.received && (copy.received as any).photoCount > 0)) {
             copy.user = 'Analyze this meal photo.';
@@ -302,10 +320,8 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
   const dispatches: DispatchTrace[] = [];
 
   if (pack === 'receptionist') {
-    const rawActionPrompt = input.lastUserAction?.details?.prompt || input.lastUserAction?.prompt;
-    const userPrompt = (rawActionPrompt && rawActionPrompt !== 'Download Debug Logs' && rawActionPrompt !== 'Flag issue')
-      ? rawActionPrompt
-      : (input.message || undefined);
+    const rawActionPrompt = resolveLastUserActionPrompt(input.lastUserAction);
+    const userPrompt = rawActionPrompt || (input.message || undefined);
     dispatches.push({
       id: 'fd/front_desk',
       parent: null,
@@ -324,10 +340,8 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
   }
 
   if (pack === 'medical' || pack === 'health_coach') {
-    const rawActionPrompt = input.lastUserAction?.details?.prompt || input.lastUserAction?.prompt;
-    const userPrompt = (rawActionPrompt && rawActionPrompt !== 'Download Debug Logs' && rawActionPrompt !== 'Flag issue')
-      ? rawActionPrompt
-      : (input.message || undefined);
+    const rawActionPrompt = resolveLastUserActionPrompt(input.lastUserAction);
+    const userPrompt = rawActionPrompt || (input.message || undefined);
     dispatches.push({
       id: pack === 'medical' ? 't1/medical' : 't1/health_coach',
       parent: null,
@@ -364,10 +378,9 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
     const promptSplitRegex = /\[UnifiedLLM-Prompt:scout\] System Instruction:\n/g;
     const matches = Array.from(logs.matchAll(promptSplitRegex));
 
-    const rawActionPrompt = input.lastUserAction?.details?.prompt || input.lastUserAction?.prompt;
-    const defaultUserPrompt = (rawActionPrompt && rawActionPrompt !== 'Download Debug Logs' && rawActionPrompt !== 'Flag issue')
-      ? rawActionPrompt
-      : ((input.photoUrl || (input.photoUrls && input.photoUrls.length > 0)) ? 'Analyze this meal photo.' : (input.message || undefined));
+    const rawActionPrompt = resolveLastUserActionPrompt(input.lastUserAction);
+    const defaultUserPrompt = rawActionPrompt
+      || ((input.photoUrl || (input.photoUrls && input.photoUrls.length > 0)) ? 'Analyze this meal photo.' : (input.message || undefined));
 
     if (matches.length > 1) {
       // Multi-turn run detected in logs!

@@ -516,6 +516,132 @@ describe('golden', () => {
     ];
   }
 
+  it('golden: replace_identity preserves scoutIndex and sourceImageIndex on the replaced row', async () => {
+    const result = await applyMealEdits({
+      items: cakalangKangkungPlate(),
+      userMessage: 'the cakalang is ikan nila',
+      commands: [{
+        action: 'replace_identity',
+        itemName: 'Cakalang',
+        newItemName: 'Ikan Nila',
+        estimate: { protein: 20, carbohydrates: 0, totalFat: 5, saturatedFat: 1, sodium: 50, cookingMethod: 'grilled', foodType: 'protein' },
+      }],
+    });
+
+    const fish = result.items.find((it: any) => it.name === 'Ikan Nila');
+    const kangkung = result.items.find((it: any) => it.name === 'Kangkung');
+
+    expect(fish).toBeTruthy();
+    expect(kangkung).toBeTruthy();
+    expect(fish?.scoutIndex).toBe(0);
+    expect(fish?.sourceImageIndex).toBe(0);
+    expect(kangkung?.scoutIndex).toBe(1);
+    expect(kangkung?.sourceImageIndex).toBe(1);
+    expect(result.changed).toBe(true);
+    expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
+  });
+
+  it('golden: replace_identity may change dbSource to estimated but keeps photo indices', async () => {
+    const items = cakalangKangkungPlate().map((it) => ({
+      ...it,
+      dbSource: it.scoutIndex === 0 ? 'fdc' : it.dbSource,
+      boundingBox2D: it.scoutIndex === 0 ? [10, 20, 70, 80] : it.boundingBox2D,
+    }));
+
+    const result = await applyMealEdits({
+      items,
+      userMessage: 'the cakalang is ikan nila',
+      commands: [{
+        action: 'replace_identity',
+        itemName: 'Cakalang',
+        newItemName: 'Ikan Nila',
+        estimate: { protein: 20, carbohydrates: 0, totalFat: 5, saturatedFat: 1, sodium: 50, cookingMethod: 'grilled', foodType: 'protein' },
+      }],
+    });
+
+    const fish = result.items.find((it: any) => it.scoutIndex === 0);
+    const kangkung = result.items.find((it: any) => it.scoutIndex === 1);
+
+    expect(fish).toBeTruthy();
+    expect(kangkung).toBeTruthy();
+    expect(fish?.name).toBe('Ikan Nila');
+    expect(fish?.dbSource).toBe('estimated');
+    expect(fish?.sourceImageIndex).toBe(0);
+    expect(fish?.boundingBox2D).toEqual([10, 20, 70, 80]);
+    expect(kangkung?.sourceImageIndex).toBe(1);
+  });
+
+  it('golden: replace_item aliases to replace_identity for fish rename', async () => {
+    const result = await applyMealEdits({
+      items: cakalangKangkungPlate(),
+      userMessage: 'the cakalang is ikan nila',
+      commands: [{
+        action: 'replace_item',
+        itemName: 'Cakalang',
+        newItemName: 'Ikan Nila',
+        estimate: { protein: 20, carbohydrates: 0, totalFat: 5, saturatedFat: 1, sodium: 50, cookingMethod: 'grilled', foodType: 'protein' },
+      }],
+    });
+
+    const fish = result.items.find((it: any) => it.scoutIndex === 0);
+    const kangkung = result.items.find((it: any) => it.scoutIndex === 1);
+
+    expect(fish).toBeTruthy();
+    expect(kangkung).toBeTruthy();
+    expect(fish?.name).toBe('Ikan Nila');
+    expect(fish?.canonicalDbName).toBe('Ikan Nila');
+    expect(fish?.originalName).toBe('Ikan Nila');
+    expect(fish?.keyword).toBe('Ikan Nila');
+    expect(fish?.scoutIndex).toBe(0);
+    expect(fish?.sourceImageIndex).toBe(0);
+    expect(fish?.weightGrams).toBe(100);
+    expect(fish?.calories).toBeGreaterThan(0);
+    expect(result.items).toHaveLength(2);
+    expect(result.changed).toBe(true);
+    expect(result.notes.some((n) => /replace_identity "Cakalang"/.test(n))).toBe(true);
+    expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
+  });
+
+  it('golden: replace_identity keeps boundingBox2D array equality with the prior row', async () => {
+    const boundingBox2D = [12, 18, 86, 92];
+    const items = [
+      {
+        scoutIndex: 0,
+        name: 'Cakalang',
+        canonicalDbName: 'Cakalang',
+        originalName: 'Cakalang',
+        keyword: 'Cakalang',
+        weightGrams: 100,
+        calories: 120,
+        protein: 25,
+        carbohydrates: 0,
+        totalFat: 2,
+        nutrients: { calories: 120, protein: 25, carbohydrates: 0, totalFat: 2, saturatedFat: 0.5, sodium: 300 },
+        sourceImageIndex: 0,
+        boundingBox2D,
+        dbSource: 'estimated',
+      },
+    ];
+
+    const result = await applyMealEdits({
+      items,
+      userMessage: 'the cakalang is ikan nila',
+      commands: [{
+        action: 'replace_identity',
+        itemName: 'Cakalang',
+        newItemName: 'Ikan Nila',
+        estimate: { protein: 20, carbohydrates: 0, totalFat: 5, saturatedFat: 1, sodium: 50, cookingMethod: 'grilled', foodType: 'protein' },
+      }],
+    });
+
+    const fish = result.items.find((it: any) => it.scoutIndex === 0);
+    expect(fish).toBeTruthy();
+    expect(fish?.name).toBe('Ikan Nila');
+    expect(fish?.boundingBox2D).toEqual(boundingBox2D);
+    expect(fish?.sourceImageIndex).toBe(0);
+    expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
+  });
+
   it('keeps replaced fish identity through a later weight-only edit on another item', async () => {
     const replaced = await applyMealEdits({
       items: cakalangKangkungPlate(),
@@ -662,6 +788,26 @@ describe('golden', () => {
     expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
   });
 
+  it('golden: split_item with empty into[] is ignored and parent remains', async () => {
+    const [plate] = steakPlate();
+    const result = await applyMealEdits({
+      items: [plate],
+      userMessage: 'split the sizzling steak plate',
+      commands: [{ action: 'split_item', itemName: plate.name, into: [] }],
+    });
+
+    expect(result.changed).toBe(false);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].name).toBe(plate.name);
+    expect(result.items[0].weightGrams).toBe(580);
+    expect(result.items[0].componentsDetailList).toHaveLength(4);
+    expect(
+      result.notes.some((n) =>
+        /split_item "Sizzling Beef and Chicken Steak".*ignored.*empty into/i.test(n),
+      ),
+    ).toBe(true);
+  });
+
   it('remove_item then set_weight on a different item does not resurrect the removed row', async () => {
     const result = await applyMealEdits({
       items: cakalangKangkungPlate(),
@@ -757,6 +903,135 @@ describe('golden', () => {
     expect(result.changed).toBe(true);
   });
 
+  it('golden: set_weight on one item keeps result.weightGrams equal to the sum of item weights', async () => {
+    const result = await applyMealEdits({
+      items: cakalangKangkungPlate(),
+      userMessage: 'make the cakalang 160g',
+      commands: [{ action: 'set_weight', itemName: 'Cakalang', newWeightGrams: 160 }],
+    });
+
+    const fish = result.items.find((it: any) => it.scoutIndex === 0);
+    const kangkung = result.items.find((it: any) => it.scoutIndex === 1);
+
+    expect(fish?.weightGrams).toBe(160);
+    expect(kangkung?.weightGrams).toBe(150);
+    expect(result.weightGrams).toBe(
+      result.items.reduce((sum: number, it: any) => sum + (Number(it.weightGrams) || 0), 0),
+    );
+    expect(result.weightGrams).toBe(310);
+    expect(result.changed).toBe(true);
+  });
+
+  it('golden: update_weight alias is normalized to set_weight and updates the portion', async () => {
+    const result = await applyMealEdits({
+      items: cakalangKangkungPlate(),
+      userMessage: 'make the kangkung 120g',
+      commands: [{ action: 'update_weight', itemName: 'Kangkung', newWeightGrams: 120 }],
+    });
+
+    const kangkung = result.items.find((it: any) => it.name === 'Kangkung');
+    expect(kangkung?.weightGrams).toBe(120);
+    expect(result.weightGrams).toBe(220);
+    expect(result.changed).toBe(true);
+    expect(result.notes.some((n) => /set_weight "Kangkung"/.test(n))).toBe(true);
+    expect(result.notes.some((n) => /skipped unknown action "update_weight"/.test(n))).toBe(false);
+    expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
+  });
+
+  it('golden: update_weight alias sets grams', async () => {
+    const result = await applyMealEdits({
+      items: cakalangKangkungPlate(),
+      userMessage: 'make the cakalang 130g',
+      commands: [{ action: 'update_weight', itemName: 'Cakalang', newWeightGrams: 130 }],
+    });
+
+    const fish = result.items.find((it: any) => it.scoutIndex === 0);
+    expect(fish?.weightGrams).toBe(130);
+    expect(result.weightGrams).toBe(280);
+    expect(result.changed).toBe(true);
+  });
+
+  it('golden: update_modifier alias is normalized to set_modifier and unsweetens tea', async () => {
+    const items = [
+      {
+        scoutIndex: 0,
+        name: 'Es Teh Manis',
+        canonicalDbName: 'Es Teh Manis',
+        originalName: 'Es Teh Manis',
+        keyword: 'Es Teh Manis',
+        weightGrams: 350,
+        foodType: 'beverage',
+        calories: 104,
+        protein: 0,
+        carbohydrates: 26,
+        totalFat: 0,
+        nutrients: { calories: 104, protein: 0, carbohydrates: 26, totalFat: 0, sugar: 26, addedSugar: 26, sodium: 5 },
+        sourceImageIndex: 0,
+      },
+    ];
+
+    const result = await applyMealEdits({
+      items,
+      userMessage: 'the tea is unsweetened',
+      commands: [{ action: 'update_modifier', itemName: 'Es Teh Manis', modifier: 'unsweetened', newItemName: 'Es Teh Tawar' }],
+    });
+
+    const tea = result.items[0];
+    expect(result.changed).toBe(true);
+    expect(tea.name).toBe('Es Teh Tawar');
+    expect(tea.canonicalDbName).toBe('Es Teh Tawar');
+    expect(tea.originalName).toBe('Es Teh Tawar');
+    expect(tea.keyword).toBe('Es Teh Tawar');
+    expect(tea.nutrients.addedSugar).toBe(0);
+    expect(tea.nutrients.calories).toBe(0);
+    expect(result.notes.some((n) => /set_modifier "Es Teh Manis"/.test(n))).toBe(true);
+    expect(result.notes.some((n) => /skipped unknown action "update_modifier"/.test(n))).toBe(false);
+    expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
+  });
+
+  it('golden: update_count alias is normalized to set_count and annotates pieces without changing grams', async () => {
+    const result = await applyMealEdits({
+      items: cakalangKangkungPlate(),
+      userMessage: 'the cakalang is 2 pieces',
+      commands: [{ action: 'update_count', itemName: 'Cakalang', count: 2 }],
+    });
+
+    const fish = result.items.find((it: any) => it.scoutIndex === 0);
+    const kangkung = result.items.find((it: any) => it.scoutIndex === 1);
+
+    expect(fish).toBeTruthy();
+    expect(kangkung).toBeTruthy();
+    expect(fish?.name).toBe('Cakalang');
+    expect(fish?.canonicalDbName).toBe('Cakalang');
+    expect(fish?.originalName).toBe('Cakalang');
+    expect(fish?.weightGrams).toBe(100);
+    expect(fish?.count).toBe(2);
+    expect(fish?.pieceCount).toBe(2);
+    expect(kangkung?.weightGrams).toBe(150);
+    expect(result.weightGrams).toBe(250);
+    expect(result.changed).toBe(true);
+    expect(result.notes.some((n) => /set_count "Cakalang"/.test(n))).toBe(true);
+    expect(result.notes.some((n) => /skipped unknown action "update_count"/.test(n))).toBe(false);
+    expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
+  });
+
+  it('golden: set_weight coerces string newWeightGrams ("150") instead of no-op', async () => {
+    const result = await applyMealEdits({
+      items: cakalangKangkungPlate(),
+      userMessage: 'make the cakalang 150g',
+      commands: [{ action: 'set_weight', itemName: 'Cakalang', newWeightGrams: '150' as any }],
+    });
+
+    const fish = result.items.find((it: any) => it.scoutIndex === 0);
+    const kangkung = result.items.find((it: any) => it.scoutIndex === 1);
+
+    expect(fish?.weightGrams).toBe(150);
+    expect(kangkung?.weightGrams).toBe(150);
+    expect(result.weightGrams).toBe(300);
+    expect(result.changed).toBe(true);
+    expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
+  });
+
   it('golden: whitespace-trimmed set_weight itemName still matches the row', async () => {
     const result = await applyMealEdits({
       items: cakalangKangkungPlate(),
@@ -768,6 +1043,21 @@ describe('golden', () => {
     expect(kangkung?.weightGrams).toBe(120);
     expect(result.weightGrams).toBe(220);
     expect(result.changed).toBe(true);
+  });
+
+  it('golden: remove_item with whitespace-trimmed itemName still removes (trim match)', async () => {
+    const result = await applyMealEdits({
+      items: cakalangKangkungPlate(),
+      userMessage: 'remove the cakalang',
+      commands: [{ action: 'remove_item', itemName: '  Cakalang  ' }],
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.items).toHaveLength(1);
+    expect(result.items.some((it: any) => /cakalang/i.test(it.name) || it.scoutIndex === 0)).toBe(false);
+    expect(result.items[0].name).toBe('Kangkung');
+    expect(result.items[0].scoutIndex).toBe(1);
+    expect(result.weightGrams).toBe(150);
   });
 
   it('golden: two set_weight commands update both portions and total weight', async () => {
@@ -973,7 +1263,7 @@ describe('golden', () => {
     expect(afterTea.changed).toBe(true);
   });
 
-  it('golden: replace_identity then set_count on Ikan Nila keeps saved portion', async () => {
+  it('golden: replace_identity then set_count on NEW fish name applies count to renamed row', async () => {
     const result = await applyMealEdits({
       items: cakalangKangkungPlate(),
       userMessage: 'the cakalang is ikan nila and it is 2 pieces',
@@ -1001,14 +1291,59 @@ describe('golden', () => {
     expect(fish?.name).toBe('Ikan Nila');
     expect(fish?.canonicalDbName).toBe('Ikan Nila');
     expect(fish?.originalName).toBe('Ikan Nila');
+    expect(fish?.keyword).toBe('Ikan Nila');
     expect(fish?.weightGrams).toBe(100);
     expect(fish?.count).toBe(2);
+    expect(fish?.pieceCount).toBe(2);
     expect(fish?.calories).toBeGreaterThan(0);
+    expect(result.items.some((it: any) => /cakalang/i.test(it.name))).toBe(false);
     expect(result.items.find((it: any) => it.scoutIndex === 1)?.weightGrams).toBe(150);
     expect(result.weightGrams).toBe(250);
   });
 
-  it('golden: split then set_weight on one child preserves sibling identity', async () => {
+  it('golden: set_count then replace_identity keeps the meal coherent and renames the fish', async () => {
+    const result = await applyMealEdits({
+      items: cakalangKangkungPlate(),
+      userMessage: 'the cakalang is 2 pieces, then the cakalang is ikan nila',
+      commands: [
+        { action: 'set_count', itemName: 'Cakalang', count: 2 },
+        {
+          action: 'replace_identity',
+          itemName: 'Cakalang',
+          newItemName: 'Ikan Nila',
+          estimate: {
+            protein: 20,
+            carbohydrates: 0,
+            totalFat: 5,
+            saturatedFat: 1,
+            sodium: 50,
+            cookingMethod: 'grilled',
+            foodType: 'protein',
+          },
+        },
+      ],
+    });
+
+    const fish = result.items.find((it: any) => it.scoutIndex === 0);
+
+    expect(fish).toBeTruthy();
+    expect(fish?.name).toBe('Ikan Nila');
+    expect(fish?.canonicalDbName).toBe('Ikan Nila');
+    expect(fish?.originalName).toBe('Ikan Nila');
+    expect(fish?.keyword).toBe('Ikan Nila');
+    expect(fish?.weightGrams).toBe(100);
+    expect(fish?.calories).toBeGreaterThan(0);
+    expect(result.items).toHaveLength(2);
+    expect(result.items.some((it: any) => /cakalang/i.test(it.name))).toBe(false);
+    expect(result.weightGrams).toBe(250);
+
+    // set_count before replace_identity may transfer or clear the piece annotation.
+    expect(fish?.count === undefined || fish?.count === null || fish?.count === 2).toBe(true);
+    expect(fish?.pieceCount === undefined || fish?.pieceCount === null || fish?.pieceCount === 2).toBe(true);
+    expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
+  });
+
+  it('golden: split then set_weight updates one child, preserves sibling, and removes parent', async () => {
     const items = [
       {
         scoutIndex: 0,
@@ -1045,6 +1380,7 @@ describe('golden', () => {
 
     expect(split.items).toHaveLength(2);
     expect(split.items.map((it: any) => it.name)).toEqual(['Fish Fillet', 'Mixed Vegetables']);
+    expect(split.items.some((it: any) => /Fish and Veg Plate/i.test(it.name))).toBe(false);
 
     const result = await applyMealEdits({
       items: split.items,
@@ -1060,6 +1396,7 @@ describe('golden', () => {
     expect(fish?.weightGrams).toBe(100);
     expect(veg?.weightGrams).toBe(180);
     expect(veg?.name).toBe('Mixed Vegetables');
+    expect(result.items.some((it: any) => /Fish and Veg Plate/i.test(it.name))).toBe(false);
     expect(result.items).toHaveLength(2);
     expect(result.weightGrams).toBe(280);
     expect(result.changed).toBe(true);
@@ -1196,6 +1533,39 @@ describe('golden', () => {
     expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
   });
 
+  it('golden: remove_item fish then add_item tempeh in the same turn leaves tempeh present and fish gone (coalesce or sequential)', async () => {
+    // "add" wording keeps remove+add sequential; without it, coalesceLegacyCommands
+    // folds them into replace_identity. Both routes must land on the same meal shape,
+    // so we assert the invariant (tempeh in, fish out) rather than provenance fields.
+    const result = await applyMealEdits({
+      items: cakalangKangkungPlate(),
+      userMessage: 'remove the cakalang and add 100g tempeh',
+      commands: [
+        { action: 'remove_item', itemName: 'Cakalang' },
+        {
+          action: 'add_item',
+          itemName: 'Tempeh',
+          newWeightGrams: 100,
+          estimate: { protein: 19, carbohydrates: 9, totalFat: 11, saturatedFat: 2, sodium: 220, cookingMethod: 'grilled', foodType: 'protein' },
+        },
+      ],
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.items).toHaveLength(2);
+    expect(result.items.some((it: any) => /cakalang/i.test(it.name))).toBe(false);
+
+    const tempeh = result.items.filter((it: any) => /tempeh/i.test(it.name));
+    expect(tempeh).toHaveLength(1);
+    expect(tempeh[0].weightGrams).toBe(100);
+    expect(tempeh[0].calories).toBeGreaterThan(0);
+
+    const kangkung = result.items.find((it: any) => /kangkung/i.test(it.name));
+    expect(kangkung?.weightGrams).toBe(150);
+    expect(result.weightGrams).toBe(250);
+    expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
+  });
+
   it('golden: add_item twice then set_weight only on the second added item keeps both and prior identities', async () => {
     const result = await applyMealEdits({
       items: cakalangKangkungPlate(),
@@ -1260,6 +1630,28 @@ describe('golden', () => {
     expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
   });
 
+  it('golden: two identical set_weight commands in one call scale the item once', async () => {
+    const result = await applyMealEdits({
+      items: cakalangKangkungPlate(),
+      userMessage: 'make the cakalang 150g',
+      commands: [
+        { action: 'set_weight', itemName: 'Cakalang', newWeightGrams: 150 },
+        { action: 'set_weight', itemName: 'Cakalang', newWeightGrams: 150 },
+      ],
+    });
+
+    const fish = result.items.find((it: any) => it.scoutIndex === 0);
+    const kangkung = result.items.find((it: any) => it.scoutIndex === 1);
+
+    expect(fish?.weightGrams).toBe(150);
+    expect(fish?.nutrients.protein).toBe(37.5);
+    expect(fish?.nutrients.totalFat).toBe(3);
+    expect(kangkung?.weightGrams).toBe(150);
+    expect(result.weightGrams).toBe(300);
+    expect(result.changed).toBe(true);
+    expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
+  });
+
   it('golden: replace_identity Cakalang to Ikan Nila then Ikan Nila to Salmon keeps final Salmon identity', async () => {
     const result = await applyMealEdits({
       items: cakalangKangkungPlate(),
@@ -1290,7 +1682,43 @@ describe('golden', () => {
     expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
   });
 
-  it('golden: unsweetened tea modifier then set_weight keeps tawar and zero added sugar', async () => {
+  it('golden: set_modifier with fuzzy itemName "the tea" falls back to beverage and renames to tawar', async () => {
+    const items = [
+      {
+        scoutIndex: 0,
+        name: 'Es Teh Manis',
+        canonicalDbName: 'Es Teh Manis',
+        originalName: 'Es Teh Manis',
+        keyword: 'Es Teh Manis',
+        weightGrams: 350,
+        foodType: 'beverage',
+        calories: 104,
+        protein: 0,
+        carbohydrates: 26,
+        totalFat: 0,
+        nutrients: { calories: 104, protein: 0, carbohydrates: 26, totalFat: 0, sugar: 26, addedSugar: 26, sodium: 5 },
+        sourceImageIndex: 0,
+      },
+    ];
+
+    const result = await applyMealEdits({
+      items,
+      userMessage: 'the tea is unsweetened',
+      commands: [{ action: 'set_modifier', itemName: 'the tea', modifier: 'unsweetened' }],
+    });
+
+    const tea = result.items[0];
+    expect(result.changed).toBe(true);
+    expect(tea.name).toBe('Es Teh Tawar');
+    expect(tea.canonicalDbName).toBe('Es Teh Tawar');
+    expect(tea.originalName).toBe('Es Teh Tawar');
+    expect(tea.keyword).toBe('Es Teh Tawar');
+    expect(tea.nutrients.addedSugar).toBe(0);
+    expect(tea.nutrients.calories).toBe(0);
+    expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
+  });
+
+  it('golden: set_modifier unsweetened then set_weight on new tawar name both stick', async () => {
     const items = [
       {
         scoutIndex: 0,
@@ -1328,6 +1756,8 @@ describe('golden', () => {
     expect(tea.nutrients.addedSugar).toBe(0);
     expect(tea.nutrients.calories).toBe(0);
     expect(result.weightGrams).toBe(250);
+    expect(result.notes.some((n) => /set_modifier "Es Teh Manis"/.test(n))).toBe(true);
+    expect(result.notes.some((n) => /set_weight "Es Teh Tawar"/.test(n))).toBe(true);
     expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
   });
 
@@ -1346,6 +1776,62 @@ describe('golden', () => {
     expect(result.weightGrams).toBe(250);
   });
 
+  it('golden: set_count 1 sets pieceCount 1', async () => {
+    const result = await applyMealEdits({
+      items: cakalangKangkungPlate(),
+      userMessage: 'the cakalang is 1 piece',
+      commands: [{ action: 'set_count', itemName: 'Cakalang', count: 1 }],
+    });
+
+    const fish = result.items.find((it: any) => it.scoutIndex === 0);
+    expect(fish).toBeTruthy();
+    expect(fish?.count).toBe(1);
+    expect(fish?.pieceCount).toBe(1);
+    expect(fish?.weightGrams).toBe(100);
+    expect(result.weightGrams).toBe(250);
+  });
+
+  it('golden: set_count on fish then empty-commands Q&A leaves count intact', async () => {
+    const counted = await applyMealEdits({
+      items: cakalangKangkungPlate(),
+      userMessage: 'the cakalang is 2 pieces',
+      commands: [{ action: 'set_count', itemName: 'Cakalang', count: 2 }],
+    });
+
+    const result = await applyMealEdits({
+      items: counted.items,
+      userMessage: 'is this meal high protein?',
+      commands: [],
+    });
+
+    const fish = result.items.find((it: any) => /cakalang/i.test(it.name));
+    expect(result.qa).toBe(true);
+    expect(result.changed).toBe(false);
+    expect(result.items).toHaveLength(2);
+    expect(fish?.count).toBe(2);
+    expect(fish?.pieceCount).toBe(2);
+    expect(fish?.weightGrams).toBe(100);
+    expect(result.weightGrams).toBe(250);
+  });
+
+  it('golden: set_count then remove_item on the same dish removes the row without crashing', async () => {
+    const result = await applyMealEdits({
+      items: cakalangKangkungPlate(),
+      userMessage: 'the cakalang is 2 pieces, then remove the cakalang',
+      commands: [
+        { action: 'set_count', itemName: 'Cakalang', count: 2 },
+        { action: 'remove_item', itemName: 'Cakalang' },
+      ],
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.items).toHaveLength(1);
+    expect(result.items.some((it: any) => /cakalang/i.test(it.name) || it.scoutIndex === 0)).toBe(false);
+    expect(result.items[0].name).toBe('Kangkung');
+    expect(result.items[0].scoutIndex).toBe(1);
+    expect(result.weightGrams).toBe(150);
+  });
+
   it('golden: set_count then set_weight on the same item keeps weight and may retain count', async () => {
     const result = await applyMealEdits({
       items: cakalangKangkungPlate(),
@@ -1353,6 +1839,30 @@ describe('golden', () => {
       commands: [
         { action: 'set_count', itemName: 'Cakalang', count: 2 },
         { action: 'set_weight', itemName: 'Cakalang', newWeightGrams: 180 },
+      ],
+    });
+
+    const fish = result.items.find((it: any) => it.scoutIndex === 0);
+    const kangkung = result.items.find((it: any) => it.scoutIndex === 1);
+
+    expect(fish).toBeTruthy();
+    expect(kangkung).toBeTruthy();
+    expect(fish?.weightGrams).toBe(180);
+    expect(fish?.count).toBe(2);
+    expect(fish?.pieceCount).toBe(2);
+    expect(kangkung?.weightGrams).toBe(150);
+    expect(result.weightGrams).toBe(330);
+    expect(result.changed).toBe(true);
+    expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
+  });
+
+  it('golden: set_weight then set_count on the same item keeps both grams and count', async () => {
+    const result = await applyMealEdits({
+      items: cakalangKangkungPlate(),
+      userMessage: 'make the cakalang 180g and it is 2 pieces',
+      commands: [
+        { action: 'set_weight', itemName: 'Cakalang', newWeightGrams: 180 },
+        { action: 'set_count', itemName: 'Cakalang', count: 2 },
       ],
     });
 
@@ -1479,6 +1989,29 @@ describe('golden', () => {
     expect(result.items).toHaveLength(0);
     expect(result.weightGrams).toBe(0);
     expect(result.items.some((it: any) => /cakalang|kangkung/i.test(it.name))).toBe(false);
+    expect(result.notes.filter((n) => /^remove_item "/.test(n))).toHaveLength(2);
+    expect(result.notes.some((n) => /remove_item "Cakalang"/.test(n))).toBe(true);
+    expect(result.notes.some((n) => /remove_item "Kangkung"/.test(n))).toBe(true);
+  });
+
+  it('golden: duplicate remove_item for the same dish removes once and notes the second miss', async () => {
+    const result = await applyMealEdits({
+      items: cakalangKangkungPlate(),
+      userMessage: 'remove the cakalang twice',
+      commands: [
+        { action: 'remove_item', itemName: 'Cakalang' },
+        { action: 'remove_item', itemName: 'Cakalang' },
+      ],
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.items).toHaveLength(1);
+    expect(result.items.some((it: any) => /cakalang/i.test(it.name))).toBe(false);
+    expect(result.items[0].name).toBe('Kangkung');
+    expect(result.items[0].weightGrams).toBe(150);
+    expect(result.weightGrams).toBe(150);
+    expect(result.notes.some((n) => /remove_item "Cakalang"/.test(n))).toBe(true);
+    expect(result.notes.some((n) => /remove_item: no item "Cakalang"/.test(n))).toBe(true);
   });
 
   it('golden: set_weight with fractional grams applies consistently without NaN', async () => {
@@ -1557,6 +2090,40 @@ describe('golden', () => {
     expect(result.changed).toBe(true);
     expect(JSON.stringify(result.items)).not.toMatch(/cakalang/i);
     expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
+  });
+
+  it('golden: coalesceLegacyCommands remove+add different names on non-composite yields replace_identity or sequential', () => {
+    const items = cakalangKangkungPlate();
+    const commands = [
+      { action: 'remove_item', itemName: 'Cakalang' },
+      {
+        action: 'add_item',
+        itemName: 'Ikan Nila',
+        newWeightGrams: 100,
+        estimate: {
+          protein: 20,
+          carbohydrates: 0,
+          totalFat: 5,
+          saturatedFat: 1,
+          sodium: 50,
+          cookingMethod: 'grilled',
+          foodType: 'protein',
+        },
+      },
+    ];
+
+    const coalesced = coalesceLegacyCommands(commands, items, 'remove the cakalang and add ikan nila');
+
+    expect(coalesced.length).toBeGreaterThanOrEqual(1);
+
+    if (coalesced.length === 1) {
+      expect(coalesced[0].action).toBe('replace_identity');
+      expect(coalesced[0].itemName).toBe('Cakalang');
+      expect(coalesced[0].newItemName).toBe('Ikan Nila');
+    } else {
+      expect(coalesced.some((c: any) => c.action === 'remove_item' && c.itemName === 'Cakalang')).toBe(true);
+      expect(coalesced.some((c: any) => c.action === 'add_item' && c.itemName === 'Ikan Nila')).toBe(true);
+    }
   });
 
   it('golden: remove_item plus add_item coalesces to replace or falls back to sequential semantics', async () => {
@@ -1680,6 +2247,40 @@ describe('golden', () => {
     expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
   });
 
+  it('golden: add_item with same name as an existing item creates a second row', async () => {
+    const result = await applyMealEdits({
+      items: cakalangKangkungPlate(),
+      userMessage: 'add another 100g cakalang',
+      commands: [{
+        action: 'add_item',
+        itemName: 'Cakalang',
+        newWeightGrams: 100,
+        estimate: {
+          protein: 25,
+          carbohydrates: 0,
+          totalFat: 2,
+          saturatedFat: 0.5,
+          sodium: 300,
+          cookingMethod: 'grilled',
+          foodType: 'protein',
+        },
+      }],
+    });
+
+    const cakalangs = result.items.filter((it: any) => /cakalang/i.test(it.name));
+
+    expect(result.changed).toBe(true);
+    expect(result.items).toHaveLength(3);
+    expect(cakalangs).toHaveLength(2);
+    expect(cakalangs[0].scoutIndex).toBe(0);
+    expect(cakalangs[1].scoutIndex).toBe(2);
+    expect(cakalangs[1].sourceImageIndex).toBeNull();
+    expect(cakalangs[1].weightGrams).toBe(100);
+    expect(cakalangs[1].calories).toBeGreaterThan(0);
+    expect(result.weightGrams).toBe(350);
+    expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
+  });
+
   it('golden: set_weight with zero or negative grams is ignored and keeps non-negative coherent weights', async () => {
     const result = await applyMealEdits({
       items: cakalangKangkungPlate(),
@@ -1705,7 +2306,7 @@ describe('golden', () => {
     expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
   });
 
-  it('golden: unknown action is ignored and leaves the meal intact', async () => {
+  it('golden: commands with only an unknown action leave the meal unchanged and note skipped unknown', async () => {
     const result = await applyMealEdits({
       items: cakalangKangkungPlate(),
       userMessage: 'do the impossible',
@@ -1713,10 +2314,28 @@ describe('golden', () => {
     });
 
     expect(result.changed).toBe(false);
+    expect(result.qa).toBe(false);
     expect(result.items).toHaveLength(2);
     expect(result.items.map((it: any) => it.name)).toEqual(['Cakalang', 'Kangkung']);
+    expect(result.items.map((it: any) => it.weightGrams)).toEqual([100, 150]);
     expect(result.weightGrams).toBe(250);
-    expect(result.notes.some((n) => /skipped unknown action/i.test(n))).toBe(true);
+    expect(result.notes).toContain('skipped unknown action "do_the_impossible"');
+  });
+
+  it('golden: set_weight on unknown itemName notes miss and leaves meal unchanged', async () => {
+    const result = await applyMealEdits({
+      items: cakalangKangkungPlate(),
+      userMessage: 'make the unknown item 120g',
+      commands: [{ action: 'set_weight', itemName: 'Unknown Item', newWeightGrams: 120 }],
+    });
+
+    expect(result.changed).toBe(false);
+    expect(result.qa).toBe(false);
+    expect(result.items).toHaveLength(2);
+    expect(result.items.map((it: any) => it.name)).toEqual(['Cakalang', 'Kangkung']);
+    expect(result.items.map((it: any) => it.weightGrams)).toEqual([100, 150]);
+    expect(result.weightGrams).toBe(250);
+    expect(result.notes.some((n) => /set_weight: no item "Unknown Item"/i.test(n))).toBe(true);
   });
 
   it('golden: replace_identity with empty newItemName keeps the prior fish name', async () => {
@@ -1768,6 +2387,50 @@ describe('golden', () => {
     expect(fish?.weightGrams).toBe(160);
     expect(result.weightGrams).toBe(310);
     expect(result.notes.some((n) => /set_weight: no item "Cakalang"/i.test(n))).toBe(true);
+  });
+
+  it('golden: set_weight then set_modifier tea both persist', async () => {
+    const items = [
+      {
+        scoutIndex: 0,
+        name: 'Es Teh Manis',
+        canonicalDbName: 'Es Teh Manis',
+        originalName: 'Es Teh Manis',
+        keyword: 'Es Teh Manis',
+        weightGrams: 350,
+        foodType: 'beverage',
+        calories: 104,
+        protein: 0,
+        carbohydrates: 26,
+        totalFat: 0,
+        nutrients: { calories: 104, protein: 0, carbohydrates: 26, totalFat: 0, sugar: 26, addedSugar: 26, sodium: 5 },
+        sourceImageIndex: 0,
+      },
+    ];
+
+    const result = await applyMealEdits({
+      items,
+      userMessage: 'the tea is 250g and tawar',
+      commands: [
+        { action: 'set_weight', itemName: 'Es Teh Manis', newWeightGrams: 250 },
+        { action: 'set_modifier', itemName: 'Es Teh Manis', modifier: 'unsweetened', newItemName: 'Es Teh Tawar' },
+      ],
+    });
+
+    const tea = result.items[0];
+    expect(tea.name).toBe('Es Teh Tawar');
+    expect(tea.canonicalDbName).toBe('Es Teh Tawar');
+    expect(tea.originalName).toBe('Es Teh Tawar');
+    expect(tea.keyword).toBe('Es Teh Tawar');
+    expect(tea.weightGrams).toBe(250);
+    expect(tea.sourceImageIndex).toBe(0);
+    expect(tea.nutrients.addedSugar).toBe(0);
+    expect(tea.nutrients.calories).toBe(0);
+    expect(result.weightGrams).toBe(250);
+    expect(result.notes.some((n) => /set_weight "Es Teh Manis"/.test(n))).toBe(true);
+    expect(result.notes.some((n) => /set_modifier "Es Teh Manis"/.test(n))).toBe(true);
+    expect(result.changed).toBe(true);
+    expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
   });
 
   it('golden: simultaneous set_weight on fish and set_modifier on tea persist together', async () => {
@@ -1847,6 +2510,52 @@ describe('golden', () => {
     expect(result.weightGrams).toBe(290);
   });
 
+  it('golden: set_weight then Q&A preserves the edited portion and total weight', async () => {
+    const weighted = await applyMealEdits({
+      items: cakalangKangkungPlate(),
+      userMessage: 'make the kangkung 120g',
+      commands: [{ action: 'set_weight', itemName: 'Kangkung', newWeightGrams: 120 }],
+    });
+
+    const result = await applyMealEdits({
+      items: weighted.items,
+      userMessage: 'is this meal high protein?',
+      commands: [],
+    });
+
+    const fish = result.items.find((it: any) => it.scoutIndex === 0);
+    const kangkung = result.items.find((it: any) => it.scoutIndex === 1);
+
+    expect(result.qa).toBe(true);
+    expect(result.changed).toBe(false);
+    expect(fish?.weightGrams).toBe(100);
+    expect(kangkung?.weightGrams).toBe(120);
+    expect(result.weightGrams).toBe(220);
+    expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
+  });
+
+  it('golden: remove_item then set_weight on removed name notes miss and does not resurrect', async () => {
+    const result = await applyMealEdits({
+      items: cakalangKangkungPlate(),
+      userMessage: 'remove the cakalang and make the cakalang 120g',
+      commands: [
+        { action: 'remove_item', itemName: 'Cakalang' },
+        { action: 'set_weight', itemName: 'Cakalang', newWeightGrams: 120 },
+      ],
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.qa).toBe(false);
+    expect(result.items).toHaveLength(1);
+    expect(result.items.some((it: any) => /cakalang/i.test(it.name) || it.scoutIndex === 0)).toBe(false);
+    expect(result.items[0].name).toBe('Kangkung');
+    expect(result.items[0].weightGrams).toBe(150);
+    expect(result.weightGrams).toBe(150);
+    expect(result.notes.some((n) => /remove_item "Cakalang"/.test(n))).toBe(true);
+    expect(result.notes.some((n) => /set_weight: no item "Cakalang"/i.test(n))).toBe(true);
+    expect(result.notes.some((n) => /set_weight "Cakalang"/.test(n))).toBe(false);
+  });
+
   it('golden: remove_item with unknown name leaves the meal unchanged', async () => {
     const result = await applyMealEdits({
       items: cakalangKangkungPlate(),
@@ -1882,6 +2591,435 @@ describe('golden', () => {
     expect(result.weightGrams).toBe(250);
     // changed may be false when the weight is unchanged; allow current Atwater recalculation behavior.
     expect([false, true]).toContain(result.changed);
+    expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
+  });
+
+  it('golden: split_item with explicit into grams conserves parent weight within 1g', async () => {
+    const [plate] = steakPlate();
+    const parentWeight = Number(plate.weightGrams) || 0;
+    const into = [
+      {
+        name: 'Beef and Chicken Steak',
+        grams: 250,
+        role: 'food',
+        estimate: {
+          protein: 48,
+          carbohydrates: 2,
+          totalFat: 36,
+          saturatedFat: 12,
+          sodium: 900,
+          cookingMethod: 'grilled',
+          foodType: 'protein',
+        },
+      },
+      {
+        name: 'Potato Wedges',
+        grams: 130,
+        role: 'food',
+        estimate: {
+          protein: 3,
+          carbohydrates: 25,
+          totalFat: 7,
+          saturatedFat: 1,
+          sodium: 180,
+          cookingMethod: 'baked',
+          foodType: 'carbohydrate',
+        },
+      },
+      {
+        name: 'Mixed Vegetables',
+        grams: 120,
+        role: 'food',
+        estimate: {
+          protein: 2,
+          carbohydrates: 10,
+          totalFat: 2,
+          saturatedFat: 0.3,
+          sodium: 120,
+          cookingMethod: 'steamed',
+          foodType: 'vegetable',
+        },
+      },
+      {
+        name: 'Black Pepper Topping',
+        grams: 80,
+        role: 'food',
+        estimate: {
+          protein: 2,
+          carbohydrates: 6,
+          totalFat: 6,
+          saturatedFat: 1,
+          sodium: 300,
+          cookingMethod: 'unknown',
+          foodType: 'condiment',
+        },
+      },
+    ];
+
+    const intoTotal = into.reduce((sum, part) => sum + Number(part.grams || 0), 0);
+    expect(Math.abs(intoTotal - parentWeight)).toBeLessThanOrEqual(1);
+
+    const result = await applyMealEdits({
+      items: [plate],
+      userMessage: 'split the sizzling steak plate into its component rows',
+      commands: [{ action: 'split_item', itemName: plate.name, into }],
+    });
+
+    expect(result.items.some((it: any) => it.name === plate.name || it.canonicalDbName === plate.name)).toBe(false);
+
+    const totalWeight = result.items.reduce((sum: number, it: any) => sum + (Number(it.weightGrams) || 0), 0);
+    expect(Math.abs(totalWeight - parentWeight)).toBeLessThanOrEqual(1);
+    expect(result.weightGrams).toBe(Math.round(totalWeight));
+    expect(result.changed).toBe(true);
+    expect(result.notes.some((n) => /split_item "Sizzling Beef and Chicken Steak"/.test(n))).toBe(true);
+    expect(result.items.every((it: any) => Number.isFinite(Number(it.weightGrams)) && Number(it.weightGrams) >= 0)).toBe(true);
+  });
+
+  it('golden: add_item with only newItemName and newWeightGrams inserts a row without estimate', async () => {
+    const result = await applyMealEdits({
+      items: cakalangKangkungPlate(),
+      userMessage: 'add 20g kerupuk',
+      commands: [{ action: 'add_item', newItemName: 'Kerupuk', newWeightGrams: 20 }],
+    });
+
+    const kerupuk = result.items.find((it: any) => /kerupuk/i.test(it.name));
+    expect(result.changed).toBe(true);
+    expect(result.items).toHaveLength(3);
+    expect(kerupuk).toBeTruthy();
+    expect(kerupuk?.weightGrams).toBe(20);
+    expect(Number.isFinite(Number(kerupuk?.calories))).toBe(true);
+    expect(Number(kerupuk?.calories)).toBeGreaterThanOrEqual(0);
+    expect(result.weightGrams).toBe(270);
+    expect(result.notes.some((n) => /add_item "Kerupuk"/.test(n))).toBe(true);
+  });
+
+  it('golden: add_item with newWeightGrams 0 falls back to default grams instead of creating a 0g row', async () => {
+    const result = await applyMealEdits({
+      items: cakalangKangkungPlate(),
+      userMessage: 'add kerupuk',
+      commands: [
+        {
+          action: 'add_item',
+          itemName: 'Kerupuk',
+          newWeightGrams: 0,
+          estimate: {
+            protein: 1,
+            carbohydrates: 14,
+            totalFat: 1,
+            saturatedFat: 0.2,
+            sodium: 120,
+            cookingMethod: 'fried',
+            foodType: 'carbohydrate',
+          },
+        },
+      ],
+    });
+
+    const kerupuk = result.items.find((it: any) => /kerupuk/i.test(it.name));
+
+    expect(result.changed).toBe(true);
+    expect(result.items).toHaveLength(3);
+    expect(kerupuk).toBeTruthy();
+    expect(kerupuk?.weightGrams).toBe(100);
+    expect(result.items.every((it: any) => Number(it.weightGrams) > 0)).toBe(true);
+    expect(Number.isFinite(Number(kerupuk?.calories))).toBe(true);
+    expect(Number(kerupuk?.calories)).toBeGreaterThanOrEqual(0);
+    expect(result.weightGrams).toBe(350);
+    expect(result.notes.some((n) => /add_item "Kerupuk" 100g/.test(n))).toBe(true);
+    expect(result.notes.some((n) => /invalid/i.test(n))).toBe(false);
+  });
+
+  it('golden: set_count with zero or negative newCount is ignored and keeps identity/weight', async () => {
+    const result = await applyMealEdits({
+      items: cakalangKangkungPlate(),
+      userMessage: 'the cakalang is 0 pieces then -1 pieces',
+      commands: [
+        { action: 'set_count', itemName: 'Cakalang', count: 0 },
+        { action: 'set_count', itemName: 'Cakalang', count: -1 },
+      ],
+    });
+
+    const fish = result.items.find((it: any) => it.scoutIndex === 0);
+    const kangkung = result.items.find((it: any) => it.scoutIndex === 1);
+
+    expect(result.changed).toBe(false);
+    expect(result.items).toHaveLength(2);
+    expect(fish?.name).toBe('Cakalang');
+    expect(fish?.canonicalDbName).toBe('Cakalang');
+    expect(fish?.originalName).toBe('Cakalang');
+    expect(fish?.weightGrams).toBe(100);
+    expect(fish?.count).toBeUndefined();
+    expect(fish?.pieceCount).toBeUndefined();
+    expect(kangkung?.name).toBe('Kangkung');
+    expect(kangkung?.weightGrams).toBe(150);
+    expect(result.weightGrams).toBe(250);
+    expect(result.notes.filter((n) => /set_count: invalid count for "Cakalang"/.test(n))).toHaveLength(2);
+    expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
+  });
+
+  it('golden: set_count with fractional count documents current accepted-positive behavior', async () => {
+    const result = await applyMealEdits({
+      items: cakalangKangkungPlate(),
+      userMessage: 'the cakalang is 2.5 pieces',
+      commands: [{ action: 'set_count', itemName: 'Cakalang', count: 2.5 }],
+    });
+
+    const fish = result.items.find((it: any) => it.scoutIndex === 0);
+    const kangkung = result.items.find((it: any) => it.scoutIndex === 1);
+
+    // Current executor only rejects `newCount <= 0`, so a fractional piece count
+    // is accepted as an annotation and does not alter already-weighed grams.
+    // If the product contract is whole pieces, reject non-integers here and in
+    // applyMealEdits().
+    expect(fish).toBeTruthy();
+    expect(fish?.name).toBe('Cakalang');
+    expect(fish?.canonicalDbName).toBe('Cakalang');
+    expect(fish?.originalName).toBe('Cakalang');
+    expect(fish?.weightGrams).toBe(100);
+    expect(fish?.count).toBe(2.5);
+    expect(fish?.pieceCount).toBe(2.5);
+    expect(kangkung?.weightGrams).toBe(150);
+    expect(result.weightGrams).toBe(250);
+    expect(result.notes.some((n) => /set_count "Cakalang".*2\.5/.test(n))).toBe(true);
+    expect(result.notes.some((n) => /set_count: invalid count for "Cakalang"/.test(n))).toBe(false);
+    expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
+  });
+
+  it('golden: add_item beverage then set_modifier unsweetened in same commands both apply (new drink becomes tawar)', async () => {
+    const result = await applyMealEdits({
+      items: cakalangKangkungPlate(),
+      userMessage: 'add es teh manis and make it tawar',
+      commands: [
+        {
+          action: 'add_item',
+          itemName: 'Es Teh Manis',
+          newWeightGrams: 350,
+          estimate: {
+            protein: 0,
+            carbohydrates: 26,
+            totalFat: 0,
+            sugar: 26,
+            addedSugar: 26,
+            sodium: 5,
+            foodType: 'beverage',
+          },
+        },
+        {
+          action: 'set_modifier',
+          itemName: 'Es Teh Manis',
+          modifier: 'unsweetened',
+          newItemName: 'Es Teh Tawar',
+        },
+      ],
+    });
+
+    const tea = result.items.find((it: any) => /teh|tea/i.test(it.name));
+    expect(tea).toBeTruthy();
+    expect(tea?.name).toBe('Es Teh Tawar');
+    expect(tea?.canonicalDbName).toBe('Es Teh Tawar');
+    expect(tea?.originalName).toBe('Es Teh Tawar');
+    expect(tea?.keyword).toBe('Es Teh Tawar');
+    expect(tea?.weightGrams).toBe(350);
+    expect(tea?.nutrients.addedSugar).toBe(0);
+    expect(tea?.nutrients.sugar).toBe(0);
+    expect(tea?.nutrients.calories).toBe(0);
+    expect(result.changed).toBe(true);
+    expect(result.items).toHaveLength(3);
+    expect(result.weightGrams).toBe(600);
+    expect(result.notes.some((n) => /add_item "Es Teh Manis"/.test(n))).toBe(true);
+    expect(result.notes.some((n) => /set_modifier "Es Teh Manis" → "?Es Teh Tawar"?/.test(n))).toBe(true);
+    expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
+  });
+
+  it('golden: set_modifier on itemName "coffee" with no coffee row notes miss and leaves meal unchanged', async () => {
+    const result = await applyMealEdits({
+      items: cakalangKangkungPlate(),
+      userMessage: 'the coffee is unsweetened',
+      commands: [{ action: 'set_modifier', itemName: 'coffee', modifier: 'unsweetened' }],
+    });
+
+    expect(result.qa).toBe(false);
+    expect(result.changed).toBe(false);
+    expect(result.items).toHaveLength(2);
+    expect(result.items.map((it: any) => it.name)).toEqual(['Cakalang', 'Kangkung']);
+    expect(result.weightGrams).toBe(250);
+    expect(result.notes.some((n) => /set_modifier: no item "coffee"/i.test(n))).toBe(true);
+    expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
+  });
+
+  it('golden: dual set_modifier different drinks: only matching tea changes when two beverages exist after add', async () => {
+    const items = [
+      {
+        scoutIndex: 0,
+        name: 'Es Teh Manis',
+        canonicalDbName: 'Es Teh Manis',
+        originalName: 'Es Teh Manis',
+        keyword: 'Es Teh Manis',
+        weightGrams: 350,
+        foodType: 'beverage',
+        calories: 104,
+        protein: 0,
+        carbohydrates: 26,
+        totalFat: 0,
+        nutrients: { calories: 104, protein: 0, carbohydrates: 26, totalFat: 0, sugar: 26, addedSugar: 26, sodium: 5 },
+        sourceImageIndex: 0,
+      },
+    ];
+
+    const result = await applyMealEdits({
+      items,
+      userMessage: 'add kopi susu and make the teh tawar',
+      commands: [
+        {
+          action: 'add_item',
+          itemName: 'Kopi Susu',
+          newWeightGrams: 200,
+          estimate: {
+            protein: 3,
+            carbohydrates: 12,
+            totalFat: 4,
+            saturatedFat: 2,
+            sodium: 40,
+            sugar: 10,
+            addedSugar: 10,
+            foodType: 'beverage',
+          },
+        },
+        {
+          action: 'set_modifier',
+          itemName: 'Es Teh Manis',
+          modifier: 'unsweetened',
+          newItemName: 'Es Teh Tawar',
+        },
+      ],
+    });
+
+    const tea = result.items.find((it: any) => /teh|tea/i.test(it.name));
+    const coffee = result.items.find((it: any) => /kopi|coffee/i.test(it.name));
+
+    expect(tea).toBeTruthy();
+    expect(coffee).toBeTruthy();
+    expect(tea.name).toBe('Es Teh Tawar');
+    expect(tea.canonicalDbName).toBe('Es Teh Tawar');
+    expect(tea.originalName).toBe('Es Teh Tawar');
+    expect(tea.keyword).toBe('Es Teh Tawar');
+    expect(tea.nutrients.addedSugar).toBe(0);
+    expect(tea.nutrients.calories).toBe(0);
+
+    expect(coffee.name).toBe('Kopi Susu');
+    expect(coffee.canonicalDbName).toBe('Kopi Susu');
+    expect(coffee.originalName).toBe('Kopi Susu');
+    expect(coffee.keyword).toBe('Kopi Susu');
+    expect(coffee.weightGrams).toBe(200);
+    expect(coffee.nutrients.calories).toBeGreaterThan(0);
+
+    expect(result.items.filter((it: any) => /tawar|unsweetened/i.test(it.name))).toHaveLength(1);
+    expect(result.weightGrams).toBe(550);
+    expect(result.changed).toBe(true);
+    expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
+  });
+
+  it('golden: rename_alias on Sempol Ayam updates identities without changing weight or nutrients', async () => {
+    const items = steakPlate();
+    const result = await applyMealEdits({
+      items,
+      userMessage: 'the sempol ayam is otak-otak',
+      commands: [
+        { action: 'rename_alias', itemName: 'Sempol Ayam', newItemName: 'Otak-Otak' },
+      ],
+    });
+
+    const row = result.items.find((it: any) => /otak/i.test(it.name));
+    expect(result.changed).toBe(true);
+    expect(result.items).toHaveLength(2);
+    expect(row).toBeTruthy();
+    expect(row.name).toBe('Otak-Otak');
+    expect(row.canonicalDbName).toBe('Otak-Otak');
+    expect(row.originalName).toBe('Otak-Otak');
+    expect(row.weightGrams).toBe(80);
+    expect(row.calories).toBe(180);
+    expect(row.nutrients).toEqual({
+      calories: 180,
+      protein: 11,
+      carbohydrates: 15,
+      totalFat: 8,
+      saturatedFat: 2,
+      sodium: 280,
+    });
+    expect(row.sourceImageIndex).toBe(3);
+    expect(row.boundingBox2D).toEqual([1, 2, 3, 4]);
+    expect(result.items.some((it: any) => /sempol/i.test(it.name))).toBe(false);
+    expect(result.weightGrams).toBe(660);
+    expect(result.notes.some((n) => /rename_alias → "Otak-Otak"/.test(n))).toBe(true);
+    expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
+  });
+
+  it('golden: rename_alias then set_count applies count to the renamed row without changing grams', async () => {
+    const items = steakPlate();
+    const result = await applyMealEdits({
+      items,
+      userMessage: 'the sempol ayam is otak-otak and it is 2 pieces',
+      commands: [
+        { action: 'rename_alias', itemName: 'Sempol Ayam', newItemName: 'Otak-Otak' },
+        { action: 'set_count', itemName: 'Otak-Otak', count: 2 },
+      ],
+    });
+
+    const row = result.items.find((it: any) => /otak/i.test(it.name));
+    expect(result.changed).toBe(true);
+    expect(result.items).toHaveLength(2);
+    expect(row).toBeTruthy();
+    expect(row?.name).toBe('Otak-Otak');
+    expect(row?.canonicalDbName).toBe('Otak-Otak');
+    expect(row?.originalName).toBe('Otak-Otak');
+    expect(row?.weightGrams).toBe(80);
+    expect(row?.count).toBe(2);
+    expect(row?.pieceCount).toBe(2);
+    expect(row?.calories).toBe(180);
+    expect(result.items.some((it: any) => /sempol/i.test(it.name))).toBe(false);
+    expect(result.weightGrams).toBe(660);
+    expect(result.notes.some((n) => /set_count "Otak-Otak"/.test(n))).toBe(true);
+    expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
+  });
+
+  it('golden: set_weight by originalName field updates the renamed row without changing current name', async () => {
+    const items = [
+      {
+        scoutIndex: 0,
+        name: 'Ikan Nila',
+        canonicalDbName: 'Ikan Nila',
+        originalName: 'Cakalang',
+        keyword: 'Ikan Nila',
+        weightGrams: 100,
+        calories: 120,
+        protein: 25,
+        carbohydrates: 0,
+        totalFat: 2,
+        nutrients: { calories: 120, protein: 25, carbohydrates: 0, totalFat: 2, saturatedFat: 0.5, sodium: 300 },
+        sourceImageIndex: 0,
+        dbSource: 'estimated',
+      },
+    ];
+
+    const result = await applyMealEdits({
+      items,
+      userMessage: 'make the cakalang 120g',
+      commands: [{ action: 'set_weight', itemName: 'Cakalang', newWeightGrams: 120 }],
+    });
+
+    const fish = result.items.find((it: any) => it.scoutIndex === 0);
+
+    expect(result.changed).toBe(true);
+    expect(result.items).toHaveLength(1);
+    expect(fish?.name).toBe('Ikan Nila');
+    expect(fish?.canonicalDbName).toBe('Ikan Nila');
+    expect(fish?.originalName).toBe('Cakalang');
+    expect(fish?.keyword).toBe('Ikan Nila');
+    expect(fish?.weightGrams).toBe(120);
+    expect(fish?.nutrients.protein).toBe(30);
+    expect(fish?.calories).toBeGreaterThan(0);
+    expect(result.weightGrams).toBe(120);
+    expect(result.notes.some((n) => /set_weight "Cakalang"/.test(n))).toBe(true);
     expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
   });
 });
