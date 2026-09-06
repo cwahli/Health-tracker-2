@@ -8,6 +8,7 @@ import {
   applyPreDietitianDensityCheck,
   buildCreateSkipResponse,
   sumSalvagedAggregates,
+  resolveCreateMealTitle,
 } from './server_food_dietitian_dispatch';
 import { NUTRIENT_KEYS } from '../../utils/nutrients';
 
@@ -141,5 +142,40 @@ describe('F-8.10 shard 28 — create-skip synthesis and salvaged aggregates', ()
     const empty = sumSalvagedAggregates(null);
     expect(empty.calories).toBe(0);
     expect(Object.keys(empty)).toHaveLength(NUTRIENT_KEYS.length);
+  });
+});
+
+describe('create meal title — full dish title, never generic (first log)', () => {
+  const totals = { totalGrams: 630, totalCals: 401, totalP: 35.7, totalC: 11, totalF: 23.7, totalSugar: 0, totalAddedSugar: 0, totalSatFat: 9.9 };
+  const dishes = [
+    { originalName: 'Ikan Cakalang Suwir Petai', keyword: 'Ikan Cakalang Suwir Petai' },
+    { originalName: 'Cah Kangkung', keyword: 'Cah Kangkung' },
+    { originalName: 'Es Teh Tawar', keyword: 'Es Teh Tawar' },
+  ];
+
+  it('joins multi-dish names instead of the generic fallback', () => {
+    expect(resolveCreateMealTitle({}, dishes, 'en')).toBe(
+      'Ikan Cakalang Suwir Petai, Cah Kangkung, and Es Teh Tawar'
+    );
+  });
+
+  it('buildCreateSkipResponse persists the full title on foodData.name', () => {
+    const out = buildCreateSkipResponse({
+      rawScoutData: {},
+      visionScoutItems: dishes,
+      preCalculatedItems: [],
+      totals,
+      scoutVerdict: { label: 'Good fuel', level: 'good' },
+      rawAdvice: 'Eat up',
+      language: 'en',
+    });
+    expect(out.rawParsed.foodData.name).toBe(
+      'Ikan Cakalang Suwir Petai, Cah Kangkung, and Es Teh Tawar'
+    );
+  });
+
+  it('prefers the scout mealName when present and falls back only when empty', () => {
+    expect(resolveCreateMealTitle({ mealName: 'Nasi Campur' }, dishes, 'en')).toBe('Nasi Campur');
+    expect(resolveCreateMealTitle({}, [], 'en')).toBe('Balanced Meal');
   });
 });

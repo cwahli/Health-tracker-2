@@ -321,8 +321,8 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
   // Stage 4: Nutrition Database Search & Truth Matching
   const hasSearch = Boolean(input.usdaSearchResults?.length || input.brandSearchResults?.length);
   const searchCount = (input.usdaSearchResults?.length || 0) + (input.brandSearchResults?.length || 0);
-  const searchStatus = hasSearch ? `✅ Connected (${searchCount} candidate(s))` : (input.pendingFoodLog ? '✅ Connected (Catalog / Fallback)' : '⚪ Standby / N/A');
-  const searchDetails = hasSearch ? `USDA: ${input.usdaSearchResults?.length || 0} | Brand: ${input.brandSearchResults?.length || 0}` : 'No external search required';
+  const searchStatus = hasSearch ? `✅ Connected (${searchCount} candidate(s))` : '⚪ Standby / N/A';
+  const searchDetails = hasSearch ? `USDA: ${input.usdaSearchResults?.length || 0} | Brand: ${input.brandSearchResults?.length || 0}` : 'Single-dispatch path: scout-direct ledger, no external fetch';
   lines.push(`| **4. Database Search & Truth Matching** | ${searchStatus} | ${searchDetails} |`);
 
   // Stage 5: Calculation & Math Engine
@@ -740,7 +740,7 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
     }
   } else {
     lines.push(`- **Resolution Strategy:** Single-Dispatch Direct Nutrient Ledger`);
-    lines.push(`- **Status:** Nutritional truth resolved directly from Vision Scout dish-level macronutrients and pure TypeScript derivation (Post-Atwater / Dish Finalize) without requiring secondary candidate database fetches.`);
+    lines.push(`- **Status:** ⚪ Standby — nutritional truth resolved directly from Vision Scout dish-level macronutrients and pure TypeScript derivation (Post-Atwater / Dish Finalize) without secondary candidate database fetches.`);
     lines.push('');
   }
 

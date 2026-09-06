@@ -319,6 +319,42 @@ describe('buildCanonicalRunTree jobId tagging', () => {
     expect(d[1].model).toBe('gemini-3.5-flash-lite');
   });
 
+  it('assigns per-turn usage/timing lines to the matching turn (t1 keeps t1 numbers)', () => {
+    const d = extractDispatches(foodInput({
+      rawScout: undefined,
+      backendLogs: [
+        '[UnifiedLLM] Calling gemini-3.5-flash-lite',
+        '[UnifiedLLM-Usage:scout] prompt=2539 completion=1250 total=3789',
+        '[UnifiedLLM-Timing:scout] ms=9431',
+        '[UnifiedLLM-Usage:scout] prompt=3116 completion=1617 total=4733',
+        '[UnifiedLLM-Timing:scout] ms=6711',
+        '[Budget] Finalized ledger',
+      ].join('\n'),
+      dispatches: [
+        {
+          id: 't1/scout',
+          turn: 1,
+          agent: 'scout',
+          user: 'Analyze this meal photo.',
+          received: { mode: 'new_log', photoCount: 1 },
+        },
+        {
+          id: 't2/scout',
+          turn: 2,
+          agent: 'scout',
+          user: 'the drink is unsweetened',
+          received: { mode: 'edit', userMessage: 'the drink is unsweetened' },
+        },
+      ],
+    }));
+
+    expect(d).toHaveLength(2);
+    expect(d[0].tokens).toBe(3789);
+    expect(d[0].latency_ms).toBe(9431);
+    expect(d[1].tokens).toBe(4733);
+    expect(d[1].latency_ms).toBe(6711);
+  });
+
   it('keeps three scout turns when prior dispatches array has length 3', () => {
     const input = foodInput({
       rawScout: undefined,

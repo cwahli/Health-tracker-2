@@ -178,6 +178,37 @@ export function parseUnifiedTimingLines(logs: string): { stage: string; ms: numb
   return [...out.entries()].map(([stage, ms]) => ({ stage, ms }));
 }
 
+/** Parse ALL `[UnifiedLLM-Usage:stage]` lines in log order (per-turn assignment).
+ *  The last-wins parser above collapses multi-turn runs onto the final turn's
+ *  numbers (t1 showing t2's tokens/latency). Index by turn, fall back to last. */
+export function parseUnifiedUsageAll(logs: string): TokenUsage[] {
+  const out: TokenUsage[] = [];
+  if (!logs || typeof logs !== 'string') return out;
+  const re = /\[UnifiedLLM-Usage:([^\]]+)\]\s*prompt=(\d+)\s+completion=(\d+)\s+total=(\d+)/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(logs)) !== null) {
+    out.push({
+      stage: (m[1] || '').trim().toLowerCase() || 'unknown',
+      input: Number(m[2]) || 0,
+      output: Number(m[3]) || 0,
+      total: Number(m[4]) || 0,
+    });
+  }
+  return out;
+}
+
+/** Parse ALL `[UnifiedLLM-Timing:stage]` lines in log order (per-turn assignment). */
+export function parseUnifiedTimingAll(logs: string): { stage: string; ms: number }[] {
+  const out: { stage: string; ms: number }[] = [];
+  if (!logs || typeof logs !== 'string') return out;
+  const re = /\[UnifiedLLM-Timing:([^\]]+)\]\s*ms=(\d+)/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(logs)) !== null) {
+    out.push({ stage: (m[1] || '').trim().toLowerCase(), ms: Number(m[2]) || 0 });
+  }
+  return out;
+}
+
 /** True when the logs prove the stage dispatched an LLM call (not a projector run).
  *  Only call-time lines count: the pipeline also logs instruction/answer lines
  *  on skip paths, so those are deliberately NOT evidence. `[scout_answer]` is
@@ -249,6 +280,8 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
   if (Array.isArray(input.dispatches) && input.dispatches.length > 0) {
     const usages = parseUnifiedUsageLines(logs);
     const timings = parseUnifiedTimingLines(logs);
+    const allUsages = parseUnifiedUsageAll(logs);
+    const allTimings = parseUnifiedTimingAll(logs);
     const modelMatch = logs.match(/Vision Scout \(([^)]+)\)|\[UnifiedLLM\] Calling (gemini-[^\s]+)/i);
 
     const enriched = input.dispatches.map((d, idx) => {
@@ -257,12 +290,18 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
         copy.model = modelMatch ? (modelMatch[1] || modelMatch[2]) : 'gemini-3.5-flash-lite';
       }
       if (copy.tokens == null) {
-        const u = usages.find(x => x.stage === copy.agent || (copy.agent === 'scout' && x.stage === 'scout'));
-        if (u) copy.tokens = u.total;
+        // Per-turn assignment: nth same-agent dispatch takes the nth same-stage
+        // usage line; fewer lines than turns falls back to the last line.
+        const cands = allUsages.filter(x => x.stage === copy.agent);
+        const sameAgentIdx = input.dispatches!.slice(0, idx).filter(x => x.agent === copy.agent).length;
+        const pick = cands[sameAgentIdx] ?? cands[cands.length - 1] ?? usages.find(x => x.stage === copy.agent);
+        if (pick) copy.tokens = pick.total;
       }
       if (copy.latency_ms == null) {
-        const t = timings.find(x => x.stage === copy.agent || (copy.agent === 'scout' && x.stage === 'scout'));
-        if (t) copy.latency_ms = t.ms;
+        const cands = allTimings.filter(x => x.stage === copy.agent);
+        const sameAgentIdx = input.dispatches!.slice(0, idx).filter(x => x.agent === copy.agent).length;
+        const pick = cands[sameAgentIdx] ?? cands[cands.length - 1] ?? timings.find(x => x.stage === copy.agent);
+        if (pick) copy.latency_ms = pick.ms;
       }
       // Fix user prompt if it was accidentally a UI button label like "Download Debug Logs"
       if (!copy.user || copy.user === 'Download Debug Logs' || copy.user === 'Flag issue') {
@@ -369,10 +408,8 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
   if (hasScout) {
     const modelMatch = logs.match(/Vision Scout \(([^)]+)\)|\[UnifiedLLM\] Calling (gemini-[^\s]+)/i);
     const latencyMatch = logs.match(/(?:Vision Scout|UnifiedLLM).*?(\d+(?:\.\d+)?)ms/i);
-    const usages = parseUnifiedUsageLines(logs);
-    const timings = parseUnifiedTimingLines(logs);
-    const scoutUsages = usages.filter(u => u.stage === 'scout');
-    const scoutTimings = timings.filter(t => t.stage === 'scout');
+    const scoutUsages = parseUnifiedUsageAll(logs).filter(u => u.stage === 'scout');
+    const scoutTimings = parseUnifiedTimingAll(logs).filter(t => t.stage === 'scout');
 
     // Check if there are multiple prompt sections in logs
     const promptSplitRegex = /\[UnifiedLLM-Prompt:scout\] System Instruction:\n/g;
@@ -426,8 +463,8 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
           output: turnNum === matches.length ? (input.rawScout || input.scoutItems) : undefined,
           rawEmission: turnNum === matches.length ? (input.rawScout || undefined) : undefined,
           model: modelMatch ? (modelMatch[1] || modelMatch[2]) : 'gemini-3.5-flash-lite',
-          latency_ms: scoutTimings[i]?.ms || (latencyMatch ? Math.round(Number(latencyMatch[1])) : 1500),
-          tokens: scoutUsages[i]?.total || undefined,
+          latency_ms: scoutTimings[i]?.ms ?? scoutTimings[scoutTimings.length - 1]?.ms ?? (latencyMatch ? Math.round(Number(latencyMatch[1])) : 1500),
+          tokens: scoutUsages[i]?.total ?? scoutUsages[scoutUsages.length - 1]?.total ?? undefined,
           error: turnNum === matches.length ? (input.error || null) : null,
         });
       }

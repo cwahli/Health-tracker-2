@@ -212,6 +212,23 @@ export interface CreateSkipSynthesisArgs {
 }
 
 /**
+ * Create-path meal title: prefer the scout's own mealName, else join the
+ * dish names (same "A, B, and C" shape as formatMultiItemMealTitle).
+ * Generic fallback only when there are no dish names at all.
+ */
+export function resolveCreateMealTitle(rawScoutData: any, visionScoutItems: any[], language?: unknown): string {
+  const direct = rawScoutData?.mealName || rawScoutData?.name;
+  if (direct && String(direct).trim()) return String(direct).trim();
+  const names = (visionScoutItems || [])
+    .map((it: any) => it?.originalName || it?.keyword || it?.name)
+    .filter(Boolean);
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  if (names.length > 2) return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
+  return t(language, 'balancedMealFallbackName');
+}
+
+/**
  * F-8.10 shard 28 — single-agent-create synthesis, extracted verbatim from
  * runFoodAnalyze. Reconciles the message with the ledger and serializes
  * the dietitian-shaped response (which the caller re-parses, as inline).
@@ -226,7 +243,7 @@ export function buildCreateSkipResponse(args: CreateSkipSynthesisArgs): {
     scoutInternalReasoning, diningEnvironment, language,
   } = args;
   const { totalGrams, totalCals, totalP, totalC, totalF } = totals;
-  const mealName = rawScoutData?.mealName || rawScoutData?.name || (visionScoutItems.length === 1 ? (visionScoutItems[0].originalName || visionScoutItems[0].keyword) : t(language, 'balancedMealFallbackName'));
+  const mealName = resolveCreateMealTitle(rawScoutData, visionScoutItems, language);
   const formattedMsg = reconcileMessageWithLedger(rawAdvice, {
     mealName,
     weightGrams: totalGrams,
