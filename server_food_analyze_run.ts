@@ -994,9 +994,14 @@ export async function runFoodAnalyze(req: any, res: any) {
         // renames from set_modifier/replace_identity (e.g. "Es Teh Manis" -> "Unsweetened
         // Iced Tea") update the nutrition ledger but the chip label stays on the old name
         // forever, because the chips read scoutItems.originalName/keyword, not itemsBreakdown.
+        // Base order matters: the persisted turn-1 items carry grounded boxes.
+        // visionScoutItems on a zero-image edit are an ungrounded re-observation
+        // (dummy boxes), so the request's turn-1 activeScoutItems outrank them.
         const baseScoutItemsForEdit = (activeMeal.scoutItems && activeMeal.scoutItems.length > 0)
           ? activeMeal.scoutItems
-          : (visionScoutItems || []);
+          : ((req.body.activeScoutItems && req.body.activeScoutItems.length > 0)
+            ? req.body.activeScoutItems
+            : (visionScoutItems || []));
         const syncedScoutItemsForEdit = syncEditScoutItems({ baseScoutItems: baseScoutItemsForEdit, resultItems: result.items });
         activeMeal.scoutItems = syncedScoutItemsForEdit;
         addDebugLog(`[ScoutSync] edit-path renamed scoutItems -> ${JSON.stringify(syncedScoutItemsForEdit.map((s: any) => s.originalName))}`);

@@ -6,6 +6,7 @@ import {
   formatMultiItemMealTitle,
   resolveEditedMealTitle,
   resolveModifyIncomingTitle,
+  isDummyBoundingBox,
   appendEditHistoryEntry,
   syncEditScoutItems,
   buildGateInput,
@@ -174,6 +175,26 @@ describe('F-8.10 shard 7 — modify-path seams', () => {
     });
     expect(fabricated[0].originalName).toBe('Mystery');
     expect(fabricated[0].cookingMethod).toBe('raw');
+  });
+
+  it('carries real turn-1 boxes over dummy zero-image edit emissions', () => {
+    expect(isDummyBoundingBox([0, 0, 100, 100])).toBe(true);
+    expect(isDummyBoundingBox([0, 0, 1000, 1000])).toBe(true);
+    expect(isDummyBoundingBox([342, 0, 907, 582])).toBe(false);
+    expect(isDummyBoundingBox(null)).toBe(false);
+    // Live case: t2 re-emitted [0,0,100,100] for all 3 dishes; chips must keep t1 boxes.
+    const out = syncEditScoutItems({
+      baseScoutItems: [{ scoutIndex: 0, originalName: 'Es Teh Manis', keyword: 'Es Teh Manis', boundingBox2D: [0, 303, 391, 655] }],
+      resultItems: [{ scoutIndex: 0, canonicalDbName: 'Es Teh Tawar', weightGrams: 300, boundingBox2D: [0, 0, 100, 100] }],
+    });
+    expect(out[0].boundingBox2D).toEqual([0, 303, 391, 655]);
+    expect(out[0].originalName).toBe('Es Teh Tawar');
+    // Real re-observation still wins when present.
+    const grounded = syncEditScoutItems({
+      baseScoutItems: [{ scoutIndex: 0, originalName: 'Tea', keyword: 'Tea', boundingBox2D: [0, 303, 391, 655] }],
+      resultItems: [{ scoutIndex: 0, canonicalDbName: 'Tea', weightGrams: 300, boundingBox2D: [10, 310, 400, 660] }],
+    });
+    expect(grounded[0].boundingBox2D).toEqual([10, 310, 400, 660]);
   });
 
   it('appends edit history and shapes gate input', () => {

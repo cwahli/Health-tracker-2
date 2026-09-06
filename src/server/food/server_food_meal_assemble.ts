@@ -283,9 +283,20 @@ export interface EditScoutSyncArgs {
 }
 
 /**
+ * Ungrounded box emissions: the model must emit boundingBox2D, so zero-image
+ * edit turns produce placeholder grids instead of grounded coordinates.
+ */
+export function isDummyBoundingBox(box: any): boolean {
+  if (!Array.isArray(box) || box.length !== 4) return false;
+  const s = box.join(',');
+  return s === '0,0,100,100' || s === '0,0,1000,1000';
+}
+
+/**
  * Syncs scoutItems (UI chips/gallery) with edit-path renames. Without this,
  * renames update the ledger but chip labels stay on the old name forever,
  * because chips read scoutItems.originalName/keyword, not itemsBreakdown.
+ * Dummy boxes from ungrounded re-observations never overwrite real ones.
  */
 export function syncEditScoutItems(args: EditScoutSyncArgs): any[] {
   const { baseScoutItems, resultItems } = args;
@@ -307,7 +318,9 @@ export function syncEditScoutItems(args: EditScoutSyncArgs): any[] {
         componentsDetailList: bItem.componentsDetailList || sItem.componentsDetailList,
         nutrients: bItem.nutrients || sItem.nutrients,
         sourceImageIndex: bItem.sourceImageIndex ?? sItem.sourceImageIndex,
-        boundingBox2D: bItem.boundingBox2D ?? sItem.boundingBox2D,
+        boundingBox2D: !isDummyBoundingBox(bItem.boundingBox2D)
+          ? (bItem.boundingBox2D ?? sItem.boundingBox2D)
+          : (sItem.boundingBox2D ?? bItem.boundingBox2D),
       };
     }
     return {
