@@ -29,13 +29,13 @@ export function buildScoutPersonalizationBlock(args: {
   const risks = (args.biomarkersNeedingImprovement || [])
     .map((b: any) => {
       const name = typeof b === 'string' ? b.split(' is ')[0] : (b?.name || b?.key || b?.biomarker || '');
-      const dir = typeof b === 'string' ? '' : (b?.direction || b?.trend || '');
+      const dir = typeof b === 'string' ? (b.match(/\bis\s+(high|low|critical)\b/i)?.[1].toLowerCase() || '') : (b?.direction || b?.trend || '');
       return name ? `${String(name).trim()}${dir ? ` (${dir})` : ''}` : '';
     })
     .filter(Boolean)
     .slice(0, 5);
   if (risks.length === 0) return '';
-  return `- PATIENT CONTEXT (special case — shapes verdict/advice only, never identity or weights): at-risk: ${risks.join('; ')}. Budgets: see NUTRITIONAL TARGET STATUS below. Prefer a verdict level and advice that move those numbers the right way.`;
+  return `- PATIENT CONTEXT (special case — shapes verdict/advice only, never identity or weights): at-risk: ${risks.join('; ')}. Budgets: see NUTRITIONAL TARGET STATUS below. Flag plainly any dish or nutrient working against those numbers — a significant impact sets the verdict level, never a softened neutral label.`;
 }
 
 export function parseBracketedFoodItems(message: string): Array<{
