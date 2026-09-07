@@ -98,6 +98,9 @@ export function buildNewLogResponse(args: {
     dispatches,
     apiCalls,
     portionClarify: portionClarify || null,
+    // Split turn: a present payload pauses the job to awaiting_user in the
+    // submit stream (serverJobs checks finalData.needsPortionClarify).
+    needsPortionClarify: portionClarify ? true : undefined,
   };
 }
 
@@ -159,9 +162,10 @@ export function buildDegradeResponse(args: {
   agentInstructions?: any;
   apiCalls: any;
   dispatches?: any[];
+  portionClarify?: any;
 }): Record<string, any> {
   const {
-    payloadData, degradedMeal, visionScoutItems, scoutContentType, agentInstructions, apiCalls, dispatches,
+    payloadData, degradedMeal, visionScoutItems, scoutContentType, agentInstructions, apiCalls, dispatches, portionClarify,
   } = args;
   const degradeMessage = "Nutrients logged based on core databases, but AI clinical advice is currently unavailable.";
   return {
@@ -174,6 +178,8 @@ export function buildDegradeResponse(args: {
     scoutContentType,
     text: degradeMessage,
     message: degradeMessage,
+    portionClarify: portionClarify || null,
+    needsPortionClarify: portionClarify ? true : undefined,
     agentInstructions,
     dispatches,
     apiCalls

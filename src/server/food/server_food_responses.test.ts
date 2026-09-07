@@ -43,6 +43,21 @@ describe('F-8.10 shard 26 — mode response payloads', () => {
     expect(n.message).toContain('Bowl');
     expect(n.savable).toBe(true);
     expect(n.data.name).toBe('Bowl');
+    expect(n.needsPortionClarify).toBeUndefined();
+  });
+
+  it('new_log sets the split-turn flag exactly when a clarify payload exists', () => {
+    const base = {
+      rawParsed: {}, parsedData: { name: 'Bowl', quantity: '1 serving' },
+      pendingFoodLog: null, mealBuild: {}, gate: { savable: true },
+      scoutInternalReasoning: null, rawScoutData: null, scoutContentType: 'visual',
+      diningEnvironment: 'home_cooked', scoutItems: [], apiCalls: [],
+    };
+    const withClarify = buildNewLogResponse({
+      ...base, portionClarify: { promptMessage: 'How much?', items: [{ name: 'Cereal Pack' }] },
+    });
+    expect(withClarify.portionClarify.items).toHaveLength(1);
+    expect(withClarify.needsPortionClarify).toBe(true);
   });
 
   it('shapes modify payloads with edit flags', () => {
@@ -68,5 +83,22 @@ describe('F-8.10 shard 28 — degrade response', () => {
     expect(d.mode).toBe('new_log');
     expect(d.message).toContain('core databases');
     expect(d.degradedStages).toEqual(['dietitian']);
+  });
+
+  it('carries the portion-clarify payload so the card question still renders on degrade', () => {
+    const meal = { name: 'Lunch', degradedStages: ['dietitian'] };
+    const clarify = { promptMessage: 'How much?', items: [{ name: 'Cereal Pack' }] };
+    const d = buildDegradeResponse({
+      payloadData: meal, degradedMeal: meal, visionScoutItems: [],
+      scoutContentType: 'visual', apiCalls: [], portionClarify: clarify,
+    });
+    expect(d.portionClarify).toEqual(clarify);
+    expect(d.needsPortionClarify).toBe(true);
+    const bare = buildDegradeResponse({
+      payloadData: meal, degradedMeal: meal, visionScoutItems: [],
+      scoutContentType: 'visual', apiCalls: [],
+    });
+    expect(bare.portionClarify).toBeNull();
+    expect(bare.needsPortionClarify).toBeUndefined();
   });
 });

@@ -889,6 +889,10 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           // dropped it — the debug export could only show the post-transform
           // scoutItems. Carried through so the run tree keeps the raw emission.
           rawScout: finalPayload?.rawScout || undefined,
+          // Same class as rawScout above: the portion-clarify payload was built
+          // at clarify-check time but this whitelist dropped it, so the card
+          // question never rendered even though pendingFoodLog carried it nested.
+          portionClarify: finalPayload?.portionClarify || undefined,
           photoUrl: photoUrl || undefined,
           photoUrls: photoUrls.length > 0 ? photoUrls : (photoUrl ? [photoUrl] : undefined),
           degradedStages: finalPayload?.degradedStages,
@@ -924,6 +928,9 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           // Debug-export fix (same as earlyResult above): carry the raw scout
           // emission through so R2 cold copies and the debug export keep it.
           rawScout: finalPayload?.rawScout || undefined,
+          // Same class: carry the portion-clarify payload or the card question
+          // never renders (see earlyResult above).
+          portionClarify: finalPayload?.portionClarify || undefined,
           photoUrl: photoUrl || undefined,
           photoUrls: photoUrls.length > 0 ? photoUrls : (photoUrl ? [photoUrl] : undefined),
           imageUrls: photoUrls.length > 0 ? photoUrls : (photoUrl ? [photoUrl] : undefined),

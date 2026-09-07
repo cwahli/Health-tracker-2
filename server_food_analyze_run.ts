@@ -1254,6 +1254,10 @@ ${textOutput}`);
     // Dietitian Degrade logic (Phase 1)
     if (preCalculatedItems && preCalculatedItems.length > 0 && preCalculatedItems.some((p: any) => (p.nutrients && p.nutrients.calories != null) || (p.primaryBase100g && p.primaryBase100g.calories !== undefined))) {
       addDebugLog(`[Dietitian Degrade] Dietitian failed permanently, but pre-calculated math exists. Salvaging meal build.`);
+      // portionClarify from the try block is out of scope here: rebuild it from
+      // the same locked items so the card question survives the degrade path.
+      let degradeClarify: any = null;
+      try { degradeClarify = buildPortionClarifyPayload(visionScoutItems); } catch {}
       const salvagedAggregatedNutrients = sumSalvagedAggregates(preCalculatedItems);
       const salvagedMeal = buildSavableMealFromParsed(preCalculatedItems, req.body.activeMeal, salvagedAggregatedNutrients, null);
       const degradedMeal = markDietitianDegraded(salvagedMeal, error.message);
@@ -1264,6 +1268,7 @@ ${textOutput}`);
         agentInstructions: { scout: scoutInstructionForDebug },
         dispatches: accumulatedDispatches,
         apiCalls,
+        portionClarify: degradeClarify,
       });
       addDebugLog(`[Dietitian Degrade] Emitting salvaged meal (kcal=${payloadData?.nutrients?.calories ?? payloadData?.calories ?? '?'}) as succeeded.`);
       return res.json(successPayload);
