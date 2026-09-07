@@ -7795,7 +7795,12 @@ export default function App() {
             onOpenAgentFromFrontDesk={handleOpenAgentFromFrontDesk}
             selectedModelId={selectedModelId}
             onChangeModelId={setSelectedModelId}
-            onJobEnqueued={(id, kind) => setActiveTab(kind === 'food' ? 'food' : 'medical')}
+            onJobEnqueued={(id, kind) => {
+              setActiveTab(kind === 'food' ? 'food' : 'medical');
+              // Unified modal behaviour: close the dialog when processing starts.
+              // Job + dispatches persist in JobStore; progress is visible in tasks/history.
+              setIsFrontDeskOpen(false);
+            }}
             onClose={() => setIsFrontDeskOpen(false)}
             biomarkers={biomarkers}
             biomarkerHistory={biomarkerHistory}
@@ -7873,8 +7878,11 @@ export default function App() {
         selectedModelId={selectedModelId}
         onChangeModelId={setSelectedModelId}
         onJobEnqueued={(id, kind) => {
-          // Keep activeJobId so follow-up edits reuse the same job (submissionMode=edit)
-          // and accumulate dispatches for multi-turn debug. Front Desk already keeps its job open.
+          // Unified modal behaviour: close the dialog when processing starts.
+          // activeJobId is cleared so the derived dialog closes; the job itself
+          // stays in JobStore (follow-up edits reopen it; dispatches accumulate).
+          // Restores aca09c4; multi-turn regressed it by keeping the job open.
+          setActiveJobId(null);
           setActiveTab('food');
         }}
         onClose={async () => {
@@ -7934,6 +7942,9 @@ export default function App() {
         onJobEnqueued={(id, kind) => {
           setActiveTab('health');
           setHealthSubTab('biomarker');
+          // Unified modal behaviour: hide the dialog when processing starts.
+          // Agent/job state is preserved (unlike onClose); reopening resumes the thread.
+          setIsMedicalChatOpen(false);
         }}
         onClose={() => {
           console.log(`[DIAG7] Medical modal onClose fired - clearing activeHandoffPayload`, new Error('trace').stack);

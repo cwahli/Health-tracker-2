@@ -338,7 +338,7 @@ export function AllAnalysesModal({
     }
 
     setTimeout(() => {
-      const el = document.getElementById(`job-${job.id}`) || document.getElementById(`task-card-${job.id}`) || document.getElementById(`food-log-${job.id}`);
+      const el = document.getElementById(`job-${job.id}`) || document.getElementById(`task-card-${job.id}`) || document.getElementById(`food-log-${job.id}`) || document.getElementById(`food-log-item-${job.id}`) || document.getElementById(`food-log-item-${(job.result as any)?.pendingFoodLog?.id}`);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
