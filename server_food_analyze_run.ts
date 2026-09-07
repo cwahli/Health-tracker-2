@@ -5,7 +5,7 @@
 import { Type } from '@google/genai';
 import { z } from 'zod';
 import { formatUSDANutrients, formatOFFNutrients, extractOFFNutrientsPer100g, isFastFoodChain, buildWebSearchQuery, loosenQuery, cleanQuery, detectChainKeyFromText, scoutHasCompletePrintedLabel, enrichScoutComponentsWithMatches, buildPastMealsContext } from './src/server/food/server_food_analyze_helpers.js';
-import { computeDietitianSkipGates, isAcceptDefaultsWithinTolerance, composeAcceptDefaultsParsed, decideScoutVerdict, decideScoutAdvice, buildPureScaleResponse, sumPrecalcTotals, buildCreateSkipResponse, sumSalvagedAggregates, salvageLedgerPlausibility, applyPreDietitianDensityCheck, resolveCreateMealTitle } from './src/server/food/server_food_dietitian_dispatch.js';
+import { computeDietitianSkipGates, isAcceptDefaultsWithinTolerance, composeAcceptDefaultsParsed, decideScoutVerdict, decideScoutAdvice, buildPureScaleResponse, sumPrecalcTotals, buildCreateSkipResponse, sumSalvagedAggregates, salvageLedgerPlausibility, applyPreDietitianDensityCheck, resolveCreateMealTitle, buildNarratorDispatch, PROJECTOR_NARRATOR_INSTRUCTION } from './src/server/food/server_food_dietitian_dispatch.js';
 import { resolveFoodAnalyzeMode, buildFoodApiCalls, normalizeParsedPostDietitian } from './src/server/food/server_food_mode_routing.js';
 import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, resolveModifyIncomingTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput, mapFinalizeToMeal, mergeModifyPathScoutItems, runEvaluationFinalize, assembleEvaluationComparison } from './src/server/food/server_food_meal_assemble.js';
 import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, buildScoutFailureError, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries, applyWeightModShortcut, restoreTurnOneCandidates, computeScoutRetryDelay, applySkipScoutShortcut, checkResumedFromImageTurn, applyTextQueryShortcut, checkMenuScaleBypass, buildScoutCallArgs, runScoutRetryLoop } from './src/server/food/server_food_scout_source.js';
@@ -812,6 +812,14 @@ export async function runFoodAnalyze(req: any, res: any) {
     sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'started', message: 'Analyzing nutrition payload...' });
     let textOutput: string = "";
     let rawParsed: any;
+    // Narrator I/O for the per-turn coverage law: every turn that shows the
+    // patient a message records exactly one narrator row (narrator LLM call
+    // or TS projector) — no dietitian agent is involved. Stashed per branch
+    // below, pushed once after mode resolution.
+    let narratorInput: {
+      systemInstruction?: string; userPrompt?: string; model?: string;
+      latencyMs?: number | null; tokens?: number | null; projected?: boolean;
+    } | null = null;
     const { canSkipDietitianForPureScale } = computeDietitianSkipGates({
       isPureWeightModification, activeMeal, userSelectedMode, weightRefineIntent, message,
     });
@@ -822,6 +830,11 @@ export async function runFoodAnalyze(req: any, res: any) {
       const pureScale = buildPureScaleResponse({ targetWeightGrams: targetWeight, language: userProfile?.language });
       textOutput = pureScale.textOutput;
       rawParsed = pureScale.rawParsed;
+      narratorInput = {
+        systemInstruction: PROJECTOR_NARRATOR_INSTRUCTION,
+        userPrompt: `[projector] scale-only refine to ${targetWeight}g — no LLM call, ledger rescaled from locked label truth.`,
+        model: 'projector', latencyMs: 0, tokens: 0, projected: true,
+      };
     } else if (isAcceptDefaultsWithinTolerance({ portionChoices: req.body.portionChoices, scoutItems: visionScoutItems, isResume: Boolean(req.body.skipScout || req.body.portionChoices) })) {
       addDebugLog('[Accept] portion choices within 30% of estimates: skipping agent, composing from ledger.');
       sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'completed', message: 'Meal analysis finalized.' });
@@ -833,6 +846,11 @@ export async function runFoodAnalyze(req: any, res: any) {
       });
       textOutput = JSON.stringify(acceptParsed);
       rawParsed = acceptParsed;
+      narratorInput = {
+        systemInstruction: PROJECTOR_NARRATOR_INSTRUCTION,
+        userPrompt: `[projector] portion choices within tolerance — no LLM call, TS-composed message from ledger, targets, and rest-of-day math.`,
+        model: 'projector', latencyMs: 0, tokens: 0, projected: true,
+      };
     } else {
       addDebugLog(`[MealAgent] Initiating Dietitian LLM evaluation...`);
       
@@ -931,6 +949,18 @@ ${textOutput}`);
         addDebugLog(`[MealAgent] Failed to parse Dietitian JSON: ${err.message}`);
         throw new Error("Failed to parse Dietitian LLM output as JSON");
       }
+      // Single-take the narrator call's usage for the dispatch row. The
+      // streamed [UnifiedLLM-Usage:dietitian] log lines are already emitted
+      // by the caller itself, so taking here removes nothing from the logs.
+      const narratorUsage = takeUnifiedUsage('dietitian');
+      const narratorMs = takeUnifiedTiming('dietitian');
+      narratorInput = {
+        systemInstruction,
+        userPrompt: fullPromptSent,
+        model: engine || 'gemini-3.5-flash-lite',
+        latencyMs: narratorMs,
+        tokens: narratorUsage ? narratorUsage.total : null,
+      };
     }
     if (rawParsed._internalReasoning) {
       addDebugLog(`[MealAgent Internal Reasoning]\n${rawParsed._internalReasoning}`);
@@ -958,6 +988,39 @@ ${textOutput}`);
       queriesToSearch,
       engine,
     });
+    // Current turn number: a fresh scout leg was just pushed above when scout
+    // ran this turn (legs already include it); on skipScout turns no leg was
+    // pushed, so the legs only count prior turns. Shared by the narrator row
+    // below and the CASE C edit dispatch — counting legs blindly mislabeled
+    // skipScout edits as t1 (locks + expert dispatch).
+    const scoutRanThisTurn = Boolean(scoutInstructionForDebug || rawScoutData);
+    const narratorScoutLegs = accumulatedDispatches.filter((d: any) => d.agent === 'scout').length;
+    const currentTurnNumber = scoutRanThisTurn ? (narratorScoutLegs || 1) : (narratorScoutLegs + 1);
+    // Narrator row: exactly one per narrated turn (create, clarify, edit —
+    // discussion/evaluation carry their resolved mode and are skipped by the
+    // per-turn coverage law). Placed after resolution so received.mode is the
+    // resolved mode, and before the CASE branches so every branch exports it.
+    if (narratorInput) {
+      const narratorDispatch = buildNarratorDispatch({
+        turn: currentTurnNumber,
+        userMessage: (message && message.trim()) ? message.trim() : (imagePayloads && imagePayloads.length > 0 ? 'Analyze this meal photo.' : 'Text meal entry'),
+        mode,
+        systemInstruction: narratorInput.systemInstruction,
+        userPrompt: narratorInput.userPrompt,
+        rawParsed,
+        model: narratorInput.model,
+        latencyMs: narratorInput.latencyMs,
+        tokens: narratorInput.tokens,
+        projected: narratorInput.projected,
+      });
+      accumulatedDispatches.push(narratorDispatch);
+      sendLog('narrator_answer', 'narrator', rawParsed?.message || rawParsed?.clinicalAdvice || 'Meal narrative finalized.', {
+        mode,
+        turn: currentTurnNumber,
+        projected: Boolean(narratorInput.projected),
+      });
+      addDebugLog(`[Narrator] dispatch t${currentTurnNumber}/narrator recorded (${narratorInput.projected ? 'projector' : 'narrator LLM'}).`);
+    }
     // CASE F: food origin lookup mode
     // CASE B: discussion mode
     if (mode === "discussion") {
@@ -1094,14 +1157,7 @@ ${textOutput}`);
       }
       {
         let editCommands = backfillEditCommandEstimates(rawParsed);
-        // Turn number: a fresh scout leg was just pushed above when scout ran
-        // this turn (legs already include it); on skipScout edits no leg was
-        // pushed, so the legs only count prior turns. Counting legs blindly
-        // mislabeled skipScout edits as t1 (locks + expert dispatch).
-        const scoutRanThisTurn = Boolean(scoutInstructionForDebug || rawScoutData);
-        const scoutLegs = accumulatedDispatches.filter((d: any) => d.agent === 'scout').length;
-        const editTurnNumber = scoutRanThisTurn ? (scoutLegs || 1) : (scoutLegs + 1);
-        const scoutTurnNumberForEdit = editTurnNumber;
+        const scoutTurnNumberForEdit = currentTurnNumber;
         const result = await applyMealEdits({
           items: Array.isArray(activeMeal.itemsBreakdown) ? activeMeal.itemsBreakdown : [],
           commands: Array.isArray(editCommands) ? editCommands : [],
@@ -1229,7 +1285,7 @@ ${textOutput}`);
         // Pipeline parity: emit dietitian/expert dispatch I/O on every edit turn
         // (projector narrative — same contract as create's dietitian_answer).
         // Same-turn agent as the scout leg above: tN/dietitian pairs tN/scout.
-        const expertTurn = editTurnNumber;
+        const expertTurn = currentTurnNumber;
         const effectiveEditCommands = (Array.isArray((result as any).appliedCommands) && (result as any).appliedCommands.length > 0)
           ? (result as any).appliedCommands
           : (Array.isArray(editCommands) ? editCommands : []);

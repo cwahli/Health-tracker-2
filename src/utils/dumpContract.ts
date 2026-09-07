@@ -822,33 +822,66 @@ function evaluateFoodAgentOutput(tree: CanonicalRunTree, isFoodPack: boolean): C
     }
   }
 
-  // 16. Verdict + advice from any agent emission in the run. n/a when the
-  // tree carries no emission outputs (nothing to verify against).
-  const emissions = (tree.dispatches || [])
-    .map((d) => d?.rawEmission || d?.output)
-    .filter((o) => o && typeof o === 'object');
-  if (emissions.length === 0) {
-    na('Agent output: verdict + advice', 'No agent emissions captured in this run');
+  // 16. Verdict + advice, PER TURN. Every turn that showed the patient a
+  // meal message must have a recorded dispatch carrying verdict label/level
+  // + advice text — the old any-emission check passed runs whose clarify
+  // turn had no advice row at all. Turns are grouped by `turn`, falling back
+  // to the tN id prefix; rows with no determinable turn are ignored (legacy
+  // and synthetic rows carry none). Discussion/evaluation turns show no meal
+  // card and are skipped. Agent-agnostic: scout, narrator, or projector rows
+  // all count — there is no dietitian agent.
+  const NON_MEAL_TURN_MODES = new Set(['discussion', 'evaluation', 'compare', 'compare_menu', 'compare_shelf']);
+  const turnOf = (d: any): number | null => {
+    if (Number.isInteger(d?.turn) && (d.turn as number) > 0) return d.turn as number;
+    const m = /^t(\d+)\b/i.exec(String(d?.id || ''));
+    return m ? Number(m[1]) : null;
+  };
+  const adviceTextOf = (o: any): string => String(o?.clinicalAdvice || o?.message || '');
+  const adviceWordsOf = (o: any): number => adviceTextOf(o).trim().split(/\s+/).filter(Boolean).length;
+  const coversTurn = (o: any): boolean => {
+    if (!o || typeof o !== 'object') return false;
+    if (!o?.verdict?.label || !o?.verdict?.level) return false;
+    const w = adviceWordsOf(o);
+    return w >= 35 && w <= 70;
+  };
+  const turnGroups = new Map<number, any[]>();
+  for (const d of tree.dispatches || []) {
+    const t = turnOf(d);
+    if (t == null) continue;
+    if (!turnGroups.has(t)) turnGroups.set(t, []);
+    turnGroups.get(t)!.push(d);
+  }
+  const mealTurns = [...turnGroups.entries()].filter(([, rows]) =>
+    rows.some((d) => !NON_MEAL_TURN_MODES.has(String(d?.received?.mode || 'new_log').toLowerCase()))
+  );
+  if (mealTurns.length === 0) {
+    na('Agent output: verdict + advice', 'No turn-attributed meal dispatches in this run');
   } else {
-    const withVerdict = emissions.find(
-      (o) => o?.verdict?.label && o?.verdict?.level && (o?.clinicalAdvice || o?.message)
-    );
-    if (!withVerdict) {
-      fail('Agent output: verdict + advice', 'No emission carries verdict label/level + advice text');
+    const bare = mealTurns
+      .filter(([, rows]) => {
+        const emissions = rows.map((d) => d?.rawEmission || d?.output).filter((o) => o && typeof o === 'object');
+        return !emissions.some(coversTurn);
+      })
+      .map(([t, rows]) => `t${t} (rows: ${rows.map((d: any) => d?.id || '?').join(', ')})`);
+    if (bare.length === 0) {
+      const detail = mealTurns.map(([t, rows]) => {
+        const emissions = rows.map((d) => d?.rawEmission || d?.output).filter((o) => o && typeof o === 'object');
+        const good = emissions.find(coversTurn);
+        const w = adviceWordsOf(good);
+        const figures = (adviceTextOf(good).match(/\d+(\.\d+)?\s*(kcal|g|mg|%)/gi) || []).length;
+        return `t${t}: "${good.verdict.label}" [${good.verdict.level}], ${w} words, ${figures} figure(s)`;
+      }).join('; ');
+      pass('Agent output: verdict + advice', `Every meal turn covered — ${detail}`);
     } else {
-      const text = String(withVerdict.clinicalAdvice || withVerdict.message || '');
-      const w = text.trim().split(/\s+/).filter(Boolean).length;
-      const figures = (text.match(/\d+(\.\d+)?\s*(kcal|g|mg|%)/gi) || []).length;
-      if (w >= 35 && w <= 70) {
-        pass('Agent output: verdict + advice', `"${withVerdict.verdict.label}" [${withVerdict.verdict.level}], ${w} words, ${figures} budget figure(s)`);
-      } else {
-        fail('Agent output: verdict + advice', `Advice ${w} words (want 35-70): "${text.slice(0, 80)}..."`);
-      }
+      fail('Agent output: verdict + advice', `Turn(s) with no verdict+advice row: ${bare.join('; ')}`);
     }
   }
 
   // 17. Dishes: at least one fully populated dish in any agent emission.
-  const allDishes = emissions.flatMap((o) => (Array.isArray(o?.dishes) ? o.dishes : []));
+  const dishEmissions = (tree.dispatches || [])
+    .map((d) => d?.rawEmission || d?.output)
+    .filter((o) => o && typeof o === 'object');
+  const allDishes = dishEmissions.flatMap((o) => (Array.isArray(o?.dishes) ? o.dishes : []));
   if (allDishes.length === 0) {
     na('Dishes: fields populated', 'No dishes in any agent emission');
   } else {
@@ -865,7 +898,7 @@ function evaluateFoodAgentOutput(tree: CanonicalRunTree, isFoodPack: boolean): C
   // the export must show it; single-turn runs are n/a.
   const clarifyPayload =
     tree.pendingFoodLog?.portionClarify ||
-    emissions.map((o) => o?.portionClarify).find((p) => p && typeof p === 'object');
+    dishEmissions.map((o) => o?.portionClarify).find((p) => p && typeof p === 'object');
   const hasSecondTurn = (tree.dispatches || []).some(
     (d) => Number(d?.turn) > 1 || /^t[2-9]\b/i.test(String(d?.id || ''))
   );

@@ -687,6 +687,47 @@ describe('Agent-output verification rows (15-19)', () => {
     expect(r?.actual).toMatch(/Edit patch/);
   });
 
+  it('fails a bare clarify turn even when a later turn is covered (per-turn law)', () => {
+    const tree = buildCanonicalRunTree({
+      pack: 'food', jobId: 'j_bare_t1', status: 'succeeded',
+      pendingFoodLog: { nutrients: fullNuts({ calories: 693 }) },
+      dispatches: [
+        // T1 clarify: scout verdict, no advice message — the gap the old
+        // any-emission check could not see.
+        { id: 't1/scout', turn: 1, agent: 'scout', received: { mode: 'review' }, output: { verdict: { label: 'High Sugar Load', level: 'warning' }, dishes: [stdDish()] } },
+        // T2 edit covered by the projector row.
+        {
+          id: 't2/dietitian', turn: 2, agent: 'dietitian', received: { mode: 'edit' },
+          output: { verdict: { label: 'Sugar Over Limit', level: 'alert' }, message: stdAdvice() },
+        },
+      ],
+    });
+    const r = law(tree, 'Agent output: verdict + advice');
+    expect(r?.result).toBe('FAIL');
+    expect(r?.actual).toMatch(/t1/);
+  });
+
+  it('passes when a narrator row covers the clarify turn (no dietitian agent)', () => {
+    const tree = buildCanonicalRunTree({
+      pack: 'food', jobId: 'j_narr_t1', status: 'succeeded',
+      pendingFoodLog: { nutrients: fullNuts({ calories: 693 }) },
+      dispatches: [
+        { id: 't1/scout', turn: 1, agent: 'scout', received: { mode: 'review' }, output: { verdict: { label: 'High Sugar Load', level: 'warning' }, dishes: [stdDish()] } },
+        {
+          id: 't1/narrator', turn: 1, agent: 'narrator', received: { mode: 'review' },
+          output: { verdict: { label: 'High Sugar Load', level: 'warning' }, message: stdAdvice() },
+        },
+        {
+          id: 't2/dietitian', turn: 2, agent: 'dietitian', received: { mode: 'edit' },
+          output: { verdict: { label: 'Sugar Over Limit', level: 'alert' }, message: stdAdvice() },
+        },
+      ],
+    });
+    const r = law(tree, 'Agent output: verdict + advice');
+    expect(r?.result).toBe('PASS');
+    expect(r?.actual).toMatch(/t1.*t2|Every meal turn covered/);
+  });
+
   it('passes verdict+advice on weight-only edits carrying both in one emission', () => {
     const edit = buildCanonicalRunTree({
       pack: 'food', jobId: 'j_edit_verdict', status: 'succeeded',
