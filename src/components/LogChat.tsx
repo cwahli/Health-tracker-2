@@ -6216,6 +6216,19 @@ ${logsText}`);
                         {(() => {
                           const clarifyData = msg.data?.portionClarify || (msg as any).portionClarify || msg.pendingFoodLog?.portionClarify;
                           if (!clarifyData) return null;
+                          // Dedupe: server attaches the same payload top-level AND nested
+                          // in pendingFoodLog, so both the clarify message and the meal
+                          // message match. First occurrence owns the card.
+                          const clarifyKey = (d: any) => JSON.stringify({
+                            p: d?.promptMessage || null,
+                            items: Array.isArray(d?.items) ? d.items.map((i: any) => i?.name ?? i) : null,
+                          });
+                          const key = clarifyKey(clarifyData);
+                          const firstIdx = messages.findIndex((m: any) => {
+                            const d = m.data?.portionClarify || m.portionClarify || m.pendingFoodLog?.portionClarify;
+                            return !!d && clarifyKey(d) === key;
+                          });
+                          if (firstIdx >= 0 && messages[firstIdx] !== msg) return null;
                           return (
                             <PortionClarifyCard
                               portionClarify={clarifyData}
