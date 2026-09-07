@@ -16,6 +16,28 @@ export function buildVisualScoutPrompt(message: string, imageCount: number): str
   return `${baseInstruction} User note: "${cleanMsg}". If the user note explicitly mentions additional foods consumed, you MUST extract them as well, even if not visible in the images. Extract all physical dishes and constituent foods into the hierarchical schema with weightGrams, packGrams, and nutrients.`;
 }
 
+/**
+ * Special-case patient block for the scout system instruction. Returns ''
+ * when there is nothing at risk so the base prompt is untouched (L12
+ * net-zero). Budgets are NOT repeated here — the NUTRITIONAL TARGET STATUS
+ * block (7-day averages) carries them. Shapes verdict/advice only — never
+ * identity or weights.
+ */
+export function buildScoutPersonalizationBlock(args: {
+  biomarkersNeedingImprovement?: any[] | null;
+}): string {
+  const risks = (args.biomarkersNeedingImprovement || [])
+    .map((b: any) => {
+      const name = typeof b === 'string' ? b.split(' is ')[0] : (b?.name || b?.key || b?.biomarker || '');
+      const dir = typeof b === 'string' ? '' : (b?.direction || b?.trend || '');
+      return name ? `${String(name).trim()}${dir ? ` (${dir})` : ''}` : '';
+    })
+    .filter(Boolean)
+    .slice(0, 5);
+  if (risks.length === 0) return '';
+  return `- PATIENT CONTEXT (special case — shapes verdict/advice only, never identity or weights): at-risk: ${risks.join('; ')}. Budgets: see NUTRITIONAL TARGET STATUS below. Prefer a verdict level and advice that move those numbers the right way.`;
+}
+
 export function parseBracketedFoodItems(message: string): Array<{
   originalName: string;
   foodName: string;

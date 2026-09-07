@@ -32,7 +32,9 @@ export function PortionClarifyCard({ portionClarify, onConfirm, disabled, langua
     const init: Record<string, number> = {};
     items.forEach((it) => {
       const key = String(it.scoutIndex);
+      const packDefault = (it as any).packGrams;
       const match =
+        (Number.isFinite(packDefault) && it.options.find((o) => o.weightGrams === packDefault)) ||
         it.options.find((o) => o.weightGrams === it.estimatedWeightGrams) || it.options[0];
       if (match) init[key] = match.weightGrams;
     });
@@ -46,7 +48,9 @@ export function PortionClarifyCard({ portionClarify, onConfirm, disabled, langua
     const init: Record<string, string> = {};
     items.forEach((it) => {
       const key = String(it.scoutIndex);
+      const packDefault = (it as any).packGrams;
       const match =
+        (Number.isFinite(packDefault) && it.options.find((o) => o.weightGrams === packDefault)) ||
         it.options.find((o) => o.weightGrams === it.estimatedWeightGrams) || it.options[0];
       if (match) init[key] = match.id;
     });
@@ -57,10 +61,12 @@ export function PortionClarifyCard({ portionClarify, onConfirm, disabled, langua
 
   if (!items.length) return null;
 
+  const packDefaultOf = (it: any) =>
+    Number.isFinite(it?.packGrams) && it.packGrams > 0 ? it.packGrams : it.estimatedWeightGrams;
   const isAnyOverThreshold = items.some((it) => {
     const key = String(it.scoutIndex);
-    const chosen = selected[key] || it.estimatedWeightGrams;
-    const base = it.estimatedWeightGrams || 100;
+    const chosen = selected[key] || packDefaultOf(it);
+    const base = packDefaultOf(it) || 100;
     return Math.abs(chosen - base) / base > 0.30;
   });
 
@@ -76,8 +82,8 @@ export function PortionClarifyCard({ portionClarify, onConfirm, disabled, langua
       </div>
       {items.map((it) => {
         const key = String(it.scoutIndex);
-        const chosen = selected[key] || it.estimatedWeightGrams;
-        const base = it.estimatedWeightGrams || 100;
+        const chosen = selected[key] || packDefaultOf(it);
+        const base = packDefaultOf(it) || 100;
         const diffRatio = Math.abs(chosen - base) / base;
         const diffPct = Math.round(diffRatio * 100);
         const isItemOver = diffRatio > 0.30;

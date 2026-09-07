@@ -1,6 +1,5 @@
 import { formatMessageContent } from '../utils/formatUtils';
-import {
- ErrorBoundary } from './ErrorBoundary';
+import { ErrorBoundary } from './ErrorBoundary';
 import { agentCardRegistry } from './chat-cards';
 import { decideFrontDeskHandoff } from '../utils/handoffGuard';
 import { mapFrontDeskSpecialist, specialistDisplayName } from '../utils/frontDeskRouting';
@@ -14,7 +13,6 @@ import { translations } from '../utils/translations';
 import { displayStatusLabel, dictionaryFor } from '../utils/i18n';
 import { X, Send, Image, Camera, FolderOpen, MessageSquare, Sparkles, Plus, Terminal, ChevronDown, ChevronUp, Loader, MapPin, Trash2, Check, Table, RotateCcw, RefreshCw, AlertTriangle, ShieldAlert, Edit2, Maximize2, Minimize2, Flag, BrainCircuit, Download } from 'lucide-react';
 import { UniversalModal } from './UniversalModal';
-import { nutrientDefinitions } from '../utils/nutrition';
 import { biomarkerDefinitions, getBiomarkerStatus, isAsianEthnicity, getBiomarkerStatusLabel, isBiomarkerValueImprobable, getMergedBiomarkerDef, detectFlaggedTelemetryErrors, buildReviewBiomarkerContext, buildBiomarkerReviewPrefill, getMappedBiomarkerKey, isBiomarkerApproved, isCatalogBuiltIn, shouldStampExtractedDefPending } from '../utils/biomarkers';
 import { BatchNavigator } from './BatchNavigator';
 import LLMSelector from './LLMSelector';
@@ -47,7 +45,6 @@ import { executeFoodAgent } from '../jobs/FoodAgentExecutor';
 import { downloadJobDebugReport } from '../utils/logChatDebugDownload';
 import { shouldRunHandoffAutoSend } from '../utils/chatAutoSend';
 import { getSessionLog } from '../jobs/sessionLog';
-import { setActiveJobScope } from '../utils/breadcrumbTracker';
 function isValidFoodLog(log: any): boolean {
   if (!log || typeof log !== 'object' || Array.isArray(log)) return false;
   return !!(
@@ -102,7 +99,7 @@ import { humanizeJobFailure } from '../utils/jobFailure';
 import { ImageStore } from '../jobs/ImageStore';
 import { reserveCredits } from '../jobs/credits';
 import { JobQueueRunner } from '../jobs/JobQueueRunner';
-import { recordBreadcrumb } from '../utils/breadcrumbTracker';
+import { recordBreadcrumb, setActiveJobScope } from '../utils/breadcrumbTracker';
 import { consumeGoldenAnalyzeToken, GOLDEN_NEW_ANALYZE_EVENT } from '../utils/goldenIngestClient';
 import { PRIMARY_NUTRIENTS, formatNutrientDisplayValue } from '../utils/nutrients';
 import { AgentType, AGENT_REGISTRY, getAgentRolloutStatus } from '../utils/agentConfig';
@@ -3257,6 +3254,7 @@ ${logsText}`);
           activeFoodLogs: activeFoodLogs,
           outOfRangeBiomarkers,
           remainingAllowance,
+          dailyNutrientTargets: report?.dailyNutrientTargets || null,
           messages,
         };
         let resData: any = null;
@@ -3564,6 +3562,7 @@ ${logsText}`);
         // 10-day rolling average of days with 2+ meals logged. This is still
         // purely local/client-loaded data — no new Firestore reads.
         bodyData.foodLogs = (activeFoodLogs || []).slice(-60).map(f => ({ name: f.name, date: f.date, nutrients: f.nutrients }));
+        bodyData.dailyNutrientTargets = report?.dailyNutrientTargets || null;
         bodyData.biomarkersNeedingImprovement = outOfRangeBiomarkers.map(b => {
           if (b.status === 'flagged') {
             return `${b.name} is FLAGGED (Telemetry data error — please review log in Medical History)`;

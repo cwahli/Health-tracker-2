@@ -9,6 +9,8 @@ import {
   buildCreateSkipResponse,
   sumSalvagedAggregates,
   resolveCreateMealTitle,
+  isAcceptDefaultsWithinTolerance,
+  composeAcceptDefaultsParsed,
 } from './server_food_dietitian_dispatch';
 import { NUTRIENT_KEYS } from '../../utils/nutrients';
 
@@ -177,5 +179,40 @@ describe('create meal title — full dish title, never generic (first log)', () 
   it('prefers the scout mealName when present and falls back only when empty', () => {
     expect(resolveCreateMealTitle({ mealName: 'Nasi Campur' }, dishes, 'en')).toBe('Nasi Campur');
     expect(resolveCreateMealTitle({}, [], 'en')).toBe('Balanced Meal');
+  });
+});
+
+describe('accept-defaults gate (portion choices within 30%, no agent)', () => {
+  const items = [
+    { scoutIndex: 0, keyword: 'Oatmeal', estimatedWeightGrams: 35, nutrients: { protein: 4, saturatedFat: 0.5, sodium: 0, carbohydrates: 23 } },
+    { scoutIndex: 1, keyword: 'Brownies', estimatedWeightGrams: 15, nutrients: { protein: 1, saturatedFat: 1, sodium: 55, carbohydrates: 11 } },
+  ];
+
+  it('accepts unchanged or small tweaks, rejects big moves and unknowns', () => {
+    expect(isAcceptDefaultsWithinTolerance({ portionChoices: { 0: 35, 1: 15 }, scoutItems: items, isResume: true })).toBe(true);
+    expect(isAcceptDefaultsWithinTolerance({ portionChoices: { 0: 40, 1: 15 }, scoutItems: items, isResume: true })).toBe(true);
+    expect(isAcceptDefaultsWithinTolerance({ portionChoices: { 0: 130, 1: 30 }, scoutItems: items, isResume: true })).toBe(false);
+    expect(isAcceptDefaultsWithinTolerance({ portionChoices: { 9: 10 }, scoutItems: items, isResume: true })).toBe(false);
+    expect(isAcceptDefaultsWithinTolerance({ portionChoices: null, scoutItems: items, isResume: true })).toBe(false);
+    expect(isAcceptDefaultsWithinTolerance({ portionChoices: { 0: 35 }, scoutItems: items, isResume: false })).toBe(false);
+  });
+
+  it('defaults to pack weight when a pack exists', () => {
+    const packed = [
+      { scoutIndex: 0, keyword: 'Oatmeal', estimatedWeightGrams: 35, packGrams: 805, nutrients: {} },
+      { scoutIndex: 1, keyword: 'Brownies', estimatedWeightGrams: 15, packGrams: 30, nutrients: {} },
+    ];
+    expect(isAcceptDefaultsWithinTolerance({ portionChoices: { 0: 805, 1: 30 }, scoutItems: packed, isResume: true })).toBe(true);
+    expect(isAcceptDefaultsWithinTolerance({ portionChoices: { 0: 35, 1: 15 }, scoutItems: packed, isResume: true })).toBe(false);
+  });
+
+  it('composes a ready message with explicit weights and ladder verdict/advice', () => {
+    const out = composeAcceptDefaultsParsed({ items, mealName: 'Test Meal', language: 'en' });
+    expect(out.message).toMatch(/Oatmeal 35g/);
+    expect(out.message).toMatch(/Brownies 15g/);
+    expect(out.verdict && out.verdict.label).toBeTruthy();
+    expect(out.clinicalAdvice && out.clinicalAdvice.length > 0).toBe(true);
+    expect(out._internalReasoning).toMatch(/no agent call/);
+    expect(out.modificationCommand).toEqual([]);
   });
 });

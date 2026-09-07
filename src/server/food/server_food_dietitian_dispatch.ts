@@ -299,3 +299,78 @@ export function sumSalvagedAggregates(preCalculatedItems: any): Record<string, n
   return salvagedAggregatedNutrients;
 }
 
+/**
+ * Accept-defaults gate: portion-clarify choices within `tolerance` of the
+ * DEFAULT (pack weight, else the scout estimate) need no agent — the ledger
+ * already says it. Returns false whenever a choice is unverifiable (unknown
+ * default) or no resume context is present, so the agent still runs instead
+ * of guessing.
+ */
+export function isAcceptDefaultsWithinTolerance(args: {
+  portionChoices?: Record<string, number> | null;
+  scoutItems?: any[] | null;
+  isResume?: boolean;
+  tolerance?: number;
+}): boolean {
+  const { scoutItems, tolerance = 0.3 } = args;
+  const choices = args.portionChoices;
+  if (!choices || typeof choices !== 'object' || !args.isResume) return false;
+  const keys = Object.keys(choices);
+  if (keys.length === 0) return true;
+  const byIndex = new Map<string, number>();
+  (scoutItems || []).forEach((it: any, i: number) => {
+    const pack = Number(it?.packGrams);
+    const est = Number(it?.estimatedWeightGrams);
+    byIndex.set(String(it?.scoutIndex ?? i), Number.isFinite(pack) && pack > 0 ? pack : est);
+  });
+  let matched = 0;
+  for (const k of keys) {
+    const w = Number((choices as any)[k]);
+    const def = byIndex.get(String(k));
+    if (!Number.isFinite(w) || w <= 0) return false;
+    if (!Number.isFinite(def) || (def as number) <= 0) return false;
+    matched++;
+    if (Math.abs(w - (def as number)) / (def as number) > tolerance) return false;
+  }
+  return matched > 0;
+}
+
+/**
+ * Ready-made parsed result for the accept-defaults path (no agent call):
+ * explicit per-dish weights in the message, verdict/advice from the TS
+ * ladders. Downstream mode resolution and response builders are untouched.
+ */
+export function composeAcceptDefaultsParsed(args: {
+  items?: any[] | null;
+  mealName?: string;
+  language?: unknown;
+}): Record<string, any> {
+  const items = Array.isArray(args.items) ? args.items : [];
+  const totals = { totalSugar: 0, totalSatFat: 0, totalP: 0 };
+  const weighed = items.map((it: any) => {
+    const n = it?.nutrients || {};
+    totals.totalSugar += Number(n.sugar ?? n.addedSugar ?? 0) || 0;
+    totals.totalSatFat += Number(n.saturatedFat ?? 0) || 0;
+    totals.totalP += Number(n.protein ?? 0) || 0;
+    const name = it?.keyword || it?.originalName || it?.name || 'Dish';
+    const w = Math.round(Number(it?.estimatedWeightGrams ?? it?.weightGrams ?? 0)) || 0;
+    return `${name} ${w}g`;
+  });
+  const mealName = args.mealName || 'meal';
+  const verdict = decideScoutVerdict({ scoutVerdict: null, totals, mealName, language: args.language });
+  const clinicalAdvice = decideScoutAdvice({ rawAdvice: '', totals, mealName, language: args.language });
+  const message = weighed.length > 0
+    ? `${mealName}: ${weighed.join('; ')}. ${clinicalAdvice}`
+    : String(clinicalAdvice || '');
+  return {
+    mode: undefined,
+    message,
+    verdict,
+    clinicalAdvice,
+    _internalReasoning: '[Accept] portion choices within 30% of estimates; no agent call.',
+    foodData: {},
+    editCommands: [],
+    modificationCommand: [],
+  };
+}
+

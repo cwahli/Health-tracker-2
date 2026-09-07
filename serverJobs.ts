@@ -20,6 +20,7 @@ export interface ServerJobPayload {
   engine?: string;
   biomarkersNeedingImprovement?: any[];
   remainingAllowance?: any;
+  dailyNutrientTargets?: any;
   activeMeal?: any;
   foodLogs?: any[];
   userSelectedMode?: string;
@@ -464,6 +465,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         engine: payload.engine || 'gemini-3.5-flash-lite',
         biomarkersNeedingImprovement: payload.biomarkersNeedingImprovement || [],
         remainingAllowance: payload.remainingAllowance || null,
+        dailyNutrientTargets: payload.dailyNutrientTargets || null,
         activeMeal: payload.activeMeal || null,
         foodLogs: payload.foodLogs || [],
         userSelectedMode: payload.userSelectedMode || mode || 'review',

@@ -1,0 +1,387 @@
+{
+  "assumptions": [
+    "Oat eaten as 1 dry serving (35 g). No prepared-bowl photo; label is the truth source.",
+    "Hemaviton drunk as full 330 ml can. kcal 89.55/can is printed on the can (partially legible, VERIFY_ON_RESOCAN).",
+    "Brownies eaten as full 30 g pack (2 servings).",
+    "Soup bowl ~400 g total (250 g broth + ~150 g solids).",
+    "Snacks trio eaten whole: risoles ~60 g + jadah ~50 g + apem ~60 g."
+  ],
+  "dishes": [
+    {
+      "components": [
+        {"name": "Beef (lean, boiled)", "weightGrams": 80},
+        {"name": "Carrot", "weightGrams": 50},
+        {"name": "Cabbage", "weightGrams": 60},
+        {"name": "Beef broth (light)", "weightGrams": 250},
+        {"name": "Scallion", "weightGrams": 10}
+      ],
+      "cookingMethod": "boiled",
+      "dishName": "Sop Daging Sapi",
+      "genericEnglishName": "Indonesian clear beef soup with carrot and cabbage",
+      "nutrients": {
+        "addedSugar": 0, "calcium": 45, "calories": 194, "carbohydrates": 12,
+        "folate": 18, "iodine": 5, "iron": 2.6, "magnesium": 30,
+        "niacin": 4, "omega3": 0.1, "phosphorus": 220, "potassium": 480,
+        "protein": 24, "riboflavin": 0.2, "saturatedFat": 2.2, "selenium": 8,
+        "sodium": 480, "solubleFibre": 0.5, "sugar": 4, "thiamine": 0.1,
+        "totalFat": 5.5, "totalFibre": 3, "transFat": 0, "unsaturatedFat": 3.3,
+        "vitaminA": 450, "vitaminB12": 4.8, "vitaminB6": 0.4, "vitaminC": 24,
+        "vitaminD": 0, "vitaminE": 0.6, "vitaminK": 25, "zinc": 5.2
+      },
+      "photo": "photo_02.jpg",
+      "source": "estimate",
+      "weightGrams": 450
+    },
+    {
+      "components": [
+        {"name": "Risoles mayo (fried roll)", "weightGrams": 60},
+        {"name": "Jadah ketan (glutinous rice cake)", "weightGrams": 50},
+        {"name": "Apem / wingko (coconut pancake)", "weightGrams": 60}
+      ],
+      "cookingMethod": "deep_fried",
+      "dishName": "Jajanan Trio",
+      "genericEnglishName": "Indonesian market snacks: fried rissole, sticky-rice cake, coconut pancake",
+      "nutrients": {
+        "addedSugar": 10, "calcium": 30, "calories": 367, "carbohydrates": 52,
+        "folate": 12, "iodine": 3, "iron": 1.2, "magnesium": 20,
+        "niacin": 1, "omega3": 0.1, "phosphorus": 100, "potassium": 220,
+        "protein": 7, "riboflavin": 0.1, "saturatedFat": 4.5, "selenium": 4,
+        "sodium": 300, "solubleFibre": 0.5, "sugar": 14, "thiamine": 0.1,
+        "totalFat": 14.5, "totalFibre": 2, "transFat": 0.1, "unsaturatedFat": 9.9,
+        "vitaminA": 15, "vitaminB12": 0.1, "vitaminB6": 0.1, "vitaminC": 1,
+        "vitaminD": 0, "vitaminE": 1.5, "vitaminK": 2, "zinc": 0.6
+      },
+      "photo": "photo_03.jpg",
+      "source": "estimate",
+      "weightGrams": 170
+    },
+    {
+      "cookingMethod": null,
+      "dishName": "Oatmeal (instant oats, 1 serving dry)",
+      "genericEnglishName": "instant oatmeal",
+      "lockedLabelTruth": {
+        "packGrams": 805,
+        "perServing": {
+          "addedSugar": 0, "calories": 150, "carbohydrates": 23, "insolubleFibre": 2,
+          "ironPctAKG": 6, "monoUnsatFat": 1.5, "polyUnsatFat": 1, "protein": 4,
+          "saturatedFat": 0.5, "sodium": 0, "solubleFibre": 1, "sugar": 2,
+          "totalFat": 4, "totalFibre": 3, "transFat": 0
+        },
+        "servingGrams": 35,
+        "servingsPerPack": 23
+      },
+      "nutrients": {
+        "calories": 557.14, "protein": 14.86, "totalFat": 14.86, "saturatedFat": 1.86,
+        "transFat": 0.0, "unsaturatedFat": 13.0, "omega3": 0.37, "carbohydrates": 85.43,
+        "sugar": 7.43, "addedSugar": 0.0, "totalFibre": 11.14, "solubleFibre": 3.71,
+        "sodium": 0, "potassium": 445.71, "magnesium": 148.57, "calcium": 55.71,
+        "iron": 4.83, "zinc": 3.71, "selenium": 18.57, "iodine": 0.0,
+        "phosphorus": 557.14, "vitaminD": 0.0, "vitaminB12": 0.0, "folate": 37.14,
+        "vitaminC": 0.0, "vitaminE": 1.49, "vitaminK": 3.71, "vitaminA": 0.0,
+        "vitaminB6": 0.19, "thiamine": 0.74, "riboflavin": 0.19, "niacin": 1.11
+      },
+      "photo": "photo_01.jpg",
+      "source": "label_lock",
+      "weightGrams": 130,
+      "userChoice": {"estimatedGrams": 35, "packGrams": 805, "chosenGrams": 130, "pctChange": 271.4, "agentEdit": true}
+    },
+    {
+      "cookingMethod": null,
+      "dishName": "Hemaviton C1000 Total Care (orange)",
+      "genericEnglishName": "vitamin C + D3 + zinc drink, orange flavour",
+      "lockedLabelTruth": {
+        "perCan": {
+          "calories": 89.55,
+          "vitaminC_mg": 1000,
+          "vitaminC_pctAKG": 1110,
+          "vitaminD3_IU": 400,
+          "vitaminD3_pctAKG": 65,
+          "volumeMl": 330,
+          "zinc_mg": 10,
+          "zinc_pctAKG": 75
+        }
+      },
+      "nutrients": {
+        "addedSugar": 18, "calcium": 5, "calories": 89.6, "carbohydrates": 22.4,
+        "folate": 0, "iodine": 0, "iron": 0, "magnesium": 0,
+        "niacin": 0, "omega3": 0, "phosphorus": 5, "potassium": 5,
+        "protein": 0, "riboflavin": 0, "saturatedFat": 0, "selenium": 0,
+        "sodium": 35, "solubleFibre": 0, "sugar": 20, "thiamine": 0,
+        "totalFat": 0, "totalFibre": 0, "transFat": 0, "unsaturatedFat": 0,
+        "vitaminA": 0, "vitaminB12": 0, "vitaminB6": 0, "vitaminC": 1000,
+        "vitaminD": 10, "vitaminE": 0, "vitaminK": 0, "zinc": 10
+      },
+      "photo": "photo_04.jpg",
+      "source": "label_lock",
+      "weightGrams": 330
+    },
+    {
+      "cookingMethod": "baked",
+      "dishName": "Lemonilo Brownies Crispy (full pack)",
+      "genericEnglishName": "crispy brownies snack",
+      "lockedLabelTruth": {
+        "perServing": {
+          "addedSugar": 5.5, "calories": 70, "carbohydrates": 11, "protein": 1,
+          "saturatedFat": 1, "sodium": 55, "sugar": 6, "totalFat": 2,
+          "totalFibre": 1, "transFat": 0
+        },
+        "servingGrams": 15,
+        "servingsPerPack": 2
+      },
+      "nutrients": {
+        "addedSugar": 11, "calcium": 10, "calories": 140, "carbohydrates": 22,
+        "folate": 4, "iodine": 0, "iron": 0.7, "magnesium": 15,
+        "niacin": 0.3, "omega3": 0, "phosphorus": 40, "potassium": 60,
+        "protein": 2, "riboflavin": 0.05, "saturatedFat": 2, "selenium": 1.5,
+        "sodium": 110, "solubleFibre": 0.5, "sugar": 12, "thiamine": 0.03,
+        "totalFat": 4, "totalFibre": 2, "transFat": 0, "unsaturatedFat": 2,
+        "vitaminA": 2, "vitaminB12": 0, "vitaminB6": 0.03, "vitaminC": 0,
+        "vitaminD": 0, "vitaminE": 0.8, "vitaminK": 1, "zinc": 0.2
+      },
+      "photo": "photo_05.jpg",
+      "source": "label_lock",
+      "weightGrams": 30,
+      "userChoice": {"estimatedGrams": 15, "packGrams": 30, "chosenGrams": 30, "pctChange": 100.0, "agentEdit": true}
+    }
+  ],
+  "expectedItems": [
+    {
+      "key": "sop_daging",
+      "names": ["Sop Daging Sapi", "beef soup", "sop daging"]
+    },
+    {
+      "key": "jajanan_trio",
+      "names": ["Risoles", "Jadah", "Apem", "Wingko"]
+    },
+    {
+      "key": "oatmeal",
+      "names": ["Oatmeal", "instant oats"]
+    },
+    {
+      "key": "hemaviton_c1000",
+      "names": ["Hemaviton", "C1000"]
+    },
+    {
+      "key": "brownies_crispy",
+      "names": ["Brownies Crispy", "Lemonilo"]
+    }
+  ],
+  "id": "golden-meal-01",
+  "mode": "new_log",
+  "passes": [
+    {
+      "id": "identify",
+      "photos": ["photo_01.jpg", "photo_02.jpg", "photo_03.jpg", "photo_04.jpg", "photo_05.jpg"],
+      "prompt": "Log this meal"
+    }
+  ],
+  "title": "Meal 01 — beef soup + market snacks + oats + Hemaviton + brownies",
+  "totals": {
+    "nutrients": {
+      "calories": 1347.74, "protein": 47.86, "totalFat": 38.86, "saturatedFat": 10.56,
+      "transFat": 0.1, "unsaturatedFat": 28.2, "omega3": 0.57, "carbohydrates": 193.83,
+      "sugar": 57.43, "addedSugar": 39.0, "totalFibre": 18.14, "solubleFibre": 5.21,
+      "sodium": 925.0, "potassium": 1210.71, "magnesium": 213.57, "calcium": 145.71,
+      "iron": 9.33, "zinc": 19.71, "selenium": 32.07, "iodine": 8.0,
+      "phosphorus": 922.14, "vitaminD": 10.0, "vitaminB12": 4.9, "folate": 71.14,
+      "vitaminC": 1025.0, "vitaminE": 4.39, "vitaminK": 31.71, "vitaminA": 467.0,
+      "vitaminB6": 0.72, "thiamine": 0.97, "riboflavin": 0.54, "niacin": 6.41
+    },
+    "salt": 2.35,
+    "weightGrams": 1060
+  },
+  "units": {
+    "minerals_mg": ["sodium", "potassium", "magnesium", "calcium", "iron", "zinc", "selenium", "phosphorus", "vitaminC", "vitaminE"],
+    "omega3": "g",
+    "protein_macros_g": [
+      "protein",
+      "carbohydrates",
+      "totalFat",
+      "saturatedFat",
+      "transFat",
+      "unsaturatedFat",
+      "sugar",
+      "addedSugar",
+      "totalFibre",
+      "solubleFibre"
+    ],
+    "salt_g_derived": "sodium * 0.00254",
+    "vitamins_mcg": ["vitaminD", "vitaminB12", "folate", "vitaminK", "vitaminA"],
+    "vitamins_mg": ["vitaminB6", "thiamine", "riboflavin", "niacin"]
+  },
+  "verifyFlags": [
+    "hemaviton_kcal_printed_89.55_verify_on_rescan",
+    "oat_iron_6pctAKG_ref18mg_verify",
+    "snack_weights_visual_estimate_verify"
+  ],
+  "turn1Ledger": {
+    "note": "Estimated ledger at end of turn 01: single servings (oats 35g, brownies 15g). Clarify pending.",
+    "weightGrams": 950,
+    "nutrients": {
+      "calories": 870.6, "protein": 36.0, "totalFat": 26.0, "saturatedFat": 8.2,
+      "transFat": 0.1, "unsaturatedFat": 17.7, "omega3": 0.3, "carbohydrates": 120.4,
+      "sugar": 46.0, "addedSugar": 33.5, "totalFibre": 9.0, "solubleFibre": 2.25,
+      "sodium": 870.0, "potassium": 855.0, "magnesium": 97.5, "calcium": 100.0,
+      "iron": 5.45, "zinc": 16.9, "selenium": 17.75, "iodine": 8.0,
+      "phosphorus": 495.0, "vitaminD": 10.0, "vitaminB12": 4.9, "folate": 42.0,
+      "vitaminC": 1025.0, "vitaminE": 2.9, "vitaminK": 28.5, "vitaminA": 466.0,
+      "vitaminB6": 0.57, "thiamine": 0.42, "riboflavin": 0.38, "niacin": 5.45
+    },
+    "salt": 2.21
+  },
+  "portionClarify": {
+    "trigger": "estimatedWeight != packGrams on 2 packaged items",
+    "questions": [
+      {
+        "dish": "Oatmeal",
+        "estimatedGrams": 35,
+        "packGrams": 805,
+        "choices": [35, 130, 805],
+        "userChoice": 130,
+        "pctChange": 83.9,
+        "defaultGrams": 805,
+        "agentEdit": true
+      },
+      {
+        "dish": "Lemonilo Brownies Crispy",
+        "estimatedGrams": 15,
+        "packGrams": 30,
+        "choices": [15, 30],
+        "userChoice": 30,
+        "pctChange": 0.0,
+        "defaultGrams": 30,
+        "agentEdit": false,
+        "note": "Choice equals pack default: accepted, rides along with the oats edit turn."
+      }
+    ],
+    "rule": "Change >30% vs pack default resolves as agent verdict/advice patch turn (dishUpdates only, never dish regeneration). Accepted defaults ride along."
+  },
+  "editTurn": {
+    "note": "After user picks 130g oats + 30g brownies: TS applies locks and rescales from label truth; t2/scout reviews the locked ledger, refreshes verdict/advice, and emits dishUpdates [] — no dish regenerated. Totals = dishes/totals above.",
+    "parentDispatch": "t1/scout",
+    "mode": "patch",
+    "expectedTotalsKcal": 1347.74,
+    "expectedWeightGrams": 1110,
+    "dishUpdates": []
+  },
+  "patientContext": {
+    "note": "REFERENCE patient (illustrative): gives the personalization + target-status blocks something to render. Not asserted as medical fact.",
+    "biomarkersNeedingImprovement": [
+      {"name": "LDL", "direction": "high"},
+      {"name": "HbA1c", "direction": "high"}
+    ],
+    "remainingAllowance": {"calories": 800, "sugar": 20, "sodium": 500},
+    "referenceHistory": [
+      {
+        "date": "2026-09-04",
+        "nutrients": {
+          "saturatedFat": 25, "calories": 2400, "sodium": 2800, "protein": 90,
+          "carbohydrates": 250, "totalFibre": 20, "potassium": 2000, "solubleFibre": 3,
+          "addedSugar": 40, "transFat": 0.2
+        }
+      },
+      {
+        "date": "2026-09-05",
+        "nutrients": {
+          "saturatedFat": 30, "calories": 2600, "sodium": 3200, "protein": 110,
+          "carbohydrates": 280, "totalFibre": 25, "potassium": 2200, "solubleFibre": 4,
+          "addedSugar": 50, "transFat": 0
+        }
+      },
+      {
+        "date": "2026-09-06",
+        "nutrients": {
+          "saturatedFat": 28, "calories": 2500, "sodium": 3000, "protein": 100,
+          "carbohydrates": 260, "totalFibre": 22, "potassium": 2100, "solubleFibre": 3.5,
+          "addedSugar": 45, "transFat": 0.1
+        }
+      }
+    ],
+    "referenceTargets": {
+      "saturatedFat": 20,
+      "calories": 1800,
+      "sodium": 2300,
+      "protein": 120,
+      "carbohydrates": 200,
+      "totalFat": 60,
+      "sugar": 30,
+      "totalFibre": 30
+    },
+    "renderedPersonalization": "- PATIENT CONTEXT (special case — shapes verdict/advice only, never identity or weights): at-risk: LDL (high); HbA1c (high). Budgets: see NUTRITIONAL TARGET STATUS below. Prefer a verdict level and advice that move those numbers the right way.",
+    "renderedTargetStatus": "=== NUTRITIONAL TARGET STATUS ===\n3 days avg: Sat fat (27.7g - 38% over), Calorie (2500kcal - 39% over), Sodium (3000mg - 30% over), Protein (100g - 17% under), Carbohydrates (263.3g - 32% over), Total Fibre (22.3g - 26% under), Potassium (2100mg), Soluble Fibre (3.5g), Added Sugar (45g - 50% over), Trans Fat (0.1g)"
+  },
+  "packDefaultLedger": {
+    "note": "What the user sees if no turn-2 agent ever runs: unanswered items stand at pack weight (oats 805g, brownies 30g). Ready-made TS message narrates this ledger.",
+    "weightGrams": 1735,
+    "salt": 2.35,
+    "verdict": {"label": "Whole Packs Exceed Your Targets", "level": "alert"},
+    "readyAdvice": "At whole packs this is 4240 kcal — more than twice your daily budget — with sugar over 3× your limit and saturated fat using up the full day's allowance in one meal. That works against your fat-loss goal and will spike blood sugar. The oat pack drives most of it: picking a smaller portion is the biggest lever. Protein covers your day and fiber is excellent. A walk helps.",
+    "nutrients": {
+      "addedSugar": 39, "calcium": 435, "calories": 4240.6, "carbohydrates": 637.4,
+      "folate": 264, "iodine": 8, "iron": 34.4, "magnesium": 985,
+      "niacin": 12.2, "omega3": 2.5, "phosphorus": 3815, "potassium": 3525,
+      "protein": 125, "riboflavin": 1.5, "saturatedFat": 20.2, "selenium": 128.5,
+      "sodium": 925, "solubleFibre": 24.5, "sugar": 96, "thiamine": 4.83,
+      "totalFat": 116, "totalFibre": 76, "transFat": 0.1, "unsaturatedFat": 95.7,
+      "vitaminA": 467, "vitaminB12": 4.9, "vitaminB6": 1.68, "vitaminC": 1025,
+      "vitaminD": 10, "vitaminE": 12.1, "vitaminK": 51, "zinc": 39
+    }
+  },
+  "finalVerdict": {"label": "Filling Meal, Sugar Still High", "level": "warning"},
+  "finalAdvice": "At 130g of oats and the full brownie pack, this meal is 1348 kcal, 75% of your day — with nearly double the sugar limit from the drink, brownies, and snacks.\n\nWith 6g of carbs and no sugar left today, dinner means lean protein with greens — no starch, no sweets — covering the 72g protein needed. One warning: the fried snacks carry 0.1g trans fat; keep that at zero.",
+  "turn3": {
+    "userMessage": "I didn't eat the pancake — and the soup is soto santan sapi, not sop daging sapi.",
+    "parentDispatch": "t2/dietitian",
+    "mode": "patch",
+    "changes": [
+      "REMOVE Apem pancake (60g) from Jajanan Trio — not eaten; full dish re-provided",
+      "RE-IDENTIFY dish 1 Sop Daging Sapi → Soto Santan Sapi (400g); full re-estimation, img #1 coords kept"
+    ],
+    "dishUpdates": [
+      {
+        "dishName": "Jajanan Trio",
+        "genericEnglishName": "market snacks: fried rissole, sticky-rice cake (pancake removed, not eaten)",
+        "weightGrams": 110,
+        "nutrients": {
+          "addedSugar": 2, "calcium": 19.41, "calories": 255, "carbohydrates": 32,
+          "folate": 7.76, "iodine": 1.94, "iron": 0.78, "magnesium": 12.94,
+          "niacin": 0.65, "omega3": 0.06, "phosphorus": 64.71, "potassium": 142.35,
+          "protein": 5.5, "riboflavin": 0.06, "saturatedFat": 3.5, "selenium": 2.59,
+          "sodium": 270, "solubleFibre": 0.32, "sugar": 4, "thiamine": 0.06,
+          "totalFat": 11.5, "totalFibre": 1.3, "transFat": 0.1, "unsaturatedFat": 7.9,
+          "vitaminA": 9.71, "vitaminB12": 0.06, "vitaminB6": 0.06, "vitaminC": 0.65,
+          "vitaminD": 0.0, "vitaminE": 0.97, "vitaminK": 1.29, "zinc": 0.39
+        }
+      },
+      {
+        "dishName": "Soto Santan Sapi",
+        "genericEnglishName": "beef soup in coconut-milk broth (soto santan)",
+        "weightGrams": 400,
+        "nutrients": {
+          "addedSugar": 0, "calcium": 40, "calories": 310, "carbohydrates": 8,
+          "folate": 15, "iodine": 5, "iron": 3.0, "magnesium": 45,
+          "niacin": 4, "omega3": 0.2, "phosphorus": 200, "potassium": 500,
+          "protein": 22, "riboflavin": 0.2, "saturatedFat": 12, "selenium": 8,
+          "sodium": 450, "solubleFibre": 0.3, "sugar": 5, "thiamine": 0.1,
+          "totalFat": 22, "totalFibre": 2.5, "transFat": 0, "unsaturatedFat": 10,
+          "vitaminA": 200, "vitaminB12": 4.8, "vitaminB6": 0.4, "vitaminC": 10,
+          "vitaminD": 0, "vitaminE": 1.0, "vitaminK": 20, "zinc": 5.0
+        }
+      }
+    ],
+    "totals": {
+      "calories": 1351.74, "protein": 44.36, "totalFat": 52.36, "saturatedFat": 19.36,
+      "transFat": 0.1, "unsaturatedFat": 32.9, "omega3": 0.63, "carbohydrates": 169.83,
+      "sugar": 48.43, "addedSugar": 31.0, "totalFibre": 16.94, "solubleFibre": 4.83,
+      "sodium": 865.0, "potassium": 1153.06, "magnesium": 221.51, "calcium": 130.12,
+      "iron": 9.31, "zinc": 19.3, "selenium": 30.66, "iodine": 6.94,
+      "phosphorus": 866.85, "vitaminD": 10.0, "vitaminB12": 4.86, "folate": 63.9,
+      "vitaminC": 1010.65, "vitaminE": 4.26, "vitaminK": 26.0, "vitaminA": 211.71,
+      "vitaminB6": 0.68, "thiamine": 0.93, "riboflavin": 0.5, "niacin": 6.06
+    },
+    "expectedTotalsKcal": 1351.74,
+    "expectedWeightGrams": 1050,
+    "verdict": {"label": "Coconut Broth Maxes Saturated Fat", "level": "alert"},
+    "advice": "Skipping the pancake cut sugar to 48g. But the soto's coconut broth pushes saturated fat to 19g, nearly the full day's allowance, at 1352 kcal, 75% of your day.\n\nWith 30g of carbs and 8g of fat left, dinner means lean protein with greens — no starch, no frying — covering the 76g protein needed. The fried snacks still carry 0.1g trans fat; keep that at zero."
+  }
+}

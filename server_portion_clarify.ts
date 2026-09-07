@@ -10,6 +10,7 @@ export type PortionClarifyItem = {
   scoutIndex: number;
   name: string;
   estimatedWeightGrams: number;
+  packGrams: number | null;
   labelServingGrams: number | null;
   options: PortionOption[];
   reason: string;
@@ -237,10 +238,11 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
     }
 
     return {
-      scoutIndex,
-      name,
-      estimatedWeightGrams: w > 0 ? w : singleUnitGrams,
-      labelServingGrams: ssG || 100,
+    scoutIndex,
+    name,
+    estimatedWeightGrams: w > 0 ? w : singleUnitGrams,
+    packGrams: Number.isFinite(packGrams) && (packGrams as number) > 0 ? Math.round(packGrams as number) : null,
+    labelServingGrams: ssG || 100,
       options,
       reason: `Multi-serve pack (${detectedUnits} units) — confirm how much you ate`,
     };
@@ -310,6 +312,7 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
     scoutIndex,
     name,
     estimatedWeightGrams: w,
+    packGrams: Number.isFinite(packGrams) && packGrams > 0 ? Math.round(packGrams) : null,
     labelServingGrams: ssG,
     options,
     reason: `Package weight (${packGrams}g) differs from estimated portion (${w}g) — confirm how much you ate`,

@@ -5,7 +5,7 @@
 import { Type } from '@google/genai';
 import { z } from 'zod';
 import { formatUSDANutrients, formatOFFNutrients, extractOFFNutrientsPer100g, isFastFoodChain, buildWebSearchQuery, loosenQuery, cleanQuery, detectChainKeyFromText, scoutHasCompletePrintedLabel, enrichScoutComponentsWithMatches, buildPastMealsContext } from './src/server/food/server_food_analyze_helpers.js';
-import { computeDietitianSkipGates, decideScoutVerdict, decideScoutAdvice, buildPureScaleResponse, sumPrecalcTotals, buildCreateSkipResponse, sumSalvagedAggregates, applyPreDietitianDensityCheck, resolveCreateMealTitle } from './src/server/food/server_food_dietitian_dispatch.js';
+import { computeDietitianSkipGates, isAcceptDefaultsWithinTolerance, composeAcceptDefaultsParsed, decideScoutVerdict, decideScoutAdvice, buildPureScaleResponse, sumPrecalcTotals, buildCreateSkipResponse, sumSalvagedAggregates, applyPreDietitianDensityCheck, resolveCreateMealTitle } from './src/server/food/server_food_dietitian_dispatch.js';
 import { resolveFoodAnalyzeMode, buildFoodApiCalls, normalizeParsedPostDietitian } from './src/server/food/server_food_mode_routing.js';
 import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, resolveModifyIncomingTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput, mapFinalizeToMeal, mergeModifyPathScoutItems, runEvaluationFinalize, assembleEvaluationComparison } from './src/server/food/server_food_meal_assemble.js';
 import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, buildScoutFailureError, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries, applyWeightModShortcut, restoreTurnOneCandidates, computeScoutRetryDelay, applySkipScoutShortcut, checkResumedFromImageTurn, applyTextQueryShortcut, checkMenuScaleBypass, buildScoutCallArgs, runScoutRetryLoop } from './src/server/food/server_food_scout_source.js';
@@ -125,7 +125,9 @@ import {
   parseAndHealVisionScout,
   reconcileIngredientsToComponents,
 } from './server_vision_scout.js';
-import { buildVisualScoutPrompt, parseBracketedFoodItems } from './agents/scoutInstructions.js';
+import { buildVisualScoutPrompt, buildScoutPersonalizationBlock, parseBracketedFoodItems } from './agents/scoutInstructions.js';
+import { buildNutritionTargetStatus, pickExplicitTargets } from './src/utils/nutritionTargetStatus.js';
+import { getCurrentDateInTimezone } from './src/utils/dateUtils.js';
 import { isDishEstimateEnabled } from './server_food_flags.js';
 import { finalizeDishLedger } from './server_dish_finalize.js';
 import { evaluateMealGate } from './server_meal_gate.js';
@@ -381,10 +383,16 @@ export async function runFoodAnalyze(req: any, res: any) {
             `2. INGREDIENT & DISH SUBSTITUTION/RENAME: If the user changes, corrects, or substitutes an ingredient or dish (e.g. 'ikan is nila', 'unsweetened tea', 'chicken instead of beef'), you MUST update the dishName, genericEnglishName, and foods[].foodName to the new substituted food (e.g. 'Ikan Nila' / 'tilapia' instead of 'Cakalang' / 'Cendro') and adjust the nutrients (calories, protein, fat, carbs, sugar) accordingly.\n` +
             `3. SEPARATE DISHES: Keep distinct plated items, sides, and beverages as separate distinct dishes in the dishes[] array. Never merge drinks into food dishes.\n` +
             `4. CLINICAL ADVICE & NARRATIVE: Provide an updated constructive 35-70 word clinicalAdvice in 2nd person ("You got...") covering key nutritional assets of the updated meal, metabolic/glycemic impact of the change, and actionable next steps/movement.`;
-        } else {
+    } else {
           scoutPromptText = buildVisualScoutPrompt(message || '', imageCount);
         }
-        const resolvedScoutSystemInstruction = withScoutLanguage(scoutSystemInstruction, userProfile?.language);
+        const scoutPersonalization = buildScoutPersonalizationBlock({ biomarkersNeedingImprovement });
+        const nutritionTargetStatus = buildNutritionTargetStatus({
+          logs: req.body.foodLogs,
+          targets: pickExplicitTargets(req.body.dailyNutrientTargets),
+          todayStr: getCurrentDateInTimezone(userProfile?.timezone),
+        });
+        const resolvedScoutSystemInstruction = withScoutLanguage(scoutSystemInstruction, userProfile?.language) + (scoutPersonalization ? `\n${scoutPersonalization}` : '') + (nutritionTargetStatus ? `\n${nutritionTargetStatus}` : '');
         scoutInstructionForDebug = {
           systemInstruction: resolvedScoutSystemInstruction,
           userPrompt: scoutPromptText,
@@ -814,6 +822,13 @@ export async function runFoodAnalyze(req: any, res: any) {
       const pureScale = buildPureScaleResponse({ targetWeightGrams: targetWeight, language: userProfile?.language });
       textOutput = pureScale.textOutput;
       rawParsed = pureScale.rawParsed;
+    } else if (isAcceptDefaultsWithinTolerance({ portionChoices: req.body.portionChoices, scoutItems: visionScoutItems, isResume: Boolean(req.body.skipScout || req.body.portionChoices) })) {
+      addDebugLog('[Accept] portion choices within 30% of estimates: skipping agent, composing from ledger.');
+      sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'completed', message: 'Meal analysis finalized.' });
+      const acceptMealName = activeMeal?.name || visionScoutItems.map((v: any) => v?.keyword || v?.originalName || v?.name).filter(Boolean).slice(0, 3).join(', ') || undefined;
+      const acceptParsed = composeAcceptDefaultsParsed({ items: visionScoutItems, mealName: acceptMealName, language: userProfile?.language });
+      textOutput = JSON.stringify(acceptParsed);
+      rawParsed = acceptParsed;
     } else {
       addDebugLog(`[MealAgent] Initiating Dietitian LLM evaluation...`);
       
