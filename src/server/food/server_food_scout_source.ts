@@ -845,7 +845,11 @@ export function buildScoutCallArgs(args: ScoutCallArgs): Record<string, any> {
     responseMimeType: "application/json",
     maxOutputTokens: 8192,
     temperature: 0.1,
-    skipThinking: true,
+    // Native reasoning stays ON for scout: the 5-image extraction call is
+    // where attention drops land (always the hardest image), and the
+    // thinking pass measurably improves full-coverage rate for ~+4s and
+    // ~+1.5k tokens. Timeout fallback retries with skipThinking anyway.
+    skipThinking: false,
     logStagePrefix: 'scout',
     responseSchema: visionScoutResponseSchema,
   };
