@@ -144,4 +144,61 @@ describe('edit patch ledger', () => {
     });
     expect(out.weightGrams).toBe(125);
   });
+
+  it('diffs portion update with empty scout emission via arrow syntax in userMessage', () => {
+    const prior = [
+      { scoutIndex: 0, name: 'Lemonilo Brownies Crispy', weightGrams: 15, nutrients: { calories: 70 } },
+    ];
+    const cmds = diffScoutToEditCommands({
+      priorItems: prior,
+      scoutItems: [],
+      userMessage: 'Please update my meal portions: Lemonilo Brownies Crispy: 15g ➔ 30g (+100%). Because the portion difference exceeds 30%, please review...',
+    });
+    expect(cmds.length).toBe(1);
+    expect(cmds[0].action).toBe('set_weight');
+    expect(cmds[0].itemName).toBe('Lemonilo Brownies Crispy');
+    expect(cmds[0].newWeightGrams).toBe(30);
+  });
+
+  it('diffs portion update with empty scout emission via portionChoices', () => {
+    const prior = [
+      { scoutIndex: 0, name: 'Lemonilo Brownies Crispy', weightGrams: 15, nutrients: { calories: 70 } },
+    ];
+    const cmds = diffScoutToEditCommands({
+      priorItems: prior,
+      scoutItems: [],
+      portionChoices: { '0': 30 },
+    });
+    expect(cmds.length).toBe(1);
+    expect(cmds[0].action).toBe('set_weight');
+    expect(cmds[0].itemName).toBe('Lemonilo Brownies Crispy');
+    expect(cmds[0].newWeightGrams).toBe(30);
+  });
+
+  it('aligns scout partial dish update to correct item in multi-dish meal without deleting others', () => {
+    const prior = [
+      { scoutIndex: 0, name: 'Beef and Vegetable Hotpot', weightGrams: 300, sourceImageIndex: 0 },
+      { scoutIndex: 1, name: 'Sizzling Steak and Sausages', weightGrams: 200, sourceImageIndex: 1 },
+    ];
+    const scout = [
+      {
+        name: 'Sizzling Steak and Sausages with Vegetables',
+        estimatedWeightGrams: 180,
+        sourceImageIndex: 1,
+        foods: [
+          { foodName: 'Beef Steak', weightGrams: 100 },
+          { foodName: 'Mixed Vegetables', weightGrams: 80 },
+        ],
+      },
+    ];
+    const cmds = diffScoutToEditCommands({
+      priorItems: prior,
+      scoutItems: scout,
+      userMessage: 'The beef steak is 100g and there was vegetable as well in this plate',
+    });
+    // Beef Hotpot must NOT be replaced!
+    expect(cmds.some(c => c.itemName === 'Beef and Vegetable Hotpot' && c.action === 'replace_identity')).toBe(false);
+    // Steak item must be targeted
+    expect(cmds.some(c => c.itemName === 'Sizzling Steak and Sausages')).toBe(true);
+  });
 });

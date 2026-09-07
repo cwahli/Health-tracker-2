@@ -886,6 +886,7 @@ export async function runFoodAnalyze(req: any, res: any) {
           priorItems,
           scoutItems: scoutDishes,
           userMessage: message,
+          portionChoices: (req.body as any)?.portionChoices,
         });
         const totals = sumPrecalcTotals(priorItems);
         const scoutVerdict = decideScoutVerdict({

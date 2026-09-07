@@ -457,14 +457,18 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
   // 7. Structure Composite Components with Scaled Weights and Nutrients
   const rawComps = Array.isArray(item.componentsDetailList) && item.componentsDetailList.length > 0
     ? item.componentsDetailList
-    : (Array.isArray(item.components) && item.components.length > 0 ? item.components : (Array.isArray(item.compositeSiblings) ? item.compositeSiblings : []));
+    : (Array.isArray(item.components) && item.components.length > 0
+      ? item.components
+      : (Array.isArray(item.foods) && item.foods.length > 0
+        ? item.foods
+        : (Array.isArray(item.compositeSiblings) ? item.compositeSiblings : [])));
 
   let componentsDetailList: any[] | undefined = undefined;
   if (rawComps.length > 0) {
     const origWeight = Math.max(1, Number(item.estimatedWeightGrams || nutrientBasisWeight || consumedWeight));
     const scale = consumedWeight / origWeight;
     componentsDetailList = rawComps.map((c: any) => {
-      const cName = String(c.name || c.searchQuery || c.keyword || 'Ingredient').trim();
+      const cName = String(c.name || c.foodName || c.searchQuery || c.keyword || 'Ingredient').trim();
       const origCW = Number(c.weightGrams ?? c.estimatedWeightGrams ?? (c.volumePercentage ? Math.round(origWeight * (c.volumePercentage / 100)) : 0));
       const cWeight = Math.max(1, Math.round(origCW * scale));
       const cBasisWeight = Math.max(1, Number(c.nutrientBasisWeight ?? c.estimatedWeightGrams ?? origCW));

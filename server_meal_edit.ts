@@ -156,6 +156,9 @@ function estimateToScoutItem(name: string, grams: number, estimate: ScoutEstimat
     boundingBox2D: media?.boundingBox2D ?? null,
     sourceImageIndex: media?.sourceImageIndex ?? null,
     nutrients: n,
+    foods: e.foods || e.components || [],
+    components: e.components || e.foods || [],
+    componentsDetailList: e.componentsDetailList || [],
   };
 }
 
@@ -443,11 +446,12 @@ export async function applyMealEdits(opts: {
     scoutForDiff = locked.items;
     notes.push(...locked.notes);
   }
-  if (commandsIn.length === 0 && scoutForDiff.length > 0) {
+  if (commandsIn.length === 0) {
     const fromDiff = diffScoutToEditCommands({
       priorItems: original,
       scoutItems: scoutForDiff,
       userMessage: opts.userMessage,
+      portionChoices: (opts as any).portionChoices,
     });
     if (fromDiff.length > 0) {
       commandsIn = fromDiff as MealEditCommand[];
@@ -625,6 +629,11 @@ export async function applyMealEdits(opts: {
         next.componentsDetailList = detailSource;
         next.compositeSiblings = Array.isArray(renamedSiblings) ? renamedSiblings : [];
         next.hasComponents = prev.hasComponents;
+      } else if (Array.isArray(next.componentsDetailList) && next.componentsDetailList.length > 0) {
+        next.hasComponents = next.componentsDetailList.length > 1;
+        if (!Array.isArray(next.components) || next.components.length === 0) {
+          next.components = next.componentsDetailList;
+        }
       } else {
         const component = {
           name: newName,

@@ -102,6 +102,10 @@ function estimateFromScout(it: any): Record<string, any> | null {
     out.components = it.components;
     any = true;
   }
+  if (Array.isArray(it?.componentsDetailList) && it.componentsDetailList.length > 0) {
+    out.componentsDetailList = it.componentsDetailList;
+    any = true;
+  }
   if (Array.isArray(it?.foods) && it.foods.length > 0) {
     out.foods = it.foods;
     any = true;
@@ -117,33 +121,114 @@ export function diffScoutToEditCommands(args: {
   priorItems: any[];
   scoutItems: any[];
   userMessage?: string;
+  portionChoices?: any;
 }): PatchEditCommand[] {
-  const { priorItems, scoutItems } = args;
-  if (!Array.isArray(priorItems) || !Array.isArray(scoutItems) || scoutItems.length === 0) {
+  const { priorItems, scoutItems = [] } = args;
+  if (!Array.isArray(priorItems) || priorItems.length === 0) {
     return [];
   }
   const commands: PatchEditCommand[] = [];
   const usedPrior = new Set<number>();
 
+  // 1. Process portionChoices if explicitly provided (e.g. direct UI portion selection)
+  if (args.portionChoices && typeof args.portionChoices === 'object') {
+    const entries = Array.isArray(args.portionChoices)
+      ? args.portionChoices.map((c: any) => [c.scoutIndex ?? c.name, c.weightGrams ?? c.weight])
+      : Object.entries(args.portionChoices);
+    for (const [k, targetWeight] of entries) {
+      const grams = Math.round(Number(targetWeight));
+      if (!grams || grams <= 0) continue;
+      const priorIdx = priorItems.findIndex((p, i) => {
+        if (p.scoutIndex != null && String(p.scoutIndex) === String(k)) return true;
+        if (String(i) === String(k)) return true;
+        return namesReferSame(displayName(p), String(k)) || namesShareSubstance(displayName(p), String(k));
+      });
+      if (priorIdx >= 0) {
+        const prior = priorItems[priorIdx];
+        const pName = displayName(prior);
+        const pWeight = weightOf(prior);
+        if (Math.abs(grams - pWeight) >= 1) {
+          commands.push({
+            action: 'set_weight',
+            itemName: pName,
+            newWeightGrams: grams,
+            scoutIndex: scoutIndexOf(prior, priorIdx),
+            targetDbId: prior.dbId || null,
+          });
+          usedPrior.add(priorIdx);
+        }
+      }
+    }
+  }
+
+  // 2. Process portion update syntax from userMessage (e.g. "Lemonilo Brownies Crispy: 15g ➔ 30g")
+  if (args.userMessage) {
+    const arrowRegex = /([a-zA-Z0-9\s/'-]+?):\s*\d+(?:\.\d+)?\s*g\s*(?:➔|->)\s*(\d+(?:\.\d+)?)\s*g/gi;
+    let match: RegExpExecArray | null;
+    while ((match = arrowRegex.exec(args.userMessage)) !== null) {
+      const matchedName = match[1].trim();
+      const targetGrams = Math.round(Number(match[2]));
+      if (targetGrams > 0) {
+        const priorIdx = priorItems.findIndex((p, i) => !usedPrior.has(i) && (namesReferSame(displayName(p), matchedName) || namesShareSubstance(displayName(p), matchedName)));
+        if (priorIdx >= 0) {
+          const prior = priorItems[priorIdx];
+          const pName = displayName(prior);
+          const pWeight = weightOf(prior);
+          if (Math.abs(targetGrams - pWeight) >= 1 && !commands.some(c => c.action === 'set_weight' && c.itemName === pName)) {
+            commands.push({
+              action: 'set_weight',
+              itemName: pName,
+              newWeightGrams: targetGrams,
+              scoutIndex: scoutIndexOf(prior, priorIdx),
+              targetDbId: prior.dbId || null,
+            });
+            usedPrior.add(priorIdx);
+          }
+        }
+      }
+    }
+  }
+
+  // Pure portion modification with empty scout emission
+  if (!Array.isArray(scoutItems) || scoutItems.length === 0) {
+    return commands;
+  }
+
+  const isFullReEmission = scoutItems.length === priorItems.length;
+
   for (let sIdx = 0; sIdx < scoutItems.length; sIdx++) {
     const scout = scoutItems[sIdx];
     const sName = displayName(scout);
     if (!sName) continue;
-    const sScoutIdx = scoutIndexOf(scout, sIdx);
+    const hasExplicitScoutIdx = scout.scoutIndex != null && Number.isFinite(Number(scout.scoutIndex));
+    const sScoutIdx = hasExplicitScoutIdx ? Number(scout.scoutIndex) : scoutIndexOf(scout, sIdx);
 
-    let priorIdx = priorItems.findIndex((p, i) => !usedPrior.has(i) && scoutIndexOf(p, i) === sScoutIdx);
+    let priorIdx = -1;
+    // 1. Explicit scoutIndex if provided by scout
+    if (hasExplicitScoutIdx) {
+      priorIdx = priorItems.findIndex((p, i) => !usedPrior.has(i) && scoutIndexOf(p, i) === sScoutIdx);
+    }
+    // 2. High-confidence name match
     if (priorIdx < 0) {
-      priorIdx = priorItems.findIndex((p, i) => !usedPrior.has(i) && (namesReferSame(displayName(p), sName) || namesShareSubstance(displayName(p), sName)));
+      priorIdx = priorItems.findIndex((p, i) => !usedPrior.has(i) && namesReferSame(displayName(p), sName));
     }
-    // Match by sourceImageIndex if both have it and it's non-null
+    // 3. Substantive name match + sourceImageIndex correlation
     if (priorIdx < 0 && scout.sourceImageIndex != null) {
-      priorIdx = priorItems.findIndex((p, i) => !usedPrior.has(i) && p.sourceImageIndex === scout.sourceImageIndex);
+      priorIdx = priorItems.findIndex((p, i) => !usedPrior.has(i) && p.sourceImageIndex === scout.sourceImageIndex && namesShareSubstance(displayName(p), sName));
     }
-    // Only fall back to positional match if scoutItems has the SAME length as priorItems (full meal re-emission),
-    // OR if the user message specifically indicates replacement/substitution of a prior item.
-    if (priorIdx < 0 && scoutItems.length === priorItems.length && sIdx < priorItems.length && !usedPrior.has(sIdx)) {
-      priorIdx = sIdx;
-    } else if (priorIdx < 0 && args.userMessage) {
+    // 4. Substantive name match
+    if (priorIdx < 0) {
+      priorIdx = priorItems.findIndex((p, i) => !usedPrior.has(i) && namesShareSubstance(displayName(p), sName));
+    }
+    // 5. Source image index match (if photo anchor matches a prior item and no ambiguity)
+    if (priorIdx < 0 && scout.sourceImageIndex != null) {
+      const imgMatches = priorItems.map((p, i) => (!usedPrior.has(i) && p.sourceImageIndex === scout.sourceImageIndex ? i : -1)).filter(i => i >= 0);
+      if (imgMatches.length === 1) {
+        priorIdx = imgMatches[0];
+      }
+    }
+    // 6. User message targeting
+    if (priorIdx < 0 && args.userMessage) {
       const msg = args.userMessage.toLowerCase();
       const hasReplaceWord = /\b(replace|substitute|instead of|change .* to|switch)\b/i.test(msg);
       if (hasReplaceWord) {
@@ -163,6 +248,11 @@ export function diffScoutToEditCommands(args: {
         }
       }
     }
+    // 7. Only fall back to positional match if scoutItems has the SAME length as priorItems (full meal re-emission)
+    if (priorIdx < 0 && isFullReEmission && sIdx < priorItems.length && !usedPrior.has(sIdx)) {
+      priorIdx = sIdx;
+    }
+
     if (priorIdx < 0) {
       // New dish from scout — add_item when estimate available
       const grams = weightOf(scout) || 100;
@@ -178,13 +268,20 @@ export function diffScoutToEditCommands(args: {
       });
       continue;
     }
+
     usedPrior.add(priorIdx);
     const prior = priorItems[priorIdx];
     const pName = displayName(prior);
     const pWeight = weightOf(prior);
     const sWeight = weightOf(scout);
 
-    if (pName && sName && !namesReferSame(pName, sName)) {
+    const isSameFamily = namesReferSame(pName, sName) || (
+      namesShareSubstance(pName, sName) &&
+      scout.sourceImageIndex != null &&
+      prior.sourceImageIndex === scout.sourceImageIndex
+    );
+
+    if (pName && sName && !isSameFamily && !namesReferSame(pName, sName)) {
       commands.push({
         action: 'replace_identity',
         itemName: pName,
@@ -195,45 +292,56 @@ export function diffScoutToEditCommands(args: {
         scoutIndex: sScoutIdx,
         estimate: estimateFromScout(scout),
       });
-    } else if (sWeight > 0 && pWeight > 0 && Math.abs(sWeight - pWeight) >= 1) {
-      // Prefer component rescale when scout components show a primary-ingredient change
-      const priorComps = Array.isArray(prior.componentsDetailList) && prior.componentsDetailList.length
-        ? prior.componentsDetailList
-        : (Array.isArray(prior.components) ? prior.components : []);
-      const scoutComps = Array.isArray(scout.componentsDetailList) && scout.componentsDetailList.length
-        ? scout.componentsDetailList
-        : (Array.isArray(scout.components) ? scout.components : []);
-      let componentCmd: PatchEditCommand | null = null;
-      if (priorComps.length && scoutComps.length) {
-        for (let ci = 0; ci < Math.min(priorComps.length, scoutComps.length); ci++) {
-          const pc = priorComps[ci];
-          const sc = scoutComps[ci];
-          if (typeof pc !== 'object' || typeof sc !== 'object') continue;
-          const pw = Number(pc.weightGrams ?? pc.estimatedWeightGrams) || 0;
-          const sw = Number(sc.weightGrams ?? sc.estimatedWeightGrams) || 0;
-          if (pw > 0 && sw > 0 && Math.abs(pw - sw) >= 1) {
-            componentCmd = {
-              action: 'update_component_weight',
-              itemName: pName,
-              componentName: String(pc.name || pc.keyword || sc.name || ''),
-              newWeightGrams: sw,
-              targetDbId: prior.dbId || null,
-              scoutIndex: sScoutIdx,
-            };
-            break;
-          }
-        }
-      }
-      if (componentCmd) {
-        commands.push(componentCmd);
-      } else {
+    } else {
+      if (pName && sName && pName !== sName) {
         commands.push({
-          action: 'set_weight',
+          action: 'rename_alias',
           itemName: pName,
-          newWeightGrams: sWeight,
+          newItemName: sName,
           targetDbId: prior.dbId || null,
           scoutIndex: sScoutIdx,
         });
+      }
+      if (sWeight > 0 && pWeight > 0 && Math.abs(sWeight - pWeight) >= 1) {
+        // Prefer component rescale when scout components show a primary-ingredient change
+        const priorComps = Array.isArray(prior.componentsDetailList) && prior.componentsDetailList.length
+          ? prior.componentsDetailList
+          : (Array.isArray(prior.components) ? prior.components : (Array.isArray(prior.foods) ? prior.foods : []));
+        const scoutComps = Array.isArray(scout.componentsDetailList) && scout.componentsDetailList.length
+          ? scout.componentsDetailList
+          : (Array.isArray(scout.components) ? scout.components : (Array.isArray(scout.foods) ? scout.foods : []));
+        let componentCmd: PatchEditCommand | null = null;
+        if (priorComps.length && scoutComps.length) {
+          for (let ci = 0; ci < Math.min(priorComps.length, scoutComps.length); ci++) {
+            const pc = priorComps[ci];
+            const sc = scoutComps[ci];
+            if (typeof pc !== 'object' || typeof sc !== 'object') continue;
+            const pw = Number(pc.weightGrams ?? pc.estimatedWeightGrams) || 0;
+            const sw = Number(sc.weightGrams ?? sc.estimatedWeightGrams) || 0;
+            if (pw > 0 && sw > 0 && Math.abs(pw - sw) >= 1) {
+              componentCmd = {
+                action: 'update_component_weight',
+                itemName: pName,
+                componentName: String(pc.name || pc.foodName || pc.keyword || sc.name || sc.foodName || ''),
+                newWeightGrams: sw,
+                targetDbId: prior.dbId || null,
+                scoutIndex: sScoutIdx,
+              };
+              break;
+            }
+          }
+        }
+        if (componentCmd) {
+          commands.push(componentCmd);
+        } else {
+          commands.push({
+            action: 'set_weight',
+            itemName: pName,
+            newWeightGrams: sWeight,
+            targetDbId: prior.dbId || null,
+            scoutIndex: sScoutIdx,
+          });
+        }
       }
     }
   }

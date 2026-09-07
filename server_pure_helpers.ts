@@ -1529,6 +1529,28 @@ export function synthesizeEditCommandsFromBreakdown(activeMeal: any, dietitianIt
     }
   }
 
+  // Check for portion update syntax in userMessage (e.g. "Lemonilo Brownies Crispy: 15g ➔ 30g")
+  const arrowRegex = /([a-zA-Z0-9\s/'-]+?):\s*\d+(?:\.\d+)?\s*g\s*(?:➔|->)\s*(\d+(?:\.\d+)?)\s*g/gi;
+  let arrowMatch: RegExpExecArray | null;
+  while ((arrowMatch = arrowRegex.exec(userMessage)) !== null) {
+    const matchedName = arrowMatch[1].trim().toLowerCase();
+    const targetGrams = Math.round(Number(arrowMatch[2]));
+    if (targetGrams > 0) {
+      const targetItem = activeItems.find((it: any) => {
+        const n = String(it.name || it.canonicalDbName || it.originalName || it.keyword || '').toLowerCase();
+        return itemsMatchByName(n, matchedName) || n.includes(matchedName) || matchedName.includes(n);
+      });
+      if (targetItem && !synthesizedCommands.some(c => (c.action === 'update_weight' || c.action === 'set_weight') && (c.itemName === targetItem.name || c.itemName === targetItem.canonicalDbName))) {
+        synthesizedCommands.push({
+          action: 'update_weight',
+          itemName: targetItem.name || targetItem.canonicalDbName || targetItem.originalName,
+          targetDbId: targetItem.dbId || null,
+          newWeightGrams: targetGrams,
+        });
+      }
+    }
+  }
+
   return synthesizedCommands;
 }
 
