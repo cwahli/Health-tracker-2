@@ -690,4 +690,58 @@ describe("server_dish_finalize", () => {
     // Cases 1 / 4 / 9 (and others) stay residual — F-10.6 is directional, not a 90% claim.
     expect(restaurantFatResidual).toEqual(expect.arrayContaining([1, 4, 9]));
   });
+
+  it("never zeroes out parent dish nutrients when subcomponents are missing macros", async () => {
+    const item = {
+      scoutIndex: 0,
+      originalName: "Grilled Chicken Steak",
+      keyword: "chicken steak",
+      estimatedWeightGrams: 300,
+      nutrientBasisWeight: 300,
+      nutrients: {
+        calories: 450,
+        protein: 42,
+        totalFat: 18,
+        saturatedFat: 4.5,
+        carbohydrates: 25,
+        sodium: 680,
+      },
+      componentsDetailList: [
+        {
+          name: "Chicken Breast",
+          weightGrams: 200,
+          // Missing/0 macros on this component
+          calories: 0,
+          protein: 0,
+          totalFat: 0,
+          saturatedFat: 0,
+          carbohydrates: 0,
+          sodium: 0,
+        },
+        {
+          name: "Mushroom Sauce",
+          weightGrams: 100,
+          calories: 0,
+          protein: 0,
+          totalFat: 0,
+          saturatedFat: 0,
+          carbohydrates: 0,
+          sodium: 0,
+        }
+      ]
+    };
+
+    const ledger = await finalizeDishLedger({
+      item,
+      nutrientBasisWeight: 300,
+      consumedWeight: 300,
+    });
+
+    // Parent dish nutrients must NOT be overwritten to 0
+    expect(ledger.nutrients.calories).toBeGreaterThan(0);
+    expect(ledger.nutrients.protein).toBeGreaterThan(0);
+    expect(ledger.nutrients.totalFat).toBeGreaterThan(0);
+    expect(ledger.componentsDetailList[0].calories).toBeGreaterThan(0);
+    expect(ledger.componentsDetailList[1].calories).toBeGreaterThan(0);
+  });
 });

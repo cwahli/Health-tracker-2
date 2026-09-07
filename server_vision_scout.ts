@@ -855,16 +855,44 @@ export function reconcileIngredientsToComponents(item: any, addDebugLog?: (msg: 
     });
   }
   if (candidateIngredients.length === 0) return;
-  const currentCompNames = item.components.map((c: any) => {
-    return String(typeof c === 'string' ? c : (c.searchQuery || c.name || c.keyword || '')).toLowerCase();
+
+  const allCompTexts: string[][] = item.components.map((c: any) => {
+    if (typeof c === 'string') return [c.toLowerCase()];
+    return [
+      c.name,
+      c.foodName,
+      c.originalName,
+      c.searchQuery,
+      c.keyword,
+      c.genericEnglishName,
+    ].filter(Boolean).map((s: string) => String(s).toLowerCase());
   });
+
+  const isAlreadyPresent = (textToMatch: string, ingLower: string): boolean => {
+    const tMatch = textToMatch.toLowerCase();
+    const ingLow = ingLower.toLowerCase();
+    return allCompTexts.some(texts =>
+      texts.some(t => {
+        if (t === tMatch || t === ingLow) return true;
+        if (t.includes(tMatch) || tMatch.includes(t)) return true;
+        if (t.includes(ingLow) || ingLow.includes(t)) return true;
+        const tTokens = t.split(/\s+/).filter(w => w.length > 2);
+        const ingTokens = ingLow.split(/\s+/).filter(w => w.length > 2);
+        const matchTokens = tMatch.split(/\s+/).filter(w => w.length > 2);
+        if (matchTokens.some(mt => tTokens.includes(mt))) return true;
+        if (ingTokens.some(it => tTokens.includes(it))) return true;
+        return false;
+      })
+    );
+  };
+
   const missingIngredients: string[] = [];
   for (const ing of candidateIngredients) {
     const match = ing.match(CONDIMENT_DRESSING_REGEX) || ing.match(GARNISH_VEGETABLE_REGEX);
     if (match) {
       const matchedName = match[0].toLowerCase();
-      const alreadyPresent = currentCompNames.some((cName) => cName.includes(matchedName) || matchedName.includes(cName));
-      if (!alreadyPresent && !missingIngredients.some(m => m.toLowerCase().includes(matchedName) || matchedName.includes(m.toLowerCase()))) {
+      const present = isAlreadyPresent(matchedName, ing);
+      if (!present && !missingIngredients.some(m => m.toLowerCase().includes(matchedName) || matchedName.includes(m.toLowerCase()))) {
         missingIngredients.push(ing);
       }
     }
@@ -880,10 +908,45 @@ export function reconcileIngredientsToComponents(item: any, addDebugLog?: (msg: 
           c.volumePercentage = Math.max(1, Math.round((Number(c.volumePercentage) || 0) * scaleFactor));
         }
       });
-      const newComp = {
+      const isCondiment = Boolean(missing.match(CONDIMENT_DRESSING_REGEX));
+      const baselineNutrients = isCondiment
+        ? {
+            protein: 0.5,
+            totalFat: 10,
+            saturatedFat: 1.5,
+            carbohydrates: 2,
+            sodium: 200,
+            addedSugar: 1,
+            totalFibre: 0,
+            calories: 100,
+          }
+        : {
+            protein: 1.0,
+            totalFat: 0.2,
+            saturatedFat: 0,
+            carbohydrates: 3,
+            sodium: 15,
+            addedSugar: 0,
+            totalFibre: 1,
+            calories: 18,
+          };
+      const newComp: any = {
+        name: missing,
+        foodName: missing,
         searchQuery: missing.toLowerCase(),
         volumePercentage: allocatedPct,
-        suggestedFdcId: null
+        suggestedFdcId: null,
+        nutrients: baselineNutrients,
+        calories: baselineNutrients.calories,
+        protein: baselineNutrients.protein,
+        totalFat: baselineNutrients.totalFat,
+        fat: baselineNutrients.totalFat,
+        saturatedFat: baselineNutrients.saturatedFat,
+        carbohydrates: baselineNutrients.carbohydrates,
+        carbs: baselineNutrients.carbohydrates,
+        sodium: baselineNutrients.sodium,
+        totalFibre: baselineNutrients.totalFibre,
+        dbSource: 'estimated',
       };
       item.components.push(newComp);
       if (addDebugLog) {
@@ -1066,11 +1129,29 @@ export function parseAndHealVisionScout(
           ingredientsList: components.map(c => c.name || c.genericEnglishName).filter(Boolean).join(', '),
         });
 
+        const parsedTransFat = Number(dNuts.transFat);
+        const estimatedTransFat = (Number.isFinite(parsedTransFat) && parsedTransFat >= 0)
+          ? parsedTransFat
+          : (d.cookingMethod === 'deep_fried'
+              ? Math.round(totalFat * 0.04 * 10) / 10
+              : (/(beef|lamb|mutton|dairy|butter|cheese)/i.test(d.dishName || '')
+                  ? Math.round(totalFat * 0.03 * 10) / 10
+                  : 0));
+
+        const parsedUnsatFat = Number(dNuts.unsaturatedFat);
+        const estimatedUnsatFat = (Number.isFinite(parsedUnsatFat) && parsedUnsatFat >= 0)
+          ? parsedUnsatFat
+          : Math.max(0, Math.round((totalFat - satFat - estimatedTransFat) * 10) / 10);
+
         const convertedNutrients: Record<string, number> = {
-          protein: Math.round(sumP * 10) / 10, carbohydrates: Math.round(sumC * 10) / 10,
-          totalFat: Math.round(totalFat * 10) / 10, saturatedFat: Math.round(satFat * 10) / 10, transFat: 0,
+          protein: Math.round((sumP > 0 ? sumP : (Number(dNuts.protein) || 0)) * 10) / 10,
+          carbohydrates: Math.round((sumC > 0 ? sumC : (Number(dNuts.carbohydrates ?? dNuts.carbs) || 0)) * 10) / 10,
+          totalFat: Math.round((totalFat > 0 ? totalFat : (Number(dNuts.totalFat ?? dNuts.fat) || 0)) * 10) / 10,
+          saturatedFat: Math.round((satFat > 0 ? satFat : (Number(dNuts.saturatedFat) || 0)) * 10) / 10,
+          transFat: estimatedTransFat,
           sugar: sugarResult.sugar, addedSugar: sugarResult.addedSugar,
-          totalFibre: Math.round(sumFibre * 10) / 10, sodium: Math.round(sumNa),
+          totalFibre: Math.round((sumFibre > 0 ? sumFibre : (Number(dNuts.totalFibre ?? dNuts.fiber) || 0)) * 10) / 10,
+          sodium: Math.round(sumNa > 0 ? sumNa : (Number(dNuts.sodium) || 0)),
           potassium: Number(dNuts.potassium) || 0, omega3: Number(dNuts.omega3) || 0,
           calcium: Number(dNuts.calcium) || 0, iron: Number(dNuts.iron) || 0,
           magnesium: Number(dNuts.magnesium) || 0, vitaminD: Number(dNuts.vitaminD) || 0,
@@ -1082,7 +1163,7 @@ export function parseAndHealVisionScout(
           vitaminB6: Number(dNuts.vitaminB6) || 0, thiamine: Number(dNuts.thiamine) || 0,
           riboflavin: Number(dNuts.riboflavin) || 0, niacin: Number(dNuts.niacin) || 0,
           solubleFibre: Number(dNuts.solubleFibre) || computeSolubleFibre(Number(sumFibre) || 0, d.dishName),
-          unsaturatedFat: Number(dNuts.unsaturatedFat) || 0,
+          unsaturatedFat: estimatedUnsatFat,
         };
         const visualDishCal = Number(dNuts.calories);
         if (Number.isFinite(visualDishCal) && visualDishCal > 0) {
@@ -1769,7 +1850,22 @@ export function parseAndHealVisionScout(
     visionScoutRanAndReturnedItems,
     diningEnvironment,
     internalReasoning: parsedScout?._internalReasoning || null,
-    verdict: parsedScout?.verdict || null,
+    verdict: (() => {
+      const v = parsedScout?.verdict;
+      if (!v || typeof v !== 'object') return null;
+      const validLevels = ['good', 'warning', 'alert', 'neutral'];
+      let lvl = String(v.level || '').toLowerCase();
+      if (!validLevels.includes(lvl)) {
+        if (['bad', 'danger', 'critical', 'fail', 'red'].includes(lvl)) lvl = 'alert';
+        else if (['warn', 'caution', 'yellow'].includes(lvl)) lvl = 'warning';
+        else if (['pass', 'great', 'green', 'ok'].includes(lvl)) lvl = 'good';
+        else lvl = 'neutral';
+      }
+      return {
+        label: String(v.label || 'Balanced choice'),
+        level: lvl,
+      };
+    })(),
     clinicalAdvice: parsedScout?.clinicalAdvice || parsedScout?.message || null,
     message: parsedScout?.message || parsedScout?.clinicalAdvice || null,
     mealName: parsedScout?.mealName || null,

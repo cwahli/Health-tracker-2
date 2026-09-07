@@ -10,6 +10,7 @@
 
 import { classifyDishAtomic } from './server_dish_classify';
 import { matchBrandMenu, BrandMatchResult } from './server_brand_match';
+import { lookupCanonicalBaseFood } from './server_food_db';
 import {
   computeCaloriesFromMacros,
   computeUnsaturatedFat,
@@ -470,14 +471,40 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
       const cR = cWeight / cBasisWeight;
 
       const cNuts = c.nutrients || {};
-      const cProtRaw = Number(c.protein ?? cNuts.protein ?? 0);
-      const cFatRaw = Number(c.totalFat ?? c.fat ?? cNuts.totalFat ?? cNuts.fat ?? cNuts.saturatedFat ?? 0);
-      const cSatRaw = Number(c.saturatedFat ?? cNuts.saturatedFat ?? 0);
-      const cCarbsRaw = Number(c.carbohydrates ?? c.carbs ?? cNuts.carbohydrates ?? 0);
-      const cNaRaw = Number(c.sodium ?? cNuts.sodium ?? 0);
-      const cCalsRaw = Number(c.calories ?? cNuts.calories ?? Math.round(4 * cProtRaw + 4 * cCarbsRaw + 9 * cFatRaw));
-      const cFibRaw = Number(c.totalFibre ?? c.fiber ?? cNuts.totalFibre ?? cNuts.fiber ?? 0);
-      const cSolRaw = Number(c.solubleFibre ?? cNuts.solubleFibre ?? 0);
+      let cProtRaw = Number(c.protein ?? cNuts.protein ?? 0);
+      let cFatRaw = Number(c.totalFat ?? c.fat ?? cNuts.totalFat ?? cNuts.fat ?? cNuts.saturatedFat ?? 0);
+      let cSatRaw = Number(c.saturatedFat ?? cNuts.saturatedFat ?? 0);
+      let cCarbsRaw = Number(c.carbohydrates ?? c.carbs ?? cNuts.carbohydrates ?? 0);
+      let cNaRaw = Number(c.sodium ?? cNuts.sodium ?? 0);
+      let cCalsRaw = Number(c.calories ?? cNuts.calories ?? 0);
+      let cFibRaw = Number(c.totalFibre ?? c.fiber ?? cNuts.totalFibre ?? cNuts.fiber ?? 0);
+      let cSolRaw = Number(c.solubleFibre ?? cNuts.solubleFibre ?? 0);
+
+      // Guard against ghost components with 0 macros: resolve via canonical DB or proportional parent allocation
+      const isZeroCalFood = /\b(water|diet\s*soda|zero\s*calorie|black\s*coffee|plain\s*tea|air\s*putih)\b/i.test(cName);
+      if (!isZeroCalFood && cProtRaw === 0 && cFatRaw === 0 && cCarbsRaw === 0 && cCalsRaw === 0) {
+        const baseLookup = lookupCanonicalBaseFood(cName) || lookupCanonicalBaseFood(c.searchQuery || '');
+        if (baseLookup) {
+          const bW = cBasisWeight > 0 ? cBasisWeight : 100;
+          cProtRaw = Math.round((Number(baseLookup.protein || 0) * (bW / 100)) * 10) / 10;
+          cFatRaw = Math.round((Number(baseLookup.totalFat ?? baseLookup.fat ?? 0) * (bW / 100)) * 10) / 10;
+          cSatRaw = Math.round((Number(baseLookup.saturatedFat || 0) * (bW / 100)) * 10) / 10;
+          cCarbsRaw = Math.round((Number(baseLookup.carbohydrates ?? baseLookup.carbs ?? 0) * (bW / 100)) * 10) / 10;
+          cNaRaw = Math.round(Number(baseLookup.sodium || 0) * (bW / 100));
+          cCalsRaw = Math.round((Number(baseLookup.calories || (4 * cProtRaw + 4 * cCarbsRaw + 9 * cFatRaw))) * (bW / 100));
+        } else if (nutrients.calories && nutrients.calories > 0) {
+          const share = Math.min(1, Math.max(0.05, origCW / (origWeight || 100)));
+          cCalsRaw = Math.round(Number(nutrients.calories) * share);
+          cProtRaw = Math.round(Number(nutrients.protein || 0) * share * 10) / 10;
+          cFatRaw = Math.round(Number(nutrients.totalFat || 0) * share * 10) / 10;
+          cSatRaw = Math.round(Number(nutrients.saturatedFat || 0) * share * 10) / 10;
+          cCarbsRaw = Math.round(Number(nutrients.carbohydrates || 0) * share * 10) / 10;
+          cNaRaw = Math.round(Number(nutrients.sodium || 0) * share);
+        }
+      }
+      if (cCalsRaw === 0 && (cProtRaw > 0 || cFatRaw > 0 || cCarbsRaw > 0)) {
+        cCalsRaw = Math.round(4 * cProtRaw + 4 * cCarbsRaw + 9 * cFatRaw);
+      }
 
       let cProt = Math.round(cProtRaw * cR * 10) / 10;
       let cFat = Math.round(cFatRaw * cR * 10) / 10;
@@ -559,6 +586,8 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
       let sumSat = 0;
       let sumCarbs = 0;
       let sumNa = 0;
+      let sumTrans = 0;
+      let sumFibre = 0;
       for (const c of componentsDetailList) {
         sumCal += (c.calories || 0);
         sumProt += (c.protein || 0);
@@ -566,18 +595,24 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
         sumSat += (c.saturatedFat || 0);
         sumCarbs += (c.carbohydrates || 0);
         sumNa += (c.sodium || 0);
+        sumTrans += (c.transFat || c.nutrients?.transFat || 0);
+        sumFibre += (c.totalFibre || c.nutrients?.totalFibre || 0);
       }
-      nutrients.calories = Math.round(sumCal);
-      nutrients.protein = Math.round(sumProt * 10) / 10;
-      nutrients.totalFat = Math.round(sumFat * 10) / 10;
-      nutrients.saturatedFat = Math.round(sumSat * 10) / 10;
-      nutrients.carbohydrates = Math.round(sumCarbs * 10) / 10;
-      nutrients.sodium = Math.round(sumNa);
-      
-      // Update missing locks
-      ['calories', 'protein', 'totalFat', 'saturatedFat', 'carbohydrates', 'sodium'].forEach(k => {
-        if (!lockedNutrientKeys.includes(k)) lockedNutrientKeys.push(k);
-      });
+      if (sumCal > 0 || sumProt > 0 || sumFat > 0 || sumCarbs > 0) {
+        nutrients.calories = Math.round(sumCal);
+        nutrients.protein = Math.round(sumProt * 10) / 10;
+        nutrients.totalFat = Math.round(sumFat * 10) / 10;
+        nutrients.saturatedFat = Math.round(sumSat * 10) / 10;
+        nutrients.carbohydrates = Math.round(sumCarbs * 10) / 10;
+        nutrients.sodium = Math.round(sumNa);
+        if (sumTrans > 0) nutrients.transFat = Math.round(sumTrans * 10) / 10;
+        if (sumFibre > 0) nutrients.totalFibre = Math.round(sumFibre * 10) / 10;
+        
+        // Update missing locks
+        ['calories', 'protein', 'totalFat', 'saturatedFat', 'carbohydrates', 'sodium'].forEach(k => {
+          if (!lockedNutrientKeys.includes(k)) lockedNutrientKeys.push(k);
+        });
+      }
     }
   }
 

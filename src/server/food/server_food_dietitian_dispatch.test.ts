@@ -76,6 +76,18 @@ describe('F-8.10 shard 15 — scout verdict and advice ladders', () => {
     expect(t({ totalSugar: 40, totalSatFat: 0, totalP: 0 })).toContain('40');
     expect(t({ totalSugar: 0, totalSatFat: 0, totalP: 0 }, 'Rice')).toContain('Rice');
     expect(t({ totalSugar: 0, totalSatFat: 0, totalP: 0 }, 'Rice', 'Custom note')).toBe('Custom note');
+
+    // Narrative macro synchronization with authoritative ledger totals
+    const draftAdvice = 'The fried snacks pack 9g of saturated fat. The beef soup gives 30g of clean protein at 500 calories.';
+    const synchronized = decideScoutAdvice({
+      rawAdvice: draftAdvice,
+      totals: { totalSatFat: 6, totalP: 38, totalCals: 620 } as any,
+      mealName: 'Lunch',
+      language: 'en',
+    });
+    expect(synchronized).toContain('6g of saturated fat');
+    expect(synchronized).toContain('38g of clean protein');
+    expect(synchronized).toContain('620 kcal');
   });
 });
 

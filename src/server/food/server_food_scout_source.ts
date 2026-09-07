@@ -19,7 +19,7 @@ import {
   priorScoutHasLabelLocks,
   REFINE_SCALE_ONLY_LOG,
 } from '../../../server_refine_scale.js';
-import { applyUserLockedSlots, type UserLockedSlot } from '../../../server_edit_patch_ledger.js';
+import { applyUserLockedSlots, namesShareSubstance, type UserLockedSlot } from '../../../server_edit_patch_ledger.js';
 
 export interface ScoutInheritArgs {
   isModifySession: boolean;
@@ -437,18 +437,35 @@ export function mergeScoutIntoActiveMeal(args: ScoutMealMergeArgs): any[] {
       let matchIdx = result.findIndex((ex, idx) => {
         if (matchedPriorIndices.has(idx)) return false;
         const exName = (ex.originalName || ex.keyword || ex.canonicalDbName || ex.name || '').toLowerCase().trim();
-        return exName && newName && (exName === newName || exName.includes(newName) || newName.includes(exName));
+        return exName && newName && (exName === newName || exName.includes(newName) || newName.includes(exName) || namesShareSubstance(exName, newName));
       });
 
-      // Check if userMessage explicitly asked to replace/substitute a prior item
+      // Match by sourceImageIndex if both have it and it's non-null
+      if (matchIdx < 0 && newcomer.sourceImageIndex != null) {
+        matchIdx = result.findIndex((ex, idx) => !matchedPriorIndices.has(idx) && ex.sourceImageIndex === newcomer.sourceImageIndex);
+      }
+
+      // Check if userMessage explicitly asked to replace/substitute a prior item, or mentions keywords of prior item
       if (matchIdx < 0 && userMessage) {
         const msg = userMessage.toLowerCase();
-        if (/\b(replace|substitute|instead of|change .* to|switch)\b/i.test(msg)) {
+        const hasReplaceWord = /\b(replace|substitute|instead of|change .* to|switch)\b/i.test(msg);
+        if (hasReplaceWord) {
           matchIdx = result.findIndex((ex, idx) => {
             if (matchedPriorIndices.has(idx)) return false;
             const exName = (ex.originalName || ex.keyword || ex.canonicalDbName || ex.name || '').toLowerCase().trim();
             return exName && msg.includes(exName);
           });
+        } else {
+          // Check if user message mentions substantive keywords of prior item (e.g. "beef dish")
+          const keywordIdx = result.findIndex((ex, idx) => {
+            if (matchedPriorIndices.has(idx)) return false;
+            const exName = (ex.originalName || ex.keyword || ex.canonicalDbName || ex.name || '').toLowerCase().trim();
+            const tokens = exName.split(/[^a-z0-9]+/).filter((w: string) => w.length > 2 && !['and', 'with', 'the', 'dish', 'hot', 'style'].includes(w));
+            return tokens.length > 0 && tokens.some((t: string) => msg.includes(t));
+          });
+          if (keywordIdx >= 0) {
+            matchIdx = keywordIdx;
+          }
         }
       }
 

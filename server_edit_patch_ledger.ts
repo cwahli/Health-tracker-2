@@ -26,6 +26,7 @@ export type PatchEditCommand = {
   componentName?: string | null;
   modifier?: string | null;
   scoutIndex?: number | null;
+  sourceImageIndex?: number | null;
   estimate?: Record<string, any> | null;
 };
 
@@ -58,6 +59,23 @@ function namesReferSame(a: string, b: string): boolean {
   return false;
 }
 
+export function significantTokens(s: string): string[] {
+  const stops = new Set(['and', 'with', 'the', 'in', 'of', 'for', 'a', 'an', 'dish', 'hot', 'style', 'fast', 'food']);
+  return normName(s).split(/[^a-z0-9]+/).filter((w: string) => w.length > 2 && !stops.has(w));
+}
+
+export function namesShareSubstance(a: string, b: string): boolean {
+  const ta = significantTokens(a);
+  const tb = significantTokens(b);
+  if (ta.length === 0 || tb.length === 0) return false;
+  const setB = new Set(tb);
+  const shared = ta.filter(t => setB.has(t));
+  const minLen = Math.min(ta.length, tb.length);
+  if (shared.length >= 2 && shared.length / minLen >= 0.5) return true;
+  if (minLen === 1 && shared.length === 1 && (ta.length === 1 || tb.length === 1)) return true;
+  return false;
+}
+
 function scoutIndexOf(it: any, fallback: number): number {
   const n = Number(it?.scoutIndex);
   return Number.isFinite(n) ? n : fallback;
@@ -80,6 +98,14 @@ function estimateFromScout(it: any): Record<string, any> | null {
   }
   if (it?.cookingMethod) out.cookingMethod = it.cookingMethod;
   if (it?.foodType) out.foodType = it.foodType;
+  if (Array.isArray(it?.components) && it.components.length > 0) {
+    out.components = it.components;
+    any = true;
+  }
+  if (Array.isArray(it?.foods) && it.foods.length > 0) {
+    out.foods = it.foods;
+    any = true;
+  }
   return any ? out : null;
 }
 
@@ -107,7 +133,11 @@ export function diffScoutToEditCommands(args: {
 
     let priorIdx = priorItems.findIndex((p, i) => !usedPrior.has(i) && scoutIndexOf(p, i) === sScoutIdx);
     if (priorIdx < 0) {
-      priorIdx = priorItems.findIndex((p, i) => !usedPrior.has(i) && namesReferSame(displayName(p), sName));
+      priorIdx = priorItems.findIndex((p, i) => !usedPrior.has(i) && (namesReferSame(displayName(p), sName) || namesShareSubstance(displayName(p), sName)));
+    }
+    // Match by sourceImageIndex if both have it and it's non-null
+    if (priorIdx < 0 && scout.sourceImageIndex != null) {
+      priorIdx = priorItems.findIndex((p, i) => !usedPrior.has(i) && p.sourceImageIndex === scout.sourceImageIndex);
     }
     // Only fall back to positional match if scoutItems has the SAME length as priorItems (full meal re-emission),
     // OR if the user message specifically indicates replacement/substitution of a prior item.
@@ -121,6 +151,16 @@ export function diffScoutToEditCommands(args: {
         if (replaceIdx >= 0) {
           priorIdx = replaceIdx;
         }
+      } else {
+        // Check if user message mentions substantive keywords of prior item (e.g. "beef dish")
+        const keywordIdx = priorItems.findIndex((p, i) => {
+          if (usedPrior.has(i)) return false;
+          const pTokens = significantTokens(displayName(p));
+          return pTokens.some(t => msg.includes(t));
+        });
+        if (keywordIdx >= 0) {
+          priorIdx = keywordIdx;
+        }
       }
     }
     if (priorIdx < 0) {
@@ -133,6 +173,7 @@ export function diffScoutToEditCommands(args: {
         newItemName: sName,
         newWeightGrams: grams,
         scoutIndex: sScoutIdx,
+        sourceImageIndex: scout.sourceImageIndex ?? null,
         estimate,
       });
       continue;

@@ -135,6 +135,10 @@ describe('F-8.10 shard 7 — modify-path seams', () => {
     expect(formatMultiItemMealTitle([])).toBe('Meal');
     expect(formatMultiItemMealTitle([{ name: 'Rice' }])).toBe('Rice');
     expect(formatMultiItemMealTitle([{ name: 'Rice' }, { name: 'Tea' }])).toBe('Rice and Tea');
+    expect(formatMultiItemMealTitle([{ name: 'Rice' }, { name: 'Tea' }, { name: 'Soup' }])).toBe('Rice, Tea, and Soup');
+    expect(formatMultiItemMealTitle([
+      { name: 'Burger' }, { name: 'Fries' }, { name: 'Cola' }, { name: 'Salad' }, { name: 'Pie' }
+    ])).toBe('Burger, Fries, and 3 other dishes');
     const renamed = resolveEditedMealTitle({
       incomingTitle: 'Rice and Soda',
       items: [{ name: 'Rice' }, { name: 'Unsweetened Tea' }],

@@ -223,7 +223,10 @@ export function formatMultiItemMealTitle(items: any[]): string {
   }).filter(Boolean);
   if (names.length === 1) return names[0];
   if (names.length === 2) return `${names[0]} and ${names[1]}`;
-  return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
+  if (names.length === 3) return `${names[0]}, ${names[1]}, and ${names[2]}`;
+  const primary = names.slice(0, 2);
+  const remainingCount = names.length - 2;
+  return `${primary.join(', ')}, and ${remainingCount} other ${remainingCount === 1 ? 'dish' : 'dishes'}`;
 }
 
 export interface EditedMealTitleArgs {

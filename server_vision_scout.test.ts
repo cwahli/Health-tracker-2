@@ -817,6 +817,39 @@ describe("server_vision_scout", () => {
       expect(precalcItems[0].nutrients.sugar).toBe(0);
       expect(precalcItems[0].components[0].calories).toBe(0);
     });
+
+    it("reconcileIngredientsToComponents gives injected ingredients valid non-zero nutrients and prevents duplicates", () => {
+      const itemWithExisting = {
+        keyword: "Burger",
+        originalName: "Cheeseburger",
+        components: [
+          { name: "Beef Patty", volumePercentage: 60 },
+          { name: "Lettuce and Sauce", volumePercentage: 40 }
+        ],
+        ingredientsList: "beef, lettuce and sauce, special sauce"
+      };
+
+      reconcileIngredientsToComponents(itemWithExisting);
+      // "sauce" / "lettuce and sauce" should not be re-injected as a duplicate
+      expect(itemWithExisting.components.length).toBe(2);
+
+      const itemWithMissing = {
+        keyword: "Salad",
+        originalName: "Garden Salad",
+        components: [
+          { name: "Mixed Greens", volumePercentage: 100 }
+        ],
+        ingredientsList: "mixed greens, ranch dressing"
+      };
+
+      reconcileIngredientsToComponents(itemWithMissing);
+      expect(itemWithMissing.components.length).toBe(2);
+      const injected = itemWithMissing.components[1] as any;
+      expect(injected.name).toBe("ranch dressing");
+      expect(injected.calories).toBeGreaterThan(0);
+      expect(injected.totalFat).toBeGreaterThan(0);
+      expect(injected.nutrients.calories).toBeGreaterThan(0);
+    });
   });
 });
 

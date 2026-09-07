@@ -137,6 +137,7 @@ import { getInMemoryServerJob } from './serverJobs.js';
 import {
   buildEditExpertDispatch,
   formatLockedSlotsForPrompt,
+  diffScoutToEditCommands,
 } from './server_edit_patch_ledger.js';
 import { matchBrandMenu, isPackagedBindItem } from './server_brand_match.js';
 import { classifyDishAtomic } from './server_dish_classify.js';
@@ -373,13 +374,29 @@ export async function runFoodAnalyze(req: any, res: any) {
         let scoutPromptText = '';
         if (isModifySession && (activeMeal || (req.body.activeScoutItems && req.body.activeScoutItems.length > 0))) {
           const priorMealItems = activeMeal?.itemsBreakdown || activeMeal?.items || req.body.activeScoutItems || [];
-          const priorSummary = priorMealItems.map((it: any) => `${it.originalName || it.keyword || it.name || 'Dish'} (${it.estimatedWeightGrams || it.weightGrams || 100}g): ${JSON.stringify(it.components || it.foods || [])}`).join('; ');
+          const priorSummary = priorMealItems.map((it: any, idx: number) => {
+            const photoLabel = it.sourceImageIndex != null ? ` [Photo #${it.sourceImageIndex}]` : '';
+            const comps = it.components || it.foods || it.componentsDetailList || [];
+            const compStr = Array.isArray(comps) && comps.length > 0
+              ? comps.map((c: any) => c.foodName || c.name || c.searchQuery || c.keyword || '').filter(Boolean).join(', ')
+              : '';
+            return `Dish ${idx + 1}${photoLabel}: ${it.originalName || it.keyword || it.name || 'Dish'} (${it.estimatedWeightGrams || it.weightGrams || 100}g)${compStr ? ` [Ingredients: ${compStr}]` : ''}`;
+          }).join('; ');
           const lockPrompt = formatLockedSlotsForPrompt(activeMeal?.userLockedSlots);
+          const mealDate = (isModifySession && activeMeal?.date)
+            ? activeMeal.date
+            : (imageDates?.[0] ? imageDates[0].split('T')[0] : new Date().toISOString().split('T')[0]);
           scoutPromptText = `The user is modifying/refining an existing logged meal.\n` +
+            `MEAL DATE: ${mealDate}\n` +
             `User modification instruction: "${(message || '').trim()}".\n` +
             `Prior Meal Dishes: ${priorSummary}.\n` + (lockPrompt || '') + `\n` +
             `CRITICAL INSTRUCTIONS FOR MODIFICATION:\n` +
-            `1. TARGETED DISH UPDATE ONLY: Follow the prototype model where only the edited, added, or substituted food item is returned in the dishes[] array. DO NOT re-emit unchanged dishes from the prior meal. If the user adds an item (e.g. 'There was also an es teh tawar'), output ONLY that new dish in dishes[]. If the user substitutes an item (identity change), output ONLY that substituted dish in dishes[]. If the edit is ONLY a portion/weight change with no identity change, output an EMPTY dishes[] array — weights and nutrients are rescaled deterministically from locked label truth; never recompute them yourself. If the user asks to remove an item, emit an empty dishes[] array.\n` +
+            `1. TARGETED DISH UPDATE ONLY: Follow the prototype model where only the edited, added, or substituted food item is returned in the dishes[] array. DO NOT re-emit unchanged dishes from the prior meal.\n` +
+            `- If the user clarifies/adds an ingredient inside an existing dish (e.g. 'The beef dish also has chicken inside', or 'more cheese on the burger'), update THAT existing dish's foods[] list and dishName, preserving its sourceImageIndex — DO NOT create a new standalone dish for an ingredient.\n` +
+            `- If the user adds a new separate dish (e.g. 'There was also an es teh tawar'), output ONLY that new dish in dishes[].\n` +
+            `- If the user substitutes an item (identity change), output ONLY that substituted dish in dishes[].\n` +
+            `- If the edit is ONLY a portion/weight change with no identity change, output an EMPTY dishes[] array — weights and nutrients are rescaled deterministically from locked label truth; never recompute them yourself.\n` +
+            `- If the user asks to remove an item, emit an empty dishes[] array.\n` +
             `2. INGREDIENT & DISH SUBSTITUTION/RENAME: If the user changes, corrects, or substitutes an ingredient or dish (e.g. 'ikan is nila', 'unsweetened tea', 'chicken instead of beef'), you MUST update the dishName, genericEnglishName, and foods[].foodName to the new substituted food (e.g. 'Ikan Nila' / 'tilapia' instead of 'Cakalang' / 'Cendro') and adjust the nutrients (calories, protein, fat, carbs, sugar) accordingly.\n` +
             `3. SEPARATE DISHES: Keep distinct plated items, sides, and beverages as separate distinct dishes in the dishes[] array. Never merge drinks into food dishes.\n` +
             `4. CLINICAL ADVICE & NARRATIVE: Provide an updated direct 35-70 word clinicalAdvice in 2nd person ("You got...") on the FULL updated meal (all dishes at their locked weights — never just the edited item). Lead with the most significant finding: flag plainly any nutrient far over budget and compounding against the 7-day average, state the health impact, then one actionable next step/movement.`;
@@ -857,6 +874,91 @@ export async function runFoodAnalyze(req: any, res: any) {
         userPrompt: `[projector] portion choices within tolerance — no LLM call, TS-composed message from ledger, targets, and rest-of-day math.`,
         model: 'projector', latencyMs: 0, tokens: 0, projected: true,
       };
+    } else if (visionScoutRanAndReturnedItems || (visionScoutItems && visionScoutItems.length > 0) || rawScoutData) {
+      if (isModifySession) {
+        addDebugLog('[MealAgent] Single-agent edit path: diffing Scout output into active meal.');
+        sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'completed', message: 'Meal update finalized.' });
+        const scoutDishes = (rawScoutData?.dishes && Array.isArray(rawScoutData.dishes))
+          ? rawScoutData.dishes
+          : (visionScoutItems || []);
+        const priorItems = Array.isArray(activeMeal?.itemsBreakdown) ? activeMeal.itemsBreakdown : (activeMeal?.items || []);
+        const editCommands = diffScoutToEditCommands({
+          priorItems,
+          scoutItems: scoutDishes,
+          userMessage: message,
+        });
+        const totals = sumPrecalcTotals(priorItems);
+        const scoutVerdict = decideScoutVerdict({
+          scoutVerdict: rawScoutData?.verdict || null,
+          totals,
+          mealName: activeMeal?.name,
+          language: userProfile?.language,
+        });
+        const rawAdvice = decideScoutAdvice({
+          rawAdvice: rawScoutData?.clinicalAdvice || rawScoutData?.message || '',
+          totals,
+          mealName: activeMeal?.name,
+          language: userProfile?.language,
+        });
+        const systemCurrentDate = new Date().toISOString().split('T')[0];
+        const mealDate = (isModifySession && activeMeal?.date)
+          ? activeMeal.date
+          : (imageDates?.[0] ? imageDates[0].split('T')[0] : systemCurrentDate);
+        rawParsed = {
+          _internalReasoning: scoutInternalReasoning || '[MealAgent] Single-agent edit path',
+          mode: 'modify',
+          message: rawAdvice || 'I have updated your meal.',
+          verdict: scoutVerdict,
+          modificationCommand: editCommands,
+          foodData: {
+            name: activeMeal?.name,
+            date: mealDate,
+          }
+        };
+        textOutput = JSON.stringify(rawParsed);
+        narratorInput = {
+          systemInstruction: PROJECTOR_NARRATOR_INSTRUCTION,
+          userPrompt: `[projector] single-agent edit — diffed scout dishes into active meal without secondary LLM call.`,
+          model: 'projector', latencyMs: 0, tokens: 0, projected: true,
+        };
+      } else {
+        addDebugLog('[MealAgent] Single-agent create path: using Scout verdict & clinical advice with finalized ledger.');
+        sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'completed', message: 'Meal analysis finalized.' });
+        const totals = sumPrecalcTotals(preCalculatedItems);
+        const scoutVerdict = decideScoutVerdict({
+          scoutVerdict: rawScoutData?.verdict || null,
+          totals,
+          mealName: resolveCreateMealTitle(rawScoutData, visionScoutItems, userProfile?.language),
+          language: userProfile?.language,
+        });
+        const rawAdvice = decideScoutAdvice({
+          rawAdvice: rawScoutData?.clinicalAdvice || rawScoutData?.message || '',
+          totals,
+          mealName: resolveCreateMealTitle(rawScoutData, visionScoutItems, userProfile?.language),
+          language: userProfile?.language,
+        });
+        const createSkip = buildCreateSkipResponse({
+          rawScoutData,
+          visionScoutItems,
+          preCalculatedItems,
+          totals,
+          scoutVerdict,
+          rawAdvice,
+          scoutConfidenceRating,
+          scoutConfidenceComment,
+          scoutCookingMethod,
+          scoutInternalReasoning,
+          diningEnvironment,
+          language: userProfile?.language,
+        });
+        textOutput = createSkip.textOutput;
+        rawParsed = createSkip.rawParsed;
+        narratorInput = {
+          systemInstruction: PROJECTOR_NARRATOR_INSTRUCTION,
+          userPrompt: `[projector] single-agent create — ledger finalized from scout truth and math engine.`,
+          model: 'projector', latencyMs: 0, tokens: 0, projected: true,
+        };
+      }
     } else {
       addDebugLog(`[MealAgent] Initiating Dietitian LLM evaluation...`);
       
@@ -1282,6 +1384,7 @@ ${textOutput}`);
           pendingFoodLog.items = result.items;
           pendingFoodLog.nutrients = result.nutrients;
           pendingFoodLog.weightGrams = result.weightGrams;
+          if (activeMeal.date) pendingFoodLog.date = activeMeal.date;
         }
         const finalMeal = pendingFoodLog || activeMeal;
         const gate = evaluateMealGate(buildGateInput({

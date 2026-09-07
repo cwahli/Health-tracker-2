@@ -47,6 +47,9 @@ export interface ScoutTotals {
   totalSugar: number;
   totalSatFat: number;
   totalP: number;
+  totalCals?: number;
+  totalC?: number;
+  totalF?: number;
 }
 
 /**
@@ -99,6 +102,30 @@ export function decideScoutAdvice(args: {
     } else {
       rawAdvice = t(language, 'adviceLoggedBalanced').replace('{name}', String(mealName));
     }
+  } else {
+    // Synchronize cited macro quantities with authoritative ledger totals
+    let syncAdvice = String(rawAdvice);
+    if (totals.totalSatFat !== undefined) {
+      syncAdvice = syncAdvice.replace(/(\d+(?:\.\d+)?)\s*(?:g|grams?)\s*(?:of\s*)?(saturated\s*fat|sat\s*fat)/gi, (m, oldVal, label) => {
+        return `${Math.round(totals.totalSatFat * 10) / 10}g of ${label}`;
+      });
+    }
+    if (totals.totalP !== undefined) {
+      syncAdvice = syncAdvice.replace(/(\d+(?:\.\d+)?)\s*(?:g|grams?)\s*(?:of\s*)?((?:clean\s*|solid\s*)?protein)/gi, (m, oldVal, label) => {
+        return `${Math.round(totals.totalP * 10) / 10}g of ${label}`;
+      });
+    }
+    if (totals.totalCals !== undefined && totals.totalCals > 0) {
+      syncAdvice = syncAdvice.replace(/(\d+(?:\.\d+)?)\s*(?:kcal|calories)\b/gi, () => {
+        return `${Math.round(totals.totalCals)} kcal`;
+      });
+    }
+    if (totals.totalSugar !== undefined) {
+      syncAdvice = syncAdvice.replace(/(\d+(?:\.\d+)?)\s*(?:g|grams?)\s*(?:of\s*)?(?:added\s*|total\s*)?(sugar)/gi, (m, oldVal, label) => {
+        return `${Math.round(totals.totalSugar * 10) / 10}g of sugar`;
+      });
+    }
+    rawAdvice = syncAdvice;
   }
   return rawAdvice;
 }
@@ -224,7 +251,12 @@ export function resolveCreateMealTitle(rawScoutData: any, visionScoutItems: any[
     .filter(Boolean);
   if (names.length === 1) return names[0];
   if (names.length === 2) return `${names[0]} and ${names[1]}`;
-  if (names.length > 2) return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
+  if (names.length === 3) return `${names[0]}, ${names[1]}, and ${names[2]}`;
+  if (names.length > 3) {
+    const primary = names.slice(0, 2);
+    const remainingCount = names.length - 2;
+    return `${primary.join(', ')}, and ${remainingCount} other ${remainingCount === 1 ? 'dish' : 'dishes'}`;
+  }
   return t(language, 'balancedMealFallbackName');
 }
 
