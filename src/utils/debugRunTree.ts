@@ -356,6 +356,9 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
           }
         }
       }
+      if (copy.agent === 'scout' && !copy.systemInstruction && !copy.instruction) {
+        copy.systemInstruction = '- QUANTITY & MULTIPACKS: Output \'weightGrams\' (consumed serving) and \'packGrams\' (container total). For unopened grocery multi-packs, set \'weightGrams\' to a single unit/serving size and \'packGrams\' to the container total.';
+      }
       if (idx === input.dispatches.length - 1 && input.rawScout && !copy.rawEmission) {
         copy.rawEmission = input.rawScout;
       }
@@ -389,6 +392,49 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
         called: true,
         error: input.error || null,
       });
+    }
+
+    if (pack === 'food') {
+      const turnSet = new Set(enriched.map(d => Number(d.turn) || 1));
+      for (const t of turnSet) {
+        const turnDispatches = enriched.filter(d => (Number(d.turn) || 1) === t);
+        const hasNarratorOrDietitian = turnDispatches.some(d => d.agent === 'narrator' || d.agent === 'dietitian' || d.agent === 'expert');
+        if (!hasNarratorOrDietitian) {
+          const matchingScout = turnDispatches.find(d => d.agent === 'scout') || turnDispatches[0];
+          const pfl = input.pendingFoodLog || (input as any)?.result?.pendingFoodLog || (input as any)?.result;
+          const verdict = pfl?.verdict || (input.receiptTable as any)?.verdict;
+          const advice = pfl?.clinicalAdvice || pfl?.message || (input as any)?.result?.clinicalAdvice || (input as any)?.result?.message || input.message;
+          const dishes = pfl?.dishes || (input.receiptTable as any)?.dishes || [];
+          if (verdict || advice || dishes.length > 0) {
+            const emission = {
+              verdict: verdict || { label: 'Supports Metabolic Energy', level: 'neutral' },
+              clinicalAdvice: advice || '',
+              message: advice || '',
+              dishes,
+            };
+            enriched.push({
+              id: `t${t}/narrator`,
+              parent: matchingScout ? matchingScout.id : null,
+              turn: t,
+              agent: 'narrator',
+              user: matchingScout?.user || '',
+              received: {
+                mode: input.mode || 'new_log',
+                projected: true,
+              },
+              systemInstruction: undefined,
+              userPrompt: undefined,
+              instruction: 'Projector narrative stage. TARGETED DISH UPDATE ONLY.',
+              output: emission,
+              rawEmission: emission,
+              model: 'projector',
+              latency_ms: 0,
+              tokens: 0,
+              error: null,
+            });
+          }
+        }
+      }
     }
 
     return enriched;
@@ -437,6 +483,12 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
   }
 
   // Food pack dispatches
+  const hasPhotos = Boolean(input.photoUrl || (input.photoUrls && input.photoUrls.length > 0));
+  const rawActionPrompt = resolveLastUserActionPrompt(input.lastUserAction);
+  const defaultUserPrompt = hasPhotos
+    ? 'Analyze this meal photo.'
+    : (rawActionPrompt || input.userPrompt || input.prompt || (input.mode === 'new_log' ? input.message : undefined));
+
   const hasScout = Boolean(
     input.scoutItems?.length ||
     input.rawScout ||
@@ -452,12 +504,6 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
     // Check if there are multiple prompt sections in logs
     const promptSplitRegex = /\[UnifiedLLM-Prompt:scout\] System Instruction:\n/g;
     const matches = Array.from(logs.matchAll(promptSplitRegex));
-
-    const hasPhotos = Boolean(input.photoUrl || (input.photoUrls && input.photoUrls.length > 0));
-    const rawActionPrompt = resolveLastUserActionPrompt(input.lastUserAction);
-    const defaultUserPrompt = hasPhotos
-      ? 'Analyze this meal photo.'
-      : (rawActionPrompt || input.userPrompt || input.prompt || (input.mode === 'new_log' ? input.message : undefined));
 
     if (matches.length > 1) {
       // Multi-turn run detected in logs!
@@ -539,6 +585,10 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
         if (match) extractedUserPrompt = match[1].trim();
       }
 
+      if (!extractedSystemInstruction) {
+        extractedSystemInstruction = "- QUANTITY & MULTIPACKS: Output 'weightGrams' (consumed serving) and 'packGrams' (container total). For unopened grocery multi-packs, set 'weightGrams' to a single unit/serving size and 'packGrams' to the container total.";
+      }
+
       const fullInstruction = extractedSystemInstruction
         ? (extractedUserPrompt ? `=== SYSTEM INSTRUCTION ===\n${extractedSystemInstruction}\n\n=== USER PROMPT ===\n${extractedUserPrompt}` : extractedSystemInstruction)
         : extractedUserPrompt;
@@ -596,6 +646,41 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
       called: true,
       error: input.error || null,
     });
+  }
+
+  if (pack === 'food' && !dispatches.some(d => d.agent === 'narrator' || d.agent === 'dietitian' || d.agent === 'expert')) {
+    const pfl = input.pendingFoodLog || (input as any)?.result?.pendingFoodLog || (input as any)?.result;
+    const verdict = pfl?.verdict || (input.receiptTable as any)?.verdict;
+    const advice = pfl?.clinicalAdvice || pfl?.message || (input as any)?.result?.clinicalAdvice || (input as any)?.result?.message || input.message;
+    const dishes = pfl?.dishes || (input.receiptTable as any)?.dishes || [];
+    if (verdict || advice || dishes.length > 0) {
+      const emission = {
+        verdict: verdict || { label: 'Supports Metabolic Energy', level: 'neutral' },
+        clinicalAdvice: advice || '',
+        message: advice || '',
+        dishes,
+      };
+      dispatches.push({
+        id: 't1/narrator',
+        parent: hasScout ? 't1/scout' : null,
+        turn: 1,
+        agent: 'narrator',
+        user: defaultUserPrompt,
+        received: {
+          mode: input.mode || 'new_log',
+          projected: true,
+        },
+        systemInstruction: undefined,
+        userPrompt: undefined,
+        instruction: 'Projector narrative stage. TARGETED DISH UPDATE ONLY.',
+        output: emission,
+        rawEmission: emission,
+        model: 'projector',
+        latency_ms: 0,
+        tokens: 0,
+        error: null,
+      });
+    }
   }
 
   return dispatches;
