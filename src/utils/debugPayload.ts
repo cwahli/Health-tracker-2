@@ -208,6 +208,20 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
     lines.push('');
   }
 
+  // 2c. Split Turn / Portion Clarify (pending question, if any)
+  const pendingClarify = (tree.pendingFoodLog as any)?.portionClarify;
+  if (pendingClarify && typeof pendingClarify === 'object') {
+    lines.push(`## 🔀 Split Turn / Portion Clarify`);
+    lines.push('');
+    if (pendingClarify.promptMessage) lines.push(`- **Question:** ${pendingClarify.promptMessage}`);
+    const clarifyItems = Array.isArray(pendingClarify.items) ? pendingClarify.items : [];
+    for (const it of clarifyItems) {
+      lines.push(`- **Ask:** ${it?.name} (est ${it?.estimatedWeightGrams}g, pack ${it?.packGrams}g)`);
+    }
+    lines.push(`- **Status:** ${tree.status === 'awaiting_user' ? 'awaiting user answer' : tree.status}`);
+    lines.push('');
+  }
+
   // 3. Agent Dispatches — once per dispatch that ran (§7)
   if (tree.dispatches && tree.dispatches.length > 0) {
     lines.push(`## 📡 Agent Dispatches (${tree.dispatches.length})`);

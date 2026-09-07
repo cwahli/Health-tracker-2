@@ -2,7 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { parseDebugMarkdown, classifyDump, evaluateContracts, formatOracleFails } from './dumpContract';
+import { parseDebugMarkdown, classifyDump, evaluateContracts, formatOracleFails, DEBUG_MODE_INSTRUCTION_MARKERS } from './dumpContract';
+import { NUTRIENT_KEYS } from './nutrients';
 import { shouldRunHandoffAutoSend } from './chatAutoSend';
 import { buildDebugMarkdownReport } from './debugPayload';
 import { buildCanonicalRunTree } from './debugRunTree';
@@ -20,6 +21,21 @@ vi.mock('./dumpContract', async (importOriginal) => {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CAPTURE = path.join(__dirname, '../../tests/captures/job_1788538012316_m9wm9cs9a.md');
+
+// Shared fixtures for agent-output verification rows (15-19): full ledgers,
+// in-band emissions, complete dishes — the shape real exports carry.
+const fullNuts = (over: Record<string, number> = {}) =>
+  Object.fromEntries(NUTRIENT_KEYS.map((k) => [k, over[k] ?? 0]));
+const stdAdvice = () => Array.from({ length: 40 }, (_, i) => `word${i}`).join(' ');
+const stdDish = () => ({
+  dishName: 'Bowl', estimatedWeightGrams: 300, packGrams: 300, sourceImageIndex: 0,
+  boundingBox2D: [0, 0, 100, 100], foods: [{ name: 'Rice' }], dishNutrients: { calories: 420 },
+});
+const stdEmission = () => ({
+  verdict: { label: 'Balanced Test Meal Verdict', level: 'warning' },
+  clinicalAdvice: stdAdvice(),
+  dishes: [stdDish()],
+});
 
 describe('dumpContract — display lag and complete-once', () => {
   it('flags happy-path with kcal but no session succeeded', () => {
@@ -166,12 +182,12 @@ describe('code probes — inner loop (must be green without a new live run)', ()
 });
 
 describe('Canonical JSON Run Tree & Contract Scorer (Q-8 / F-8.13)', () => {
-  it('evaluates all 13 §9 contract laws directly on CanonicalRunTree', () => {
+  it('evaluates all 18 contract laws directly on CanonicalRunTree', () => {
     const tree = buildCanonicalRunTree({
       jobId: 'job_tree_test',
       status: 'succeeded',
       backendLogs: '[Vision Scout] ok (1200ms)\n[Budget] Finalized ledger: 420 kcal\nAnalyzeFinished succeeded',
-      pendingFoodLog: { nutrients: { calories: 420, protein: 30 } },
+      pendingFoodLog: { nutrients: fullNuts({ calories: 420, protein: 30 }) },
       dialogInventory: {
         open: true,
         title: 'Lunch',
@@ -182,12 +198,12 @@ describe('Canonical JSON Run Tree & Contract Scorer (Q-8 / F-8.13)', () => {
       },
       dispatches: [
         { id: 't1/scout', agent: 'scout', model: 'gemini-3.5-flash-lite', latency_ms: 1200 },
-        { id: 't1/dietitian', agent: 'dietitian', model: 'gemini-3.5-flash-lite', latency_ms: 2100 },
+        { id: 't1/dietitian', agent: 'dietitian', model: 'gemini-3.5-flash-lite', latency_ms: 2100, output: stdEmission() },
       ],
     });
 
     const evals = evaluateContracts(tree);
-    expect(evals.length).toBe(13);
+    expect(evals.length).toBe(18);
 
     const sseLaw = evals.find(e => e.law === 'SSE {final,result}');
     expect(sseLaw?.result).toBe('PASS');
@@ -527,10 +543,10 @@ describe('Canonical JSON Run Tree & Contract Scorer (Q-8 / F-8.13)', () => {
       jobId: 'job_clean_food_tree',
       status: 'succeeded',
       backendLogs: '[Budget] Finalized ledger: 420 kcal\nAnalyzeFinished succeeded',
-      pendingFoodLog: { nutrients: { calories: 420, protein: 30 } },
+      pendingFoodLog: { nutrients: fullNuts({ calories: 420, protein: 30 }) },
       dispatches: [
         { id: 't1/scout', agent: 'scout', model: 'gemini-3.5-flash-lite', latency_ms: 1200 },
-        { id: 't1/dietitian', agent: 'dietitian', model: 'gemini-3.5-flash-lite', latency_ms: 2100 },
+        { id: 't1/dietitian', agent: 'dietitian', model: 'gemini-3.5-flash-lite', latency_ms: 2100, output: stdEmission() },
       ],
     });
 
@@ -554,6 +570,124 @@ describe('Canonical JSON Run Tree & Contract Scorer (Q-8 / F-8.13)', () => {
     }).not.toThrow();
     expect(Array.isArray(fails)).toBe(true);
   });
+});
+
+describe('Agent-output verification rows (15-19)', () => {
+  const law = (tree: any, name: string) =>
+    evaluateContracts(tree).find((e) => e.law === name);
+
+  it('fails nutrients on missing keys, passes full ledgers (zeros legal)', () => {
+    const partial = buildCanonicalRunTree({
+      pack: 'food', jobId: 'j_nuts_partial', status: 'succeeded',
+      pendingFoodLog: { nutrients: { calories: 420 } },
+    });
+    expect(law(partial, 'Agent output: nutrients complete')?.result).toBe('FAIL');
+    const full = buildCanonicalRunTree({
+      pack: 'food', jobId: 'j_nuts_full', status: 'succeeded',
+      pendingFoodLog: { nutrients: fullNuts({ calories: 420 }) },
+    });
+    const r = law(full, 'Agent output: nutrients complete');
+    expect(r?.result).toBe('PASS');
+    expect(r?.actual).toMatch(/32 keys finite/);
+  });
+
+  it('fails verdict+advice when out of band, passes in-band personalised advice', () => {
+    const short = buildCanonicalRunTree({
+      pack: 'food', jobId: 'j_adv_short', status: 'succeeded',
+      pendingFoodLog: { nutrients: fullNuts({ calories: 420 }) },
+      dispatches: [{ id: 't1/scout', output: { verdict: { label: 'Ok', level: 'good' }, clinicalAdvice: 'too short' } }],
+    });
+    expect(law(short, 'Agent output: verdict + advice')?.result).toBe('FAIL');
+    const good = buildCanonicalRunTickedTree();
+    expect(law(good, 'Agent output: verdict + advice')?.result).toBe('PASS');
+  });
+
+  it('requires at least one fully populated dish when dishes exist', () => {
+    const thin = buildCanonicalRunTree({
+      pack: 'food', jobId: 'j_dish_thin', status: 'succeeded',
+      pendingFoodLog: { nutrients: fullNuts({ calories: 420 }) },
+      dispatches: [{ id: 't1/scout', output: { ...stdEmission(), dishes: [{ dishName: 'Bowl' }] } }],
+    });
+    const r = law(thin, 'Dishes: fields populated');
+    expect(r?.result).toBe('FAIL');
+    expect(r?.actual).toMatch(/missing/);
+    const full = buildCanonicalRunTree({
+      pack: 'food', jobId: 'j_dish_full', status: 'succeeded',
+      pendingFoodLog: { nutrients: fullNuts({ calories: 420 }) },
+      dispatches: [{ id: 't1/scout', output: stdEmission() }],
+    });
+    expect(law(full, 'Dishes: fields populated')?.result).toBe('PASS');
+  });
+
+  it('fails awaiting_user with no question payload, passes shown splits', () => {
+    const stuck = buildCanonicalRunTree({
+      pack: 'food', jobId: 'j_split_stuck', status: 'awaiting_user',
+      pendingFoodLog: { nutrients: fullNuts({ calories: 420 }) },
+    });
+    expect(law(stuck, 'Multi-turn split shown')?.result).toBe('FAIL');
+    const shown = buildCanonicalRunTree({
+      pack: 'food', jobId: 'j_split_shown', status: 'awaiting_user',
+      pendingFoodLog: {
+        nutrients: fullNuts({ calories: 420 }),
+        portionClarify: { promptMessage: 'How much?', items: [{ name: 'Oats' }] },
+      },
+    });
+    expect(law(shown, 'Multi-turn split shown')?.result).toBe('PASS');
+    const single = buildCanonicalRunTree({
+      pack: 'food', jobId: 'j_single', status: 'succeeded',
+      pendingFoodLog: { nutrients: fullNuts({ calories: 420 }) },
+    });
+    expect(law(single, 'Multi-turn split shown')?.result).toBe('n/a');
+  });
+
+  it('verifies the Mode D chunk on evaluation runs and scout chunk otherwise', () => {
+    const dPass = buildCanonicalRunTree({
+      pack: 'food', jobId: 'j_moded', status: 'succeeded',
+      pendingFoodLog: { nutrients: fullNuts({ calories: 420 }) },
+      dispatches: [{
+        id: 't1/compare', received: { mode: 'evaluation' },
+        systemInstruction: '=== ACTIVE TASK: PRODUCT EVALUATION & COMPARISON === rank items',
+      }],
+    });
+    const r1 = law(dPass, 'Mode instruction chunk');
+    expect(r1?.result).toBe('PASS');
+    expect(r1?.actual).toMatch(/Mode D compare/);
+    const dFail = buildCanonicalRunTree({
+      pack: 'food', jobId: 'j_moded_missing', status: 'succeeded',
+      pendingFoodLog: { nutrients: fullNuts({ calories: 420 }) },
+      dispatches: [{
+        id: 't1/compare', received: { mode: 'evaluation' },
+        systemInstruction: 'Some generic instruction without the compare chunk',
+      }],
+    });
+    expect(law(dFail, 'Mode instruction chunk')?.result).toBe('FAIL');
+    const meal = buildCanonicalRunTree({
+      pack: 'food', jobId: 'j_meal_chunk', status: 'succeeded',
+      pendingFoodLog: { nutrients: fullNuts({ calories: 420 }) },
+      dispatches: [{
+        id: 't1/scout', received: { mode: 'review' },
+        systemInstruction: 'rules incl. QUANTITY & MULTIPACKS and weights',
+      }],
+    });
+    expect(law(meal, 'Mode instruction chunk')?.result).toBe('PASS');
+  });
+
+  it('DEBUG_MODE_INSTRUCTION_MARKERS covers Mode D and stays extensible', () => {
+    const labels = DEBUG_MODE_INSTRUCTION_MARKERS.map((e) => e.label);
+    expect(labels).toContain('Mode D compare');
+    for (const e of DEBUG_MODE_INSTRUCTION_MARKERS) {
+      expect(e.modes.length).toBeGreaterThan(0);
+      expect(e.markers.length).toBeGreaterThan(0);
+    }
+  });
+
+  function buildCanonicalRunTickedTree() {
+    return buildCanonicalRunTree({
+      pack: 'food', jobId: 'j_adv_good', status: 'succeeded',
+      pendingFoodLog: { nutrients: fullNuts({ calories: 420 }) },
+      dispatches: [{ id: 't1/scout', output: stdEmission() }],
+    });
+  }
 });
 
 describe('parseDebugMarkdown — identity jobId extraction', () => {

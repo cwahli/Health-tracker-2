@@ -9,6 +9,26 @@ import {
 import { buildCanonicalRunTree } from './debugRunTree';
 
 describe('debugPayload', () => {
+  it('buildDebugMarkdownReport includes a Split Turn section when a portion question is pending', () => {
+    const md = buildDebugMarkdownReport({
+      jobId: 'job_split_pending',
+      status: 'awaiting_user',
+      pack: 'food',
+      pendingFoodLog: {
+        nutrients: { calories: 700 },
+        portionClarify: {
+          promptMessage: 'How much of "Oats" did you eat?',
+          items: [{ name: 'Oats', estimatedWeightGrams: 35, packGrams: 805 }],
+        },
+      },
+    });
+
+    expect(md).toContain('## 🔀 Split Turn / Portion Clarify');
+    expect(md).toContain('How much of "Oats" did you eat?');
+    expect(md).toContain('Oats (est 35g, pack 805g)');
+    expect(md).toContain('awaiting user answer');
+  });
+
   it('buildDebugMarkdownReport includes Identity heading', () => {
     const md = buildDebugMarkdownReport({
       jobId: 'job_identity_heading',

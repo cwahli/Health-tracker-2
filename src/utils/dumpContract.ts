@@ -12,6 +12,7 @@ import type {
   DispatchTrace,
   HandoffTrace,
 } from './debugRunTree.js';
+import { NUTRIENT_KEYS } from './nutrients.js';
 
 export type DumpFacts = {
   jobId: string | null;
@@ -640,7 +641,184 @@ export function evaluateContracts(tree: CanonicalRunTree): ContractEvaluation[] 
     }
   }
 
+  // 15-19. Agent-output verification (food pack): nutrients, verdict/advice,
+  // dish completeness, multi-turn split visibility, mode instruction chunk.
+  // DEBUG_MODE_INSTRUCTION_MARKERS is the customisation point: a new agent or
+  // mode registers its required instruction markers here — no code changes
+  // needed elsewhere. Non-food packs are n/a until their chunks are mapped.
+  const foodEvals = evaluateFoodAgentOutput(tree, isFoodPack);
+  evals.push(...foodEvals);
+
   return evals;
+}
+
+/**
+ * Mode → required instruction-chunk markers shown in the export.
+ * Later agents/modes add one entry: { modes, label, markers }.
+ */
+export const DEBUG_MODE_INSTRUCTION_MARKERS: Array<{
+  modes: string[];
+  label: string;
+  markers: string[];
+}> = [
+  {
+    modes: ['evaluation', 'compare', 'compare_menu', 'compare_shelf'],
+    label: 'Mode D compare',
+    markers: ['ACTIVE TASK: PRODUCT EVALUATION & COMPARISON'],
+  },
+  {
+    modes: ['modify', 'edit'],
+    label: 'Edit patch',
+    markers: ['TARGETED DISH UPDATE ONLY'],
+  },
+  {
+    modes: ['*'],
+    label: 'Meal scout',
+    markers: ['QUANTITY & MULTIPACKS'],
+  },
+];
+
+const DISH_REQUIRED_FIELDS = [
+  'dishName', 'estimatedWeightGrams', 'sourceImageIndex', 'boundingBox2D', 'foods', 'dishNutrients',
+];
+
+function dishCompleteness(dish: any): string[] {
+  const missing: string[] = [];
+  if (!dish || typeof dish !== 'object') return [...DISH_REQUIRED_FIELDS, '(no dish)'];
+  if (!dish.dishName) missing.push('dishName');
+  if (!Number.isFinite(Number(dish.estimatedWeightGrams))) missing.push('estimatedWeightGrams');
+  if (!Number.isInteger(dish.sourceImageIndex)) missing.push('sourceImageIndex');
+  if (!Array.isArray(dish.boundingBox2D) || dish.boundingBox2D.length !== 4) missing.push('boundingBox2D');
+  if (!Array.isArray(dish.foods) || dish.foods.length === 0) missing.push('foods');
+  if (!dish.dishNutrients || typeof dish.dishNutrients !== 'object') missing.push('dishNutrients');
+  return missing;
+}
+
+function evaluateFoodAgentOutput(tree: CanonicalRunTree, isFoodPack: boolean): ContractEvaluation[] {
+  const out: ContractEvaluation[] = [];
+  const pass = (law: string, actual: string) =>
+    out.push({ law, layer: 'content', fault: 'none', result: 'PASS', actual });
+  const fail = (law: string, actual: string) =>
+    out.push({ law, layer: 'content', fault: 'MISSING', result: 'FAIL', actual });
+  const na = (law: string, actual: string) =>
+    out.push({ law, layer: 'content', fault: 'none', result: 'n/a', actual });
+  if (!isFoodPack) {
+    na('Agent output: nutrients complete', `Food-only law (pack=${tree.pack})`);
+    na('Agent output: verdict + advice', `Food-only law (pack=${tree.pack})`);
+    na('Dishes: fields populated', `Food-only law (pack=${tree.pack})`);
+    na('Multi-turn split shown', `Food-only law (pack=${tree.pack})`);
+    na('Mode instruction chunk', `Food-only law (pack=${tree.pack})`);
+    return out;
+  }
+
+  // 15. Nutrients: every key present with a finite number. Zeros are legal
+  // computed values (e.g. transFat 0) — they are counted, never failed.
+  const ledgerNuts = tree.pendingFoodLog?.nutrients;
+  if (!ledgerNuts || typeof ledgerNuts !== 'object') {
+    na('Agent output: nutrients complete', 'No finalized ledger in this run');
+  } else {
+    const bad = NUTRIENT_KEYS.filter(
+      (k) => !Number.isFinite(Number((ledgerNuts as any)[k]))
+    );
+    const zeros = NUTRIENT_KEYS.filter((k) => Number((ledgerNuts as any)[k]) === 0).length;
+    if (bad.length === 0) {
+      pass('Agent output: nutrients complete', `All ${NUTRIENT_KEYS.length} keys finite (${zeros} legal zeros)`);
+    } else {
+      fail('Agent output: nutrients complete', `Non-computed keys: ${bad.join(', ')}`);
+    }
+  }
+
+  // 16. Verdict + advice from any agent emission in the run. n/a when the
+  // tree carries no emission outputs (nothing to verify against).
+  const emissions = (tree.dispatches || [])
+    .map((d) => d?.rawEmission || d?.output)
+    .filter((o) => o && typeof o === 'object');
+  if (emissions.length === 0) {
+    na('Agent output: verdict + advice', 'No agent emissions captured in this run');
+  } else {
+    const withVerdict = emissions.find(
+      (o) => o?.verdict?.label && o?.verdict?.level && (o?.clinicalAdvice || o?.message)
+    );
+    if (!withVerdict) {
+      fail('Agent output: verdict + advice', 'No emission carries verdict label/level + advice text');
+    } else {
+      const text = String(withVerdict.clinicalAdvice || withVerdict.message || '');
+      const w = text.trim().split(/\s+/).filter(Boolean).length;
+      const figures = (text.match(/\d+(\.\d+)?\s*(kcal|g|mg|%)/gi) || []).length;
+      if (w >= 35 && w <= 70) {
+        pass('Agent output: verdict + advice', `"${withVerdict.verdict.label}" [${withVerdict.verdict.level}], ${w} words, ${figures} budget figure(s)`);
+      } else {
+        fail('Agent output: verdict + advice', `Advice ${w} words (want 35-70): "${text.slice(0, 80)}..."`);
+      }
+    }
+  }
+
+  // 17. Dishes: at least one fully populated dish in any agent emission.
+  const allDishes = emissions.flatMap((o) => (Array.isArray(o?.dishes) ? o.dishes : []));
+  if (allDishes.length === 0) {
+    na('Dishes: fields populated', 'No dishes in any agent emission');
+  } else {
+    const full = allDishes.filter((d) => dishCompleteness(d).length === 0);
+    if (full.length > 0) {
+      pass('Dishes: fields populated', `${full.length}/${allDishes.length} dish(es) fully populated (${full.map((d: any) => d.dishName).slice(0, 5).join(', ')})`);
+    } else {
+      const sample = dishCompleteness(allDishes[0]).join(', ');
+      fail('Dishes: fields populated', `0/${allDishes.length} complete; first dish missing: ${sample}`);
+    }
+  }
+
+  // 18. Multi-turn split: if the run paused or carries a portion question,
+  // the export must show it; single-turn runs are n/a.
+  const clarifyPayload =
+    tree.pendingFoodLog?.portionClarify ||
+    emissions.map((o) => o?.portionClarify).find((p) => p && typeof p === 'object');
+  const hasSecondTurn = (tree.dispatches || []).some(
+    (d) => Number(d?.turn) > 1 || /^t[2-9]\b/i.test(String(d?.id || ''))
+  );
+  const splitState = tree.status === 'awaiting_user' || Boolean(clarifyPayload) || hasSecondTurn;
+  if (!splitState) {
+    na('Multi-turn split shown', 'Single-turn run, no split state');
+  } else if (!clarifyPayload && tree.status === 'awaiting_user') {
+    fail('Multi-turn split shown', 'Paused awaiting_user with no portion-question payload captured');
+  } else if (clarifyPayload) {
+    const items = Array.isArray((clarifyPayload as any).items) ? (clarifyPayload as any).items.length : 0;
+    pass('Multi-turn split shown', `Portion question captured (${items} item(s))${hasSecondTurn ? '; second turn dispatched' : ''}`);
+  } else {
+    pass('Multi-turn split shown', 'Second turn dispatched');
+  }
+
+  // 19. Mode instruction chunk: every mode present in the run must show its
+  // chunk (customise via DEBUG_MODE_INSTRUCTION_MARKERS). Unknown modes fall
+  // back to the '*' scout entry.
+  const instructions = (tree.dispatches || [])
+    .map((d) => d?.systemInstruction || d?.instruction || '')
+    .filter(Boolean);
+  if (instructions.length === 0) {
+    na('Mode instruction chunk', 'No instructions captured in this run');
+  } else {
+    const modesPresent = new Set(
+      (tree.dispatches || []).map((d) => String(d?.received?.mode || 'new_log').toLowerCase())
+    );
+    const specific = DEBUG_MODE_INSTRUCTION_MARKERS.filter(
+      (e) => !e.modes.includes('*') && e.modes.some((m) => modesPresent.has(m.toLowerCase()))
+    );
+    const required = specific.length > 0
+      ? specific
+      : DEBUG_MODE_INSTRUCTION_MARKERS.filter((e) => e.modes.includes('*'));
+    const missing: string[] = [];
+    for (const entry of required) {
+      for (const m of entry.markers) {
+        if (!instructions.some((s) => s.includes(m))) missing.push(`${entry.label}: ${m}`);
+      }
+    }
+    if (missing.length === 0) {
+      pass('Mode instruction chunk', `${required.map((e) => e.label).join(' + ')} chunk(s) shown for mode(s)=${[...modesPresent].join(',')}`);
+    } else {
+      fail('Mode instruction chunk', `Missing chunk(s): ${missing.join('; ')}`);
+    }
+  }
+
+  return out;
 }
 
 function isCanonicalRunTree(obj: any): obj is CanonicalRunTree {
