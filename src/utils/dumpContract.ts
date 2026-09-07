@@ -883,9 +883,13 @@ function evaluateFoodAgentOutput(tree: CanonicalRunTree, isFoodPack: boolean): C
 
   // 19. Mode instruction chunk: every mode present in the run must show its
   // chunk (customise via DEBUG_MODE_INSTRUCTION_MARKERS). Unknown modes fall
-  // back to the '*' scout entry.
+  // back to the '*' scout entry. Scan the full dispatched text per dispatch
+  // (system + instruction + user prompt): on edit turns the TARGETED DISH
+  // UPDATE ONLY block rides in the user prompt while systemInstruction stays
+  // the generic scout schema — first-nonempty field selection hid it and
+  // failed every weight-only edit.
   const instructions = (tree.dispatches || [])
-    .map((d) => d?.systemInstruction || d?.instruction || '')
+    .map((d) => [d?.systemInstruction, d?.instruction, d?.userPrompt].filter((s) => typeof s === 'string' && s.length > 0).join('\n'))
     .filter(Boolean);
   if (instructions.length === 0) {
     na('Mode instruction chunk', 'No instructions captured in this run');

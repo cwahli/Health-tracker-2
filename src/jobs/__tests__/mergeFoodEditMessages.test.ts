@@ -36,7 +36,9 @@ describe('mergeFoodEditMessages', () => {
     const merged = mergeFoodEditMessages([originalCard, userEdit], assistant);
     expect(merged).toHaveLength(2);
     expect(merged[0].data.pendingFoodLog.nutrients.calories).toBe(556);
-    expect(merged[0].content).toContain('unsweetened tea');
+    // In-place update: latest message replaces the stale pre-edit narrative.
+    expect(merged[0].content).toBe('The unsweetened tea keeps added sugar minimal.');
+    expect(merged[0].content).not.toContain('Sweetened tea analysis');
     expect(merged[1].role).toBe('user');
     expect(merged[1].data?.pendingFoodLog).toBeUndefined();
     expect(merged.filter((m: any) => m.data?.pendingFoodLog || m.pendingFoodLog)).toHaveLength(1);

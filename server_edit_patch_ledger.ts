@@ -403,13 +403,15 @@ export function buildEditExpertDispatch(args: {
   editCommands: any[];
   items: any[];
   nutrients?: Record<string, any>;
+  verdict?: { label?: string; level?: string } | null;
   skipped?: boolean;
   skipReason?: string;
   model?: string;
 }): any {
   const turn = args.turn;
   const systemInstruction =
-    'Edit-turn expert/projector stage. Clinical narrative must reflect the post-edit ledger. ' +
+    'Edit-turn expert/projector stage. TARGETED DISH UPDATE ONLY: rescale the locked label truth for the edited slots; never re-emit or recompute unchanged dishes. ' +
+    'Clinical narrative must reflect the post-edit ledger. ' +
     'When skipped, reason is explicit in output.skipReason.';
   const userPrompt = JSON.stringify({
     userMessage: args.userMessage || '',
@@ -431,6 +433,14 @@ export function buildEditExpertDispatch(args: {
     : {
         skipped: false,
         message: args.finalMessage,
+        // Contract parity with create: one emission must carry BOTH the
+        // verdict label/level and the advice text, or the debug export law
+        // "Agent output: verdict + advice" fails on every weight-only edit
+        // (scout emits verdict with empty dishes[], projector emits the
+        // message — neither alone satisfies the law).
+        ...(args.verdict && args.verdict.label && args.verdict.level
+          ? { verdict: { label: args.verdict.label, level: args.verdict.level } }
+          : {}),
         editCommandCount: (args.editCommands || []).length,
       };
   return {

@@ -1391,7 +1391,14 @@ ${logsText}`);
         return;
       }
       if (job.messages && job.messages.length > 0) {
-        const baseMsgs = migrateMessages(job.messages).map((m: any) => {
+        // Backfill the latest ledger onto the LATEST assistant bubble only.
+        // Injecting resolvePendingFoodLog(job) into every historical assistant
+        // is what duplicated the card after portion edits: the turn-1 bubble
+        // rendered the turn-2 ledger message on top (desc) plus its own stale
+        // turn-1 narrative below (content), with the same table twice.
+        const migrated = migrateMessages(job.messages);
+        const lastAssistantIdx = migrated.map((m: any) => m.role).lastIndexOf('assistant');
+        const baseMsgs = migrated.map((m: any, idx: number) => {
           if (m.role === 'user' && typeof m.content === 'string' && m.content.trim().startsWith('{')) {
             try {
               const parsed = JSON.parse(m.content);
@@ -1405,7 +1412,8 @@ ${logsText}`);
             } catch {}
           }
           if (m.role === 'assistant' && (m.agentType === 'food' || m.agentType === 'food_log' || m.agentType === 'food_analyze' || type === 'food' || m.pendingFoodLog || m.data?.pendingFoodLog)) {
-            const foodLog = m.pendingFoodLog || m.data?.pendingFoodLog || resolvePendingFoodLog(job);
+            const storedLog = m.pendingFoodLog || m.data?.pendingFoodLog;
+            const foodLog = storedLog || (idx === lastAssistantIdx ? resolvePendingFoodLog(job) : null);
             if (foodLog) {
               return {
                 ...m,
@@ -2772,10 +2780,18 @@ ${logsText}`);
             history: persistMessages,
             userProfile: profile || null,
             engine: selectedModelId || 'gemini-3.5-flash-lite',
-            biomarkersNeedingImprovement: [],
+            // Personalization must ride the server-job path, not just the
+            // direct-executor path: empty biomarkers/logs (and a missing
+            // targets key) is what left scout + dietitian generic — no
+            // NUTRITIONAL TARGET STATUS, no patient-context block, and a
+            // non-personalised verdict/advice on every turn including edits.
+            biomarkersNeedingImprovement: (outOfRangeBiomarkers || [])
+              .filter((b: any) => b && b.status !== 'flagged')
+              .map((b: any) => `${b.name} is ${b.status} (${b.value} ${b.unit})`),
             remainingAllowance: remainingAllowance || null,
+            dailyNutrientTargets: report?.dailyNutrientTargets || null,
             activeMeal: prunedMealForJob,
-            foodLogs: [],
+            foodLogs: (activeFoodLogs || []).slice(-60).map((f: any) => ({ name: f.name, date: f.date, nutrients: f.nutrients })),
             userSelectedMode: submissionMode,
             activeScoutItems: scoutItemsForJob,
             portionChoices: extraOptions?.portionChoices,

@@ -85,9 +85,30 @@ describe('edit patch ledger', () => {
     expect(d.id).toBe('t2/dietitian');
     expect(d.agent).toBe('dietitian');
     expect(d.systemInstruction).toBeTruthy();
+    expect(d.systemInstruction).toContain('TARGETED DISH UPDATE ONLY');
     expect(d.userPrompt).toBeTruthy();
     expect(d.rawEmission).toBeTruthy();
     expect(d.output.skipped).toBe(false);
+  });
+
+  it('carries verdict alongside the advice message for contract parity', () => {
+    const d = buildEditExpertDispatch({
+      turn: 2,
+      userMessage: 'oats 130g',
+      finalMessage: 'You got quality protein from the meat soups and steady energy from the adjusted cereal portion in this meal.',
+      editCommands: [{ action: 'update_weight', itemName: 'Energen Cereal', newWeightGrams: 130 }],
+      items: [{ scoutIndex: 2, name: 'Energen Cereal', weightGrams: 130, nutrients: { calories: 557 } }],
+      verdict: { label: 'Increased Carbohydrate and Calorie Load', level: 'warning' },
+    });
+    expect(d.output.verdict).toEqual({ label: 'Increased Carbohydrate and Calorie Load', level: 'warning' });
+    expect(d.rawEmission.verdict.label).toBeTruthy();
+    const bare = buildEditExpertDispatch({
+      turn: 2,
+      finalMessage: 'Updated.',
+      editCommands: [],
+      items: [],
+    });
+    expect(bare.output.verdict).toBeUndefined();
   });
 
   it('preserves prior identity locks when a later turn only sets weight', () => {

@@ -1094,7 +1094,14 @@ ${textOutput}`);
       }
       {
         let editCommands = backfillEditCommandEstimates(rawParsed);
-        const scoutTurnNumberForEdit = accumulatedDispatches.filter((d: any) => d.agent === 'scout').length || 1;
+        // Turn number: a fresh scout leg was just pushed above when scout ran
+        // this turn (legs already include it); on skipScout edits no leg was
+        // pushed, so the legs only count prior turns. Counting legs blindly
+        // mislabeled skipScout edits as t1 (locks + expert dispatch).
+        const scoutRanThisTurn = Boolean(scoutInstructionForDebug || rawScoutData);
+        const scoutLegs = accumulatedDispatches.filter((d: any) => d.agent === 'scout').length;
+        const editTurnNumber = scoutRanThisTurn ? (scoutLegs || 1) : (scoutLegs + 1);
+        const scoutTurnNumberForEdit = editTurnNumber;
         const result = await applyMealEdits({
           items: Array.isArray(activeMeal.itemsBreakdown) ? activeMeal.itemsBreakdown : [],
           commands: Array.isArray(editCommands) ? editCommands : [],
@@ -1221,7 +1228,8 @@ ${textOutput}`);
         }));
         // Pipeline parity: emit dietitian/expert dispatch I/O on every edit turn
         // (projector narrative — same contract as create's dietitian_answer).
-        const expertTurn = accumulatedDispatches.filter((d: any) => d.agent === 'scout').length || 1;
+        // Same-turn agent as the scout leg above: tN/dietitian pairs tN/scout.
+        const expertTurn = editTurnNumber;
         const effectiveEditCommands = (Array.isArray((result as any).appliedCommands) && (result as any).appliedCommands.length > 0)
           ? (result as any).appliedCommands
           : (Array.isArray(editCommands) ? editCommands : []);
@@ -1232,6 +1240,7 @@ ${textOutput}`);
           editCommands: effectiveEditCommands,
           items: result.items,
           nutrients: result.nutrients,
+          verdict: activeMeal.verdict || rawParsed.verdict || null,
           skipped: false,
           model: 'projector',
         });

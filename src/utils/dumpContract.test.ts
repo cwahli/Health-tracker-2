@@ -672,6 +672,39 @@ describe('Agent-output verification rows (15-19)', () => {
     expect(law(meal, 'Mode instruction chunk')?.result).toBe('PASS');
   });
 
+  it('finds the edit-patch chunk in the user prompt when system stays generic', () => {
+    const edit = buildCanonicalRunTree({
+      pack: 'food', jobId: 'j_edit_chunk', status: 'succeeded',
+      pendingFoodLog: { nutrients: fullNuts({ calories: 1332 }) },
+      dispatches: [{
+        id: 't2/scout', received: { mode: 'edit' },
+        systemInstruction: 'generic scout schema with QUANTITY & MULTIPACKS rules',
+        userPrompt: 'User modification instruction: "oats 130g".\nCRITICAL INSTRUCTIONS FOR MODIFICATION:\n1. TARGETED DISH UPDATE ONLY: output an EMPTY dishes[] array on weight-only edits.',
+      }],
+    });
+    const r = law(edit, 'Mode instruction chunk');
+    expect(r?.result).toBe('PASS');
+    expect(r?.actual).toMatch(/Edit patch/);
+  });
+
+  it('passes verdict+advice on weight-only edits carrying both in one emission', () => {
+    const edit = buildCanonicalRunTree({
+      pack: 'food', jobId: 'j_edit_verdict', status: 'succeeded',
+      pendingFoodLog: { nutrients: fullNuts({ calories: 1332 }) },
+      dispatches: [
+        { id: 't2/scout', received: { mode: 'edit' }, output: { dishes: [], verdict: { label: 'Increased Carbohydrate Load', level: 'warning' } } },
+        {
+          id: 't2/dietitian', received: { mode: 'edit' },
+          output: {
+            verdict: { label: 'Increased Carbohydrate Load', level: 'warning' },
+            message: 'You got 78g of quality protein from the meat soups and steady energy from the 130g cereal portion totalling 1332 kcal. The added sugars reach 19g against your daily target, so balance the rest of the day with fiber rich greens and lean sides. Enjoy a gentle 20 minute post meal walk to support digestion and circulation.',
+          },
+        },
+      ],
+    });
+    expect(law(edit, 'Agent output: verdict + advice')?.result).toBe('PASS');
+  });
+
   it('DEBUG_MODE_INSTRUCTION_MARKERS covers Mode D and stays extensible', () => {
     const labels = DEBUG_MODE_INSTRUCTION_MARKERS.map((e) => e.label);
     expect(labels).toContain('Mode D compare');

@@ -1,7 +1,11 @@
 /**
- * Merge an edit-turn assistant result into the existing meal card.
+ * Merge an edit-turn assistant result into the existing meal card, in place.
  * Appending a second assistant message with pendingFoodLog is what produced
  * two identical "Sweet Iced Tea / 660 kcal" cards after "the tea is unsweetened".
+ * Appending the old text under the new ("--- Update:") is the same bug in one
+ * bubble: the card renders the fresh ledger message on top plus the stale
+ * pre-edit narrative below. Edits therefore REPLACE the card content with the
+ * latest message; history stays in job dispatches / debug export, not the bubble.
  */
 export function mergeFoodEditMessages(nonLiveMsgs: any[], assistantMsg: any): any[] {
   if (!Array.isArray(nonLiveMsgs) || nonLiveMsgs.length === 0) {
@@ -24,15 +28,16 @@ export function mergeFoodEditMessages(nonLiveMsgs: any[], assistantMsg: any): an
   const priorMsg = nonLiveMsgs[priorIdx];
   const pendingFoodLog = assistantMsg?.pendingFoodLog || assistantMsg?.data?.pendingFoodLog;
   const messageText = assistantMsg?.content;
-  
-  const originalContent = priorMsg.content || '';
-  const appendedContent = messageText 
-    ? `${originalContent}\n\n---\n**Update:**\n${messageText}`
-    : originalContent;
+
+  // In-place update: the card shows the latest turn only. Never append the
+  // stale pre-edit narrative below the fresh message (that duplication is
+  // what "--- Update:" produced on portion edits: post-edit advice on top,
+  // pre-edit 855 kcal advice below, same table twice via desc + content).
+  const mergedContent = messageText || priorMsg.content || '';
 
   const mergedMsg = {
     ...priorMsg,
-    content: appendedContent,
+    content: mergedContent,
     data: {
       ...priorMsg.data,
       ...(assistantMsg?.data || {}),
