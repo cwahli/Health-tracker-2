@@ -60,9 +60,19 @@ function namesReferSame(a: string, b: string): boolean {
 }
 
 export function significantTokens(s: string): string[] {
-  const stops = new Set(['and', 'with', 'the', 'in', 'of', 'for', 'a', 'an', 'dish', 'hot', 'style', 'fast', 'food']);
-  return normName(s).split(/[^a-z0-9]+/).filter((w: string) => w.length > 2 && !stops.has(w));
+  const stops = new Set([
+    'and', 'with', 'the', 'in', 'of', 'for', 'a', 'an', 'to', 'at', 'by', 'on',
+    'dish', 'style', 'fast', 'food', 'dan', 'dengan', 'dari', 'untuk', 'di', 'ke', 'yg', 'yang',
+  ]);
+  return normName(s).split(/[^a-z0-9]+/).filter((w: string) => w.length >= 2 && !stops.has(w));
 }
+
+const PREPARATION_MODIFIERS = new Set([
+  'manis', 'tawar', 'sweet', 'sweetened', 'unsweetened', 'unsweatened',
+  'goreng', 'bakar', 'rebus', 'panggang', 'kukus', 'grilled', 'fried', 'boiled', 'steamed', 'baked', 'roasted',
+  'pan', 'deep', 'crispy', 'plain', 'fresh', 'raw', 'pedas', 'spicy', 'extra', 'less', 'no', 'zero', 'tanpa',
+  'ice', 'iced', 'hot', 'panas', 'dingin', 'warm', 'hangat',
+]);
 
 export function namesShareSubstance(a: string, b: string): boolean {
   const ta = significantTokens(a);
@@ -73,6 +83,66 @@ export function namesShareSubstance(a: string, b: string): boolean {
   const minLen = Math.min(ta.length, tb.length);
   if (shared.length >= 2 && shared.length / minLen >= 0.5) return true;
   if (minLen === 1 && shared.length === 1 && (ta.length === 1 || tb.length === 1)) return true;
+  if (shared.length >= 1) {
+    const setA = new Set(ta);
+    const diffA = ta.filter(t => !setB.has(t));
+    const diffB = tb.filter(t => !setA.has(t));
+    if (diffA.every(t => PREPARATION_MODIFIERS.has(t)) || diffB.every(t => PREPARATION_MODIFIERS.has(t))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function itemAllNames(it: any): string[] {
+  const names: string[] = [];
+  const add = (v: any) => {
+    if (!v || typeof v !== 'string') return;
+    const t = v.trim();
+    if (t && !names.includes(t)) names.push(t);
+  };
+  add(it?.name);
+  add(it?.dishName);
+  add(it?.canonicalDbName);
+  add(it?.originalName);
+  add(it?.originalLocalName);
+  add(it?.keyword);
+  add(it?.genericEnglishName);
+  const comps = Array.isArray(it?.foods)
+    ? it.foods
+    : (Array.isArray(it?.components)
+      ? it.components
+      : (Array.isArray(it?.componentsDetailList) ? it.componentsDetailList : []));
+  for (const c of comps) {
+    if (typeof c === 'object' && c) {
+      add(c?.name);
+      add(c?.foodName);
+      add(c?.genericEnglishName);
+      add(c?.keyword);
+    }
+  }
+  return names;
+}
+
+export function itemsReferSame(a: any, b: any): boolean {
+  const namesA = itemAllNames(a);
+  const namesB = itemAllNames(b);
+  for (const na of namesA) {
+    for (const nb of namesB) {
+      if (namesReferSame(na, nb)) return true;
+    }
+  }
+  return false;
+}
+
+export function itemsShareSubstance(a: any, b: any): boolean {
+  const namesA = itemAllNames(a);
+  const namesB = itemAllNames(b);
+  for (const na of namesA) {
+    for (const nb of namesB) {
+      if (namesShareSubstance(na, nb)) return true;
+    }
+  }
   return false;
 }
 
@@ -82,10 +152,11 @@ function scoutIndexOf(it: any, fallback: number): number {
 }
 
 function estimateFromScout(it: any): Record<string, any> | null {
-  const n = it?.nutrients || it?.preCalcNutrients || {};
+  const n = { ...(it?.dishNutrients || {}), ...(it?.nutrients || {}), ...(it?.preCalcNutrients || {}) };
   const keys = [
     'protein', 'carbohydrates', 'totalFat', 'saturatedFat', 'sodium',
-    'addedSugar', 'totalFibre', 'sugar', 'cookingMethod', 'foodType',
+    'addedSugar', 'totalFibre', 'sugar', 'totalSugar', 'potassium', 'calcium', 'iron',
+    'magnesium', 'vitaminD', 'omega3', 'cookingMethod', 'foodType',
   ];
   const out: Record<string, any> = {};
   let any = false;
@@ -98,6 +169,7 @@ function estimateFromScout(it: any): Record<string, any> | null {
   }
   if (it?.cookingMethod) out.cookingMethod = it.cookingMethod;
   if (it?.foodType) out.foodType = it.foodType;
+  if (it?.sourceImageIndex != null) out.sourceImageIndex = Number(it.sourceImageIndex);
   if (Array.isArray(it?.components) && it.components.length > 0) {
     out.components = it.components;
     any = true;
@@ -202,55 +274,123 @@ export function diffScoutToEditCommands(args: {
     if (!sName) continue;
     const hasExplicitScoutIdx = scout.scoutIndex != null && Number.isFinite(Number(scout.scoutIndex));
     const sScoutIdx = hasExplicitScoutIdx ? Number(scout.scoutIndex) : scoutIndexOf(scout, sIdx);
+    const isExplicitAdd = scout.action === 'add';
+    const isExplicitReplace = scout.action === 'replace';
+    const isExplicitDelete = scout.action === 'delete' || scout.action === 'remove';
 
     let priorIdx = -1;
-    // 1. Explicit scoutIndex if provided by scout
-    if (hasExplicitScoutIdx) {
-      priorIdx = priorItems.findIndex((p, i) => !usedPrior.has(i) && scoutIndexOf(p, i) === sScoutIdx);
-    }
-    // 2. High-confidence name match
-    if (priorIdx < 0) {
-      priorIdx = priorItems.findIndex((p, i) => !usedPrior.has(i) && namesReferSame(displayName(p), sName));
-    }
-    // 3. Substantive name match + sourceImageIndex correlation
-    if (priorIdx < 0 && scout.sourceImageIndex != null) {
-      priorIdx = priorItems.findIndex((p, i) => !usedPrior.has(i) && p.sourceImageIndex === scout.sourceImageIndex && namesShareSubstance(displayName(p), sName));
-    }
-    // 4. Substantive name match
-    if (priorIdx < 0) {
-      priorIdx = priorItems.findIndex((p, i) => !usedPrior.has(i) && namesShareSubstance(displayName(p), sName));
-    }
-    // 5. Source image index match (if photo anchor matches a prior item and no ambiguity)
-    if (priorIdx < 0 && scout.sourceImageIndex != null) {
-      const imgMatches = priorItems.map((p, i) => (!usedPrior.has(i) && p.sourceImageIndex === scout.sourceImageIndex ? i : -1)).filter(i => i >= 0);
-      if (imgMatches.length === 1) {
-        priorIdx = imgMatches[0];
+
+    if (!isExplicitAdd) {
+      // 1. Explicit targetDishIndex from agent
+      if (scout.targetDishIndex != null && Number.isFinite(Number(scout.targetDishIndex))) {
+        const rawIdx = Number(scout.targetDishIndex);
+        const oneBased = rawIdx - 1;
+        if (oneBased >= 0 && oneBased < priorItems.length && !usedPrior.has(oneBased)) {
+          priorIdx = oneBased;
+        } else if (rawIdx >= 0 && rawIdx < priorItems.length && !usedPrior.has(rawIdx)) {
+          priorIdx = rawIdx;
+        }
+      }
+
+      // 2. Explicit replacesDish from agent
+      if (priorIdx < 0 && scout.replacesDish && typeof scout.replacesDish === 'string') {
+        const rep = scout.replacesDish.trim().toLowerCase();
+        priorIdx = priorItems.findIndex((p, i) => !usedPrior.has(i) && (
+          itemAllNames(p).some(n => n.toLowerCase() === rep || namesReferSame(n, rep) || namesShareSubstance(n, rep))
+        ));
+      }
+
+      // 3. Explicit scoutIndex if provided by scout
+      if (priorIdx < 0 && hasExplicitScoutIdx) {
+        priorIdx = priorItems.findIndex((p, i) => !usedPrior.has(i) && scoutIndexOf(p, i) === sScoutIdx);
+      }
+      // 4. High-confidence name match on display name
+      if (priorIdx < 0) {
+        priorIdx = priorItems.findIndex((p, i) => !usedPrior.has(i) && namesReferSame(displayName(p), sName));
+      }
+      // 5. Multi-name match across genericEnglishName and constituent foods
+      if (priorIdx < 0) {
+        priorIdx = priorItems.findIndex((p, i) => !usedPrior.has(i) && itemsReferSame(p, scout));
+      }
+      // 6. Substantive name match + sourceImageIndex correlation
+      if (priorIdx < 0 && scout.sourceImageIndex != null) {
+        priorIdx = priorItems.findIndex((p, i) => !usedPrior.has(i) && p.sourceImageIndex === scout.sourceImageIndex && itemsShareSubstance(p, scout));
+      }
+      // 7. Substantive name match (without image restriction)
+      if (priorIdx < 0) {
+        priorIdx = priorItems.findIndex((p, i) => !usedPrior.has(i) && itemsShareSubstance(p, scout));
+      }
+      // 8. User message targeting
+      if (priorIdx < 0 && args.userMessage) {
+        const msg = args.userMessage.toLowerCase();
+        const hasReplaceWord = /\b(replace|substitute|instead of|change .* to|switch)\b/i.test(msg);
+        if (hasReplaceWord) {
+          const replaceIdx = priorItems.findIndex((p, i) => !usedPrior.has(i) && itemAllNames(p).some(n => msg.includes(n.toLowerCase())));
+          if (replaceIdx >= 0) {
+            priorIdx = replaceIdx;
+          }
+        } else {
+          // Check if user message mentions substantive keywords of prior item or scout item
+          const keywordIdx = priorItems.findIndex((p, i) => {
+            if (usedPrior.has(i)) return false;
+            const pNames = itemAllNames(p);
+            for (const pn of pNames) {
+              if (msg.includes(pn.toLowerCase())) return true;
+              const pTokens = significantTokens(pn);
+              if (pTokens.some(t => msg.includes(t))) return true;
+            }
+            // Bilingual category matches (tea <-> teh, coffee <-> kopi, fish <-> ikan)
+            const isTea = pNames.some(n => /\b(tea|teh|chai|matcha)\b/i.test(n));
+            if (isTea && /\b(tea|teh)\b/i.test(msg)) return true;
+            const isCoffee = pNames.some(n => /\b(coffee|kopi|espresso|latte)\b/i.test(n));
+            if (isCoffee && /\b(coffee|kopi)\b/i.test(msg)) return true;
+            const isFish = pNames.some(n => /\b(fish|ikan|seafood)\b/i.test(n));
+            if (isFish && /\b(fish|ikan)\b/i.test(msg)) return true;
+            return false;
+          });
+          if (keywordIdx >= 0) {
+            priorIdx = keywordIdx;
+          }
+        }
+      }
+      // 9. Source image index match (if photo anchor matches a prior item and no ambiguity)
+      if (priorIdx < 0 && scout.sourceImageIndex != null) {
+        const imgMatches = priorItems.map((p, i) => (!usedPrior.has(i) && p.sourceImageIndex === scout.sourceImageIndex ? i : -1)).filter(i => i >= 0);
+        if (imgMatches.length === 1) {
+          priorIdx = imgMatches[0];
+        }
+      }
+      // 10. Explicit replace fallback: if agent specified replace action, ensure an unused prior item is targeted
+      if (priorIdx < 0 && isExplicitReplace) {
+        const remainingPriorIndices = priorItems.map((_, i) => i).filter(i => !usedPrior.has(i));
+        if (remainingPriorIndices.length === 1) {
+          priorIdx = remainingPriorIndices[0];
+        }
+      }
+      // 11. Only fall back to positional match if scoutItems has the SAME length as priorItems (full meal re-emission)
+      if (priorIdx < 0 && isFullReEmission && sIdx < priorItems.length && !usedPrior.has(sIdx)) {
+        priorIdx = sIdx;
       }
     }
-    // 6. User message targeting
-    if (priorIdx < 0 && args.userMessage) {
-      const msg = args.userMessage.toLowerCase();
-      const hasReplaceWord = /\b(replace|substitute|instead of|change .* to|switch)\b/i.test(msg);
-      if (hasReplaceWord) {
-        const replaceIdx = priorItems.findIndex((p, i) => !usedPrior.has(i) && msg.includes(displayName(p).toLowerCase()));
-        if (replaceIdx >= 0) {
-          priorIdx = replaceIdx;
-        }
-      } else {
-        // Check if user message mentions substantive keywords of prior item (e.g. "beef dish")
-        const keywordIdx = priorItems.findIndex((p, i) => {
-          if (usedPrior.has(i)) return false;
-          const pTokens = significantTokens(displayName(p));
-          return pTokens.some(t => msg.includes(t));
+
+    if (isExplicitDelete) {
+      if (priorIdx >= 0) {
+        usedPrior.add(priorIdx);
+        const prior = priorItems[priorIdx];
+        commands.push({
+          action: 'remove_item',
+          itemName: displayName(prior),
+          targetDbId: prior.dbId || null,
+          scoutIndex: sScoutIdx,
         });
-        if (keywordIdx >= 0) {
-          priorIdx = keywordIdx;
-        }
+      } else if (sName) {
+        commands.push({
+          action: 'remove_item',
+          itemName: sName,
+          scoutIndex: sScoutIdx,
+        });
       }
-    }
-    // 7. Only fall back to positional match if scoutItems has the SAME length as priorItems (full meal re-emission)
-    if (priorIdx < 0 && isFullReEmission && sIdx < priorItems.length && !usedPrior.has(sIdx)) {
-      priorIdx = sIdx;
+      continue;
     }
 
     if (priorIdx < 0) {
@@ -275,13 +415,61 @@ export function diffScoutToEditCommands(args: {
     const pWeight = weightOf(prior);
     const sWeight = weightOf(scout);
 
-    const isSameFamily = namesReferSame(pName, sName) || (
-      namesShareSubstance(pName, sName) &&
-      scout.sourceImageIndex != null &&
-      prior.sourceImageIndex === scout.sourceImageIndex
-    );
+    const isSubstantiveRename = pName && sName && !namesReferSame(pName, sName);
 
-    if (pName && sName && !isSameFamily && !namesReferSame(pName, sName)) {
+    // Subitem / component level actions inside this dish
+    const scoutFoods = Array.isArray(scout.foods) ? scout.foods : [];
+    const subitemActions = scoutFoods.filter((f: any) => f && typeof f === 'object' && (f.action === 'delete' || f.action === 'remove' || f.action === 'add' || f.action === 'replace'));
+    if (subitemActions.length > 0 && (!isSubstantiveRename || !isExplicitReplace)) {
+      for (const f of subitemActions) {
+        const fAction = String(f.action).toLowerCase();
+        const fName = String(f.foodName || f.name || '').trim();
+        const fRep = String(f.replacesFood || '').trim();
+        const fWeight = Number(f.weightGrams ?? f.estimatedWeightGrams) || 0;
+        const fImageIdx = f.sourceImageIndex != null ? Number(f.sourceImageIndex) : (scout.sourceImageIndex != null ? Number(scout.sourceImageIndex) : null);
+        const fEstimate = f.nutrients ? { nutrients: f.nutrients } : null;
+
+        if (fAction === 'delete' || fAction === 'remove') {
+          commands.push({
+            action: 'remove_component',
+            itemName: pName,
+            componentName: fRep || fName,
+            targetDbId: prior.dbId || null,
+            scoutIndex: sScoutIdx,
+          });
+        } else if (fAction === 'add') {
+          commands.push({
+            action: 'add_component',
+            itemName: pName,
+            componentName: fName,
+            newItemName: fName,
+            newWeightGrams: fWeight > 0 ? fWeight : 50,
+            sourceImageIndex: fImageIdx,
+            targetDbId: prior.dbId || null,
+            scoutIndex: sScoutIdx,
+            estimate: fEstimate,
+          });
+        } else if (fAction === 'replace') {
+          commands.push({
+            action: 'replace_component',
+            itemName: pName,
+            componentName: fRep || fName,
+            newItemName: fName,
+            newWeightGrams: fWeight > 0 ? fWeight : null,
+            sourceImageIndex: fImageIdx,
+            targetDbId: prior.dbId || null,
+            scoutIndex: sScoutIdx,
+            estimate: fEstimate,
+          });
+        }
+      }
+      continue;
+    }
+
+    const estimate = estimateFromScout(scout);
+    const hasNutrientChanges = Boolean(estimate && Object.keys(estimate).some(k => k !== 'cookingMethod' && k !== 'foodType'));
+
+    if (pName && sName && (isExplicitReplace || isSubstantiveRename || (pName !== sName && hasNutrientChanges))) {
       commands.push({
         action: 'replace_identity',
         itemName: pName,
@@ -290,7 +478,8 @@ export function diffScoutToEditCommands(args: {
         newWeightGrams: sWeight > 0 ? sWeight : (pWeight || null),
         targetDbId: prior.dbId || null,
         scoutIndex: sScoutIdx,
-        estimate: estimateFromScout(scout),
+        sourceImageIndex: scout.sourceImageIndex ?? prior.sourceImageIndex ?? null,
+        estimate,
       });
     } else {
       if (pName && sName && pName !== sName) {

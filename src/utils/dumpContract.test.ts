@@ -203,7 +203,7 @@ describe('Canonical JSON Run Tree & Contract Scorer (Q-8 / F-8.13)', () => {
     });
 
     const evals = evaluateContracts(tree);
-    expect(evals.length).toBe(22);
+    expect(evals.length).toBe(23);
 
     const sseLaw = evals.find(e => e.law === 'SSE {final,result}');
     expect(sseLaw?.result).toBe('PASS');
@@ -216,6 +216,9 @@ describe('Canonical JSON Run Tree & Contract Scorer (Q-8 / F-8.13)', () => {
 
     const composerLaw = evals.find(e => e.law === 'Composer controls count = 1');
     expect(composerLaw?.result).toBe('PASS');
+
+    const editLaw = evals.find(e => e.law === 'Edit patch: components & nutrients preserved');
+    expect(editLaw?.result).toBe('n/a');
 
     const fails = classifyDump(tree);
     expect(fails.length).toBe(0);
@@ -910,6 +913,119 @@ describe('dumpContract — empty facts', () => {
     };
 
     expect(formatOracleFails([fail])).toContain(fail.id);
+  });
+
+  describe('Edit patch: components & nutrients preserved law', () => {
+    it('evaluates to n/a on single-turn create run', () => {
+      const tree = buildCanonicalRunTree({
+        pack: 'food',
+        jobId: 'job_create_single_turn',
+        status: 'succeeded',
+        dispatches: [{ id: 't1/scout', agent: 'scout', turn: 1 }],
+      });
+      const evals = evaluateContracts(tree);
+      const law = evals.find(e => e.law === 'Edit patch: components & nutrients preserved');
+      expect(law?.result).toBe('n/a');
+      expect(law?.actual).toContain('Single-turn create');
+    });
+
+    it('evaluates to PASS when edit preserves components and populates nutrients', () => {
+      const tree = buildCanonicalRunTree({
+        pack: 'food',
+        jobId: 'job_edit_preserved',
+        status: 'succeeded',
+        dispatches: [
+          { id: 't1/scout', agent: 'scout', turn: 1 },
+          { id: 't2/scout', agent: 'scout', turn: 2, received: { mode: 'edit' } },
+        ],
+        pendingFoodLog: {
+          dishes: [
+            {
+              dishName: 'Beef and Vegetable Hotpot',
+              weightGrams: 550,
+              foods: [
+                { name: 'Beef Slices', weightGrams: 120 },
+                { name: 'Tofu', weightGrams: 100 },
+                { name: 'Shirataki Noodles', weightGrams: 100 },
+                { name: 'Napa Cabbage and Vegetables', weightGrams: 180 },
+                { name: 'Potato', weightGrams: 50 },
+              ],
+              nutrients: { calories: 401, protein: 33, totalFat: 14, carbohydrates: 22.8, sodium: 108 },
+            },
+            {
+              dishName: 'Iced Lemon Tea',
+              weightGrams: 350,
+              foods: [{ name: 'Tea', weightGrams: 350 }],
+              nutrients: { calories: 5, protein: 0, totalFat: 0, carbohydrates: 1, sodium: 5 },
+            },
+          ],
+        },
+      });
+      const evals = evaluateContracts(tree);
+      const law = evals.find(e => e.law === 'Edit patch: components & nutrients preserved');
+      expect(law?.result).toBe('PASS');
+      expect(law?.actual).toContain('2 dish(es) with 6 component(s) preserved');
+
+      const fails = classifyDump(tree);
+      expect(fails.some(f => f.id === 'EDIT_COMPONENT_PRESERVED')).toBe(false);
+    });
+
+    it('evaluates to FAIL and flags EDIT_COMPONENT_PRESERVED when hotpot components are wiped out', () => {
+      const tree = buildCanonicalRunTree({
+        pack: 'food',
+        jobId: 'job_edit_wipeout',
+        status: 'succeeded',
+        dispatches: [
+          { id: 't1/scout', agent: 'scout', turn: 1 },
+          { id: 't2/scout', agent: 'scout', turn: 2, received: { mode: 'edit' } },
+        ],
+        pendingFoodLog: {
+          dishes: [
+            {
+              dishName: 'Beef and Vegetable Hotpot',
+              weightGrams: 50,
+              foods: [
+                { name: 'Potato', weightGrams: 50 },
+              ],
+              nutrients: { calories: 51, protein: 1, totalFat: 0, carbohydrates: 11.8, sodium: 3 },
+            },
+          ],
+        },
+      });
+      const evals = evaluateContracts(tree);
+      const law = evals.find(e => e.law === 'Edit patch: components & nutrients preserved');
+      expect(law?.result).toBe('FAIL');
+      expect(law?.actual).toContain('Component wipeout detected');
+
+      const fails = classifyDump(tree);
+      expect(fails.some(f => f.id === 'EDIT_COMPONENT_PRESERVED')).toBe(true);
+    });
+
+    it('evaluates to FAIL when edited dish has missing/NaN nutrients', () => {
+      const tree = buildCanonicalRunTree({
+        pack: 'food',
+        jobId: 'job_edit_missing_nutrients',
+        status: 'succeeded',
+        dispatches: [
+          { id: 't1/scout', agent: 'scout', turn: 1 },
+          { id: 't2/scout', agent: 'scout', turn: 2, received: { mode: 'edit' } },
+        ],
+        pendingFoodLog: {
+          dishes: [
+            {
+              dishName: 'Beef and Vegetable Hotpot',
+              weightGrams: 550,
+              foods: [{ name: 'Beef' }, { name: 'Tofu' }],
+              nutrients: { calories: NaN, protein: null },
+            },
+          ],
+        },
+      });
+      const evals = evaluateContracts(tree);
+      const law = evals.find(e => e.law === 'Edit patch: components & nutrients preserved');
+      expect(law?.result).toBe('FAIL');
+      expect(law?.actual).toContain('Dishes with missing nutrients');
+    });
   });
 });
 

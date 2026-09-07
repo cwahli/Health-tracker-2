@@ -239,6 +239,9 @@ export const visionScoutResponseSchema = {
             items: { type: Type.INTEGER },
           },
           isStandaloneCondimentPacket: { type: Type.BOOLEAN, nullable: true },
+          action: { type: Type.STRING, enum: ["replace", "add", "delete"], nullable: true },
+          replacesDish: { type: Type.STRING, nullable: true },
+          targetDishIndex: { type: Type.INTEGER, nullable: true },
           foods: {
             type: Type.ARRAY,
             items: {
@@ -247,6 +250,8 @@ export const visionScoutResponseSchema = {
                 foodName: { type: Type.STRING },
                 genericEnglishName: { type: Type.STRING, nullable: true },
                 packageLabelText: { type: Type.STRING, nullable: true },
+                action: { type: Type.STRING, enum: ["replace", "add", "delete"], nullable: true },
+                replacesFood: { type: Type.STRING, nullable: true },
                 weightGrams: { type: Type.NUMBER },
                 packGrams: { type: Type.NUMBER, nullable: true },
                 sourceImageIndex: { type: Type.INTEGER, nullable: true },
@@ -289,6 +294,11 @@ export const visionScoutResponseSchema = {
           dishNutrients: {
             type: Type.OBJECT,
             properties: {
+              protein: { type: Type.NUMBER, nullable: true },
+              carbohydrates: { type: Type.NUMBER, nullable: true },
+              sodium: { type: Type.NUMBER, nullable: true },
+              addedSugar: { type: Type.NUMBER, nullable: true },
+              totalFibre: { type: Type.NUMBER, nullable: true },
               saturatedFat: { type: Type.NUMBER },
               totalFat: { type: Type.NUMBER },
               totalSugar: { type: Type.NUMBER },

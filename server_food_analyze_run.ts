@@ -391,14 +391,12 @@ export async function runFoodAnalyze(req: any, res: any) {
             `User modification instruction: "${(message || '').trim()}".\n` +
             `Prior Meal Dishes: ${priorSummary}.\n` + (lockPrompt || '') + `\n` +
             `CRITICAL INSTRUCTIONS FOR MODIFICATION:\n` +
-            `1. TARGETED DISH UPDATE ONLY: Follow the prototype model where only the edited, added, or substituted food item is returned in the dishes[] array. DO NOT re-emit unchanged dishes from the prior meal.\n` +
-            `- If the user clarifies/adds an ingredient inside an existing dish (e.g. 'The beef dish also has chicken inside', or 'more cheese on the burger'), update THAT existing dish's foods[] list and dishName, preserving its sourceImageIndex — DO NOT create a new standalone dish for an ingredient.\n` +
-            `- If the user adds a new separate dish (e.g. 'There was also an es teh tawar'), output ONLY that new dish in dishes[].\n` +
-            `- If the user substitutes an item (identity change), output ONLY that substituted dish in dishes[].\n` +
-            `- If the edit is ONLY a portion/weight change with no identity change, output an EMPTY dishes[] array — weights and nutrients are rescaled deterministically from locked label truth; never recompute them yourself.\n` +
-            `- If the user asks to remove an item, emit an empty dishes[] array.\n` +
-            `2. INGREDIENT & DISH SUBSTITUTION/RENAME: If the user changes, corrects, or substitutes an ingredient or dish (e.g. 'ikan is nila', 'unsweetened tea', 'chicken instead of beef'), you MUST update the dishName, genericEnglishName, and foods[].foodName to the new substituted food (e.g. 'Ikan Nila' / 'tilapia' instead of 'Cakalang' / 'Cendro') and adjust the nutrients (calories, protein, fat, carbs, sugar) accordingly.\n` +
-            `3. SEPARATE DISHES: Keep distinct plated items, sides, and beverages as separate distinct dishes in the dishes[] array. Never merge drinks into food dishes.\n` +
+            `1. TARGETED UPDATE (DISH OR SUBITEM): Output only modified or new items. Support action "replace" | "add" | "delete" at dish or foods[] subitem level.\n` +
+            `- For new or edited dishes: populate full nutrients amount (protein, carbs, fat, sodium, sugar, fibre) the same way you populate a new item.\n` +
+            `- For dishes: set dish action "replace" | "add" | "delete" with replacesDish and/or targetDishIndex. Always include sourceImageIndex.\n` +
+            `- For subitems/components inside a dish: in foods[], set action "replace" | "add" | "delete", replacesFood, full nutrients, and sourceImageIndex.\n` +
+            `2. FULL NUTRIENT VALUES: Always provide complete, accurate nutrients for any new or edited dish or food component.\n` +
+            `3. SEPARATE DISHES: Keep distinct plated items, sides, and beverages as separate distinct dishes in dishes[]. Never merge drinks into food dishes.\n` +
             `4. CLINICAL ADVICE & NARRATIVE: Provide an updated direct 35-70 word clinicalAdvice in 2nd person ("You got...") on the FULL updated meal (all dishes at their locked weights — never just the edited item). Lead with the most significant finding: flag plainly any nutrient far over budget and compounding against the 7-day average, state the health impact, then one actionable next step/movement.`;
     } else {
           scoutPromptText = buildVisualScoutPrompt(message || '', imageCount);

@@ -403,9 +403,9 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
           const matchingScout = turnDispatches.find(d => d.agent === 'scout') || turnDispatches[0];
           const pfl = input.pendingFoodLog || (input as any)?.result?.pendingFoodLog || (input as any)?.result;
           const verdict = pfl?.verdict || (input.receiptTable as any)?.verdict;
-          const advice = pfl?.clinicalAdvice || pfl?.message || (input as any)?.result?.clinicalAdvice || (input as any)?.result?.message || input.message;
+          const advice = pfl?.clinicalAdvice || pfl?.message || (input as any)?.result?.clinicalAdvice || (input as any)?.result?.message;
           const dishes = pfl?.dishes || (input.receiptTable as any)?.dishes || [];
-          if (verdict || advice || dishes.length > 0) {
+          if (verdict || (advice && advice.length > 20) || dishes.length > 0) {
             const emission = {
               verdict: verdict || { label: 'Supports Metabolic Energy', level: 'neutral' },
               clinicalAdvice: advice || '',
@@ -651,9 +651,9 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
   if (pack === 'food' && !dispatches.some(d => d.agent === 'narrator' || d.agent === 'dietitian' || d.agent === 'expert')) {
     const pfl = input.pendingFoodLog || (input as any)?.result?.pendingFoodLog || (input as any)?.result;
     const verdict = pfl?.verdict || (input.receiptTable as any)?.verdict;
-    const advice = pfl?.clinicalAdvice || pfl?.message || (input as any)?.result?.clinicalAdvice || (input as any)?.result?.message || input.message;
+    const advice = pfl?.clinicalAdvice || pfl?.message || (input as any)?.result?.clinicalAdvice || (input as any)?.result?.message;
     const dishes = pfl?.dishes || (input.receiptTable as any)?.dishes || [];
-    if (verdict || advice || dishes.length > 0) {
+    if (verdict || (advice && advice.length > 20) || dishes.length > 0) {
       const emission = {
         verdict: verdict || { label: 'Supports Metabolic Energy', level: 'neutral' },
         clinicalAdvice: advice || '',

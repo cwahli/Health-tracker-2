@@ -870,6 +870,345 @@ describe('golden', () => {
     expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
   });
 
+  it('scout diff + applyMealEdits replaces sweet tea with unsweetened tea and updates tilapia sodium without item duplication', async () => {
+    const identity = (name: string, extra: Record<string, any> = {}) => ({
+      name,
+      canonicalDbName: name,
+      originalName: name,
+      keyword: name,
+      ...extra,
+    });
+    const child = (name: string, grams: number, nutrients: any) => identity(name, {
+      weightGrams: grams,
+      calories: nutrients.calories ?? 0,
+      protein: nutrients.protein ?? 0,
+      carbohydrates: nutrients.carbohydrates ?? 0,
+      totalFat: nutrients.totalFat ?? 0,
+      nutrients,
+    });
+
+    const priorItems = [
+      identity('Nasi Putih', {
+        weightGrams: 150,
+        sourceImageIndex: 0,
+        calories: 195,
+        protein: 4,
+        carbohydrates: 43,
+        totalFat: 0.5,
+        nutrients: { calories: 195, protein: 4, carbohydrates: 43, totalFat: 0.5, sodium: 5 },
+      }),
+      identity('Cah Kangkung', {
+        weightGrams: 120,
+        sourceImageIndex: 0,
+        calories: 93,
+        protein: 3,
+        carbohydrates: 5,
+        totalFat: 7,
+        nutrients: { calories: 93, protein: 3, carbohydrates: 5, totalFat: 7, sodium: 550 },
+      }),
+      identity('Ikan Bakar', {
+        weightGrams: 200,
+        sourceImageIndex: 0,
+        calories: 240,
+        protein: 35,
+        carbohydrates: 0,
+        totalFat: 10,
+        nutrients: { calories: 240, protein: 35, carbohydrates: 0, totalFat: 10, sodium: 550 },
+        components: [child('Ikan Bakar', 180, { calories: 235, protein: 35, carbohydrates: 0, totalFat: 10, sodium: 545 })],
+      }),
+      identity('Es Teh Manis', {
+        genericEnglishName: 'sweet iced tea',
+        weightGrams: 300,
+        sourceImageIndex: 0,
+        foodType: 'beverage',
+        calories: 90,
+        protein: 0,
+        carbohydrates: 22,
+        totalFat: 0,
+        nutrients: { calories: 90, protein: 0, carbohydrates: 22, totalFat: 0, addedSugar: 20, sodium: 10 },
+        components: [child('Sweet Iced Tea', 300, { calories: 90, protein: 0, carbohydrates: 22, totalFat: 0, addedSugar: 20, sodium: 10 })],
+      }),
+      identity('Kue Apem Panggang', {
+        weightGrams: 60,
+        sourceImageIndex: 1,
+        calories: 138,
+        protein: 2,
+        carbohydrates: 28,
+        totalFat: 2,
+        nutrients: { calories: 138, protein: 2, carbohydrates: 28, totalFat: 2, addedSugar: 8, sodium: 120 },
+      }),
+    ];
+
+    const scoutDishes = [
+      {
+        name: 'Ikan Nila Bakar',
+        genericEnglishName: 'grilled tilapia',
+        estimatedWeightGrams: 200,
+        sourceImageIndex: 0,
+        nutrients: { calories: 210, protein: 38, carbohydrates: 2, totalFat: 6, saturatedFat: 1.5, sodium: 300 },
+        foods: [
+          { foodName: 'Ikan Nila Bakar', weightGrams: 200, nutrients: { calories: 210, protein: 38, carbohydrates: 2, totalFat: 6, saturatedFat: 1.5, sodium: 300 } },
+        ],
+      },
+      {
+        name: 'Es Teh Tawar',
+        genericEnglishName: 'unsweetened iced tea',
+        estimatedWeightGrams: 300,
+        sourceImageIndex: 0,
+        nutrients: { calories: 2, protein: 0, carbohydrates: 0.5, totalFat: 0, addedSugar: 0, sodium: 5 },
+        foods: [
+          { foodName: 'Teh Tawar', weightGrams: 300, nutrients: { calories: 2, protein: 0, carbohydrates: 0.5, totalFat: 0, addedSugar: 0, sodium: 5 } },
+        ],
+      },
+    ];
+
+    const result = await applyMealEdits({
+      items: priorItems,
+      commands: [],
+      scoutItems: scoutDishes,
+      userMessage: 'The ikan is nilai and tea is unsweatened',
+    });
+
+    // Verify no item duplication occurred
+    expect(result.items).toHaveLength(5);
+    expect(result.weightGrams).toBe(830);
+
+    // Verify fish replacement and updated sodium
+    const tilapia = result.items.find((it: any) => it.name.includes('Nila'));
+    expect(tilapia).toBeDefined();
+    expect(tilapia?.nutrients.sodium).toBe(300);
+
+    // Verify tea replacement and unsweetened sugar
+    const tea = result.items.find((it: any) => it.name.includes('Teh'));
+    expect(tea).toBeDefined();
+    expect(tea?.name).toMatch(/tawar|unsweetened/i);
+    expect(tea?.nutrients.addedSugar).toBe(0);
+
+    // Total added sugar should be 8g (from Apem), not 28g
+    expect(result.nutrients.addedSugar).toBe(8);
+  });
+
+  it('contract: applyMealEdits deterministically honors agent replacesDish and action without item duplicates', async () => {
+    const priorItems = [
+      { name: 'Nasi Putih', canonicalDbName: 'Nasi Putih', originalName: 'Nasi Putih', keyword: 'nasi putih', weightGrams: 150, nutrients: { calories: 195, carbs: 42, protein: 4, fat: 0.5, saturatedFat: 0.1, addedSugar: 0, sodium: 5, totalFibre: 0.6 } },
+      { name: 'Cah Kangkung', canonicalDbName: 'Cah Kangkung', originalName: 'Cah Kangkung', keyword: 'kangkung', weightGrams: 120, nutrients: { calories: 93, carbs: 4, protein: 3, fat: 7, saturatedFat: 1.2, addedSugar: 0, sodium: 550, totalFibre: 2.5 } },
+      {
+        name: 'Ikan Bakar',
+        canonicalDbName: 'Ikan Bakar',
+        originalName: 'Ikan Bakar',
+        keyword: 'ikan bakar',
+        weightGrams: 200,
+        nutrients: { calories: 240, carbs: 2, protein: 35, fat: 10, saturatedFat: 2.5, addedSugar: 0, sodium: 550, totalFibre: 0 },
+        foods: [{ foodName: 'Ikan Bakar', weightGrams: 180, nutrients: { calories: 230, protein: 35, sodium: 545 } }],
+      },
+      {
+        name: 'Es Teh Manis',
+        canonicalDbName: 'Es Teh Manis',
+        originalName: 'Es Teh Manis',
+        keyword: 'teh manis',
+        genericEnglishName: 'sweet iced tea',
+        weightGrams: 300,
+        nutrients: { calories: 90, carbs: 22, protein: 0, fat: 0, saturatedFat: 0, addedSugar: 20, sodium: 10, totalFibre: 0 },
+        foods: [{ foodName: 'Teh Manis', weightGrams: 300, nutrients: { calories: 90, addedSugar: 20, sodium: 10 } }],
+      },
+      { name: 'Kue Apem Panggang', canonicalDbName: 'Kue Apem Panggang', originalName: 'Kue Apem Panggang', keyword: 'apem', weightGrams: 60, nutrients: { calories: 138, carbs: 26, protein: 2, fat: 3, saturatedFat: 1.5, addedSugar: 8, sodium: 120, totalFibre: 0.8 } },
+    ];
+
+    const agentScoutDishes = [
+      {
+        dishName: 'Ikan Nila Bakar',
+        name: 'Ikan Nila Bakar',
+        genericEnglishName: 'grilled tilapia',
+        action: 'replace',
+        replacesDish: 'Ikan Bakar',
+        targetDishIndex: 3,
+        estimatedWeightGrams: 200,
+        sourceImageIndex: 0,
+        nutrients: { calories: 210, carbs: 1, protein: 38, fat: 6, saturatedFat: 1.5, addedSugar: 0, sodium: 300, totalFibre: 0 },
+        foods: [{ foodName: 'Ikan Nila Bakar', weightGrams: 200, nutrients: { calories: 210, protein: 38, sodium: 300 } }],
+      },
+      {
+        dishName: 'Es Teh Tawar',
+        name: 'Es Teh Tawar',
+        genericEnglishName: 'unsweetened iced tea',
+        action: 'replace',
+        replacesDish: 'Es Teh Manis',
+        targetDishIndex: 4,
+        estimatedWeightGrams: 300,
+        sourceImageIndex: 0,
+        nutrients: { calories: 2, carbs: 0.5, protein: 0, fat: 0, saturatedFat: 0, addedSugar: 0, sodium: 5, totalFibre: 0 },
+        foods: [{ foodName: 'Teh Tawar', weightGrams: 300, nutrients: { calories: 2, addedSugar: 0, sodium: 5 } }],
+      },
+    ];
+
+    const result = await applyMealEdits({
+      items: priorItems,
+      commands: [],
+      scoutItems: agentScoutDishes,
+      userMessage: 'The ikan is nila and the tea is unsweetened',
+    });
+
+    expect(result.items).toHaveLength(5);
+    expect(result.weightGrams).toBe(830);
+
+    const tea = result.items.find((it: any) => it.name.includes('Teh'));
+    expect(tea?.name).toBe('Es Teh Tawar');
+    expect(tea?.nutrients.addedSugar).toBe(0);
+
+    const fish = result.items.find((it: any) => it.name.includes('Nila'));
+    expect(fish?.name).toBe('Ikan Nila Bakar');
+    expect(fish?.nutrients.sodium).toBe(300);
+
+    expect(result.nutrients.addedSugar).toBe(8);
+  });
+
+  it('contract: applyMealEdits honors subitem add_component and replace_component with full nutrients and image tracking', async () => {
+    const priorFishPlatter = {
+      name: 'Ikan Bakar Platter',
+      canonicalDbName: 'Ikan Bakar Platter',
+      originalName: 'Ikan Bakar Platter',
+      keyword: 'ikan bakar platter',
+      weightGrams: 250,
+      sourceImageIndex: 0,
+      nutrients: { calories: 280, carbs: 2, protein: 36, fat: 10, saturatedFat: 2.5, addedSugar: 0, sodium: 405, totalFibre: 1 },
+      components: [
+        { name: 'Ikan Bakar', foodName: 'Ikan Bakar', weightGrams: 200, nutrients: { calories: 260, carbs: 0, protein: 35, fat: 9, saturatedFat: 2.2, addedSugar: 0, sodium: 400, totalFibre: 0 } },
+        { name: 'Lalapan', foodName: 'Lalapan', weightGrams: 50, nutrients: { calories: 20, carbs: 2, protein: 1, fat: 1, saturatedFat: 0.3, addedSugar: 0, sodium: 5, totalFibre: 1 } },
+      ],
+      componentsDetailList: [
+        { name: 'Ikan Bakar', foodName: 'Ikan Bakar', weightGrams: 200, nutrients: { calories: 260, carbs: 0, protein: 35, fat: 9, saturatedFat: 2.2, addedSugar: 0, sodium: 400, totalFibre: 0 } },
+        { name: 'Lalapan', foodName: 'Lalapan', weightGrams: 50, nutrients: { calories: 20, carbs: 2, protein: 1, fat: 1, saturatedFat: 0.3, addedSugar: 0, sodium: 5, totalFibre: 1 } },
+      ],
+      hasComponents: true,
+    };
+
+    // Test subitem add_component
+    const addResult = await applyMealEdits({
+      items: [priorFishPlatter],
+      commands: [
+        {
+          action: 'add_component',
+          itemName: 'Ikan Bakar Platter',
+          componentName: 'Sambal Terasi',
+          newWeightGrams: 30,
+          sourceImageIndex: 1,
+          estimate: {
+            nutrients: { calories: 35, carbs: 3, protein: 1, fat: 2, saturatedFat: 0.4, addedSugar: 1, sodium: 220, totalFibre: 0.5 },
+          },
+        },
+      ],
+      userMessage: 'Add sambal terasi to the fish platter',
+    });
+
+    expect(addResult.items).toHaveLength(1);
+    const updatedDish = addResult.items[0];
+    expect(updatedDish.weightGrams).toBe(280);
+    expect(updatedDish.components).toHaveLength(3);
+    const addedComp = updatedDish.components.find((c: any) => c.name === 'Sambal Terasi');
+    expect(addedComp).toBeDefined();
+    expect(addedComp.sourceImageIndex).toBe(1);
+    expect(updatedDish.nutrients.sodium).toBe(625); // 405 + 220
+    expect(updatedDish.nutrients.addedSugar).toBe(1);
+
+    // Test subitem replace_component: replace Lalapan with Kerupuk
+    const replaceResult = await applyMealEdits({
+      items: [updatedDish],
+      commands: [
+        {
+          action: 'replace_component',
+          itemName: 'Ikan Bakar Platter',
+          componentName: 'Lalapan',
+          newItemName: 'Kerupuk Ikan',
+          newWeightGrams: 20,
+          sourceImageIndex: 0,
+          estimate: {
+            nutrients: { calories: 95, carbs: 12, protein: 2, fat: 4, saturatedFat: 0.8, addedSugar: 0, sodium: 110, totalFibre: 0.2 },
+          },
+        },
+      ],
+      userMessage: 'Replace lalapan with kerupuk ikan',
+    });
+
+    const replacedDish = replaceResult.items[0];
+    expect(replacedDish.weightGrams).toBe(250); // 280 - 50 (lalapan) + 20 (kerupuk)
+    expect(replacedDish.components.some((c: any) => c.name === 'Lalapan')).toBe(false);
+    expect(replacedDish.components.some((c: any) => c.name === 'Kerupuk Ikan')).toBe(true);
+  });
+
+  it('contract: applyMealEdits executes remove_item for dish deletion', async () => {
+    const items = [
+      { name: 'Nasi Putih', weightGrams: 150, nutrients: { calories: 195, carbs: 42, protein: 4, fat: 0.5, saturatedFat: 0.1, addedSugar: 0, sodium: 5, totalFibre: 0.6 } },
+      { name: 'Es Teh Manis', weightGrams: 300, nutrients: { calories: 90, carbs: 22, protein: 0, fat: 0, saturatedFat: 0, addedSugar: 20, sodium: 10, totalFibre: 0 } },
+    ];
+
+    const result = await applyMealEdits({
+      items,
+      commands: [{ action: 'remove_item', itemName: 'Es Teh Manis' }],
+      userMessage: 'I did not drink the sweet tea, remove it',
+    });
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].name).toBe('Nasi Putih');
+    expect(result.nutrients.addedSugar).toBe(0);
+    expect(result.weightGrams).toBe(150);
+  });
+
+  it('contract: replace_identity with delta foods merges rather than wiping out existing components', async () => {
+    const hotpot = {
+      name: 'Beef and Vegetable Hotpot',
+      canonicalDbName: 'Beef and Vegetable Hotpot',
+      originalName: 'Beef and Vegetable Hotpot',
+      keyword: 'beef and vegetable hotpot',
+      weightGrams: 500,
+      nutrients: { calories: 350, protein: 32, totalFat: 14, carbohydrates: 11, sodium: 105 },
+      components: [
+        { name: 'Beef Slices', foodName: 'Beef Slices', weightGrams: 120, nutrients: { calories: 180, protein: 22, totalFat: 10, carbohydrates: 0, sodium: 60 } },
+        { name: 'Tofu', foodName: 'Tofu', weightGrams: 100, nutrients: { calories: 80, protein: 8, totalFat: 3, carbohydrates: 2, sodium: 10 } },
+        { name: 'Shirataki Noodles', foodName: 'Shirataki Noodles', weightGrams: 100, nutrients: { calories: 15, protein: 0, totalFat: 0, carbohydrates: 3, sodium: 5 } },
+        { name: 'Napa Cabbage and Vegetables', foodName: 'Napa Cabbage and Vegetables', weightGrams: 180, nutrients: { calories: 40, protein: 2, totalFat: 0.5, carbohydrates: 6, sodium: 30 } },
+      ],
+      componentsDetailList: [
+        { name: 'Beef Slices', foodName: 'Beef Slices', weightGrams: 120, nutrients: { calories: 180, protein: 22, totalFat: 10, carbohydrates: 0, sodium: 60 } },
+        { name: 'Tofu', foodName: 'Tofu', weightGrams: 100, nutrients: { calories: 80, protein: 8, totalFat: 3, carbohydrates: 2, sodium: 10 } },
+        { name: 'Shirataki Noodles', foodName: 'Shirataki Noodles', weightGrams: 100, nutrients: { calories: 15, protein: 0, totalFat: 0, carbohydrates: 3, sodium: 5 } },
+        { name: 'Napa Cabbage and Vegetables', foodName: 'Napa Cabbage and Vegetables', weightGrams: 180, nutrients: { calories: 40, protein: 2, totalFat: 0.5, carbohydrates: 6, sodium: 30 } },
+      ],
+      hasComponents: true,
+    };
+
+    const result = await applyMealEdits({
+      items: [hotpot],
+      commands: [
+        {
+          action: 'replace_identity',
+          itemName: 'Beef and Vegetable Hotpot',
+          newItemName: 'Beef and Vegetable Hotpot',
+          replacementItemName: 'Beef and Vegetable Hotpot',
+          newWeightGrams: 550,
+          estimate: {
+            foods: [
+              {
+                foodName: 'Potato',
+                weightGrams: 50,
+                action: 'add',
+                nutrients: { calories: 51, protein: 1, totalFat: 0, carbohydrates: 11.8, sodium: 3 },
+              },
+            ],
+          },
+        },
+      ],
+      userMessage: 'There is also potato in the hotpot',
+    });
+
+    expect(result.items).toHaveLength(1);
+    const updatedHotpot = result.items[0];
+    expect(updatedHotpot.components).toHaveLength(5);
+    expect(updatedHotpot.components.some((c: any) => c.name === 'Beef Slices')).toBe(true);
+    expect(updatedHotpot.components.some((c: any) => c.name === 'Potato')).toBe(true);
+    expect(updatedHotpot.weightGrams).toBe(550);
+    expect(updatedHotpot.nutrients.protein).toBeGreaterThan(30);
+  });
+
   it('golden: split_item with empty into[] is ignored and parent remains', async () => {
     const [plate] = steakPlate();
     const result = await applyMealEdits({

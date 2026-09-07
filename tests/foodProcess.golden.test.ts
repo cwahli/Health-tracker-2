@@ -329,4 +329,34 @@ describe('Q-8.1 food process audit board', () => {
     expect(tree.contract.some((c) => c.law === 'AnalyzeFinished count = 1' && c.result === 'PASS')).toBe(true);
     expect(classifyDump(tree)).toEqual([]);
   });
+
+  it('EDIT_COMPONENT_PRESERVED: multi-turn edit preserves components and passes contract', () => {
+    const tree = buildCanonicalRunTree({
+      jobId: 'job_edit_soto',
+      pack: 'food',
+      status: 'succeeded',
+      dispatches: [
+        { id: 't1/scout', agent: 'scout', turn: 1, model: 'gemini-3.5-flash-lite', latency_ms: 1200 },
+        { id: 't2/scout', agent: 'scout', turn: 2, model: 'gemini-3.5-flash-lite', latency_ms: 1100, received: { mode: 'edit' } },
+      ],
+      pendingFoodLog: {
+        dishes: [
+          {
+            dishName: 'Beef and Vegetable Hotpot',
+            weightGrams: 550,
+            foods: [
+              { name: 'Beef Slices', weightGrams: 120 },
+              { name: 'Tofu', weightGrams: 100 },
+              { name: 'Shirataki Noodles', weightGrams: 100 },
+              { name: 'Napa Cabbage and Vegetables', weightGrams: 180 },
+              { name: 'Potato', weightGrams: 50 },
+            ],
+            nutrients: { calories: 401, protein: 33, totalFat: 14, carbohydrates: 22.8, sodium: 108 },
+          },
+        ],
+      },
+    });
+    expect(tree.contract.some((c) => c.law === 'Edit patch: components & nutrients preserved' && c.result === 'PASS')).toBe(true);
+    expect(classifyDump(tree)).toEqual([]);
+  });
 });

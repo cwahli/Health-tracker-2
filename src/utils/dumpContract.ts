@@ -802,6 +802,7 @@ function evaluateFoodAgentOutput(tree: CanonicalRunTree, isFoodPack: boolean): C
     na('Dishes: fields populated', `Food-only law (pack=${tree.pack})`);
     na('Multi-turn split shown', `Food-only law (pack=${tree.pack})`);
     na('Mode instruction chunk', `Food-only law (pack=${tree.pack})`);
+    na('Edit patch: components & nutrients preserved', `Food-only law (pack=${tree.pack})`);
     return out;
   }
 
@@ -949,6 +950,55 @@ function evaluateFoodAgentOutput(tree: CanonicalRunTree, isFoodPack: boolean): C
     }
   }
 
+  // 20. Edit patch: components & nutrients preserved.
+  // When an edit or modification turn has occurred, verify:
+  // (a) No component wipeout (e.g. composite dish reduced to single ingredient without deletion instruction)
+  // (b) Full nutrients populated for edited/new items
+  // (c) Untouched dishes preserved
+  // Single-turn create runs evaluate to n/a.
+  const editDispatches = (tree.dispatches || []).filter(
+    (d) => Number(d?.turn) > 1 ||
+      /^t[2-9]\b/i.test(String(d?.id || '')) ||
+      String(d?.received?.mode || '').toLowerCase() === 'edit' ||
+      String(d?.received?.mode || '').toLowerCase() === 'modify' ||
+      /User modification instruction/i.test(d?.userPrompt || d?.instruction || '')
+  );
+  const isEditRun = editDispatches.length > 0 ||
+    /\[MealEdit\]|applyMealEdits|diffScoutToEditCommands/i.test(tree.backendLogs || '') ||
+    tree.breadcrumbs.some((b) => /edit_meal|modify|patch_ledger/i.test(b.action || ''));
+
+  if (!isEditRun) {
+    na('Edit patch: components & nutrients preserved', 'Single-turn create, no edit turns');
+  } else {
+    const pfl = tree.pendingFoodLog;
+    const dishes: any[] = Array.isArray(pfl?.dishes) ? pfl.dishes : [];
+
+    const collapsedDishes = dishes.filter((d) => {
+      const foods = Array.isArray(d?.foods) ? d.foods : (Array.isArray(d?.components) ? d.components : []);
+      const isComposite = /hotpot|platter|plate|sizzling|curry|combo|bowl|soup|stew/i.test(d?.name || d?.dishName || '');
+      return isComposite && foods.length === 1 && (Number(d?.weightGrams || d?.estimatedWeightGrams) || 0) < 150;
+    });
+
+    const dishesWithEmptyNutrients = dishes.filter((d) => {
+      const nuts = d?.nutrients || d?.dishNutrients;
+      if (!nuts || typeof nuts !== 'object') return true;
+      return !Number.isFinite(Number(nuts.calories)) || !Number.isFinite(Number(nuts.protein));
+    });
+
+    if (dishes.length === 0 && !/remove_item|deleted all/i.test(tree.backendLogs || '')) {
+      fail('Edit patch: components & nutrients preserved', 'No dishes remaining after edit');
+    } else if (collapsedDishes.length > 0) {
+      const names = collapsedDishes.map((d) => d?.name || d?.dishName).join(', ');
+      fail('Edit patch: components & nutrients preserved', `Component wipeout detected: ${names} collapsed to single ingredient`);
+    } else if (dishesWithEmptyNutrients.length > 0) {
+      const names = dishesWithEmptyNutrients.map((d) => d?.name || d?.dishName).join(', ');
+      fail('Edit patch: components & nutrients preserved', `Dishes with missing nutrients: ${names}`);
+    } else {
+      const totalComps = dishes.reduce((acc, d) => acc + (Array.isArray(d?.foods) ? d.foods.length : (Array.isArray(d?.components) ? d.components.length : 1)), 0);
+      pass('Edit patch: components & nutrients preserved', `${dishes.length} dish(es) with ${totalComps} component(s) preserved with full nutrients`);
+    }
+  }
+
   return out;
 }
 
@@ -1089,6 +1139,14 @@ export function classifyDump(factsOrTree: DumpFacts | CanonicalRunTree): OracleF
           detail: c.actual,
           file: 'src/utils/debugRunTree.ts, src/utils/dumpContract.ts',
           doNot: 'Score food scout laws on medical/receptionist packs',
+        });
+      } else if (c.law === 'Edit patch: components & nutrients preserved') {
+        fails.push({
+          class: 'DISH_DROP',
+          id: 'EDIT_COMPONENT_PRESERVED',
+          detail: c.actual,
+          file: 'server_edit_patch_ledger.ts, server_meal_edit.ts',
+          doNot: 'Component wipeout, catalog alias hack',
         });
       }
     }

@@ -201,4 +201,290 @@ describe('edit patch ledger', () => {
     // Steak item must be targeted
     expect(cmds.some(c => c.itemName === 'Sizzling Steak and Sausages')).toBe(true);
   });
+
+  it('correctly substitutes sweet tea for unsweetened tea and updates fish identity without duplication', async () => {
+    const prior = [
+      { name: 'Nasi Putih', weightGrams: 150, sourceImageIndex: 0, nutrients: { calories: 195, sodium: 5 } },
+      { name: 'Cah Kangkung', weightGrams: 120, sourceImageIndex: 0, nutrients: { calories: 93, sodium: 550 } },
+      {
+        name: 'Ikan Bakar',
+        weightGrams: 200,
+        sourceImageIndex: 0,
+        nutrients: { calories: 240, protein: 35, sodium: 550 },
+        foods: [
+          { foodName: 'Ikan Bakar', weightGrams: 180, nutrients: { protein: 35, sodium: 545 } },
+          { foodName: 'Lalapan', weightGrams: 20, nutrients: { sodium: 5 } },
+        ],
+      },
+      {
+        name: 'Es Teh Manis',
+        genericEnglishName: 'sweet iced tea',
+        weightGrams: 300,
+        sourceImageIndex: 0,
+        nutrients: { calories: 90, addedSugar: 20, sodium: 10 },
+        foods: [
+          { foodName: 'Teh Manis', weightGrams: 300, nutrients: { addedSugar: 20, sodium: 10 } },
+        ],
+      },
+      { name: 'Kue Apem Panggang', weightGrams: 60, sourceImageIndex: 1, nutrients: { calories: 138, addedSugar: 8, sodium: 120 } },
+    ];
+
+    const scout = [
+      {
+        name: 'Ikan Nila Bakar',
+        genericEnglishName: 'grilled tilapia',
+        estimatedWeightGrams: 200,
+        sourceImageIndex: 0,
+        nutrients: { calories: 210, protein: 38, sodium: 300 },
+        foods: [
+          { foodName: 'Ikan Nila Bakar', weightGrams: 200, nutrients: { calories: 210, protein: 38, sodium: 300 } },
+        ],
+      },
+      {
+        name: 'Es Teh Tawar',
+        genericEnglishName: 'unsweetened iced tea',
+        estimatedWeightGrams: 300,
+        sourceImageIndex: 0,
+        nutrients: { calories: 2, addedSugar: 0, sodium: 5 },
+        foods: [
+          { foodName: 'Teh Tawar', weightGrams: 300, nutrients: { calories: 2, addedSugar: 0, sodium: 5 } },
+        ],
+      },
+    ];
+
+    const cmds = diffScoutToEditCommands({
+      priorItems: prior,
+      scoutItems: scout,
+      userMessage: 'The ikan is nilai and tea is unsweatened',
+    });
+
+    // Both should be replace_identity, NOT add_item
+    expect(cmds.some(c => c.action === 'add_item')).toBe(false);
+    expect(cmds.filter(c => c.action === 'replace_identity').length).toBe(2);
+
+    const fishCmd = cmds.find(c => c.itemName === 'Ikan Bakar' && c.action === 'replace_identity');
+    expect(fishCmd).toBeDefined();
+    expect(fishCmd?.newItemName).toBe('Ikan Nila Bakar');
+
+    const teaCmd = cmds.find(c => c.itemName === 'Es Teh Manis' && c.action === 'replace_identity');
+    expect(teaCmd).toBeDefined();
+    expect(teaCmd?.newItemName).toBe('Es Teh Tawar');
+  });
+
+  describe('Agent Explicit Edit Contract (replacesDish, targetDishIndex, action)', () => {
+    const prior = [
+      { name: 'Nasi Putih', weightGrams: 150, nutrients: { calories: 195 } },
+      { name: 'Cah Kangkung', weightGrams: 120, nutrients: { calories: 93 } },
+      { name: 'Ikan Bakar', weightGrams: 200, nutrients: { calories: 240 } },
+      { name: 'Es Teh Manis', weightGrams: 300, nutrients: { calories: 90 } },
+      { name: 'Kue Apem Panggang', weightGrams: 60, nutrients: { calories: 138 } },
+    ];
+
+    it('contract: honors explicit replacesDish property from agent scout emission', () => {
+      const scout = [
+        {
+          name: 'Es Teh Tawar',
+          action: 'replace',
+          replacesDish: 'Es Teh Manis',
+          estimatedWeightGrams: 300,
+          nutrients: { calories: 2, addedSugar: 0 },
+        },
+      ];
+
+      const cmds = diffScoutToEditCommands({
+        priorItems: prior,
+        scoutItems: scout,
+      });
+
+      expect(cmds).toHaveLength(1);
+      expect(cmds[0].action).toBe('replace_identity');
+      expect(cmds[0].itemName).toBe('Es Teh Manis');
+      expect(cmds[0].newItemName).toBe('Es Teh Tawar');
+    });
+
+    it('contract: honors explicit targetDishIndex (1-based from prompt) from agent scout emission', () => {
+      const scout = [
+        {
+          name: 'Ikan Nila Bakar',
+          action: 'replace',
+          targetDishIndex: 3, // Dish 3 from Prior Meal Dishes prompt: Ikan Bakar
+          estimatedWeightGrams: 200,
+          nutrients: { calories: 210, protein: 38 },
+        },
+      ];
+
+      const cmds = diffScoutToEditCommands({
+        priorItems: prior,
+        scoutItems: scout,
+      });
+
+      expect(cmds).toHaveLength(1);
+      expect(cmds[0].action).toBe('replace_identity');
+      expect(cmds[0].itemName).toBe('Ikan Bakar');
+      expect(cmds[0].newItemName).toBe('Ikan Nila Bakar');
+    });
+
+    it('contract: honors explicit action="add" and does NOT substitute existing items even if names share keywords', () => {
+      const scout = [
+        {
+          name: 'Es Teh Hijau',
+          action: 'add',
+          estimatedWeightGrams: 250,
+          nutrients: { calories: 10 },
+        },
+      ];
+
+      const cmds = diffScoutToEditCommands({
+        priorItems: prior,
+        scoutItems: scout,
+        userMessage: 'Also add green tea',
+      });
+
+      expect(cmds).toHaveLength(1);
+      expect(cmds[0].action).toBe('add_item');
+      expect(cmds[0].itemName).toBe('Es Teh Hijau');
+    });
+
+    it('contract: honors explicit action="delete" to remove a main dish by targetDishIndex or replacesDish', () => {
+      const scout = [
+        {
+          name: 'Es Teh Manis',
+          action: 'delete',
+          targetDishIndex: 4,
+          estimatedWeightGrams: 0,
+        },
+      ];
+
+      const cmds = diffScoutToEditCommands({
+        priorItems: prior,
+        scoutItems: scout,
+      });
+
+      expect(cmds).toHaveLength(1);
+      expect(cmds[0].action).toBe('remove_item');
+      expect(cmds[0].itemName).toBe('Es Teh Manis');
+    });
+
+    it('contract: preserves sourceImageIndex and full nutrients when replacing a dish', () => {
+      const scout = [
+        {
+          name: 'Ikan Nila Bakar',
+          action: 'replace',
+          replacesDish: 'Ikan Bakar',
+          sourceImageIndex: 2,
+          estimatedWeightGrams: 220,
+          dishNutrients: { protein: 42, carbohydrates: 0, totalFat: 7, sodium: 350 },
+        },
+      ];
+
+      const cmds = diffScoutToEditCommands({
+        priorItems: prior,
+        scoutItems: scout,
+      });
+
+      expect(cmds).toHaveLength(1);
+      expect(cmds[0].action).toBe('replace_identity');
+      expect(cmds[0].itemName).toBe('Ikan Bakar');
+      expect(cmds[0].newItemName).toBe('Ikan Nila Bakar');
+      expect(cmds[0].sourceImageIndex).toBe(2);
+      expect(cmds[0].estimate?.protein).toBe(42);
+      expect(cmds[0].estimate?.sodium).toBe(350);
+    });
+
+    it('contract: honors subitem actions (replace, add, delete) within a dish', () => {
+      const priorWithComps = [
+        {
+          name: 'Ikan Bakar Platter',
+          weightGrams: 250,
+          sourceImageIndex: 0,
+          components: [
+            { name: 'Ikan Bakar', weightGrams: 200, nutrients: { protein: 35, sodium: 400 } },
+            { name: 'Lalapan', weightGrams: 50, nutrients: { protein: 1, sodium: 5 } },
+          ],
+        },
+      ];
+
+      const scout = [
+        {
+          name: 'Ikan Bakar Platter',
+          sourceImageIndex: 0,
+          foods: [
+            {
+              foodName: 'Lalapan',
+              action: 'delete',
+              replacesFood: 'Lalapan',
+            },
+            {
+              foodName: 'Sambal Terasi',
+              action: 'add',
+              weightGrams: 30,
+              sourceImageIndex: 0,
+              nutrients: { protein: 1, sodium: 200, carbohydrates: 3, totalFat: 2 },
+            },
+          ],
+        },
+      ];
+
+      const cmds = diffScoutToEditCommands({
+        priorItems: priorWithComps,
+        scoutItems: scout,
+      });
+
+      expect(cmds).toHaveLength(2);
+      const removeCmd = cmds.find(c => c.action === 'remove_component');
+      expect(removeCmd).toBeDefined();
+      expect(removeCmd?.componentName).toBe('Lalapan');
+
+      const addCmd = cmds.find(c => c.action === 'add_component');
+      expect(addCmd).toBeDefined();
+      expect(addCmd?.componentName).toBe('Sambal Terasi');
+      expect(addCmd?.newWeightGrams).toBe(30);
+      expect(addCmd?.sourceImageIndex).toBe(0);
+      expect(addCmd?.estimate?.nutrients?.sodium).toBe(200);
+    });
+
+    it('contract: when scout marks dish action="replace" but provides foods with action="add", dispatches subitem action rather than wiping components', () => {
+      const priorHotpot = [
+        {
+          name: 'Beef and Vegetable Hotpot',
+          weightGrams: 500,
+          components: [
+            { name: 'Beef Slices', weightGrams: 120, nutrients: { protein: 22, saturatedFat: 3.5 } },
+            { name: 'Tofu', weightGrams: 100, nutrients: { protein: 8 } },
+            { name: 'Shirataki Noodles', weightGrams: 100, nutrients: { carbohydrates: 3 } },
+            { name: 'Napa Cabbage and Vegetables', weightGrams: 180, nutrients: { carbohydrates: 6 } },
+          ],
+        },
+      ];
+
+      const scout = [
+        {
+          dishName: 'Beef and Vegetable Hotpot',
+          action: 'replace',
+          replacesDish: 'Beef and Vegetable Hotpot',
+          targetDishIndex: 0,
+          estimatedWeightGrams: 550,
+          foods: [
+            {
+              foodName: 'Potato',
+              action: 'add',
+              weightGrams: 50,
+              nutrients: { protein: 1, carbohydrates: 11.8, sodium: 3 },
+            },
+          ],
+        },
+      ];
+
+      const cmds = diffScoutToEditCommands({
+        priorItems: priorHotpot,
+        scoutItems: scout,
+      });
+
+      expect(cmds).toHaveLength(1);
+      expect(cmds[0].action).toBe('add_component');
+      expect(cmds[0].itemName).toBe('Beef and Vegetable Hotpot');
+      expect(cmds[0].componentName).toBe('Potato');
+      expect(cmds[0].newWeightGrams).toBe(50);
+    });
+  });
 });
