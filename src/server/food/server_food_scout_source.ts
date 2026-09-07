@@ -548,6 +548,87 @@ export function logScoutItemSummaries(items: any[], onLog: (msg: string) => void
 }
 
 /**
+ * Per-image grounding inventory: which input images the scout's dishes came
+ * from. Prefers the model's own 'perImage' block (required by the INGESTION
+ * rule); falls back to deriving coverage from dishes' sourceImageIndex.
+ * Returns the normalized entries plus zero-coverage image indices so a
+ * future targeted second pass can trigger on them (attention-drop recovery).
+ */
+export function summarizeScoutImageInventory(args: {
+  perImage?: any;
+  imageCount?: number;
+  items?: any[];
+}): { entries: Array<{ imageIndex: number; itemsFound: string[] }>; uncovered: number[]; unmatched: string[] } {
+  const count = Number(args.imageCount) || 0;
+  const entries: Array<{ imageIndex: number; itemsFound: string[] }> = [];
+  const modelRows = Array.isArray(args.perImage) ? args.perImage : [];
+  for (let i = 0; i < count; i++) {
+    const row = modelRows.find((r: any) => Number(r?.imageIndex) === i);
+    if (row && Array.isArray(row.itemsFound)) {
+      entries.push({ imageIndex: i, itemsFound: row.itemsFound.map((n: any) => String(n)) });
+    } else {
+      const names = (Array.isArray(args.items) ? args.items : [])
+        .filter((it: any) => Number(it?.sourceImageIndex) === i)
+        .map((it: any) => String(it?.dishName || it?.originalName || it?.keyword || it?.name || 'Dish'));
+      entries.push({ imageIndex: i, itemsFound: names });
+    }
+  }
+  const uncovered = entries.filter((e) => e.itemsFound.length === 0).map((e) => e.imageIndex);
+  // Claimed-but-not-extracted: names the model listed in perImage that match
+  // no emitted dish. Distinguishes "looked and declined" from "never looked"
+  // and is the trigger a targeted second pass would use. Only checked when
+  // the model actually emitted perImage (derived entries come from dishes,
+  // so they trivially match).
+  const unmatched: string[] = [];
+  if (modelRows.length > 0) {
+    const dishNames = (Array.isArray(args.items) ? args.items : []).map((it: any) =>
+      String(it?.dishName || it?.originalName || it?.keyword || it?.name || ''));
+    const norm = (s: string): string[] => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter((w) => w.length > 2);
+    const matchesDish = (name: string): boolean => {
+      const n = norm(name);
+      if (n.length === 0) return true;
+      return dishNames.some((d: string) => {
+        const dn = norm(String(d));
+        if (dn.length === 0) return false;
+        if (dn.join(' ').includes(n.join(' ')) || n.join(' ').includes(dn.join(' '))) return true;
+        const shared = n.filter((w) => dn.includes(w)).length;
+        return shared / Math.min(n.length, dn.length) >= 0.5;
+      });
+    };
+    for (const row of modelRows) {
+      for (const name of (Array.isArray(row?.itemsFound) ? row.itemsFound : [])) {
+        if (!matchesDish(String(name)) && !unmatched.includes(String(name))) unmatched.push(String(name));
+      }
+    }
+  }
+  return { entries, uncovered, unmatched };
+}
+
+/** Single-line scout inventory log plus a WARN per zero-coverage image. */
+export function logScoutImageInventory(args: {
+  perImage?: any;
+  imageCount?: number;
+  items?: any[];
+  onLog: (msg: string) => void;
+}): { uncovered: number[]; unmatched: string[] } {
+  const { entries, uncovered, unmatched } = summarizeScoutImageInventory(args);
+  const count = Number(args.imageCount) || 0;
+  args.onLog(
+    `[ScoutInventory] ${count} image(s) attached; ` +
+    (entries.length > 0
+      ? entries.map((e) => `img${e.imageIndex}: [${e.itemsFound.join(', ') || 'none'}]`).join('; ')
+      : 'no images attached')
+  );
+  for (const idx of uncovered) {
+    args.onLog(`[ScoutInventory] WARN image ${idx} grounded 0 dishes — possible attention drop; check framing or re-query that image alone.`);
+  }
+  for (const name of unmatched) {
+    args.onLog(`[ScoutInventory] WARN "${name}" claimed in perImage but no dish emitted — looked-and-declined (often a label/pack shot with no portion cue).`);
+  }
+  return { uncovered, unmatched };
+}
+
+/**
  * F-8.10 shard 16 — shortcut-chain seams. B5 scale-only reuse, turn-1
  * candidate restore, and scout retry delay. Streaming/LLM calls stay inline.
  */

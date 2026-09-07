@@ -11,6 +11,8 @@ import {
   applyScoutResultState,
   mergeScoutIntoActiveMeal,
   logScoutItemSummaries,
+  summarizeScoutImageInventory,
+  logScoutImageInventory,
   applyWeightModShortcut,
   restoreTurnOneCandidates,
   computeScoutRetryDelay,
@@ -188,6 +190,76 @@ describe('F-8.10 shard 11 — scout result handling', () => {
     ], (m) => logs.push(m));
     expect(logs[0]).toContain('Nutrition Label:');
     expect(logs[0]).toContain('Flags: [big]');
+  });
+
+  it('summarizes model perImage rows and flags zero-coverage images', () => {
+    const out = summarizeScoutImageInventory({
+      perImage: [
+        { imageIndex: 0, itemsFound: ['Oat Cereal'] },
+        { imageIndex: 1, itemsFound: [] },
+      ],
+      imageCount: 2,
+      items: [{ sourceImageIndex: 0, dishName: 'Oat Cereal' }],
+    });
+    expect(out.entries).toHaveLength(2);
+    expect(out.entries[0].itemsFound).toEqual(['Oat Cereal']);
+    expect(out.uncovered).toEqual([1]);
+  });
+
+  it('derives coverage from dishes when the model omits perImage', () => {
+    const logs: string[] = [];
+    const out = logScoutImageInventory({
+      perImage: undefined,
+      imageCount: 3,
+      items: [
+        { sourceImageIndex: 1, dishName: 'Soup' },
+        { sourceImageIndex: 2, dishName: 'Drink' },
+      ],
+      onLog: (m) => logs.push(m),
+    });
+    expect(out.uncovered).toEqual([0]);
+    expect(logs.some((m) => m.includes('[ScoutInventory] 3 image(s) attached'))).toBe(true);
+    expect(logs.some((m) => m.includes('WARN image 0 grounded 0 dishes'))).toBe(true);
+  });
+
+  it('logs no WARN when every image is grounded', () => {
+    const logs: string[] = [];
+    const out = logScoutImageInventory({
+      perImage: [{ imageIndex: 0, itemsFound: ['Oats'] }],
+      imageCount: 1,
+      items: [{ sourceImageIndex: 0, keyword: 'Oats' }],
+      onLog: (m) => logs.push(m),
+    });
+    expect(out.uncovered).toEqual([]);
+    expect(out.unmatched).toEqual([]);
+    expect(logs.some((m) => m.includes('WARN'))).toBe(false);
+  });
+
+  it('flags perImage names that match no emitted dish (looked-and-declined)', () => {
+    const logs: string[] = [];
+    const out = logScoutImageInventory({
+      perImage: [
+        { imageIndex: 0, itemsFound: ['Informasi Nilai Gizi'] },
+        { imageIndex: 1, itemsFound: ['Beef soup'] },
+      ],
+      imageCount: 2,
+      items: [
+        { sourceImageIndex: 1, dishName: 'Sup Daging Sapi dan Sayur' },
+        { sourceImageIndex: 1, dishName: 'Beef soup with vegetables' },
+      ],
+      onLog: (m) => logs.push(m),
+    });
+    expect(out.unmatched).toEqual(['Informasi Nilai Gizi']);
+    expect(logs.some((m) => m.includes('looked-and-declined'))).toBe(true);
+  });
+
+  it('matches variant names to dishes without noise', () => {
+    const out = summarizeScoutImageInventory({
+      perImage: [{ imageIndex: 0, itemsFound: ['Beef soup'] }],
+      imageCount: 1,
+      items: [{ sourceImageIndex: 0, dishName: 'Beef soup with vegetables' }],
+    });
+    expect(out.unmatched).toEqual([]);
   });
 });
 

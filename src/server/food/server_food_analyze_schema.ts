@@ -211,6 +211,16 @@ export const visionScoutResponseSchema = {
     },
     clinicalAdvice: { type: Type.STRING, nullable: true },
     message: { type: Type.STRING, nullable: true },
+    perImage: {
+      type: Type.ARRAY, nullable: true,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          imageIndex: { type: Type.INTEGER },
+          itemsFound: { type: Type.ARRAY, items: { type: Type.STRING } },
+        },
+      },
+    },
     dishes: {
       type: Type.ARRAY,
       items: {

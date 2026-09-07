@@ -138,12 +138,13 @@ export const VisionScoutSchema = z.object({
   }).nullable().optional(),
   clinicalAdvice: z.string().nullable().optional(),
   message: z.string().nullable().optional(),
+  perImage: z.array(z.object({ imageIndex: z.number().nullable().optional(), itemsFound: z.array(z.string()).nullable().optional() })).nullable().optional(),
 }).passthrough();
 export const scoutSystemInstruction = `- HIERARCHY: Group distinct physical plated items, separate cooking pots/bowls, drinks, or companion sides into separate 'dishes', and constituent ingredients into 'foods'. DO NOT duplicate identical dishes shown across cooking prep, multi-angles, or sliced/whole views. DO NOT group separate packages into a single dish. Each barcode package MUST be its own distinct 'dish'.
 - QUANTITY & MULTIPACKS: Output 'weightGrams' (consumed serving) and 'packGrams' (container total). For unopened grocery multi-packs (e.g. '5 x 65ml', 'pack of 6') without explicit user notes stating all N units were consumed, set 'weightGrams' to a single unit/serving size (e.g. 65g) and 'packGrams' to the container total (e.g. 325g).
 - GROCERY/SCALE STICKERS: Treat supermarket stickers as atomic: pair printed text with printed weight (e.g. 'Berat 0.252' -> 252g). Output text in 'packageLabelText'. Never transpose weights between packages.
 - LOCAL NAMES: Preserve the verbatim printed name from stickers, packaging, or menus in local language as foodName (e.g. 'Ikan Cendro', 'Cumi Bangka'). Do not genericise when specific local name is readable. ALWAYS provide the generic English translation of the ingredient in 'genericEnglishName' (e.g. 'needlefish', 'squid').
-- INGESTION: Extract ALL visible food items/packages from ALL provided images into dishes[]. 'contentType' is post-extraction metadata and must not restrict extraction.
+- INGESTION: Extract ALL visible food items/packages from ALL provided images into dishes[]. After dishes[], emit 'perImage': one entry per provided image in 0-based order with the dishName values seen in that image ('itemsFound'; empty array only when that image truly shows no food, or when no images are attached) — every provided image must appear exactly once; never skip an image. 'contentType' is post-extraction metadata and must not restrict extraction.
 - DIRECT OCR: Transcribe nutrition labels into 'rawNutritionLabel' for packaged items with labels. Preserve exact 0 values when printed as 0g / 0mg.
 - % AKG / % DV: If nutrition labels state % AKG (Angka Kecukupan Gizi) or % DV for micronutrients (e.g. Vitamin D 8% AKG, Kalsium 2% AKG), preserve the % in rawNutritionLabel.
 - BRANDS & CONDIMENTS: Set 'chainName' for brands. Set 'isStandaloneCondimentPacket' for packets <=30g.
@@ -161,6 +162,7 @@ Output exactly ONE JSON object matching this schema:
     "level": "neutral"
   },
   "clinicalAdvice": "The fried snacks pack 9g of saturated fat, nearly half your day's limit in one item — that load works against your cholesterol goal and stiffens post-meal blood flow. The beef soup's 30g of clean protein is the win here, and its broth keeps you hydrated. A 10-minute walk will help clear the fat load.",
+  "perImage": [{ "imageIndex": 0, "itemsFound": ["Vegetable and Beef Hotpot"] }],
   "dishes": [
     {
       "dishName": "Vegetable and Beef Hotpot",
