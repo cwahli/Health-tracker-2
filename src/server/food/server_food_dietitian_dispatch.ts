@@ -300,6 +300,23 @@ export function sumSalvagedAggregates(preCalculatedItems: any): Record<string, n
 }
 
 /**
+ * Salvage plausibility gate: a summed ledger can inherit garbage from an
+ * unscaled estimator (observed: 9600 kcal / 2276 g protein from a baseline
+ * runaway). Refuse success on physically impossible ledgers so the job fails
+ * retryably instead of logging absurd numbers as a completed meal.
+ */
+export function salvageLedgerPlausibility(nutrients: any, weightGrams: any): { ok: boolean; reason: string } {
+  const kcal = Number(nutrients?.calories) || 0;
+  const protein = Number(nutrients?.protein) || 0;
+  const g = Number(weightGrams) || 0;
+  const density = g > 0 ? kcal / g : 0;
+  if (kcal > 8000) return { ok: false, reason: `kcal=${kcal}` };
+  if (protein > 500) return { ok: false, reason: `protein=${protein}g` };
+  if (g >= 100 && density > 9.2) return { ok: false, reason: `density=${density.toFixed(2)}kcal/g` };
+  return { ok: true, reason: '' };
+}
+
+/**
  * Accept-defaults gate: portion-clarify choices within `tolerance` of the
  * DEFAULT (pack weight, else the scout estimate) need no agent — the ledger
  * already says it. Returns false whenever a choice is unverifiable (unknown

@@ -245,7 +245,10 @@ export async function hydrateUserJobs(userId: string = 'anonymous', isFull: bool
   // 1. Try server route /api/jobs/status
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    // Slow routes (cold boot, R2/Supabase latency) routinely exceed 10s —
+    // aborting early causes retry storms and stuck "uploading" UI. One shot,
+    // so allow a full window.
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
     try {
       const res = await fetch(`/api/jobs/status?userId=${encodeURIComponent(effectiveUserId)}&full=${isFull}`, { signal: controller.signal });
       if (res.ok) {

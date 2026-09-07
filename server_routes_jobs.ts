@@ -73,21 +73,23 @@ jobsRouter.post('/api/jobs/submit', async (req, res) => {
 
     if (images && Array.isArray(images) && images.length > 0) {
       imageUrls = Array.isArray(imageUrls) ? [...imageUrls] : [];
-      for (let i = 0; i < images.length; i++) {
-        if (typeof images[i] === 'string' && images[i].startsWith('data:image/')) {
+      // Parallel uploads: sequential awaits stalled submits for 30s+ on slow
+      // routes (each PUT pays full latency). Order + fallback preserved.
+      const uploaded = await Promise.all(images.map(async (img: any, i: number) => {
+        if (typeof img === 'string' && img.startsWith('data:image/')) {
           console.log(`[POST /api/jobs/submit] Uploading image ${i} to R2 for job ${jobId}...`);
           try {
-            const r2Url = await uploadPhotoToR2(`${jobId}_${i}`, images[i]);
-            if (r2Url && r2Url.startsWith('http')) {
-              imageUrls.push(r2Url);
-            } else {
-              imageUrls.push(images[i]);
-            }
+            const r2Url = await uploadPhotoToR2(`${jobId}_${i}`, img);
+            return (r2Url && r2Url.startsWith('http')) ? r2Url : img;
           } catch (e) {
             console.error(`[POST /api/jobs/submit] Failed to upload image ${i} to R2`, e);
-            imageUrls.push(images[i]);
+            return img;
           }
         }
+        return null;
+      }));
+      for (const url of uploaded) {
+        if (url) imageUrls.push(url);
       }
     }
 

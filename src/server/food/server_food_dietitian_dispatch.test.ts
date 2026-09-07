@@ -9,6 +9,7 @@ import {
   buildCreateSkipResponse,
   sumSalvagedAggregates,
   resolveCreateMealTitle,
+  salvageLedgerPlausibility,
   isAcceptDefaultsWithinTolerance,
   composeAcceptDefaultsParsed,
 } from './server_food_dietitian_dispatch';
@@ -144,6 +145,14 @@ describe('F-8.10 shard 28 — create-skip synthesis and salvaged aggregates', ()
     const empty = sumSalvagedAggregates(null);
     expect(empty.calories).toBe(0);
     expect(Object.keys(empty)).toHaveLength(NUTRIENT_KEYS.length);
+  });
+
+  it('refuses implausible salvaged ledgers (unscaled-estimator runaway)', () => {
+    // Observed live failure: 9600 kcal / 2276.7 g protein baseline runaway.
+    expect(salvageLedgerPlausibility({ calories: 9600, protein: 2276.7 }, 1000).ok).toBe(false);
+    expect(salvageLedgerPlausibility({ calories: 1347.7, protein: 47.9 }, 1060).ok).toBe(true);
+    expect(salvageLedgerPlausibility({ calories: 960, protein: 20 }, 100).ok).toBe(false); // 9.6/g > fat ceiling
+    expect(salvageLedgerPlausibility({}, 0).ok).toBe(true);
   });
 });
 

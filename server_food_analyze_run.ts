@@ -5,7 +5,7 @@
 import { Type } from '@google/genai';
 import { z } from 'zod';
 import { formatUSDANutrients, formatOFFNutrients, extractOFFNutrientsPer100g, isFastFoodChain, buildWebSearchQuery, loosenQuery, cleanQuery, detectChainKeyFromText, scoutHasCompletePrintedLabel, enrichScoutComponentsWithMatches, buildPastMealsContext } from './src/server/food/server_food_analyze_helpers.js';
-import { computeDietitianSkipGates, isAcceptDefaultsWithinTolerance, composeAcceptDefaultsParsed, decideScoutVerdict, decideScoutAdvice, buildPureScaleResponse, sumPrecalcTotals, buildCreateSkipResponse, sumSalvagedAggregates, applyPreDietitianDensityCheck, resolveCreateMealTitle } from './src/server/food/server_food_dietitian_dispatch.js';
+import { computeDietitianSkipGates, isAcceptDefaultsWithinTolerance, composeAcceptDefaultsParsed, decideScoutVerdict, decideScoutAdvice, buildPureScaleResponse, sumPrecalcTotals, buildCreateSkipResponse, sumSalvagedAggregates, salvageLedgerPlausibility, applyPreDietitianDensityCheck, resolveCreateMealTitle } from './src/server/food/server_food_dietitian_dispatch.js';
 import { resolveFoodAnalyzeMode, buildFoodApiCalls, normalizeParsedPostDietitian } from './src/server/food/server_food_mode_routing.js';
 import { buildFallbackItemsBreakdown, assembleParsedMealHeader, backfillEditCommandEstimates, resolveEditedMealTitle, resolveModifyIncomingTitle, appendEditHistoryEntry, syncEditScoutItems, buildGateInput, deriveMealComposition, resolveMealImageUrls, mergeFinalScoutItems, buildNewLogGateInput, mapFinalizeToMeal, mergeModifyPathScoutItems, runEvaluationFinalize, assembleEvaluationComparison } from './src/server/food/server_food_meal_assemble.js';
 import { inheritActiveMealScoutItems, mapCompareItemsToScoutItems, resolvePriorScoutItems, applyBracketPreExtract, injectExplicitFoodTags, inferPackagedBindChains, buildScoutFailureError, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries, applyWeightModShortcut, restoreTurnOneCandidates, computeScoutRetryDelay, applySkipScoutShortcut, checkResumedFromImageTurn, applyTextQueryShortcut, checkMenuScaleBypass, buildScoutCallArgs, runScoutRetryLoop } from './src/server/food/server_food_scout_source.js';
@@ -1262,6 +1262,24 @@ ${textOutput}`);
       const salvagedMeal = buildSavableMealFromParsed(preCalculatedItems, req.body.activeMeal, salvagedAggregatedNutrients, null);
       const degradedMeal = markDietitianDegraded(salvagedMeal, error.message);
       const payloadData = toPendingFoodLog(degradedMeal);
+      // Salvage guard: a summed ledger can inherit garbage from an unscaled
+      // estimator. Never report success on a physically impossible meal —
+      // fail retryably (Retry button) instead of logging absurd numbers.
+      const salvageCheck = salvageLedgerPlausibility(
+        (payloadData as any)?.nutrients, (payloadData as any)?.weightGrams
+      );
+      if (!salvageCheck.ok) {
+        addDebugLog(`[Dietitian Degrade] Refusing implausible salvage (${salvageCheck.reason}).`);
+        const implausiblePayload: any = {
+          error: `Analysis produced an implausible ledger (${salvageCheck.reason}) — nothing was saved. Please retry; pick a different model if it repeats.`,
+          agentNotAvailable: true,
+        };
+        if (visionScoutItems && visionScoutItems.length > 0) {
+          implausiblePayload.scoutItems = visionScoutItems;
+          implausiblePayload.scoutContentType = visionScoutContentType;
+        }
+        return res.status(200).json(implausiblePayload);
+      }
       const successPayload = buildDegradeResponse({
         payloadData, degradedMeal, visionScoutItems,
         scoutContentType: visionScoutContentType,
