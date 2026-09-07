@@ -893,6 +893,10 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           // at clarify-check time but this whitelist dropped it, so the card
           // question never rendered even though pendingFoodLog carried it nested.
           portionClarify: finalPayload?.portionClarify || undefined,
+          // Answered stays answered: answer-resume submits carry
+          // portionChoices, so the client never resurrects the question card
+          // on rebuilds (the payload above is preserved as evidence).
+          portionClarifyAnswered: (payload as any)?.portionChoices ? true : (finalPayload?.portionClarifyAnswered || undefined),
           photoUrl: photoUrl || undefined,
           photoUrls: photoUrls.length > 0 ? photoUrls : (photoUrl ? [photoUrl] : undefined),
           degradedStages: finalPayload?.degradedStages,
@@ -931,6 +935,9 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           // Same class: carry the portion-clarify payload or the card question
           // never renders (see earlyResult above).
           portionClarify: finalPayload?.portionClarify || undefined,
+          // Answered stays answered (see earlyResult above): answer-resume
+          // submits carry portionChoices.
+          portionClarifyAnswered: (payload as any)?.portionChoices ? true : (finalPayload?.portionClarifyAnswered || undefined),
           photoUrl: photoUrl || undefined,
           photoUrls: photoUrls.length > 0 ? photoUrls : (photoUrl ? [photoUrl] : undefined),
           imageUrls: photoUrls.length > 0 ? photoUrls : (photoUrl ? [photoUrl] : undefined),

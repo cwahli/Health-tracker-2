@@ -3,7 +3,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { agentCardRegistry } from './chat-cards';
 import { decideFrontDeskHandoff } from '../utils/handoffGuard';
 import { mapFrontDeskSpecialist, specialistDisplayName } from '../utils/frontDeskRouting';
-import { dedupeConsecutiveAssistantMessages } from '../utils/chatMessageDedupe';
+import { dedupeConsecutiveAssistantMessages, dropAnsweredClarifyMessages } from '../utils/chatMessageDedupe';
 import { AgentThoughtBox } from './chat-cards/FoodCard';
 import { trackApiCall, setActiveQueryId, generateQueryId } from '../utils/apiTracker';
 import { saveAgentRequestLog, getAgentRequestLogs } from '../utils/agentLogsTracker';
@@ -1467,9 +1467,13 @@ ${logsText}`);
         }
         // Food cards patch in place as consecutive assistants; Front Desk
         // receptionist → handoff → Health Coach must stay three separate turns.
-        const dedupedBaseMsgs: ChatMessage[] = dedupeConsecutiveAssistantMessages(baseMsgs, {
+        // Answered elsewhere (e.g. portion answer submitted as an edit on a new
+        // job): never resurrect the question on rebuilds.
+        const clarifyAnswered = !!(job.result as any)?.portionClarifyAnswered ||
+          !!(job.result as any)?.clean_result?.portionClarifyAnswered;
+        const dedupedBaseMsgs: ChatMessage[] = dropAnsweredClarifyMessages(dedupeConsecutiveAssistantMessages(baseMsgs, {
           enabled: type === 'food'
-        });
+        }), clarifyAnswered);
         if (
           type === 'front_desk'
           && job.result
@@ -1486,10 +1490,6 @@ ${logsText}`);
           } as ChatMessage);
         }
         const lastMsg = dedupedBaseMsgs[dedupedBaseMsgs.length - 1];
-        // Answered elsewhere (e.g. portion answer submitted as an edit on a new
-        // job): never resurrect the question on rebuilds.
-        const clarifyAnswered = !!(job.result as any)?.portionClarifyAnswered ||
-          !!(job.result as any)?.clean_result?.portionClarifyAnswered;
         if (job.status === 'awaiting_user' && !clarifyAnswered) {
           const rawResult = job.result?.clean_result || job.result || (job as any).clean_result || {};
           const portionClarify =
@@ -6254,6 +6254,10 @@ ${logsText}`);
                           type={type}
                         />
                         {(() => {
+                          // Locally answered at confirm time: never render the
+                          // question again for this bubble (rebuild filtering
+                          // covers server-persisted copies).
+                          if ((msg as any).portionClarifyAnswered) return null;
                           const clarifyData = msg.data?.portionClarify || (msg as any).portionClarify || msg.pendingFoodLog?.portionClarify;
                           if (!clarifyData) return null;
                           // Dedupe: server attaches the same payload top-level AND nested
@@ -6280,6 +6284,11 @@ ${logsText}`);
                                 }
 
                                 const { updatedLog, isOverThreshold, maxDiffPercent, changesSummary } = applyPortionChoicesToLog(activeMeal, choices);
+                                // Answering retires the question everywhere it nests: the card
+                                // renders from msg.data/pendingFoodLog portionClarify, and the
+                                // ledger spread preserves it — null it on the answered copy
+                                // or the answered card resurrects on the next rebuild.
+                                const answeredLog = { ...updatedLog, portionClarify: null } as any;
 
                                 if (!isOverThreshold) {
                                   // <= 30% difference: apply changes directly without calling agent again
@@ -6288,19 +6297,20 @@ ${logsText}`);
                                     if (m.id === msg.id) {
                                       const nextData = {
                                         ...m.data,
-                                        pendingFoodLog: updatedLog,
-                                        data: updatedLog,
+                                        pendingFoodLog: answeredLog,
+                                        data: answeredLog,
                                         portionClarify: null,
                                         needsPortionClarify: false,
-                                        scoutItems: updatedLog.scoutItems || m.data?.scoutItems,
-                                        receiptTable: updatedLog.receiptTable || m.data?.receiptTable,
+                                        scoutItems: answeredLog.scoutItems || m.data?.scoutItems,
+                                        receiptTable: answeredLog.receiptTable || m.data?.receiptTable,
                                       };
                                       return {
                                         ...m,
-                                        pendingFoodLog: updatedLog,
+                                        pendingFoodLog: answeredLog,
                                         data: nextData,
                                         portionClarify: null,
                                         needsPortionClarify: false,
+                                        portionClarifyAnswered: true,
                                       };
                                     }
                                     return m;
@@ -6311,8 +6321,8 @@ ${logsText}`);
                                       JobStore.updateJob(jobId, {
                                         result: {
                                           ...cur.result,
-                                          pendingFoodLog: updatedLog,
-                                          data: updatedLog,
+                                          pendingFoodLog: answeredLog,
+                                          data: answeredLog,
                                           portionClarify: null,
                                           needsPortionClarify: false,
                                           portionClarifyAnswered: true,
@@ -6337,16 +6347,17 @@ ${logsText}`);
                                   if (m.id === msg.id) {
                                     return {
                                       ...m,
-                                      pendingFoodLog: updatedLog,
+                                      pendingFoodLog: answeredLog,
                                       data: {
                                         ...m.data,
-                                        pendingFoodLog: updatedLog,
-                                        data: updatedLog,
+                                        pendingFoodLog: answeredLog,
+                                        data: answeredLog,
                                         portionClarify: null,
                                         needsPortionClarify: false,
                                       },
                                       portionClarify: null,
                                       needsPortionClarify: false,
+                                      portionClarifyAnswered: true,
                                     };
                                   }
                                   return m;
@@ -6376,7 +6387,7 @@ ${logsText}`);
                                   handleSend({
                                     text: `Please update my meal portions: ${changesSummary}. Because the portion difference exceeds 30%, please review the nutritional calculation, macro distribution, and provide an updated clinical evaluation and verdict.`,
                                     overrideMode: 'edit',
-                                    activeMeal: updatedLog,
+                                    activeMeal: answeredLog,
                                     sourceMsgId: msg.id,
                                     portionChoices: choices,
                                     skipScout: true,
