@@ -23,7 +23,7 @@ export const foodAnalyzeSchema = {
           items: {
             type: Type.OBJECT,
             properties: {
-              action: { type: Type.STRING, enum: ['update_weight', 'update_component_weight', 'update_modifier', 'remove_item', 'add_item', 'replace_item', 'replace_identity', 'split_item', 'set_count', 'rename_alias', 'update_cooking_method'] },
+              action: { type: Type.STRING, enum: ['update_weight', 'update_component_weight', 'update_modifier', 'remove_item', 'remove_component', 'add_item', 'replace_item', 'replace_identity', 'split_item', 'set_count', 'rename_alias', 'update_cooking_method'] },
               itemName: { type: Type.STRING },
               newWeightGrams: { type: Type.INTEGER, nullable: true },
               targetDbId: { type: Type.STRING, nullable: true },

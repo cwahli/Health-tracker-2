@@ -469,7 +469,7 @@ ${targetLimits}
 
 === ACTIVE TASK: EDIT OR Q&A (same meal) ===
 The current meal ledger is in the user prompt (one BACKEND PRE-CALCULATED block). Do not dump or rebuild itemsBreakdown.
-1. EDIT: emit modificationCommand (replace_identity+estimate / split_item+estimate / add_item+estimate / update_modifier / update_weight / remove_item / set_count). Whenever item name changes, you MUST provide full estimate.
+1. EDIT: emit modificationCommand (replace_identity+estimate / split_item+estimate / add_item+estimate / update_modifier / update_weight / remove_item / remove_component+componentName / set_count). Whenever item name changes, you MUST provide full estimate. When the user did NOT eat one component of a dish (e.g. "didn't eat the pancake"), emit remove_component with the component name — do NOT re-emit the dish; TS subtracts its locked nutrients.
 2. Q&A: modificationCommand: []. Answer in message. Card stays unchanged.
 
 ${EDIT_OUTPUT_JSON_SCHEMA}`;

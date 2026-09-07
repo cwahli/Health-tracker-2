@@ -749,6 +749,47 @@ export async function applyMealEdits(opts: {
       item.componentsDetailList = comps;
       items[idx] = reaggregateDishWeightFromComponents({ ...item, components: comps, componentsDetailList: comps, hasComponents: true });
       notes.push(`update_component_weight "${raw.componentName}" ${oldW}g → ${newW}g`);
+    } else if (action === 'remove_component') {
+      if (idx < 0) { notes.push(`remove_component: no item "${itemName}"`); continue; }
+      if (!raw.componentName) { notes.push('remove_component: missing componentName'); continue; }
+      const item = items[idx];
+      const comps = componentsOf(item);
+      const cIdx = comps.findIndex((c) => {
+        const cn = String(c.name || c.searchQuery || c.keyword || '').toLowerCase();
+        return cn && cn.includes(String(raw.componentName || '').toLowerCase());
+      });
+      if (cIdx < 0) { notes.push(`remove_component: no component "${raw.componentName}"`); continue; }
+      const [dropped] = comps.splice(cIdx, 1);
+      const dropW = Number(dropped.weightGrams ?? dropped.estimatedWeightGrams) || 0;
+      // Subtract the LOCKED component nutrients — never rescale by weight share
+      // (composition is uneven: the dropped food may hold most of one nutrient).
+      const dropN = dropped.nutrients || {};
+      const base = { ...(item.nutrients || {}) };
+      for (const k of NUTRIENT_KEYS) {
+        const iv = base[k] ?? (item as any)[k];
+        const dv = dropN[k] ?? (dropped as any)[k];
+        if (typeof iv === 'number' && Number.isFinite(iv) && typeof dv === 'number' && Number.isFinite(dv)) {
+          base[k] = Math.max(0, Math.round((iv - dv) * 10) / 10);
+        }
+      }
+      const locked = Array.isArray(item.lockedNutrientKeys) ? item.lockedNutrientKeys : [];
+      if (!locked.includes('calories')) {
+        base.calories = computeCaloriesFromMacros(base.protein, base.carbohydrates, base.totalFat);
+      }
+      const compW = comps.reduce((a: number, c: any) => a + (Number(c.weightGrams ?? c.estimatedWeightGrams) || 0), 0);
+      const next = {
+        ...item,
+        nutrients: base,
+        weightGrams: Math.round(compW),
+        estimatedWeightGrams: Math.round(compW),
+        components: comps,
+        componentsDetailList: comps,
+      };
+      for (const k of ['calories', 'protein', 'totalFat', 'saturatedFat', 'carbohydrates', 'sodium'] as const) {
+        if (typeof (base as any)[k] === 'number') (next as any)[k] = (base as any)[k];
+      }
+      items[idx] = reaggregateDishWeightFromComponents({ ...next, hasComponents: true });
+      notes.push(`remove_component "${raw.componentName}" from "${itemName}" (−${dropW}g)`);
     } else if (action === 'rename_alias') {
       if (idx < 0) continue;
       const newName = raw.newItemName || itemName;

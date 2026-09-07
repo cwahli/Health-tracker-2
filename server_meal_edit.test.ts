@@ -331,6 +331,88 @@ describe('applyMealEdits', () => {
     expect(result.items[0].name).toBe('Es Teh Tawar');
     expect(result.changed).toBe(true);
   });
+
+  it('remove_component subtracts locked nutrients (uneven share, not weight ratio)', async () => {
+    const items = [
+      {
+        scoutIndex: 1,
+        name: 'Jajanan Trio',
+        canonicalDbName: 'Jajanan Trio',
+        originalName: 'Jajanan Trio',
+        weightGrams: 170,
+        nutrients: { calories: 367, protein: 7, carbohydrates: 52, totalFat: 14.5, saturatedFat: 4.5, sugar: 14, addedSugar: 10, sodium: 300 },
+        sourceImageIndex: 2,
+        componentsDetailList: [
+          { name: 'Risoles', weightGrams: 60, nutrients: { calories: 190, protein: 4, carbohydrates: 18, totalFat: 10, saturatedFat: 3, sugar: 2, addedSugar: 1, sodium: 250 } },
+          { name: 'Jadah Ketan', weightGrams: 50, nutrients: { calories: 65, protein: 1.5, carbohydrates: 14, totalFat: 1.5, saturatedFat: 0.5, sugar: 2, addedSugar: 1, sodium: 20 } },
+          { name: 'Apem', weightGrams: 60, nutrients: { calories: 112, protein: 1.5, carbohydrates: 20, totalFat: 3, saturatedFat: 1, sugar: 10, addedSugar: 8, sodium: 30 } },
+        ],
+      },
+    ];
+    const result = await applyMealEdits({
+      items,
+      userMessage: "I didn't eat the pancake",
+      commands: [{ action: 'remove_component', itemName: 'Jajanan Trio', componentName: 'Apem' }],
+    });
+    const row = result.items[0];
+    expect(row.componentsDetailList.map((c: any) => c.name)).toEqual(['Risoles', 'Jadah Ketan']);
+    expect(row.weightGrams).toBe(110);
+    // Exact subtraction: sugar 14 − 10 = 4 (weight-ratio scaling would give ~9)
+    expect(row.nutrients.sugar).toBe(4);
+    expect(row.nutrients.addedSugar).toBe(2);
+    expect(row.nutrients.saturatedFat).toBe(3.5);
+    expect(row.nutrients.sodium).toBe(270);
+    expect(row.nutrients.protein).toBe(5.5);
+    expect(mealItemsHaveAtwaterCalories(result.items)).toBe(true);
+    expect(result.changed).toBe(true);
+  });
+
+  it('remove_component keeps locked calories via subtraction instead of Atwater', async () => {
+    const items = [
+      {
+        scoutIndex: 4,
+        name: 'Brownies',
+        weightGrams: 30,
+        lockedNutrientKeys: ['calories'],
+        nutrients: { calories: 140, protein: 2, carbohydrates: 22, totalFat: 4, sugar: 12 },
+        componentsDetailList: [
+          { name: 'Brownie Half A', weightGrams: 15, nutrients: { calories: 70, protein: 1, carbohydrates: 11, totalFat: 2, sugar: 6 } },
+          { name: 'Brownie Half B', weightGrams: 15, nutrients: { calories: 70, protein: 1, carbohydrates: 11, totalFat: 2, sugar: 6 } },
+        ],
+      },
+    ];
+    const result = await applyMealEdits({
+      items,
+      commands: [{ action: 'remove_component', itemName: 'Brownies', componentName: 'Half B' }],
+    });
+    expect(result.items[0].nutrients.calories).toBe(70);
+    expect(result.items[0].weightGrams).toBe(15);
+  });
+
+  it('remove_component with unknown component or missing name is a no-op', async () => {
+    const items = [
+      {
+        scoutIndex: 1,
+        name: 'Jajanan Trio',
+        weightGrams: 170,
+        nutrients: { calories: 367, sugar: 14 },
+        componentsDetailList: [
+          { name: 'Risoles', weightGrams: 60, nutrients: { calories: 190, sugar: 2 } },
+        ],
+      },
+    ];
+    const miss = await applyMealEdits({
+      items,
+      commands: [{ action: 'remove_component', itemName: 'Jajanan Trio', componentName: 'Apem' }],
+    });
+    expect(miss.items[0].nutrients.sugar).toBe(14);
+    expect(miss.items[0].weightGrams).toBe(170);
+    const nameless = await applyMealEdits({
+      items,
+      commands: [{ action: 'remove_component', itemName: 'Jajanan Trio' }],
+    });
+    expect(nameless.items[0].nutrients.sugar).toBe(14);
+  });
 });
 
 describe('evidence job outer check (frozen example, class tests above)', () => {
