@@ -149,7 +149,7 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
   const name = String(item.originalName || item.keyword || item.name || 'Item').trim();
   const nameL = name.toLowerCase();
   const ing = String(item.ingredientsList || item.ingredients || '').toLowerCase();
-  const blob = `${nameL} ${ing} ${String(item.keyword || '').toLowerCase()}`;
+  const blob = `${nameL} ${ing} ${String(item.keyword || '').toLowerCase()} ${String(item.packageLabelText || '').toLowerCase()}`;
   const w = Math.round(Number(item.estimatedWeightGrams ?? item.weightGrams) || 0);
   const raw = item?.rawNutritionLabel;
   const rawServing = String(raw?.servingSize || raw?.serving || '').trim();
@@ -159,7 +159,7 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
   let packGrams = detectPackNetWeightGrams(item);
 
   // Universal Unit Count Match: matches any digit preceding common packaging / unit words
-  const unitCountMatch = blob.match(/\b(\d+)\s*(?:pack|pk|slices?|bagels?|rolls?|thins?|buns?|wraps?|tortillas?|pancakes?|muffins?|crumpets?|waffles?|pieces?|pcs?|bars?|bakes?|sachets?|pouches?|biscuits?|cookies?|patties?|fillets?|sausages?|cutlets?|meatballs?|servings?|units?)\b/i);
+  const unitCountMatch = blob.match(/\b(\d+)\s*(?:pack|pk|slices?|bagels?|rolls?|thins?|buns?|wraps?|tortillas?|pancakes?|muffins?|crumpets?|waffles?|pieces?|pcs?|bars?|bakes?|sachets?|pouches?|biscuits?|cookies?|patties?|fillets?|sausages?|cutlets?|meatballs?|servings?|sajian|saji|porsi|units?)\b/i);
   let detectedUnits = unitCountMatch ? parseInt(unitCountMatch[1], 10) : 0;
 
   // Extract leading digit from item name (e.g. "2 butter croissants" → 2, "4 chicken strips" → 4).
@@ -244,7 +244,9 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
     packGrams: Number.isFinite(packGrams) && (packGrams as number) > 0 ? Math.round(packGrams as number) : null,
     labelServingGrams: ssG || 100,
       options,
-      reason: `Multi-serve pack (${detectedUnits} units) — confirm how much you ate`,
+      reason: detectedUnits >= 2
+        ? `Multi-serve pack (${detectedUnits} units) — confirm how much you ate`
+        : `Package weight (${packGrams}g) differs from estimated portion (${w}g) — confirm how much you ate`,
     };
   }
 

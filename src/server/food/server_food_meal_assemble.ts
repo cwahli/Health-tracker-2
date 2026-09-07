@@ -648,6 +648,21 @@ export function mergeModifyPathScoutItems(args: ModifyScoutMergeArgs): any[] {
     ? visionScoutItems
     : (activeMealScoutItems || []);
   let updatedScoutItems = mergeScoutItems(baseScoutItems, dietitianScoutItems);
+  // Patch precedence: a re-emitted/patch box that is a dummy placeholder must
+  // never downgrade locked coordinates. Adopt the prior item's box when the
+  // current one is dummy and the prior one is real.
+  if (Array.isArray(activeMealScoutItems) && activeMealScoutItems.length > 0) {
+    updatedScoutItems = updatedScoutItems.map((sItem: any) => {
+      if (!isDummyBoundingBox(sItem?.boundingBox2D)) return sItem;
+      const prior = activeMealScoutItems.find((p: any) =>
+        namesReferToSameFood(p.canonicalDbName || p.originalName || p.name || p.keyword, sItem.originalName || sItem.keyword || sItem.name)
+      );
+      if (prior && !isDummyBoundingBox(prior.boundingBox2D) && Number.isInteger(prior.sourceImageIndex)) {
+        return { ...sItem, boundingBox2D: prior.boundingBox2D, sourceImageIndex: prior.sourceImageIndex };
+      }
+      return sItem;
+    });
+  }
   if (itemsBreakdown && Array.isArray(itemsBreakdown) && itemsBreakdown.length > 0) {
     const currentScoutIndices = new Set(itemsBreakdown.map((b: any) => b.scoutIndex).filter((i: any) => i !== undefined && i !== null));
     if (currentScoutIndices.size > 0) {

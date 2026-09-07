@@ -2,6 +2,23 @@ import { describe, it, expect } from 'vitest';
 import { applyPortionChoices, detectPortionAmbiguity, buildPortionClarifyPayload } from './server_portion_clarify';
 
 describe('detectPortionAmbiguity & buildPortionClarifyPayload', () => {
+  it('parses Indonesian serving counts ("23 sajian per Kemasan") as units', () => {
+    const item = {
+      scoutIndex: 4,
+      originalName: 'Oatmeal',
+      keyword: 'instant oatmeal',
+      estimatedWeightGrams: 35,
+      packGrams: 805,
+      packageLabelText: 'Takaran Saji 35 g, 23 sajian per Kemasan',
+      rawNutritionLabel: { servingSize: '35 g', calories: '150 kkal' },
+    };
+    const res = detectPortionAmbiguity(item, 4);
+    expect(res).not.toBeNull();
+    expect(res?.reason).toMatch(/23 units/);
+    expect(res?.options.some((o) => o.weightGrams === 35)).toBe(true);
+    expect(res?.options.some((o) => o.weightGrams === 805)).toBe(true);
+  });
+
   it('detects multipack cereal bar box as portion ambiguous', () => {
     const item = {
       scoutIndex: 2,

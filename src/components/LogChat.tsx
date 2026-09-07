@@ -1478,7 +1478,11 @@ ${logsText}`);
           } as ChatMessage);
         }
         const lastMsg = dedupedBaseMsgs[dedupedBaseMsgs.length - 1];
-        if (job.status === 'awaiting_user') {
+        // Answered elsewhere (e.g. portion answer submitted as an edit on a new
+        // job): never resurrect the question on rebuilds.
+        const clarifyAnswered = !!(job.result as any)?.portionClarifyAnswered ||
+          !!(job.result as any)?.clean_result?.portionClarifyAnswered;
+        if (job.status === 'awaiting_user' && !clarifyAnswered) {
           const rawResult = job.result?.clean_result || job.result || (job as any).clean_result || {};
           const portionClarify =
             rawResult.portionClarify ||
@@ -5983,6 +5987,24 @@ ${logsText}`);
                       </div>
                     );
                   }
+                  // Dedupe: submit-handler and JobStore-sync both append the same
+                  // turn result (identical job + ledger). First occurrence wins;
+                  // different ledgers (turn 1 vs turn 2) still both render.
+                  if (isAss) {
+                    const pl = (msg as any).data?.pendingFoodLog || (msg as any).pendingFoodLog;
+                    if (pl) {
+                      const items = Array.isArray(pl.itemsBreakdown) ? pl.itemsBreakdown : (Array.isArray(pl.items) ? pl.items : null);
+                      const mealKey = `${(msg as any).jobId || ''}|${String(msg.content || '').slice(0, 160)}|${pl?.nutrients?.calories ?? '?'}|${items ? items.length : '?'}`;
+                      const firstDup = messages.findIndex((m: any) => {
+                        if (m.role !== 'assistant' || m === msg) return false;
+                        const q = m.data?.pendingFoodLog || m.pendingFoodLog;
+                        if (!q) return false;
+                        const qi = Array.isArray(q.itemsBreakdown) ? q.itemsBreakdown : (Array.isArray(q.items) ? q.items : null);
+                        return `${m.jobId || ''}|${String(m.content || '').slice(0, 160)}|${q?.nutrients?.calories ?? '?'}|${qi ? qi.length : '?'}` === mealKey;
+                      });
+                      if (firstDup >= 0) return null;
+                    }
+                  }
                   return (
                 <div
                   key={msg.id ? `${msg.id}_${idx}` : idx}
@@ -6277,6 +6299,7 @@ ${logsText}`);
                                           data: updatedLog,
                                           portionClarify: null,
                                           needsPortionClarify: false,
+                                          portionClarifyAnswered: true,
                                         }
                                       });
                                     }
@@ -6286,6 +6309,14 @@ ${logsText}`);
 
                                 // > 30% difference: treated like an edit with the agent reviewing the data and providing a new verdict
                                 recordBreadcrumb('portion_clarify_agent_edit', 'portion_clarify_card', { choices, maxDiffPercent, inPlaceMsgId: msg.id });
+                                if (jobId) {
+                                  const curJob = JobStore.getJob(jobId);
+                                  if (curJob) {
+                                    JobStore.updateJob(jobId, {
+                                      result: { ...curJob.result, portionClarifyAnswered: true }
+                                    });
+                                  }
+                                }
                                 setMessages(prev => prev.map(m => {
                                   if (m.id === msg.id) {
                                     return {

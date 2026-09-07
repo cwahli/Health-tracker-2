@@ -338,6 +338,36 @@ describe('F-8.10 shard 20 — modify-path scout merge', () => {
     expect(out).toHaveLength(1);
     expect(out[0].scoutIndex).toBe(5);
   });
+
+  it('keeps locked coordinates when a patch re-emit carries a dummy box', () => {
+    const out = mergeModifyPathScoutItems({
+      visionScoutItems: [
+        { scoutIndex: 4, keyword: 'Cereal', originalName: 'Granola / Cereal Packet', estimatedWeightGrams: 130, boundingBox2D: [0, 0, 100, 100], sourceImageIndex: 0 },
+      ],
+      activeMealScoutItems: [
+        { scoutIndex: 4, keyword: 'Cereal', originalName: 'Granola / Cereal Packet', estimatedWeightGrams: 35, boundingBox2D: [10, 20, 900, 950], sourceImageIndex: 0 },
+      ],
+      dietitianScoutItems: [],
+      itemsBreakdown: [],
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0].boundingBox2D).toEqual([10, 20, 900, 950]);
+    expect(out[0].sourceImageIndex).toBe(0);
+  });
+
+  it('leaves boxes alone when nothing is dummy', () => {
+    const out = mergeModifyPathScoutItems({
+      visionScoutItems: [
+        { scoutIndex: 1, keyword: 'Soup', originalName: 'Sop', estimatedWeightGrams: 400, boundingBox2D: [100, 50, 920, 960], sourceImageIndex: 1 },
+      ],
+      activeMealScoutItems: [
+        { scoutIndex: 1, keyword: 'Soup', originalName: 'Sop', estimatedWeightGrams: 400, boundingBox2D: [5, 5, 50, 50], sourceImageIndex: 1 },
+      ],
+      dietitianScoutItems: [],
+      itemsBreakdown: [],
+    });
+    expect(out[0].boundingBox2D).toEqual([100, 50, 920, 960]);
+  });
 });
 
 describe('F-8.10 shard 24 — evaluation finalize loop', () => {
