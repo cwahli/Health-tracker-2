@@ -826,7 +826,11 @@ export async function runFoodAnalyze(req: any, res: any) {
       addDebugLog('[Accept] portion choices within 30% of estimates: skipping agent, composing from ledger.');
       sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'completed', message: 'Meal analysis finalized.' });
       const acceptMealName = activeMeal?.name || visionScoutItems.map((v: any) => v?.keyword || v?.originalName || v?.name).filter(Boolean).slice(0, 3).join(', ') || undefined;
-      const acceptParsed = composeAcceptDefaultsParsed({ items: visionScoutItems, mealName: acceptMealName, language: userProfile?.language });
+      const acceptParsed = composeAcceptDefaultsParsed({
+        items: visionScoutItems, mealName: acceptMealName, language: userProfile?.language,
+        targets: req.body.dailyNutrientTargets, foodLogs: req.body.foodLogs,
+        todayStr: getCurrentDateInTimezone(userProfile?.timezone),
+      });
       textOutput = JSON.stringify(acceptParsed);
       rawParsed = acceptParsed;
     } else {

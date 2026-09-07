@@ -224,4 +224,54 @@ describe('accept-defaults gate (portion choices within 30%, no agent)', () => {
     expect(out._internalReasoning).toMatch(/no agent call/);
     expect(out.modificationCommand).toEqual([]);
   });
+
+  it('composes a personalised 2-paragraph message when explicit targets exist', () => {
+    const mealItems = [{
+      keyword: 'Mixed Meal',
+      estimatedWeightGrams: 1060,
+      nutrients: {
+        calories: 1347.74, protein: 47.86, carbohydrates: 193.83, totalFat: 38.86,
+        saturatedFat: 10.56, sugar: 57.43, totalFibre: 18.14, sodium: 925, transFat: 0.1,
+      },
+    }];
+    const targets = {
+      calories: 1800, protein: 120, carbohydrates: 200, totalFat: 60,
+      saturatedFat: 20, sugar: 30, totalFibre: 30, sodium: 3000,
+    };
+    const out = composeAcceptDefaultsParsed({
+      items: mealItems, mealName: 'Mixed Meal', language: 'en',
+      targets, foodLogs: [], todayStr: '2026-09-07',
+    });
+    const words = out.clinicalAdvice.trim().split(/\s+/).length;
+    expect(words).toBeGreaterThanOrEqual(35);
+    expect(words).toBeLessThanOrEqual(70);
+    expect(out.clinicalAdvice).toContain('1348 kcal');
+    expect(out.clinicalAdvice).toContain('75%');
+    expect(out.clinicalAdvice).toContain('sugar');
+    expect(out.clinicalAdvice).toContain('1.9');
+    expect(out.clinicalAdvice).toContain('6g carbs');
+    expect(out.clinicalAdvice).toContain('no sugar');
+    expect(out.clinicalAdvice).toContain('72g protein');
+    expect(out.clinicalAdvice).toContain('0.1g trans fat');
+    expect(out.clinicalAdvice).toContain('\n\n');
+    expect(out.verdict.label).toBe('High Glycemic Impact (Elevated Sugar)');
+    expect(out.verdict.level).toBe('warning');
+    expect(out.message).toBe(out.clinicalAdvice);
+  });
+
+  it('personalised accept message renders in Indonesian with the same facts', () => {
+    const mealItems = [{
+      keyword: 'Mixed Meal',
+      estimatedWeightGrams: 1060,
+      nutrients: { calories: 1347.74, protein: 47.86, carbohydrates: 193.83, sugar: 57.43, saturatedFat: 10.56, transFat: 0 },
+    }];
+    const out = composeAcceptDefaultsParsed({
+      items: mealItems, mealName: 'Mixed Meal', language: 'id',
+      targets: { calories: 1800, protein: 120, carbohydrates: 200, sugar: 30, saturatedFat: 20 },
+      foodLogs: [], todayStr: '2026-09-07',
+    });
+    expect(out.clinicalAdvice).toContain('kkal');
+    expect(out.clinicalAdvice).toContain('gula');
+    expect(out.verdict.label).toBeTruthy();
+  });
 });

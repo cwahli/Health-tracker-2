@@ -353,38 +353,116 @@ export function isAcceptDefaultsWithinTolerance(args: {
 }
 
 /**
- * Ready-made parsed result for the accept-defaults path (no agent call):
- * explicit per-dish weights in the message, verdict/advice from the TS
- * ladders. Downstream mode resolution and response builders are untouched.
+ * Ready-made parsed result for the accept-defaults path (no agent call).
+ * With explicit targets it composes the same personalised 2-paragraph shape
+ * as agent advice (position vs targets, then rest-of-day steering) from TS
+ * math; without targets it falls back to the generic ladder message.
+ * Downstream mode resolution and response builders are untouched.
  */
+const ACCEPT_TARGET_KEYS = ['calories', 'protein', 'carbohydrates', 'totalFat', 'saturatedFat', 'sugar', 'totalFibre', 'sodium'] as const;
+
+function trimNum(v: number): string {
+  const r = Math.round(v * 10) / 10;
+  return String(r);
+}
+
 export function composeAcceptDefaultsParsed(args: {
   items?: any[] | null;
   mealName?: string;
   language?: unknown;
+  targets?: Record<string, any> | null;
+  foodLogs?: Array<{ date?: string; nutrients?: Record<string, any> | null }> | null;
+  todayStr?: string;
 }): Record<string, any> {
   const items = Array.isArray(args.items) ? args.items : [];
-  const totals = { totalSugar: 0, totalSatFat: 0, totalP: 0 };
-  const weighed = items.map((it: any) => {
+  const lang = args.language;
+  const meal: Record<string, number> = {};
+  for (const it of items) {
     const n = it?.nutrients || {};
-    totals.totalSugar += Number(n.sugar ?? n.addedSugar ?? 0) || 0;
-    totals.totalSatFat += Number(n.saturatedFat ?? 0) || 0;
-    totals.totalP += Number(n.protein ?? 0) || 0;
-    const name = it?.keyword || it?.originalName || it?.name || 'Dish';
-    const w = Math.round(Number(it?.estimatedWeightGrams ?? it?.weightGrams ?? 0)) || 0;
-    return `${name} ${w}g`;
-  });
+    for (const k of [...ACCEPT_TARGET_KEYS, 'transFat']) {
+      const v = Number(n[k]);
+      if (Number.isFinite(v)) meal[k] = (meal[k] || 0) + v;
+    }
+  }
+  const T: Record<string, number> = {};
+  for (const k of ACCEPT_TARGET_KEYS) {
+    const v = Number(args.targets?.[k]);
+    if (Number.isFinite(v) && v > 0) T[k] = v;
+  }
   const mealName = args.mealName || 'meal';
-  const verdict = decideScoutVerdict({ scoutVerdict: null, totals, mealName, language: args.language });
-  const clinicalAdvice = decideScoutAdvice({ rawAdvice: '', totals, mealName, language: args.language });
-  const message = weighed.length > 0
-    ? `${mealName}: ${weighed.join('; ')}. ${clinicalAdvice}`
-    : String(clinicalAdvice || '');
+
+  if (!T.calories) {
+    const totals = { totalSugar: meal.sugar || 0, totalSatFat: meal.saturatedFat || 0, totalP: meal.protein || 0 };
+    const weighed = items.map((it: any) => {
+      const name = it?.keyword || it?.originalName || it?.name || 'Dish';
+      const w = Math.round(Number(it?.estimatedWeightGrams ?? it?.weightGrams ?? 0)) || 0;
+      return `${name} ${w}g`;
+    });
+    const verdict = decideScoutVerdict({ scoutVerdict: null, totals, mealName, language: lang });
+    const clinicalAdvice = decideScoutAdvice({ rawAdvice: '', totals, mealName, language: lang });
+    const message = weighed.length > 0 ? `${mealName}: ${weighed.join('; ')}. ${clinicalAdvice}` : String(clinicalAdvice || '');
+    return {
+      mode: undefined, message, verdict, clinicalAdvice,
+      _internalReasoning: '[Accept] portion choices within 30% of estimates; no agent call.',
+      foodData: {}, editCommands: [], modificationCommand: [],
+    };
+  }
+
+  const today: Record<string, number> = {};
+  if (Array.isArray(args.foodLogs) && args.todayStr) {
+    for (const log of args.foodLogs) {
+      if (String(log?.date || '').slice(0, 10) !== args.todayStr) continue;
+      const n = log?.nutrients || {};
+      for (const k of [...ACCEPT_TARGET_KEYS, 'transFat']) {
+        const v = Number(n[k]);
+        if (Number.isFinite(v)) today[k] = (today[k] || 0) + v;
+      }
+    }
+  }
+  const r0 = (v: number) => Math.max(0, Math.round(v));
+  const kcalShare = Math.round((meal.calories || 0) / T.calories * 100);
+  let p1 = t(lang, 'apMealPosition')
+    .replace('{kcal}', String(r0(meal.calories || 0)))
+    .replace('{pct}', String(kcalShare));
+  const offenders = [
+    { key: 'sugar', label: t(lang, 'apNutSugar'), mult: T.sugar ? (meal.sugar || 0) / T.sugar : 0 },
+    { key: 'saturatedFat', label: t(lang, 'apNutSatFat'), mult: T.saturatedFat ? (meal.saturatedFat || 0) / T.saturatedFat : 0 },
+  ].filter((c) => c.mult >= 1).sort((a, b) => b.mult - a.mult);
+  const worst = offenders[0];
+  if (worst) {
+    p1 += ' ' + t(lang, 'apOverLimit')
+      .replace('{nutrient}', worst.label)
+      .replace('{mult}', trimNum(worst.mult));
+  }
+  let verdict: any;
+  if (worst?.key === 'sugar') {
+    verdict = { label: t(lang, 'verdictHighGlycemicSugar'), level: worst.mult >= 2 ? 'alert' : 'warning' };
+  } else if (worst?.key === 'saturatedFat') {
+    verdict = { label: t(lang, 'verdictElevatedSatFat'), level: worst.mult >= 2 ? 'alert' : 'warning' };
+  } else {
+    verdict = decideScoutVerdict({
+      scoutVerdict: null,
+      totals: { totalSugar: meal.sugar || 0, totalSatFat: meal.saturatedFat || 0, totalP: meal.protein || 0 },
+      mealName, language: lang,
+    });
+  }
+  const rem = (k: string) => (T[k] || 0) - (today[k] || 0) - (meal[k] || 0);
+  const sugarLeft = rem('sugar');
+  const sugarLeftTxt = sugarLeft > 0 ? `${r0(sugarLeft)}g ${t(lang, 'apNutSugar')}` : t(lang, 'apNoSugar');
+  let p2 = t(lang, 'apRestOfDay')
+    .replace('{carbs}', String(r0(rem('carbohydrates'))))
+    .replace('{sugarLeft}', sugarLeftTxt);
+  p2 += ' ' + t(lang, 'apProteinSteer').replace('{protein}', String(r0(rem('protein'))));
+  if ((meal.transFat || 0) > 0) {
+    p2 += ' ' + t(lang, 'apTransFatWarn').replace('{grams}', trimNum(meal.transFat));
+  }
+  const clinicalAdvice = `${p1}\n\n${p2}`;
   return {
     mode: undefined,
-    message,
+    message: clinicalAdvice,
     verdict,
     clinicalAdvice,
-    _internalReasoning: '[Accept] portion choices within 30% of estimates; no agent call.',
+    _internalReasoning: '[Accept] portion choices within 30% of estimates; no agent call, TS-composed personalised message.',
     foodData: {},
     editCommands: [],
     modificationCommand: [],
