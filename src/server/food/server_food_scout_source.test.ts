@@ -261,6 +261,15 @@ describe('F-8.10 shard 11 — scout result handling', () => {
     });
     expect(out.unmatched).toEqual([]);
   });
+
+  it('stays silent when the index anchors the row despite wobbling names', () => {
+    const out = summarizeScoutImageInventory({
+      perImage: [{ imageIndex: 0, itemsFound: ['Oat Cereal pack'] }],
+      imageCount: 1,
+      items: [{ sourceImageIndex: 0, dishName: 'Sup Oatmeal Sehat' }],
+    });
+    expect(out.unmatched).toEqual([]);
+  });
 });
 
 describe('F-8.10 shard 16 — shortcut chain seams', () => {

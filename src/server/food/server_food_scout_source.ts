@@ -576,13 +576,19 @@ export function summarizeScoutImageInventory(args: {
   const uncovered = entries.filter((e) => e.itemsFound.length === 0).map((e) => e.imageIndex);
   // Claimed-but-not-extracted: names the model listed in perImage that match
   // no emitted dish. Distinguishes "looked and declined" from "never looked"
-  // and is the trigger a targeted second pass would use. Only checked when
-  // the model actually emitted perImage (derived entries come from dishes,
-  // so they trivially match).
+  // and is the trigger a targeted second pass would use. Two anchors, either
+  // one silences the WARN: the name matches a dish (fuzzy), or some dish
+  // carries that row's image index (exact — names wobble, indices don't).
+  // Only checked when the model actually emitted perImage (derived entries
+  // come from dishes, so they trivially match).
   const unmatched: string[] = [];
   if (modelRows.length > 0) {
-    const dishNames = (Array.isArray(args.items) ? args.items : []).map((it: any) =>
+    const dishList: any[] = Array.isArray(args.items) ? args.items : [];
+    const dishNames = dishList.map((it: any) =>
       String(it?.dishName || it?.originalName || it?.keyword || it?.name || ''));
+    const indices = new Set(
+      dishList.map((it: any) => Number(it?.sourceImageIndex)).filter((n: number) => Number.isInteger(n))
+    );
     const norm = (s: string): string[] => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter((w) => w.length > 2);
     const matchesDish = (name: string): boolean => {
       const n = norm(name);
@@ -596,8 +602,12 @@ export function summarizeScoutImageInventory(args: {
       });
     };
     for (const row of modelRows) {
-      for (const name of (Array.isArray(row?.itemsFound) ? row.itemsFound : [])) {
-        if (!matchesDish(String(name)) && !unmatched.includes(String(name))) unmatched.push(String(name));
+      const idx = Number(row?.imageIndex);
+      const names = Array.isArray(row?.itemsFound) ? row.itemsFound.map((n: any) => String(n)) : [];
+      if (names.length === 0) continue;
+      const indexAnchored = Number.isInteger(idx) && indices.has(idx);
+      for (const name of names) {
+        if (!matchesDish(name) && !indexAnchored && !unmatched.includes(name)) unmatched.push(name);
       }
     }
   }
