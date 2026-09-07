@@ -210,6 +210,12 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
   // If discrete unit food (e.g. croissants, bars, biscuits, patties)
   if (detectedUnits >= 2 || isDiscreteUnitFood) {
     const isIndividualUnit = /\b(bar|biscuit|cookie|bagel|thin|wrap|slice|patty|fillet|sausage|pancake|muffin|crumpet|roll|bun|croissant)\b/i.test(unitNoun);
+    // Servings-counted bulk (e.g. "23 sajian", "40 servings") is not a set of
+    // countable units: "Whole pack of 23 (805g)" is not something anyone
+    // eats, so unit framing must not leak into the reason or the pack option.
+    const countIsServingsOnly = unitCountMatch
+      ? /servings?|sajian|saji|porsi/i.test(unitCountMatch[0] || '')
+      : false;
     let singleUnitGrams: number;
     if (isIndividualUnit && w > 0 && w <= 95) {
       singleUnitGrams = w;
@@ -221,7 +227,12 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
 
     const options: PortionOption[] = [];
     const pluralNoun = unitNoun.endsWith('s') ? unitNoun : `${unitNoun}s`;
-    const packLabel = unitCountMatch ? `Whole pack of ${detectedUnits} (${packGrams}g)` : `Whole pack (${packGrams}g)`;
+    // Whole-pack options above ~5 servings are not real choices (nobody eats
+    // an 805g oats bag); offering them normalizes absurd ledgers.
+    const wholePackSane = packGrams <= 5 * singleUnitGrams;
+    const packLabel = unitCountMatch && !countIsServingsOnly
+      ? `Whole pack of ${detectedUnits} (${packGrams}g)`
+      : `Whole pack (${packGrams}g)`;
 
     options.push({ id: `unit_1_${singleUnitGrams}`, label: `1 ${unitNoun} (${singleUnitGrams}g)`, weightGrams: singleUnitGrams });
     if (detectedUnits >= 2) {
@@ -230,7 +241,7 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
     if (detectedUnits >= 3 && detectedUnits !== 4) {
       options.push({ id: `unit_3_${singleUnitGrams * 3}`, label: `3 ${pluralNoun} (${singleUnitGrams * 3}g)`, weightGrams: singleUnitGrams * 3 });
     }
-    if (!options.some((o) => o.weightGrams === packGrams)) {
+    if (wholePackSane && !options.some((o) => o.weightGrams === packGrams)) {
       options.push({ id: `pack_${packGrams}`, label: packLabel, weightGrams: packGrams });
     }
     if ((ssG === 100 || !ssG) && !options.some((o) => o.weightGrams === 100)) {
@@ -245,7 +256,9 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
     labelServingGrams: ssG || 100,
       options,
       reason: detectedUnits >= 2
-        ? `Multi-serve pack (${detectedUnits} units) — confirm how much you ate`
+        ? (countIsServingsOnly
+          ? `Multi-serve pack (${detectedUnits} servings) — confirm how much you ate`
+          : `Multi-serve pack (${detectedUnits} units) — confirm how much you ate`)
         : `Package weight (${packGrams}g) differs from estimated portion (${w}g) — confirm how much you ate`,
     };
   }
@@ -264,8 +277,10 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
     seen.add(w);
   }
 
-  // 2. Whole pack
-  if (!seen.has(packGrams)) {
+  // 2. Whole pack (only when it is a sane choice — see discrete branch)
+  const servingGrams = w > 0 ? w : (ssG || 100);
+  const wholePackSane = packGrams <= 5 * servingGrams;
+  if (wholePackSane && !seen.has(packGrams)) {
     options.push({
       id: `pack_${packGrams}`,
       label: `Whole pack (${packGrams}g)`,
@@ -286,15 +301,26 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
       }
     }
   } else if (packGrams >= 100) {
-    const half = Math.round(packGrams / 2);
-    if (half >= 15 && !seen.has(half) && half !== packGrams) {
-      seen.add(half);
-      options.push({ id: `half_${half}`, label: `Half pack (${half}g)`, weightGrams: half });
-    }
-    const quarter = Math.round(packGrams / 4);
-    if (quarter >= 15 && !seen.has(quarter) && quarter !== packGrams) {
-      seen.add(quarter);
-      options.push({ id: `quarter_${quarter}`, label: `1/4 pack (${quarter}g)`, weightGrams: quarter });
+    if (wholePackSane) {
+      const half = Math.round(packGrams / 2);
+      if (half >= 15 && !seen.has(half) && half !== packGrams) {
+        seen.add(half);
+        options.push({ id: `half_${half}`, label: `Half pack (${half}g)`, weightGrams: half });
+      }
+      const quarter = Math.round(packGrams / 4);
+      if (quarter >= 15 && !seen.has(quarter) && quarter !== packGrams) {
+        seen.add(quarter);
+        options.push({ id: `quarter_${quarter}`, label: `1/4 pack (${quarter}g)`, weightGrams: quarter });
+      }
+    } else if (servings != null && servings >= 2) {
+      // Bulk pack with absurd whole/half/quarter options (e.g. 805g oats):
+      // offer a realistic second serving instead so the question survives.
+      const sliceGrams = Math.max(5, Math.round(packGrams / servings));
+      const twoServ = sliceGrams * 2;
+      if (!seen.has(twoServ) && twoServ > 0 && twoServ !== packGrams) {
+        seen.add(twoServ);
+        options.push({ id: `n2_${twoServ}`, label: `2 servings (${twoServ}g)`, weightGrams: twoServ });
+      }
     }
   }
 

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { applyPortionChoices, detectPortionAmbiguity, buildPortionClarifyPayload } from './server_portion_clarify';
 
 describe('detectPortionAmbiguity & buildPortionClarifyPayload', () => {
-  it('parses Indonesian serving counts ("23 sajian per Kemasan") as units', () => {
+  it('parses Indonesian serving counts ("23 sajian per Kemasan") as servings, not countable units', () => {
     const item = {
       scoutIndex: 4,
       originalName: 'Oatmeal',
@@ -14,9 +14,53 @@ describe('detectPortionAmbiguity & buildPortionClarifyPayload', () => {
     };
     const res = detectPortionAmbiguity(item, 4);
     expect(res).not.toBeNull();
-    expect(res?.reason).toMatch(/23 units/);
+    // Servings language must not leak unit framing into the question.
+    expect(res?.reason).toMatch(/23 servings/);
+    expect(res?.reason).not.toMatch(/23 units/);
     expect(res?.options.some((o) => o.weightGrams === 35)).toBe(true);
-    expect(res?.options.some((o) => o.weightGrams === 805)).toBe(true);
+    expect(res?.options.some((o) => o.weightGrams === 70)).toBe(true);
+    // "Whole pack of 23 (805g)" is not something anyone eats — dropped,
+    // while the question itself (35 vs 130 matters hugely) survives.
+    expect(res?.options.some((o) => o.weightGrams === 805)).toBe(false);
+    expect(res?.options.some((o) => /[Ww]hole pack/.test(o.label))).toBe(false);
+  });
+
+  it('keeps whole-pack choice for small packs (brownies 2 servings of 15g)', () => {
+    const item = {
+      scoutIndex: 3,
+      originalName: 'Lemonilo Brownies Crispy',
+      keyword: 'brownies crispy',
+      estimatedWeightGrams: 15,
+      packGrams: 30,
+      packageLabelText: 'Takaran Saji: 15 g, 2 Sajian per Kemasan',
+      rawNutritionLabel: { servingSize: '15 g', calories: '70 kkal' },
+    };
+    const res = detectPortionAmbiguity(item, 3);
+    expect(res).not.toBeNull();
+    expect(res?.reason).toMatch(/2 servings/);
+    expect(res?.options.some((o) => o.weightGrams === 15)).toBe(true);
+    expect(res?.options.some((o) => o.weightGrams === 30)).toBe(true);
+  });
+
+  it('drops absurd whole/half/quarter pack options for bulk packs on the general path', () => {
+    const item = {
+      scoutIndex: 0,
+      originalName: 'Bulk Oats Bag',
+      keyword: 'oats',
+      estimatedWeightGrams: 35,
+      packGrams: 805,
+      // No servings/unit/count words anywhere: skips the unit branch,
+      // derives pack from servings count on the general branch.
+      rawNutritionLabel: { servingsPerContainer: '23', servingSize: '35 g', calories: '150 kkal' },
+    };
+    const res = detectPortionAmbiguity(item, 0);
+    expect(res).not.toBeNull();
+    const grams = (res?.options || []).map((o) => o.weightGrams);
+    expect(grams).toContain(35);
+    expect(grams).toContain(70);
+    expect(grams).not.toContain(805);
+    expect(grams).not.toContain(402);
+    expect(grams).not.toContain(201);
   });
 
   it('detects multipack cereal bar box as portion ambiguous', () => {
