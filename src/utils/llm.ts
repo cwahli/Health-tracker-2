@@ -11,14 +11,14 @@ export const AVAILABLE_LLMS: LLMModel[] = [
     id: 'gemini-3.8-flash',
     name: 'Gemini 3.8 Flash',
     provider: 'Google',
-    description: 'Vertex default for this local meal-review run.',
-    isDefault: true
+    description: 'Newest flash model. Separate free-tier quota (20 req/day).'
   },
   {
     id: 'gemini-3.5-flash-lite',
     name: 'Gemini 3.5 Flash Lite',
     provider: 'Google',
-    description: 'Free-tier 15 req/min — switch away if you hit 429.'
+    description: 'Default for all live calls. Free-tier 15 req/min — switch away if you hit 429.',
+    isDefault: true
   },
   {
     id: 'gemini-3.1-flash-lite',
