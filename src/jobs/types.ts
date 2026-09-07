@@ -9,6 +9,15 @@ export interface AgentJob {
   viewed?: boolean;
   kind: JobKind;
   mode?: string;
+  /** Forwarded journeys: id of the job this one was handed off from (e.g. Front Desk → food). */
+  parentJobId?: string | null;
+  /** What the parent handoff carried (for receipt verification + debug linkage). */
+  handoffSummary?: {
+    fromJobId: string;
+    targetAgent: string;
+    intent?: string;
+    keysForwarded: string[];
+  } | null;
   lockedModeFamily?: string;
   status: JobStatus;
   stepIndex: number;

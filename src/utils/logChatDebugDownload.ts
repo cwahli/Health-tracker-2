@@ -247,8 +247,20 @@ export async function downloadJobDebugReport(args: {
   }
 
   if (format === 'markdown') {
-    const handoffChain = job?.result?.handoffChain || msg?.data?.handoffChain || msg?.data?.agentResult?.handoffChain || (msg?.data?.handoffPayload || msg?.data?.agentResult?.handoffPayload ? ['Front Desk (Triage)', (msg?.data?.handoffPayload?.targetAgent || msg?.data?.agentResult?.handoffPayload?.targetAgent) === 'medical' ? 'Medical Specialist' : 'Health Coach'] : undefined);
+    const handoffChainTarget = (msg?.data?.handoffPayload?.targetAgent || msg?.data?.agentResult?.handoffPayload?.targetAgent);
+    const handoffChain = job?.result?.handoffChain || msg?.data?.handoffChain || msg?.data?.agentResult?.handoffChain || (msg?.data?.handoffPayload || msg?.data?.agentResult?.handoffPayload ? ['Front Desk (Triage)', handoffChainTarget === 'medical' ? 'Medical Specialist' : handoffChainTarget === 'food' ? 'Food Log' : 'Health Coach'] : undefined);
     const handoffPayload = job?.result?.handoffPayload || msg?.data?.handoffPayload || msg?.data?.agentResult?.handoffPayload || msg?.handoffPayload;
+    // Forwarded journeys: resolve the parent job so one export shows the full
+    // chain (e.g. Front Desk triage → food leg) instead of a single job.
+    const parentJob = (job as any)?.parentJobId ? JobStore.getJob((job as any).parentJobId) : null;
+    const linkedJobs = parentJob ? [{ id: parentJob.id, kind: parentJob.kind, status: parentJob.status, mode: parentJob.mode }] : [];
+    const forwardHandoff = (job as any)?.handoffSummary ? [{
+      from: 'front_desk',
+      to: (job as any).handoffSummary.targetAgent || 'food',
+      received: (job as any).handoffSummary,
+      keysDropped: [],
+      jobId: resolvedJobId,
+    }] : [];
     const agentPayload = job?.inputSnapshot || msg?.data?.payload || msg?.data?.sentPayload || lastUserAction?.details || lastUserAction?.payload;
 
     const mdContent = buildDebugMarkdownReport({
@@ -280,6 +292,8 @@ export async function downloadJobDebugReport(args: {
       conversationHistory,
       handoffChain,
       handoffPayload,
+      handoffs: forwardHandoff.length > 0 ? forwardHandoff : undefined,
+      linkedJobs: linkedJobs.length > 0 ? linkedJobs : undefined,
       agentPayload,
       agentInstructions: job?.result?.agentInstructions || msg?.data?.agentInstructions || msg?.data?.agentResult?.agentInstructions || msg?.agentInstructions,
       photoUrl: job?.result?.photoUrl || msg?.data?.photoUrl || pendingFoodLog?.imageUrl || pendingFoodLog?.imageUrls?.[0],

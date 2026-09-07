@@ -6745,7 +6745,7 @@ export default function App() {
       {(() => {
         const handleOpenAgentFromFrontDesk = (
           agentType: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent7' | 'data_review' | 'health_baseline' | 'medical' | 'food' | 'food_idea' | null,
-          options?: { prefillMessage?: string; autoSendMessage?: string; handoffPayload?: any; updatedProfile?: any }
+          options?: { prefillMessage?: string; autoSendMessage?: string; handoffPayload?: any; updatedProfile?: any; sourceJobId?: string }
         ) => {
           console.log(`[DIAG7] handleOpenAgentFromFrontDesk called: agentType=${agentType}, hasHandoffPayload=${!!options?.handoffPayload}, hasAutoSendMessage=${!!options?.autoSendMessage}`);
           if (options?.updatedProfile) {
@@ -6762,12 +6762,22 @@ export default function App() {
           if (agentType === 'food' || (agentType as string) === 'food_log') {
             setIsFrontDeskOpen(false);
             const foodJobId = `job_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const handoffKeys = options?.handoffPayload && typeof options.handoffPayload === 'object'
+              ? Object.keys(options.handoffPayload)
+              : [];
             JobStore.createJob({
               id: foodJobId,
               kind: 'food_log',
               lockedModeFamily: 'A',
               status: 'draft',
-              inputSnapshot: { text: options?.autoSendMessage || options?.prefillMessage || '', imageRefs: [] }
+              parentJobId: options?.sourceJobId || null,
+              handoffSummary: options?.sourceJobId ? {
+                fromJobId: options.sourceJobId,
+                targetAgent: 'food',
+                intent: options?.handoffPayload?.intent,
+                keysForwarded: handoffKeys,
+              } : null,
+              inputSnapshot: { text: options?.autoSendMessage || options?.prefillMessage || '', imageRefs: [], parentJobId: options?.sourceJobId || null }
             });
             setActiveJobId(foodJobId);
             return;

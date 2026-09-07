@@ -61,6 +61,7 @@ Plus (do not drop when adding packs):
 9. **`jobId` (and turn/dispatch id) on console, network, and server lines.** Handoff carries the same id.
 10. **Per-dispatch signals:** `model`, `latency_ms` (time-to-first-token if streamed), `tokens` if returned, `error` / finish.
 11. **Feature test & debug coupling (case-by-case):** New and updated features must map to a home in the canonical run tree (under `pack`, `dispatches`, `dialogInventory`, or `contract`) and integrate into the most relevant existing golden/contract suite. Consolidate into existing regression and golden paths to prevent test sprawl and redundancy.
+12. **Split-turn sections sit between snapshot and dispatches** — pending portion question (`🔀 Split Turn`), then adjustment audit. Later sections point; they do not reprint it.
 
 ---
 
@@ -101,9 +102,11 @@ run
   handoffs[] { from, to, received, keysDropped, jobId }
   dispatches[] {
     id, parent, turn, agent,
-    user, received, instruction, output,
+    user, received, instruction, output, rawEmission, called,
     model, latency_ms, tokens, error
   }
+  portionAdjustment?, pendingFoodLog?, scoutItems?, receiptTable?, rawScout?,
+  backendLogs?, extractedData?, report?, linkedJobs?[]
   contract[] { law, layer, fault, result, actual }
 ```
 
@@ -146,7 +149,7 @@ Empty console/network/actions = explicit **none**, not omitted. Do not drop beca
 
 ### 6.1 `food` (Log Meal, including multiple edits)
 
-Dialog inventory · gate+ledger once · scout once per create turn that ran scout · calc once per finalized turn · **one turn/dispatch block per user send** (t1 create, t2+ edits) · backend log excerpt without prompt reprint.
+Dialog inventory · **paused turns show the pending portion question + items (`🔀 Split Turn`)** · gate+ledger once · scout once per create turn that ran scout · calc once per finalized turn · **one turn/dispatch block per user send** (t1 create, t2+ edits) · backend log excerpt without prompt reprint. Edit turns carry verdict/advice/`dishUpdates` (patch — never a full dish re-emit).
 
 ### 6.2 `receptionist` (Front Desk, including transfer)
 
@@ -197,6 +200,10 @@ These already exist on `DebugReportInput`. **Keeping them in the export is a gat
 | Handoff | Chain + each agent + dropped keys | Transfer without specialist = MISSING |
 | Edits | One turn block per user send | |
 | Dialog inventory | Food/specialist when modal open | Retry vs kcal scor able |
+| Split question | Pending `portionClarify` prompt + items when paused | Paused turn exports without it |
+| Mode chunk | Required instruction chunk per dispatch mode (`DEBUG_MODE_INSTRUCTION_MARKERS`) | Chunk verified on the wrong mode |
+| Dish completeness | ≥1 fully populated dish when dishes exist | |
+| Linked parent job | `parentJobId` + handoff summary on forwarded legs | Forwarded food leg without a parent link |
 | `jobId` on lines | Console + network + server | Joinable |
 
 Refactors of `LogChat` / `serverJobs` / debug route that stop forwarding these = FAIL named debug tests.
@@ -224,6 +231,24 @@ Food-pack examples (unused = `n/a`):
 | Matrix calc matches ledger | content | MISSING |
 | Each dispatch has model + latency_ms | process | MISSING |
 | Handoff from/to + same jobId if transfer | process | MISSING |
+| Agent output: nutrients complete | content | MISSING |
+| Agent output: verdict + advice | content | MISSING |
+| Dishes: fields populated | content | MISSING |
+| Multi-turn split shown | content | MISSING |
+| Mode instruction chunk | content | MISSING |
+| Handoff chain complete | process | MISSING |
+| Handoff received | content | MISSING |
+| Lab panel complete | content | MISSING |
+| Clinical report shown | content | MISSING |
+
+22 on food packs (13 original + 9 agent-output/journey rows); other packs score the process subset plus their pack rows, the rest `n/a`.
+
+### Pack × law partition (what is scored where)
+
+- **PROCESS (every pack):** SSE final/result · submit running · dispatches signals · handoff from/to validity · Handoff chain complete · persist order.
+- **FOOD LOG:** AnalyzeFinished · ledger→succeeded · matrix-vs-ledger · dialog chrome (on_card, composer, Retry/Attempt) · DIAG5 · scout-tape-home · nutrients · verdict+advice · dishes · split shown · mode chunk · Handoff received (forwarded legs).
+- **BIOMARKER (medical):** lab panel complete · clinical report shown · Apply/salvage terminal · extractedData as ledger-equiv · scout-tape-off guard.
+- **RECEPTIONIST:** transfer-implied handoff record · Front Desk triage chunk · linked leg resolvable · scout-tape-off guard.
 
 Plus QUALITY.md §1.3.1 exits for this pack. Receptionist: transfer target ran. Medical: Apply/salvage terminal.
 
@@ -233,7 +258,7 @@ Historical dumps stay **red** if that run was broken. Dummy fixtures / code prob
 
 ## 10. What this file can and cannot catch
 
-**Can (this run):** SSE wrap, queue lie, poller/card lag, persist order, stall with no hop, AnalyzeFinished storms, DIAG5 on food, matrix vs ledger, dialog chrome if inventoried, dish drop vs scout, Apply miss, console/network, last actions, which agent ran and what they saw, edit turns, Front Desk → specialist gaps, dropped handoff keys, TTFT on a dispatch.
+**Can (this run):** SSE wrap, queue lie, poller/card lag, persist order, stall with no hop, AnalyzeFinished storms, DIAG5 on food, matrix vs ledger, dialog chrome if inventoried, dish drop vs scout, Apply miss, console/network, last actions, which agent ran and what they saw, edit turns, Front Desk → specialist gaps, dropped handoff keys, TTFT on a dispatch, uncomputed nutrient keys, missing verdict/advice, incomplete dishes, paused-without-question splits, wrong mode chunks, unlinked forwarded legs, missing lab/report.
 
 **Cannot:** a worker exit this job never took. Those are dummy rows on the process board (Q-8.1). One debug file ≠ the whole suite.
 
@@ -259,15 +284,17 @@ Aligned with OTel GenAI / LangSmith-style **trace vs eval**, without buying Phoe
 
 | | Gap | ID |
 |--|-----|-----|
-| A | JSON run tree canonical; markdown is a view | **F-8.13** |
-| B | `jobId` on console, network, server | F-8.13 |
-| C | Dialog inventory | F-8.13 + **Q-8.3** |
-| D | Per-dispatch model / latency_ms / tokens | F-8.13 |
-| E | Handoff from/to/dropped keys | F-8.13 + **Q-8.5** |
-| F | Scorer on JSON at download and vitest | F-8.13 |
-| G | Dummy rows for exits not in this dump | **Q-8.1** |
+| A | JSON run tree canonical; markdown is a view | **F-8.13** done |
+| B | `jobId` on console, network, server | F-8.13 done |
+| C | Dialog inventory | F-8.13 + **Q-8.3** done |
+| D | Per-dispatch model / latency_ms / tokens | F-8.13 done |
+| E | Handoff from/to/dropped keys | F-8.13 + **Q-8.5** done |
+| F | Scorer on JSON at download and vitest | F-8.13 done |
+| G | Dummy rows for exits not in this dump | **Q-8.1** done |
 | H | Stall/503 one-line count later | **R-12** (not a dashboard) |
 | I | No LangSmith / LLM-judge inner loop | Standing |
+| J | Mode-chunk map covers all packs (scout, patch, Mode D, triage, lab, coach) | Done |
+| K | Forwarded-journey linkage (`parentJobId`, linked export) | Open |
 
 ---
 
@@ -293,9 +320,12 @@ Until the JSON tree exists, markdown parse is allowed as fallback. After F-8.13,
 - Drop console/network/breadcrumbs/last action because the meal succeeded  
 - Flatten multi-edit or handoff into one dietitian prompt  
 - Second copy of instruction/output in the log excerpt  
-- Screenshot or innerHTML as the contract  
-- LangSmith / Phoenix / LLM-judge inside `dumpContract`  
-- Regex-on-markdown as the **only** scorer once the JSON tree exists  
+- Screenshot or innerHTML as the contract
+- LangSmith / Phoenix / LLM-judge inside `dumpContract`
+- Regex-on-markdown as the **only** scorer once the JSON tree exists
+- Report success on an implausible salvaged ledger (kcal/protein/density guard lives in code)
+- Drop fields through response whitelists (portionClarify/rawScout class — carry-through is tested)
+- Regenerate all dishes on edit turns (patch: verdict/advice/`dishUpdates` only)
 - A metrics product (R-12 is a number in handover)  
 - Grok watching the spinner for four minutes  
 

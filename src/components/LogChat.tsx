@@ -427,7 +427,7 @@ interface LogChatProps {
   reviewBiomarkerKey?: string;
   onOpenAgentFromFrontDesk?: (
     agentType: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent7' | 'data_review' | 'health_baseline' | 'medical' | 'food' | 'food_idea' | null,
-    options?: { prefillMessage?: string; autoSendMessage?: string; handoffPayload?: any; updatedProfile?: any }
+    options?: { prefillMessage?: string; autoSendMessage?: string; handoffPayload?: any; updatedProfile?: any; sourceJobId?: string }
   ) => void;
   biomarkerHistory?: any[];
   onAgentFinish?: (agentType: string, agentResult: any, extraActions?: any) => Promise<void>;
@@ -4616,7 +4616,8 @@ ${logsText}`);
                 handoffPayload: handoff,
                 prefillMessage: prompt,
                 autoSendMessage: prompt,
-                updatedProfile: handoff.collectedData || resData.updatedProfile
+                updatedProfile: handoff.collectedData || resData.updatedProfile,
+                sourceJobId: jobId,
               });
             }, 350);
           } else {
@@ -4753,7 +4754,8 @@ ${logsText}`);
         handoffPayload: handoff,
         prefillMessage: prompt,
         autoSendMessage: prompt,
-        updatedProfile: updatedProf
+        updatedProfile: updatedProf,
+        sourceJobId: jobId,
       });
       return;
     }

@@ -127,6 +127,9 @@ export type DebugReportInput = {
   dialogInventory?: DialogInventory | null;
   dispatches?: DispatchTrace[];
   handoffs?: HandoffTrace[];
+  /** Linked jobs of a forwarded journey (e.g. parent Front Desk job of a food
+   * leg). Resolved by the export caller via JobStore; rendered as a chain. */
+  linkedJobs?: Array<{ id: string; kind?: string; status?: string; mode?: string }>;
   pack?: 'food' | 'receptionist' | 'medical' | 'health_coach';
   conversationId?: string | null;
   extractedData?: any;
@@ -404,7 +407,10 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
   // Multi-Agent Workflow & Handoff Trace
   const effectiveHandoffChain = input.handoffChain && input.handoffChain.length > 0
     ? input.handoffChain
-    : (input.handoffPayload ? ['Front Desk (Triage)', input.handoffPayload.targetAgent === 'medical' ? 'Medical Specialist' : 'Health Coach'] : undefined);
+    : (input.handoffPayload ? ['Front Desk (Triage)', (() => {
+      const t = input.handoffPayload.targetAgent;
+      return t === 'medical' ? 'Medical Specialist' : t === 'food' ? 'Food Log' : 'Health Coach';
+    })()] : undefined);
 
   if (effectiveHandoffChain || input.handoffPayload) {
     lines.push(`## ⛓️ Multi-Agent Workflow & Handoff Trace`);
@@ -427,7 +433,18 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
     lines.push('');
   }
 
-  // Agent Input Payload & Context as Received
+  // Linked journey: forwarded runs span jobs (e.g. Front Desk → food leg).
+  // The parent job summary rides here so one export shows the full chain.
+  const linked = Array.isArray((tree as any).linkedJobs) ? (tree as any).linkedJobs : [];
+  if (linked.length > 0) {
+    lines.push(`## 🔗 Linked Journey`);
+    lines.push('');
+    for (const lj of linked) {
+      lines.push(`- **${lj.id}** kind=${lj.kind || '?'} status=${lj.status || '?'}${lj.mode ? ` mode=${lj.mode}` : ''}`);
+    }
+    lines.push('');
+  }
+  // Linked-journey section ends here.
   if (input.agentPayload) {
     lines.push(`## 📥 Agent Input Payload as Received`);
     lines.push('');

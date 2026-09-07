@@ -96,6 +96,8 @@ export interface CanonicalRunTree {
   dispatches: DispatchTrace[];
   contract: ContractEvaluation[];
   portionAdjustment?: PortionAdjustmentTrace | null;
+  /** Linked jobs of a forwarded journey (resolved by the export caller). */
+  linkedJobs?: Array<{ id: string; kind?: string; status?: string; mode?: string }>;
   // Retained payload attributes for tooling / views
   pendingFoodLog?: any;
   scoutItems?: any[];
@@ -103,6 +105,8 @@ export interface CanonicalRunTree {
   rawScout?: any;
   backendLogs?: string;
   extractedData?: any;
+  /** Clinical/health-coach report output (medical pack verification). */
+  report?: any;
 }
 
 /** Determines which operational pack this run belongs to */
@@ -681,6 +685,7 @@ export function buildCanonicalRunTree(input: DebugReportInput): CanonicalRunTree
     dispatches,
     contract: [],
     portionAdjustment,
+    linkedJobs: Array.isArray(input.linkedJobs) ? input.linkedJobs : [],
     pendingFoodLog: input.pendingFoodLog,
     scoutItems: input.scoutItems,
     receiptTable: input.receiptTable,
@@ -689,6 +694,7 @@ export function buildCanonicalRunTree(input: DebugReportInput): CanonicalRunTree
       ? input.backendLogs.split('\n').map(l => tagJobId(l, jobId)).join('\n')
       : input.backendLogs,
     extractedData: input.extractedData,
+    report: (input as any).report,
   };
 
   // Evaluate contracts on the populated tree

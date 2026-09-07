@@ -648,6 +648,7 @@ export function evaluateContracts(tree: CanonicalRunTree): ContractEvaluation[] 
   // needed elsewhere. Non-food packs are n/a until their chunks are mapped.
   const foodEvals = evaluateFoodAgentOutput(tree, isFoodPack);
   evals.push(...foodEvals);
+  evals.push(...evaluateJourneyAndBiomarker(tree));
 
   return evals;
 }
@@ -672,6 +673,21 @@ export const DEBUG_MODE_INSTRUCTION_MARKERS: Array<{
     markers: ['TARGETED DISH UPDATE ONLY'],
   },
   {
+    modes: ['receptionist', 'front_desk', 'frontdesk', 'general_receptionist'],
+    label: 'Front Desk triage',
+    markers: ['You are the Receptionist and Onboarding AI Specialist'],
+  },
+  {
+    modes: ['medical', 'biomarker', 'biomarker_review', 'lab'],
+    label: 'Medical lab review',
+    markers: ['You are an expert clinical laboratory AI'],
+  },
+  {
+    modes: ['health_coach', 'healthcoach', 'health_baseline'],
+    label: 'Health coach',
+    markers: ['You are a clinical AI Health Coach'],
+  },
+  {
     modes: ['*'],
     label: 'Meal scout',
     markers: ['QUANTITY & MULTIPACKS'],
@@ -692,6 +708,84 @@ function dishCompleteness(dish: any): string[] {
   if (!Array.isArray(dish.foods) || dish.foods.length === 0) missing.push('foods');
   if (!dish.dishNutrients || typeof dish.dishNutrients !== 'object') missing.push('dishNutrients');
   return missing;
+}
+
+function evaluateJourneyAndBiomarker(tree: CanonicalRunTree): ContractEvaluation[] {
+  const out: ContractEvaluation[] = [];
+  const pass = (law: string, actual: string) =>
+    out.push({ law, layer: 'content', fault: 'none', result: 'PASS', actual });
+  const fail = (law: string, actual: string) =>
+    out.push({ law, layer: 'content', fault: 'MISSING', result: 'FAIL', actual });
+  const na = (law: string, actual: string) =>
+    out.push({ law, layer: 'content', fault: 'none', result: 'n/a', actual });
+  const isFoodPack = tree.pack === 'food';
+
+  // 20. Handoff chain complete (all packs): forwarded legs must resolve
+  // their parent job; dropped payload keys fail.
+  {
+    const hs = tree.handoffs || [];
+    if (hs.length === 0) {
+      out.push({ law: 'Handoff chain complete', layer: 'process', fault: 'none', result: 'n/a', actual: 'No handoffs in this run' });
+    } else {
+      const linkedIds = new Set((tree.linkedJobs || []).map((j) => j.id));
+      const dropped = hs.filter((h) => Array.isArray(h.keysDropped) && h.keysDropped.length > 0);
+      const unlinked = hs.filter((h) => {
+        const fromId = (h.received as any)?.fromJobId;
+        return fromId && !linkedIds.has(fromId) && fromId !== tree.jobId;
+      });
+      if (dropped.length > 0) {
+        out.push({ law: 'Handoff chain complete', layer: 'process', fault: 'MISSING', result: 'FAIL', actual: `Keys dropped in transfer: ${dropped.map((h) => `${h.from}->${h.to} (${h.keysDropped!.join(',')})`).join('; ')}` });
+      } else if (unlinked.length > 0) {
+        out.push({ law: 'Handoff chain complete', layer: 'process', fault: 'MISSING', result: 'FAIL', actual: `Parent job(s) unresolvable: ${unlinked.map((h) => (h.received as any)?.fromJobId).join(', ')}` });
+      } else {
+        out.push({ law: 'Handoff chain complete', layer: 'process', fault: 'none', result: 'PASS', actual: `${hs.length} handoff(s) linked (${hs.map((h) => `${h.from}->${h.to}`).join(', ')})` });
+      }
+    }
+  }
+
+  // 21. Handoff received (food legs of a forwarded journey).
+  {
+    const foodHandoff = (tree.handoffs || []).find((h) => String(h.to || '').toLowerCase() === 'food');
+    if (!foodHandoff && tree.pack !== 'food') {
+      out.push({ law: 'Handoff received', layer: 'content', fault: 'none', result: 'n/a', actual: `No food handoff in this run (pack=${tree.pack})` });
+    } else if (!foodHandoff) {
+      out.push({ law: 'Handoff received', layer: 'content', fault: 'none', result: 'n/a', actual: 'Direct food log, no forwarded handoff' });
+    } else {
+      const keys = (foodHandoff.received as any)?.keysForwarded;
+      if (Array.isArray(keys) && keys.length > 0) {
+        out.push({ law: 'Handoff received', layer: 'content', fault: 'none', result: 'PASS', actual: `Payload keys carried: ${keys.join(', ')}` });
+      } else {
+        out.push({ law: 'Handoff received', layer: 'content', fault: 'MISSING', result: 'FAIL', actual: 'Food leg has no received payload keys recorded' });
+      }
+    }
+  }
+
+  // 22-23. Biomarker pack: lab panel + clinical report (mirrors nutrients/verdict).
+  if (tree.pack !== 'medical') {
+    out.push({ law: 'Lab panel complete', layer: 'content', fault: 'none', result: 'n/a', actual: `Medical-only law (pack=${tree.pack})` });
+    out.push({ law: 'Clinical report shown', layer: 'content', fault: 'none', result: 'n/a', actual: `Medical-only law (pack=${tree.pack})` });
+  } else {
+    const panel = tree.extractedData;
+    if (!panel || typeof panel !== 'object' || Object.keys(panel).length === 0) {
+      out.push({ law: 'Lab panel complete', layer: 'content', fault: 'none', result: 'n/a', actual: 'No extracted panel in this run' });
+    } else {
+      const bad = Object.entries(panel).filter(([, v]) => v == null || (typeof v === 'number' && !Number.isFinite(v)));
+      if (bad.length === 0) {
+        out.push({ law: 'Lab panel complete', layer: 'content', fault: 'none', result: 'PASS', actual: `${Object.keys(panel).length} analyte(s) extracted` });
+      } else {
+        out.push({ law: 'Lab panel complete', layer: 'content', fault: 'MISSING', result: 'FAIL', actual: `Non-computed analytes: ${bad.map(([k]) => k).join(', ')}` });
+      }
+    }
+    const report = (tree as any).report;
+    if (report && (typeof report === 'object' ? Object.keys(report).length > 0 : String(report).trim().length > 0)) {
+      out.push({ law: 'Clinical report shown', layer: 'content', fault: 'none', result: 'PASS', actual: 'Clinical report present' });
+    } else {
+      out.push({ law: 'Clinical report shown', layer: 'content', fault: 'none', result: 'n/a', actual: 'No report in this run' });
+    }
+  }
+
+
+  return out;
 }
 
 function evaluateFoodAgentOutput(tree: CanonicalRunTree, isFoodPack: boolean): ContractEvaluation[] {

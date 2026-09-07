@@ -203,7 +203,7 @@ describe('Canonical JSON Run Tree & Contract Scorer (Q-8 / F-8.13)', () => {
     });
 
     const evals = evaluateContracts(tree);
-    expect(evals.length).toBe(18);
+    expect(evals.length).toBe(22);
 
     const sseLaw = evals.find(e => e.law === 'SSE {final,result}');
     expect(sseLaw?.result).toBe('PASS');
@@ -675,10 +675,54 @@ describe('Agent-output verification rows (15-19)', () => {
   it('DEBUG_MODE_INSTRUCTION_MARKERS covers Mode D and stays extensible', () => {
     const labels = DEBUG_MODE_INSTRUCTION_MARKERS.map((e) => e.label);
     expect(labels).toContain('Mode D compare');
+    expect(labels).toContain('Front Desk triage');
+    expect(labels).toContain('Medical lab review');
+    expect(labels).toContain('Health coach');
     for (const e of DEBUG_MODE_INSTRUCTION_MARKERS) {
       expect(e.modes.length).toBeGreaterThan(0);
       expect(e.markers.length).toBeGreaterThan(0);
     }
+  });
+
+  it('fails unlinked forwarded legs and passes resolved chains', () => {
+    const unlinked = buildCanonicalRunTree({
+      pack: 'food', jobId: 'j_chain_broken', status: 'succeeded',
+      pendingFoodLog: { nutrients: fullNuts({ calories: 420 }) },
+      handoffs: [{ from: 'front_desk', to: 'food', received: { fromJobId: 'job_fd_gone' }, keysDropped: [], jobId: 'j_chain_broken' }],
+      linkedJobs: [],
+    });
+    const laws = (t: any) => evaluateContracts(t);
+    expect(laws(unlinked).find((e) => e.law === 'Handoff chain complete')?.result).toBe('FAIL');
+    const linked = buildCanonicalRunTree({
+      pack: 'food', jobId: 'j_chain_ok', status: 'succeeded',
+      pendingFoodLog: { nutrients: fullNuts({ calories: 420 }) },
+      handoffs: [{ from: 'front_desk', to: 'food', received: { fromJobId: 'job_fd_1', keysForwarded: ['intent', 'images'] }, keysDropped: [], jobId: 'j_chain_ok' }],
+      linkedJobs: [{ id: 'job_fd_1', kind: 'receptionist', status: 'succeeded' }],
+    });
+    const le = laws(linked);
+    expect(le.find((e) => e.law === 'Handoff chain complete')?.result).toBe('PASS');
+    expect(le.find((e) => e.law === 'Handoff received')?.result).toBe('PASS');
+  });
+
+  it('scores biomarker lab panel and report on medical pack only', () => {
+    const med = buildCanonicalRunTree({
+      pack: 'medical', jobId: 'j_med_full', status: 'succeeded',
+      extractedData: { glucose: 94, hba1c: 5.9 },
+      report: { summary: 'ok' },
+    });
+    const laws = (t: any) => evaluateContracts(t);
+    expect(laws(med).find((e) => e.law === 'Lab panel complete')?.result).toBe('PASS');
+    expect(laws(med).find((e) => e.law === 'Clinical report shown')?.result).toBe('PASS');
+    const medThin = buildCanonicalRunTree({
+      pack: 'medical', jobId: 'j_med_thin', status: 'succeeded',
+      extractedData: { glucose: null },
+    });
+    expect(laws(medThin).find((e) => e.law === 'Lab panel complete')?.result).toBe('FAIL');
+    const food = buildCanonicalRunTree({
+      pack: 'food', jobId: 'j_food_biomarker_na', status: 'succeeded',
+      pendingFoodLog: { nutrients: fullNuts({ calories: 420 }) },
+    });
+    expect(laws(food).find((e) => e.law === 'Lab panel complete')?.result).toBe('n/a');
   });
 
   function buildCanonicalRunTickedTree() {
