@@ -7,6 +7,9 @@ import {
   buildScoutComparePrompt,
 } from "./scout_only_compare_instructions.js";
 
+import dotenv from "dotenv";
+dotenv.config();
+
 const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) {
   console.error("GEMINI_API_KEY environment variable is required");

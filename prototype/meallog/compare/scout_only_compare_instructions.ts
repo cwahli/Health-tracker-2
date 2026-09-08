@@ -38,6 +38,7 @@ STRICT INVARIANTS:
      * When hasNutritionLabel is true, YOU MUST POPULATE ALL NUTRIENT FIELDS in perServing (calories, protein, totalFat, saturatedFat, carbohydrates, sugar, sodiumMg, saltMg).
    - Front-only packages without a nutrition panel: set hasNutritionLabel to false or omit, transcribe product name from OCR, and set perServing to null.
    - NO LUMPING: Each distinct variety, flavor, or dish entry gets its own item in items[].
+   - STRICT OVERALL ITEM RANKING: Items in items[] MUST be ordered primarily from best/healthiest tier down to least favorable tier, and within each tier from best to least favorable.
 
 3. ACTIVE MULTI-TIER GROUPING & STRICT NUTRITIONAL CLUSTERING (MAX 10% VARIANCE):
    - ZERO ORPHANED ITEMS: Every single index from 0 to items.length - 1 MUST be assigned to at least one group in groups[]. The union of all scoutItemIndices must cover 100% of extracted items.
@@ -50,9 +51,12 @@ STRICT INVARIANTS:
      * Tier 3 (warning / caution): Deep-fried poultry/meats/seafood, stir-fried noodles, fried rice, sweetened beverages.
      * Tier 4 (alert / severe metabolic load): Deep-fried animal skins/offal, deep-fried vegetables (extreme oil absorption), ultra-processed boiled crackers or instant noodles in heavy oil.
 
-4. DIET TASK: ORDERING (Ranking) & AVOIDING THE CALORIE ILLUSION TRAP:
-   - The groups in groups[] MUST be sorted in strict order of overall health ranking: BEST / SAFEST CHOICE FIRST ('good'), down to least suitable at the bottom ('alert').
-   - Ranking order: 'good' -> 'neutral' -> 'warning' -> 'alert'.
+4. DIET TASK: ORDERING & RANKING (GROUPS AND SUB-ITEMS SORTED BEST TO LEAST FAVORABLE):
+   - STRICT GROUP RANKING: The groups in groups[] MUST be sorted in strict descending order of overall health ranking: BEST / SAFEST CHOICE FIRST ('good'), down to least suitable at the bottom ('alert').
+     * Ranking order: 'good' -> 'neutral' -> 'warning' -> 'alert'.
+   - STRICT SUB-ITEM RANKING INSIDE GROUPS:
+     * Inside every group, "scoutItemIndices" MUST be sorted strictly from best to least favorable (most healthful to least healthful candidate item).
+     * The first item index listed in scoutItemIndices must be the healthiest, safest choice in that group; subsequent indices follow in descending order of nutritional quality.
    - BEWARE THE "CALORIE ILLUSION TRAP":
      * NEVER rank a confectionery or snack as "Tier 1 (good)" simply because its portion is tiny (e.g. 23g wafer bar at 90 kcal) if it is sugar-dense (>25% sugar by weight) with negligible protein (<2g) and fiber.
      * Evaluate NUTRIENT DENSITY: Compare sugar-to-protein ratio, saturated fat percentage, and fiber retention. Wholesome staple breads with 2g sugar and 4g protein rank HIGHER in healthfulness than a 90 kcal candy bar that is 30% refined sugar.
@@ -208,12 +212,16 @@ Analyze all ${imageCount} provided comparison image(s).
    - CONDENSED ITEM FORMAT: Keep each item object minimal with only "name", "tier", and "sourceImageIndex" (no boundingBox2D on items, and omit empty/null boilerplate keys). This saves massive vision processing power and output tokens, enabling fast extraction of 50-100+ items.
 2. GROUP BOUNDING BOXES:
    - Provide "boundingBox2D": [ymin, xmin, ymax, xmax] ONLY on each group in groups[], demarcating the region of the image containing those items.
-3. TIER ASSIGNMENT: In items[], tag every item with its diet tier (tier: 1 for safest/healthiest, 2 for moderate, 3 for caution/warning, 4 for alert/severe).
+3. TIER ASSIGNMENT & SUB-ITEM ORDERING:
+   - In items[], tag every item with its diet tier (tier: 1 for safest/healthiest, 2 for moderate, 3 for caution/warning, 4 for alert/severe).
+   - Sort items in items[] from best/healthiest choice down to least favorable.
+   - Inside each group in groups[], sort "scoutItemIndices" strictly from best/healthiest choice to least favorable sub-item.
 4. ACTIVE NUTRITIONAL CLUSTERING (MAX 10% VARIANCE & HIDDEN HARMS): In groups[], create ranked clusters. You MUST NOT group dishes if ${varianceRuleText}. BEYOND MACROS: Isolate items with critical hidden harms (e.g., Trans Fats, heavy synthetic additives, extreme oxidized oil) into their own 'alert' group, even if base macros match cleaner foods. Split broad categories (e.g., split "Fried Foods" into "Fried Lean Proteins", "Fried Carbs", "Fried Sides"). You may create 5-10 groups to maintain tight variance. Map every item index into scoutItemIndices. Zero orphaned items.
 5. ORDERING & VERDICTS: Order groups from best/safest choice down to alert. Provide verdict level, 3-6 word label, comparative sentence, clinical advice message, ordering tips, and ${averageNutrientsInstruction}`;
 
   if (isGeneric) {
-    return `${base}${contextPrompt}`;
+    const genericDirective = `\nDEFAULT COMPARISON MANDATE (No specific user filter provided): Extract, evaluate, and compare ALL legible dishes, beverages, products, and items visible across the entire image/menu/shelf without omission. Group and rank all candidate items strictly from best/healthiest to least favorable.`;
+    return `${base}${genericDirective}${contextPrompt}`;
   }
   return `${base}\nUser note: "${cleanMsg}".${contextPrompt}`;
 }
@@ -273,6 +281,7 @@ export const scoutOnlyCompareResponseSchema = {
           groupName: { type: Type.STRING },
           scoutItemIndices: {
             type: Type.ARRAY,
+            description: "List of item indices belonging to this group, strictly sorted in descending order from best/healthiest choice to least favorable sub-item.",
             items: { type: Type.INTEGER },
           },
           boundingBox2D: {

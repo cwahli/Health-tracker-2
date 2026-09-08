@@ -460,6 +460,17 @@ async function runScoutOnlyComparePrototype() {
           }
         }
 
+        // Ensure sub-items in scoutItemIndices are sorted by item tier (best/healthiest first)
+        json.groups.forEach((g: any) => {
+          if (Array.isArray(g.scoutItemIndices)) {
+            g.scoutItemIndices.sort((a: number, b: number) => {
+              const tierA = typeof json.items[a]?.tier === "number" ? json.items[a].tier : 2;
+              const tierB = typeof json.items[b]?.tier === "number" ? json.items[b].tier : 2;
+              return tierA - tierB;
+            });
+          }
+        });
+
         // Ensure group bounding boxes are valid
         json.groups.forEach((g: any) => {
           if (!Array.isArray(g.boundingBox2D) || g.boundingBox2D.length !== 4) {
@@ -565,10 +576,6 @@ async function runScoutOnlyComparePrototype() {
       }
       if (itemsCount > 20 && maxGroupItems > itemsCount * 0.55) {
         checkRes.details.push(`⚠️ WARNING: Lazy middle dumping detected! Largest group contains ${maxGroupItems}/${itemsCount} (${Math.round((maxGroupItems / itemsCount) * 100)}%) items.`);
-      }
-      if (itemsWithValidBbox.length < itemsCount) {
-        checkRes.details.push(`⚠️ WARNING: Some items are missing valid boundingBox2D!`);
-        checkRes.passed = false;
       }
       if (groupsWithValidBbox.length < (json.groups?.length || 0)) {
         checkRes.details.push(`⚠️ WARNING: Some groups are missing valid boundingBox2D!`);
