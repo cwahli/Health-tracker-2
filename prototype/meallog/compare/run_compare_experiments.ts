@@ -19,14 +19,83 @@ if (!apiKey) {
 }
 
 const ai = new GoogleGenAI({ apiKey });
-const imagesDir = path.join(process.cwd(), "prototype", "compare", "images");
+const imagesDir = path.join(process.cwd(), "prototype", "meallog", "compare", "images");
 
-// The 3 target test images from user job job_1787869907978_hisertpsj
-const imageFiles = [
-  "job_1787869907978_hisertpsj_0.jpg", // Photo 0: Say Bread bakery display shelf (Polo Keju / Double Cheese Bread)
-  "job_1787869907978_hisertpsj_1.jpg", // Photo 1: SilverQueen Nutrition Facts label (Back)
-  "job_1787869907978_hisertpsj_2.jpg", // Photo 2: SilverQueen Milk Chocolate with Cashews (Front)
+export interface CompareSetMetadata {
+  id: string;
+  name: string;
+  description: string;
+  files: string[];
+}
+
+// Set 1: Bakery Shelf & SilverQueen Chocolate
+export const imageFilesSet1 = [
+  "compare_set1_0.jpg", // Photo 0: Say Bread bakery display shelf (Polo Keju / Double Cheese Bread)
+  "compare_set1_1.jpg", // Photo 1: SilverQueen Nutrition Facts label (Back)
+  "compare_set1_2.jpg", // Photo 2: SilverQueen Milk Chocolate with Cashews (Front)
 ];
+
+// Set 2: 4 Reference Snack & Pack Nutrition Labels
+export const imageFilesSet2 = [
+  "compare_set2_0.jpg", // Photo 0: Green bar
+  "compare_set2_1.jpg", // Photo 1: Pack front
+  "compare_set2_2.jpg", // Photo 2: Yellow cake
+  "compare_set2_3.jpg", // Photo 3: Blue bread
+];
+
+// Set 3: Indonesian Restaurant Menu Pages (Sambal Bakar Pencok)
+export const imageFilesSet3 = [
+  "compare_set3_0.jpg", // Menu Page 1
+  "compare_set3_1.jpg", // Menu Page 2
+];
+
+// Set 4: Juice & Beverage List
+export const imageFilesSet4 = [
+  "compare_set4_0.jpg", // Juice list
+];
+
+// Set 5: Packaged Product / Drink Item
+export const imageFilesSet5 = [
+  "compare_set5_0.jpg", // Product photo
+];
+
+export const compareSets: Record<string, CompareSetMetadata> = {
+  "1": {
+    id: "set1",
+    name: "Set 1: Bakery Shelf & SilverQueen Chocolate",
+    description: "User job job_1787869907978_hisertpsj: Say Bread display + SilverQueen label/bar",
+    files: imageFilesSet1,
+  },
+  "2": {
+    id: "set2",
+    name: "Set 2: 4 Snack & Pack Nutrition Labels",
+    description: "4 snack labels and pack fronts (green bar, pack front, yellow cake, blue bread)",
+    files: imageFilesSet2,
+  },
+  "3": {
+    id: "set3",
+    name: "Set 3: Restaurant Menu Pages (Sambal Bakar Pencok)",
+    description: "2-page Indonesian restaurant menu comparing dishes/options",
+    files: imageFilesSet3,
+  },
+  "4": {
+    id: "set4",
+    name: "Set 4: Juice & Beverage List",
+    description: "Beverage and juice menu options list",
+    files: imageFilesSet4,
+  },
+  "5": {
+    id: "set5",
+    name: "Set 5: Packaged Product Item",
+    description: "Standalone packaged beverage / snack product evaluation",
+    files: imageFilesSet5,
+  },
+};
+
+// Default to set 2 (or choose via env COMPARE_SET=1..5)
+const activeSetKey = process.env.COMPARE_SET || "2";
+export const activeCompareSet = compareSets[activeSetKey] || compareSets["2"];
+const imageFiles = activeCompareSet.files;
 
 function loadImages(files: string[]) {
   const parts: any[] = [];
@@ -81,6 +150,7 @@ const experiments: ExperimentConfig[] = [
 async function runExperiments() {
   console.log("==========================================================================================");
   console.log("SCOUT EVALUATION: CONSOLIDATED EXTRACTION MANDATE WITHOUT 'MIXED' ENUM");
+  console.log(`Active Compare Set: [${activeCompareSet.name}] (${activeCompareSet.description})`);
   console.log("Model: gemini-3.5-flash-lite | Schema: Strictly ['visual', 'menu_or_poster', 'label', 'text']");
   console.log("==========================================================================================\n");
 

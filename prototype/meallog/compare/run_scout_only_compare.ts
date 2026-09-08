@@ -29,6 +29,100 @@ interface CompareTestCase {
 
 const testCases: CompareTestCase[] = [
   {
+    id: "compare_set1",
+    name: "Compare Set 1: User Job Bakery Shelf & SilverQueen Chocolate",
+    kind: "mixed_selection",
+    imagePaths: [
+      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "compare_set1_0.jpg"), // Photo 0: Say Bread bakery shelf
+      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "compare_set1_1.jpg"), // Photo 1: SilverQueen Nutrition Facts
+      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "compare_set1_2.jpg"), // Photo 2: SilverQueen Milk Chocolate
+    ],
+    userPrompt: "Compare these items and advise on healthier choices.",
+  },
+  {
+    id: "compare_set2",
+    name: "Compare Set 2: 4 Reference Snack & Pack Nutrition Labels",
+    kind: "nutrition_labels",
+    imagePaths: [
+      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "compare_set2_0.jpg"), // 0: Green bar
+      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "compare_set2_1.jpg"), // 1: Pack front
+      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "compare_set2_2.jpg"), // 2: Yellow cake
+      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "compare_set2_3.jpg"), // 3: Blue bread
+    ],
+    userPrompt: "Compare these 4 snacks and help me choose the healthiest one.",
+    expectedChecks: (result: any) => {
+      const details: string[] = [];
+      let passed = true;
+
+      const items = result.items || [];
+      const groups = result.groups || [];
+      details.push(`Extracted ${items.length} items (expected 4).`);
+      if (items.length < 3) passed = false;
+
+      details.push(`Created ${groups.length} comparison groups.`);
+      if (groups.length === 0) {
+        details.push("FAIL: No comparison groups created!");
+        return { passed: false, details };
+      }
+
+      const allAssignedIndices = new Set<number>();
+      groups.forEach((g: any, gIdx: number) => {
+        (g.scoutItemIndices || []).forEach((idx: number) => allAssignedIndices.add(idx));
+        details.push(`Group ${gIdx + 1} ("${g.groupName}"): ${g.scoutItemIndices?.length || 0} item(s), Verdict: [${g.verdict?.level?.toUpperCase()}] "${g.verdict?.label}"`);
+        if (!g.verdict?.level || !g.verdict?.label) {
+          details.push(`FAIL: Group ${gIdx + 1} missing verdict!`);
+          passed = false;
+        }
+      });
+      details.push(`Diet Grouping: ${allAssignedIndices.size}/${items.length} items mapped to groups.`);
+
+      const levelRank: Record<string, number> = { good: 1, neutral: 2, warning: 3, alert: 4 };
+      let previousRank = 0;
+      let orderOk = true;
+      groups.forEach((g: any) => {
+        const lvl = (g.verdict?.level || "neutral").toLowerCase();
+        const r = levelRank[lvl] || 2;
+        if (r < previousRank) orderOk = false;
+        previousRank = r;
+      });
+      if (!orderOk) {
+        details.push("WARN: Groups not strictly sorted by healthiness (best choice first).");
+      } else {
+        details.push("PASS: Diet Ordering verified: Groups sorted best-choice first down to alert/caution.");
+      }
+
+      return { passed, details };
+    },
+  },
+  {
+    id: "compare_set3",
+    name: "Compare Set 3: Restaurant Menu Pages (Sambal Bakar Pencok)",
+    kind: "menu_items",
+    imagePaths: [
+      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "compare_set3_0.jpg"),
+      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "compare_set3_1.jpg"),
+    ],
+    userPrompt: "What are the healthier options on this menu?",
+  },
+  {
+    id: "compare_set4",
+    name: "Compare Set 4: Juice List",
+    kind: "menu_items",
+    imagePaths: [
+      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "compare_set4_0.jpg"),
+    ],
+    userPrompt: "Compare the juices on this list and recommend the best option.",
+  },
+  {
+    id: "compare_set5",
+    name: "Compare Set 5: Product Item",
+    kind: "food_items",
+    imagePaths: [
+      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "compare_set5_0.jpg"),
+    ],
+    userPrompt: "Evaluate and analyze this product.",
+  },
+  {
     id: "G5_snack_labels",
     name: "G5: Compare 5 Printed Snack Nutrition Labels & Pack Fronts",
     kind: "nutrition_labels",

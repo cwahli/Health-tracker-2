@@ -19,13 +19,77 @@ if (!apiKey) {
 }
 
 const ai = new GoogleGenAI({ apiKey });
-const imagesDir = path.join(process.cwd(), "prototype", "compare", "images");
+const imagesDir = path.join(process.cwd(), "prototype", "meallog", "compare", "images");
 
-const imageFiles = [
-  "job_1787869907978_hisertpsj_0.jpg", // Photo 0: Bakery Display Shelf
-  "job_1787869907978_hisertpsj_1.jpg", // Photo 1: Nutrition Label Back
-  "job_1787869907978_hisertpsj_2.jpg", // Photo 2: Chocolate Bar Front
+export interface CompareSetMetadata {
+  id: string;
+  name: string;
+  description: string;
+  files: string[];
+}
+
+const imageFilesSet1 = [
+  "compare_set1_0.jpg", // Photo 0: Bakery Display Shelf
+  "compare_set1_1.jpg", // Photo 1: Nutrition Label Back
+  "compare_set1_2.jpg", // Photo 2: Chocolate Bar Front
 ];
+
+const imageFilesSet2 = [
+  "compare_set2_0.jpg",
+  "compare_set2_1.jpg",
+  "compare_set2_2.jpg",
+  "compare_set2_3.jpg",
+];
+
+const imageFilesSet3 = [
+  "compare_set3_0.jpg",
+  "compare_set3_1.jpg",
+];
+
+const imageFilesSet4 = [
+  "compare_set4_0.jpg",
+];
+
+const imageFilesSet5 = [
+  "compare_set5_0.jpg",
+];
+
+export const compareSets: Record<string, CompareSetMetadata> = {
+  "1": {
+    id: "set1",
+    name: "Set 1: Bakery Shelf & SilverQueen Chocolate",
+    description: "User job job_1787869907978_hisertpsj: Say Bread display + SilverQueen label/bar",
+    files: imageFilesSet1,
+  },
+  "2": {
+    id: "set2",
+    name: "Set 2: 4 Snack & Pack Nutrition Labels",
+    description: "4 snack labels and pack fronts (green bar, pack front, yellow cake, blue bread)",
+    files: imageFilesSet2,
+  },
+  "3": {
+    id: "set3",
+    name: "Set 3: Restaurant Menu Pages (Sambal Bakar Pencok)",
+    description: "2-page Indonesian restaurant menu comparing dishes/options",
+    files: imageFilesSet3,
+  },
+  "4": {
+    id: "set4",
+    name: "Set 4: Juice & Beverage List",
+    description: "Beverage and juice menu options list",
+    files: imageFilesSet4,
+  },
+  "5": {
+    id: "set5",
+    name: "Set 5: Packaged Product Item",
+    description: "Standalone packaged beverage / snack product evaluation",
+    files: imageFilesSet5,
+  },
+};
+
+const activeSetKey = process.env.COMPARE_SET || "2";
+export const activeCompareSet = compareSets[activeSetKey] || compareSets["2"];
+const imageFiles = activeCompareSet.files;
 
 function loadImages(files: string[]) {
   return files.map(f => {
