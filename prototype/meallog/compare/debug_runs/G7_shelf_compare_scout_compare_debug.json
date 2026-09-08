@@ -1,8 +1,8 @@
 {
-  "_internalReasoning": "Scanned all supermarket snack shelf products and categorized into 4 ranked groups based on deep-fried status, portion size, and nutritional impact given the user's high calorie, saturated fat, and sodium status.",
-  "comparisonTitle": "Supermarket Snack Shelf Product Evaluation & Ranking",
+  "_internalReasoning": "Scanned the supermarket chip and snack shelf top-to-bottom, extracting all readable snack options into condensed item entries and clustering them into ranked dietary groups based on nutritional impact and user limits.",
+  "comparisonTitle": "Supermarket Snack Shelf Evaluation & Comparison",
   "comparisonType": "shelf_selection",
-  "summary": "Evaluation of the supermarket snack shelf reveals ultra-processed, calorie-dense, and sodium-heavy fried snacks (NOVA 4). Given your elevated calorie, sodium, and saturated fat status, all items here represent significant metabolic challenges. Smaller pouches and baked-style corn snacks offer relative portion control compared to massive family bags.",
+  "summary": "This supermarket snack shelf features ultra-processed foods high in sodium, saturated fat, and refined carbohydrates, which directly exacerbate the user's current surplus intake of calories, sodium, and saturated fat. Choosing smaller portion packs helps limit immediate damage, while large family-size bags present severe metabolic risks.",
   "items": [
     {
       "name": "Happy Tos Tortilla Chips Corn Chips",
@@ -20,7 +20,7 @@
       "sourceImageIndex": 0
     },
     {
-      "name": "Chiato Lite Potato Chips",
+      "name": "Chitato Lite Snack Kentang",
       "tier": 3,
       "sourceImageIndex": 0
     },
@@ -30,12 +30,12 @@
       "sourceImageIndex": 0
     },
     {
-      "name": "Japanese Style Snack",
+      "name": "Japota Potato Chips",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Jetz Tortilla Roasted Corn Flavor",
+      "name": "Jetz Tortilla Roasted Corn Flavour",
       "tier": 3,
       "sourceImageIndex": 0
     },
@@ -45,33 +45,28 @@
       "sourceImageIndex": 0
     },
     {
-      "name": "Happy Tos Blue",
+      "name": "Happy Tos Corn Chips Blue",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Happy Tos Yellow",
+      "name": "Happy Tos Corn Chips Yellow",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Qtela Singkong Original",
+      "name": "Qtela Keripik Singkong Original",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Lays Daging Sapi Panggang",
+      "name": "Lays Wavy Daging Sapi",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Qtela Snack",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Doritos Jagung Bakar",
-      "tier": 3,
+      "name": "Qtela Keripik Singkong Barbeque",
+      "tier": 4,
       "sourceImageIndex": 0
     },
     {
@@ -80,17 +75,12 @@
       "sourceImageIndex": 0
     },
     {
+      "name": "Oishi Panchos Traditional Style Tortilla Chips",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
       "name": "Oishi Panchos Balado",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Oishi Panchos Keju",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Oishi Panchos",
       "tier": 3,
       "sourceImageIndex": 0
     },
@@ -105,82 +95,47 @@
       "sourceImageIndex": 0
     },
     {
-      "name": "Qtela Family Pack Rumput Laut",
+      "name": "Qtela Rasa Ayam Lada Hitam",
       "tier": 4,
       "sourceImageIndex": 0
     },
     {
-      "name": "Kusuka Singkong Original",
+      "name": "Doritos Jagung Bakar",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Chubby Cassava",
+      "name": "GurBee Layers",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Chubby Cassava Original",
+      "name": "Oishi Hiki Popcorn",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Kusuka Singkong Balado",
-      "tier": 4,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Guritee Layers",
+      "name": "Lostos Tortilla",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Guritee Layers Barbeque",
+      "name": "Chub Cassava",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "GunBee Layers",
+      "name": "Chub Cassava Chips",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Oishi Poup Corn",
+      "name": "Kusuka Singkong",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Oishi Tortilla Chips",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Oishi Tortilla Sweet",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Lemonilo Chimi Cassava Chips",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Lemonilo Chimi Balado",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Qtela Small Pack",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Garuda Crunch Corn Tornado",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Garuda Crunch Corn Tornado BBQ",
+      "name": "Lemonilo Chimi Keripik Singkong",
       "tier": 3,
       "sourceImageIndex": 0
     },
@@ -190,12 +145,7 @@
       "sourceImageIndex": 0
     },
     {
-      "name": "Wonhae Korean Snack",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Taro Net Teriyaki BBQ",
+      "name": "Garuda Crunch Corn Tornado",
       "tier": 3,
       "sourceImageIndex": 0
     },
@@ -203,78 +153,59 @@
       "name": "Taro Net Seaweed",
       "tier": 3,
       "sourceImageIndex": 0
-    },
-    {
-      "name": "Taro Net Original",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Chiki Twist",
-      "tier": 3,
-      "sourceImageIndex": 0
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 3 - Portion-Controlled Small Snack Pouches",
+      "groupName": "Tier 3 - Portion-Controlled Snack Pouches",
       "scoutItemIndices": [
         2,
         3,
         4,
         5,
         6,
+        13,
+        20,
         21,
         22,
         23,
+        24,
         25,
         26,
         27,
         28,
-        29,
-        30,
-        31,
-        32,
-        33,
-        34,
-        35,
-        36,
-        37,
-        38,
-        39,
-        40,
-        41
+        29
       ],
       "boundingBox2D": [
-        50,
-        15,
-        990,
-        980
+        100,
+        200,
+        950,
+        800
       ],
       "verdict": {
-        "label": "Moderate Caution Portion Controlled",
+        "label": "Moderate Caution Portion Pouch",
         "level": "warning"
       },
-      "comparisonSentence": "Unlike massive family-size bags, these smaller single-serving snack pouches strictly limit total calorie, sodium, and saturated fat intake.",
-      "message": "These individual-sized snack pouches and popcorn bags help enforce hard portion boundaries, which is crucial since you are currently exceeding your calorie and sodium targets. While still ultra-processed (NOVA 4) with refined carbohydrates and added sodium, consuming a small single pouch prevents the runaway caloric surplus common with large bags. Enjoy strictly in moderation as an occasional treat.",
+      "comparisonSentence": "Unlike family-size mega packs, these individual snack pouches offer built-in portion limits that help curb excessive calorie and sodium intake.",
+      "message": "These individual-sized snack pouches provide high carbohydrates and moderate fats while helping to prevent runaway overeating compared to bulk packages. However, they remain ultra-processed items lacking adequate dietary fiber and protein, contributing excess sodium and calories that conflict directly with your current 30% sodium surplus and calorie targets. Consume strictly as an occasional small treat.",
       "averageNutrients": {
         "calories": 140,
-        "protein": 2,
+        "protein": 1.5,
         "totalFat": 7,
         "saturatedFat": 2.5,
         "carbohydrates": 18,
         "sugar": 2,
-        "totalFibre": 1,
+        "totalFibre": 0.8,
         "sodium": 180,
         "addedSugar": 1,
-        "potassium": 120,
-        "solubleFibre": 0.5,
+        "potassium": 90,
+        "solubleFibre": 0.2,
         "transFat": 0
       },
-      "orderingTip": "Choose the smallest available single-serve pouch and avoid multipacks that invite repeat consumption."
+      "orderingTip": "Select single-serving small pouches and avoid buying bulk multi-packs to naturally restrict mindless eating."
     },
     {
-      "groupName": "Tier 3 - Standard Tortilla and Corn Chips",
+      "groupName": "Tier 4 - High-Load Bulk & Fried Snack Packs",
       "scoutItemIndices": [
         0,
         1,
@@ -284,76 +215,41 @@
         10,
         11,
         12,
-        13,
         14,
         15,
         16,
-        17
-      ],
-      "boundingBox2D": [
-        80,
-        0,
-        680,
-        600
-      ],
-      "verdict": {
-        "label": "High Sodium & Saturated Fat",
-        "level": "warning"
-      },
-      "comparisonSentence": "These standard corn and tortilla chips deliver moderate per-serving macros but contribute heavily to your excess sodium and fat limits.",
-      "message": "Standard retail corn and tortilla chips provide quick energy from refined corn masa and vegetable oils, but they lack dietary fiber and essential micronutrients. Given that your current 3-day averages show significant excess in saturated fat and sodium, consuming these chips will further aggravate your metabolic load. Pair with raw vegetable sticks or limit portion sizes strictly.",
-      "averageNutrients": {
-        "calories": 160,
-        "protein": 2.2,
-        "totalFat": 9,
-        "saturatedFat": 3,
-        "carbohydrates": 17,
-        "sugar": 1,
-        "totalFibre": 1.2,
-        "sodium": 220,
-        "addedSugar": 0.5,
-        "potassium": 140,
-        "solubleFibre": 0.4,
-        "transFat": 0
-      },
-      "orderingTip": "Portion out a small handful into a separate bowl instead of eating directly from the large bag."
-    },
-    {
-      "groupName": "Tier 4 - Large Family Pack Fried Snacks",
-      "scoutItemIndices": [
+        17,
         18,
-        19,
-        20,
-        24
+        19
       ],
       "boundingBox2D": [
-        320,
-        580,
-        590,
-        990
+        0,
+        0,
+        900,
+        1000
       ],
       "verdict": {
-        "label": "Severe Calorie & Fat Alert",
+        "label": "High Sodium & Saturated Fat Alert",
         "level": "alert"
       },
-      "comparisonSentence": "Compared to single-serve packs, these large family packs present an extreme metabolic hazard due to runaway fat and sodium.",
-      "message": "These large family-size fried cassava and chip packs are exceptionally dense in calories, total fat, and sodium, directly conflicting with your goals to correct elevated caloric and sodium intake. Unrestricted snacking from family packs virtually guarantees exceeding daily limits. Avoid purchasing these large formats entirely to remove temptation.",
+      "comparisonSentence": "Compared to single-portion bags, these large family packs and heavy fried chips deliver excessive saturated fat and sodium loads.",
+      "message": "These large-format and heavy fried snacks pack massive amounts of sodium, saturated fat, and refined carbohydrates, severely worsening your existing nutritional surpluses (38% over sat fat, 39% over calories, and 30% over sodium). Regular consumption of these deep-fried ultra-processed items accelerates metabolic strain and works directly against your dietary goals.",
       "averageNutrients": {
-        "calories": 520,
+        "calories": 480,
         "protein": 4,
-        "totalFat": 28,
-        "saturatedFat": 10,
-        "carbohydrates": 64,
-        "sugar": 4,
-        "totalFibre": 3,
-        "sodium": 650,
-        "addedSugar": 2,
-        "potassium": 350,
-        "solubleFibre": 1,
+        "totalFat": 26,
+        "saturatedFat": 9.5,
+        "carbohydrates": 58,
+        "sugar": 4.5,
+        "totalFibre": 2,
+        "sodium": 550,
+        "addedSugar": 2.5,
+        "potassium": 210,
+        "solubleFibre": 0.5,
         "transFat": 0.1
       },
-      "orderingTip": "Do not buy family-size formats; opt out entirely or choose unflavoured whole-food alternatives."
+      "orderingTip": "Avoid purchasing large family packs entirely to eliminate temptation and protect against sodium and fat overconsumption."
     }
   ],
-  "recommendedOption": "Tier 3 - Portion-Controlled Small Snack Pouches"
+  "recommendedOption": "Tier 3 - Portion-Controlled Snack Pouches"
 }

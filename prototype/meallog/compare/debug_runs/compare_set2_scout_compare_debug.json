@@ -1,114 +1,115 @@
 {
-  "_internalReasoning": "Evaluated four snack/bread products based on user profile (high sat fat, calories, sodium, added sugar, low protein/fiber). Grouped and ranked them from best to worst.",
-  "comparisonTitle": "Bakery and Snack Product Health Comparison",
+  "_internalReasoning": "Evaluated 4 packaged snack items comparing macronutrients against user targets showing excess calorie, saturated fat, sodium, and added sugar profiles.",
+  "comparisonTitle": "Packaged Snack & Bread Nutritional Evaluation",
   "comparisonType": "nutrition_labels",
-  "summary": "Comparing these four packaged snack options reveals significant variations in protein, sodium, and saturated fat content, making clear which choice best aligns with your daily nutritional targets.",
+  "summary": "Comparing the four packaged baked snacks reveals significant variation in fiber, protein density, and saturated fat, with the multiseed bread offering the most balanced nutritional profile despite higher calories per serving.",
   "items": [
     {
-      "name": "Multiseed Bread",
+      "name": "Green Package Snack Bar",
+      "tier": 2,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Yellow Package Multiseed Bread",
       "tier": 1,
       "sourceImageIndex": 1
     },
     {
-      "name": "Sweet Bread / Pastry",
-      "tier": 2,
-      "sourceImageIndex": 3
-    },
-    {
-      "name": "Cream Filled Bread",
+      "name": "Yellow-Green Package Cream Bread",
       "tier": 3,
       "sourceImageIndex": 2
     },
     {
-      "name": "Packaged Snack Bar",
-      "tier": 4,
-      "sourceImageIndex": 0
+      "name": "Blue Package Sweet Bread",
+      "tier": 2,
+      "sourceImageIndex": 3
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 1 - Safest Choice: High Fiber & Protein Bread",
+      "groupName": "Tier 1 - Safest Choice: Multiseed Whole Grain Bread",
       "scoutItemIndices": [
-        0
+        1
       ],
       "boundingBox2D": [
-        50,
-        10,
-        950,
-        990
+        300,
+        0,
+        900,
+        1000
       ],
       "verdict": {
-        "label": "Best Fiber & Protein Source",
+        "label": "High Protein & Fiber Choice",
         "level": "good"
       },
-      "comparisonSentence": "This multiseed bread provides superior fiber and protein compared to the sugary snack bar and pastries.",
-      "message": "This multiseed bread option is the healthiest choice among the evaluated items, offering a substantial amount of dietary fiber and protein to help meet your nutritional goals while keeping saturated fats moderate. However, monitor the carbohydrate and sodium levels if you are consuming multiple servings.",
+      "comparisonSentence": "This multiseed bread provides significantly more protein and dietary fiber than the other refined grain options, helping mitigate your carbohydrate intake.",
+      "message": "This product delivers valuable dietary fiber and a higher protein content relative to refined options, which supports satiety. However, note the moderate sodium and carbohydrate content which requires portion mindfulness given your current daily intake excesses.",
       "averageNutrients": {
         "calories": 250,
         "protein": 8,
         "totalFat": 7,
         "saturatedFat": 3,
         "carbohydrates": 38,
-        "sugar": 4,
-        "totalFibre": 6,
+        "sugar": 8,
+        "totalFibre": 4,
         "sodium": 330,
-        "addedSugar": 3,
-        "potassium": 210,
-        "solubleFibre": 1.5,
+        "addedSugar": 6,
+        "potassium": 150,
+        "solubleFibre": 1,
         "transFat": 0
       },
-      "orderingTip": "Opt for this high-fiber multiseed bread as your primary carbohydrate source and keep portions to a single 80g serving."
+      "orderingTip": "Enjoy a single 80g serving as a breakfast or snack base, pairing it with unsweetened protein sources."
     },
     {
-      "groupName": "Tier 2 - Moderate Choice: Standard Bread",
+      "groupName": "Tier 2 - Moderate Choices: Portion-Controlled & Standard Breads",
       "scoutItemIndices": [
-        1
+        0,
+        3
       ],
       "boundingBox2D": [
-        50,
-        10,
-        950,
-        990
+        0,
+        0,
+        1000,
+        1000
       ],
       "verdict": {
-        "label": "Moderate Carb Option",
+        "label": "Moderate Calories & Lower Protein",
         "level": "neutral"
       },
-      "comparisonSentence": "Compared to the multiseed bread, this standard bread offers less fiber and lower protein relative to its carbohydrate load.",
-      "message": "This option provides a moderate calorie and fat profile, but falls short on dietary fiber compared to whole-grain alternatives. It contributes to your daily carbohydrate and sodium intakes without offering significant micronutrient or protein advantages.",
+      "comparisonSentence": "These options feature lower absolute calories per serving than the multiseed bread, but offer considerably less fiber and protein.",
+      "message": "These snacks present manageable calorie and fat counts per serving, but lack sufficient protein and fiber to address your nutritional deficit goals. They contribute moderately to daily carbohydrate loads without providing robust satiety benefits.",
       "averageNutrients": {
-        "calories": 120,
-        "protein": 4,
-        "totalFat": 2.5,
-        "saturatedFat": 1.5,
-        "carbohydrates": 21,
-        "sugar": 2,
-        "totalFibre": 1.5,
-        "sodium": 150,
-        "addedSugar": 1.5,
-        "potassium": 90,
+        "calories": 105,
+        "protein": 2.5,
+        "totalFat": 2.8,
+        "saturatedFat": 1.3,
+        "carbohydrates": 18,
+        "sugar": 4.5,
+        "totalFibre": 1,
+        "sodium": 85,
+        "addedSugar": 3,
+        "potassium": 80,
         "solubleFibre": 0.5,
         "transFat": 0
       },
-      "orderingTip": "Enjoy in moderation and pair with a protein source to balance your macronutrient intake."
+      "orderingTip": "Stick to strict single-serving portions to avoid excessive refined carbohydrate consumption."
     },
     {
-      "groupName": "Tier 3 - Caution: Cream-Filled Sweet Bread",
+      "groupName": "Tier 3 - Caution: Cream-Filled Processed Bakery Item",
       "scoutItemIndices": [
         2
       ],
       "boundingBox2D": [
-        50,
-        10,
-        950,
-        990
+        0,
+        0,
+        1000,
+        1000
       ],
       "verdict": {
-        "label": "Higher Saturated Fat Warning",
+        "label": "Elevated Saturated Fat & Refined Sugars",
         "level": "warning"
       },
-      "comparisonSentence": "This cream-filled bread contains higher saturated fat and lower protein density than the multiseed bread choice.",
-      "message": "This cream-filled bakery item delivers elevated levels of saturated fat and refined carbohydrates, which will worsen your existing caloric and saturated fat excesses. While it provides energy, the lack of substantial fiber and protein makes it a less favorable nutritional choice.",
+      "comparisonSentence": "This cream-filled pastry delivers higher saturated fat levels that worsen your current 38% excess intake compared to simpler grain options.",
+      "message": "While providing moderate energy, this cream-filled product carries a higher load of saturated fat and refined ingredients that conflict with your current nutritional deficit goals. Frequent consumption exacerbates your saturated fat and carbohydrate overages.",
       "averageNutrients": {
         "calories": 250,
         "protein": 6,
@@ -118,46 +119,13 @@
         "sugar": 19,
         "totalFibre": 1,
         "sodium": 125,
-        "addedSugar": 15,
-        "potassium": 80,
+        "addedSugar": 12,
+        "potassium": 90,
         "solubleFibre": 0.3,
         "transFat": 0.1
       },
-      "orderingTip": "Limit consumption of cream-filled baked goods to prevent exceeding your daily saturated fat and added sugar limits."
-    },
-    {
-      "groupName": "Tier 4 - Alert: Nutrient-Poor Snack Bar",
-      "scoutItemIndices": [
-        3
-      ],
-      "boundingBox2D": [
-        50,
-        10,
-        950,
-        990
-      ],
-      "verdict": {
-        "label": "High Sugar & Low Protein Alert",
-        "level": "alert"
-      },
-      "comparisonSentence": "Unlike the wholesome multiseed bread, this snack bar offers negligible protein and fiber relative to its refined sugar content.",
-      "message": "This snack item is severely lacking in protein and fiber while contributing disproportionately to your daily added sugar and carbohydrate loads. Consuming this will exacerbate your caloric and sugar overconsumption without providing lasting satiety.",
-      "averageNutrients": {
-        "calories": 90,
-        "protein": 1,
-        "totalFat": 3,
-        "saturatedFat": 1,
-        "carbohydrates": 15,
-        "sugar": 7,
-        "totalFibre": 0.5,
-        "sodium": 20,
-        "addedSugar": 6,
-        "potassium": 40,
-        "solubleFibre": 0.1,
-        "transFat": 0
-      },
-      "orderingTip": "Avoid this snack bar and replace it with whole foods or high-protein alternatives to support your nutritional goals."
+      "orderingTip": "Limit consumption of cream fillings to occasional treats rather than daily staples."
     }
   ],
-  "recommendedOption": "Multiseed Bread"
+  "recommendedOption": "Yellow Package Multiseed Bread"
 }
