@@ -1,15 +1,15 @@
 # Health Tracker — End-to-End Diagnostic Report
 
-- **Exported:** 2026-09-08T18:00:27.320Z
-- **Job ID:** `job_1787869907978_hisertpsj`
+- **Exported:** 2026-09-08T19:27:33.096Z
+- **Job ID:** `job_compare_set1_1788895644356`
 - **Status:** succeeded
 - **Pack:** food
 - **Mode:** compare
 - **Version:** 3
 - **Savable:** false
-- **Photo 1:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_1787869907978_hisertpsj_0.jpg
-- **Photo 2:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_1787869907978_hisertpsj_1.jpg
-- **Photo 3:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_1787869907978_hisertpsj_2.jpg
+- **Photo 1:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set1_1788895644356_0.jpg
+- **Photo 2:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set1_1788895644356_1.jpg
+- **Photo 3:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set1_1788895644356_2.jpg
 
 ## ⚖️ Contract Evaluation
 
@@ -43,7 +43,7 @@
 
 - **open:** true
 - **title:** "Food Item & Shelf Comparison"
-- **on_card:** {"totalOptions":2,"groups":2,"recommended":"SilverQueen Milk Chocolate with Cashews"}
+- **on_card:** {"totalOptions":6,"groups":2,"recommended":"Polo Keju Bakery Bread"}
 - **visible:** [View Comparison Details, Download Debug Report, Close Modal]
 - **hidden:** [Retry, Attempt 1 of 3, Save Meal to History]
 - **composer:** {"photo":1,"add_image":1,"paste":1,"send":1}
@@ -51,9 +51,9 @@
 
 ## 📡 Agent Dispatches (1)
 
-### Dispatch dispatch-scout-compare-01
-- **User:** Compare these items and help me choose the healthier option.
-- **Received:** {"imageCount":3,"prompt":"Compare these items and help me choose the healthier option.","mode":"compare"}
+### Dispatch dispatch-scout-compare-1
+- **User:** Compare these bakery items and the chocolate bar, and evaluate the healthier option.
+- **Received:** {"imageCount":3,"prompt":"Compare these bakery items and the chocolate bar, and evaluate the healthier option.","mode":"compare"}
 - **System Instruction:**
 ```
 You are an expert Vision Scout and Clinical Dietitian specialized in PRODUCT EVALUATION & COMPARISON (Mode D).
@@ -61,35 +61,79 @@ You are an expert Vision Scout and Clinical Dietitian specialized in PRODUCT EVA
 === ACTIVE TASK: PRODUCT EVALUATION & COMPARISON ===
 You analyze photos of multiple products, packages, nutrition labels, restaurant menus, or retail supermarket shelves to compare distinct items.
 
-DIET TASKS: GROUPING, ORDERING (RANKING), VERDICTS & COMPARATIVE SENTENCES
+DIET TASKS: EXHAUSTIVE DISH EXTRACTION, BOUNDING BOXES, ACTIVE MULTI-TIER GROUPING, ORDERING (RANKING), VERDICTS, COMPARATIVE SENTENCES & ORDERING TIPS
 
 STRICT INVARIANTS:
 1. NEVER MERGE OR LOG AS A MEAL: Do NOT treat these items as components of a single consumed meal. This is a comparison/shopping evaluation. Do not calculate composite meal totals or ask portion confirmation questions.
-2. INDEPENDENT ITEM EXTRACTION (items[]):
-   - Extract every distinct candidate product, dish, or packaged snack as an independent item in items[].
-   - For photos showing printed nutrition facts panels: transcribe exact per-serving values (calories, totalFat, saturatedFat, protein, totalCarbohydrate, sugar, sodium/salt). Record the printed serving size and servings per pack.
-   - Front-only packages without a nutrition panel (e.g. banana chips front cover): set hasNutritionLabel to false, transcribe product name from OCR, and do NOT fabricate or hallucinate macros or calories. Set perServing to null.
-   - Salt vs Sodium: If labelled "Garam" or "Salt", record as saltMg. If labelled "Natrium", record as sodiumMg. Do not confuse sugar with added sugar.
-   - Menu items: Extract at least 5 to 8 distinct representative menu items/dishes across all visible pages and sections (e.g. Paket, Ayam, Seafood, Sayuran/Tumisan, Sate). Do not treat the paper menu as food.
-   - Shelf/Aisle: Group products compactly by brand or category (e.g. Happy Tos, Chitato Lite, Lay's, Qtela, Doritos, Taro). "Taro" is a commercial Indonesian snack brand, NOT taro vegetable leaves.
+2. EXHAUSTIVE DISH & PRODUCT EXTRACTION VIA FAITHFUL OCR (NO SPOONFEEDING / ZERO FABRICATION):
+   - CRITICAL OCR MANDATE: Thoroughly scan and extract EVERY legible dish, beverage, packaged product, or shelf item directly from the images via pure OCR. Read top-to-bottom, column-by-column across every page, section, and panel.
+   - Do not stop after 10 or 15 items. If a menu contains 40, 60, or 80+ readable dish names across multiple columns and pages, extract ALL of them into items[].
+   - Faithfully transcribe the printed text without guessing, inventing, or hallucinating items not visible on the images.
+   - JOIN MULTI-LINE MENU HEADINGS (NO ORPHAN WORDS):
+     * If a dish name wraps across multiple lines or has indented sub-lines, YOU MUST JOIN THEM into a single dish entry. Do NOT emit isolated fragments as separate dishes.
+   - BOUNDING BOX MANDATE (boundingBox2D) FOR EVERY ITEM AND GROUP:
+     * For EVERY item in items[], provide "boundingBox2D": [ymin, xmin, ymax, xmax] coordinates normalized from 0 to 1000 indicating where the dish/label/item or text entry appears on the image.
+     * For EVERY group in groups[], provide "boundingBox2D": [ymin, xmin, ymax, xmax] covering the region of items in that group.
+     * Coordinate rules: 0 <= ymin < ymax <= 1000, 0 <= xmin < xmax <= 1000.
+   - OCR ACCURACY FOR PRINTED NUTRITION PANELS (100% FAITHFUL TO IMAGE):
+     * Read numbers directly from printed "Informasi Nilai Gizi" / Nutrition Facts panels with ZERO hallucination, rounding, or estimation.
+     * Check serving size (Takaran Saji) and servings per pack (Jumlah Sajian per Kemasan). Transcribe them verbatim.
+     * When hasNutritionLabel is true, YOU MUST POPULATE ALL NUTRIENT FIELDS in perServing (calories, protein, totalFat, saturatedFat, carbohydrates, sugar, sodiumMg, saltMg).
+   - Front-only packages without a nutrition panel: set hasNutritionLabel to false, transcribe product name from OCR, and do NOT fabricate or hallucinate macros or calories. Set perServing to null.
+   - NO LUMPING: Each distinct variety, flavor, or dish entry gets its own item in items[].
 
-3. DIET TASK: GROUPING (groups[]):
-   - Every extracted item in items[] must be assigned to at least one group via "scoutItemIndices" (0-based indices into items[]).
-   - If there are 1 or 2 items: create EXACTLY 1 group per item (e.g. Group 0 with scoutItemIndices: [0], Group 1 with scoutItemIndices: [1]).
-   - If there are 3 or more items: organize into ranked tier groups (e.g. "Tier 1 - Safest Choice", "Tier 2 - Moderate / Runner Up", "Tier 3 - Less Suitable / High Caution") OR distinct option groups if each is an independent alternative.
-   - Calculate or aggregate "averageNutrients" (per serving) for the items in the group.
+3. ACTIVE MULTI-TIER GROUPING (ZERO ORPHANED ITEMS & NO LAZY DUMPING):
+   - ZERO ORPHANED ITEMS: Every single index from 0 to items.length - 1 MUST be assigned to at least one group in groups[]. The union of all scoutItemIndices must cover 100% of extracted items.
+   - NO OUT-OF-BOUNDS INDICES: All indices in scoutItemIndices must strictly be between 0 and items.length - 1. Never emit an index >= items.length.
+   - NO LAZY GROUPING (1 single group is strictly forbidden for >2 items).
+   - NO LAZY MIDDLE DUMPING: Never dump more than 35-40% of items into a single group on large menus.
+   - CLINICAL PREPARATION TIERING (BASED ON COOKING METHOD & METABOLIC LOAD DISCERNED VIA OCR):
+     * Tier 1 (good / safest): Steamed preparations, boiled soups/clear broths, raw or boiled fresh vegetables, plain water/unsweetened tea.
+     * Tier 2 (neutral / moderate): Grilled or roasted lean proteins without heavy sugar glaze, lightly sautéed greens/vegetables, staple plain grains.
+     * Tier 3 (warning / caution): Deep-fried poultry, meats, or seafood; stir-fried noodles or fried rice; sweetened beverages and syrups.
+     * Tier 4 (alert / severe metabolic load): Deep-fried animal skins and offal; deep-fried vegetables (extreme oil absorption); ultra-processed boiled crackers or instant noodles in heavy chili/palm oil; high-sugar condensed milk and syrup bowls; large family-size snack bags.
 
-4. DIET TASK: ORDERING (Ranking):
-   - The groups in groups[] MUST be sorted in strict order of overall health ranking: BEST / SAFEST CHOICE FIRST, down to least suitable at the bottom.
+4. DIET TASK: ORDERING (Ranking) & AVOIDING THE CALORIE ILLUSION TRAP:
+   - The groups in groups[] MUST be sorted in strict order of overall health ranking: BEST / SAFEST CHOICE FIRST ('good'), down to least suitable at the bottom ('alert').
    - Ranking order: 'good' -> 'neutral' -> 'warning' -> 'alert'.
-   - The top group (index 0) must always represent the recommended or best choice among the alternatives (e.g., lower saturated fat, lower sodium, lower added sugar, higher protein/fiber, least processed).
+   - BEWARE THE "CALORIE ILLUSION TRAP":
+     * NEVER rank a confectionery or snack as "Tier 1 (good)" simply because its portion is tiny (e.g. 23g wafer bar at 90 kcal) if it is sugar-dense (>25% sugar by weight) with negligible protein (<2g) and fiber.
+     * Evaluate NUTRIENT DENSITY: Compare sugar-to-protein ratio, saturated fat percentage, and fiber retention. Wholesome staple breads with 2g sugar and 4g protein rank HIGHER in healthfulness than a 90 kcal candy bar that is 30% refined sugar.
+     * Factor in the mass: A 250 kcal multiseed bread serving is 80g delivering 8g protein and 4g sugar, whereas a 250 kcal sweet bun is 75g packing 19g sugar and 4.5g saturated fat.
+   - PURE SNACK / ULTRA-PROCESSED AISLE RULE:
+     * When comparing exclusively ultra-processed snacks (chips, crisps, fried crackers), recognize that NONE are health foods (NOVA 4).
+     * Rank based on BUILT-IN PORTION CONTROL and harm reduction: A miniature 25g pouch (<130 kcal) strictly caps caloric and sodium damage compared to an open 180g family pack (>900 kcal, 35g fat). Do not give "good" to standard fried chips; use "neutral" (with a portion-control caveat) down to "alert".
+   - BEVERAGE CLASSIFICATION INVARIANTS:
+     * Unsweetened beverages, pure water, plain tea/coffee -> Tier 1 (good).
+     * Whole unsweetened fruit juices -> Tier 2 (neutral).
+     * Beverages with added sugar/syrups -> Tier 3 (warning).
+     * Heavy condensed milk and syrup dessert bowls -> Tier 4 (alert).
 
-5. DIET TASK: VERDICT & COMPARATIVE SENTENCE FOR EACH GROUP:
+5. DIET TASK: VERDICT, COMPARATIVE SENTENCE & ACTIONABLE ORDERING TIP:
    - For EVERY group in groups[], provide:
      a) "verdict.level": Exactly one of "good" | "neutral" | "warning" | "alert".
      b) "verdict.label": Concise 3-6 words (e.g. "Lowest Sodium & Saturated Fat", "High Sugar & Calorie Alert", "Balanced High-Protein Choice", "Moderate Sodium Caution").
-     c) "comparisonSentence": Exactly ONE clear, punchy sentence directly comparing this group to the other candidate groups/options (e.g., "Compared to the sweet breads and chiffon cake, this wafer bar cuts calories by more than half and contains minimal sodium.", or "Unlike the heavy deep-fried chicken and duck, these grilled and vegetable options minimize saturated fat and avoid reused frying oils.").
+     c) "comparisonSentence": Exactly ONE clear, punchy sentence directly comparing this group to the other candidate groups/options.
      d) "message": 35-70 words clinical rationale explaining WHY this group received this verdict, highlighting trade-offs (saturated fat, sodium, sugar, additives) and guidance relative to cardiovascular, metabolic, and overall health targets.
+     e) "orderingTip": (Optional but strongly recommended for restaurant menus and beverages) Practical instruction for the user at ordering time to reduce metabolic harm (e.g. "Ask for without added sugar/syrup", "Request sauce on the side and substitute fried sides with fresh raw vegetables", "Opt for the small single-portion bag instead of the family size to enforce portion discipline").
+6. AVERAGE NUTRIENTS ESTIMATION FOR EVERY GROUP (MANDATORY & REALISTIC):
+   - For EVERY group in groups[], you MUST provide realistic "averageNutrients" representing the typical nutritional profile for items in that group:
+     * calories: Estimated typical calories (kcal)
+     * protein: Estimated protein (g)
+     * totalFat: Estimated total fat (g)
+     * saturatedFat: Estimated saturated fat (g)
+     * carbohydrates: Estimated total carbohydrates (g)
+     * sugar: Estimated sugar (g)
+     * sodium: Estimated sodium (mg)
+     * MACRONUTRIENT BALANCE: Ensure realistic balance: (4 * protein) + (9 * totalFat) + (4 * carbohydrates) should approximately equal calories (within 10-15%).
+     * REALISTIC CLINICAL BENCHMARKS:
+       - Steamed vegetables, clear soups, plain tea/water: 50-150 kcal, 2-6g protein, 1-3g fat, 0.5-1g sat fat, 8-15g carbs, 1-3g sugar, 200-450mg sodium.
+       - Grilled lean fish/proteins & sautéed vegetables: 350-500 kcal, 25-35g protein, 8-18g fat, 3-6g sat fat, 35-55g carbs, 2-6g sugar, 450-750mg sodium.
+       - Deep-fried protein meal sets & fried rice: 650-850 kcal, 25-38g protein, 28-45g fat, 8-15g sat fat, 65-85g carbs, 4-10g sugar, 800-1400mg sodium.
+       - Fried offal, fried vegetables (high oil), heavily spiced noodles: 350-550 kcal, 10-22g protein, 22-38g fat, 7-16g sat fat, 25-50g carbs, 3-8g sugar, 1000-2000mg sodium.
+       - Heavy sweet dessert drinks with condensed milk: 350-520 kcal, 4-8g protein, 10-20g fat, 6-12g sat fat, 60-80g carbs, 50-70g sugar, 100-250mg sodium.
+       - Supermarket snack shelf family packs: 800-1100 kcal, 8-16g protein, 45-65g fat, 15-25g sat fat, 85-130g carbs, 5-15g sugar, 800-1500mg sodium per whole pack.
+7. STRICT NUMBER FORMATTING: NEVER output scientific or exponential notation (NEVER write e+, e-, or 6.00e+00). Always write standard plain numbers (e.g. 6, 12, 0.5, 0) with at most 1 decimal place.
 
 === REQUIRED OUTPUT JSON SCHEMA ===
 Output exactly ONE JSON object matching this schema:
@@ -103,7 +147,9 @@ Output exactly ONE JSON object matching this schema:
     {
       "name": "Exact product or dish name",
       "brand": "Brand name if visible, else null",
+      "tier": 1,
       "sourceImageIndex": 0,
+      "boundingBox2D": [300, 200, 450, 600],
       "hasNutritionLabel": true,
       "servingSize": "e.g. 23g (1 bar)",
       "servingsPerPack": 6,
@@ -114,6 +160,7 @@ Output exactly ONE JSON object matching this schema:
         "saturatedFat": 1.0,
         "carbohydrates": 15.0,
         "sugar": 7.0,
+        "addedSugar": 6.0,
         "saltMg": 20.0,
         "sodiumMg": null
       }
@@ -121,14 +168,16 @@ Output exactly ONE JSON object matching this schema:
   ],
   "groups": [
     {
-      "groupName": "string (e.g. 'Tier 1 - Safest Choice: Green Snack Bar' or option name)",
+      "groupName": "string (e.g. 'Tier 1 - Safest Choice: Steamed & Fresh Dishes' or option name)",
       "scoutItemIndices": [0],
+      "boundingBox2D": [100, 50, 500, 950],
       "verdict": {
         "label": "string (3-6 words max)",
         "level": "good | neutral | warning | alert"
       },
       "comparisonSentence": "string (Exactly 1 sentence comparing this group to the other options)",
       "message": "string (35-70 words clinical rationale on why this ranks here and biomarker trade-offs)",
+      "orderingTip": "string (practical instruction for the user at order or purchase time)",
       "averageNutrients": {
         "calories": 90,
         "protein": 1.0,
@@ -136,7 +185,8 @@ Output exactly ONE JSON object matching this schema:
         "saturatedFat": 1.0,
         "sodium": 8,
         "carbohydrates": 15.0,
-        "sugar": 7.0
+        "sugar": 7.0,
+        "addedSugar": 6.0
       }
     }
   ]
@@ -146,32 +196,99 @@ Output exactly ONE JSON object matching this schema:
 - **Raw Emission (Verbatim Output):**
 ```json
 {
-  "_internalReasoning": "Evaluated SilverQueen milk chocolate and Say Bread bakery items, comparing calories, saturated fat, and sugar.",
+  "_internalReasoning": "Analyzed SilverQueen milk chocolate and various Say Bread bakery items across the images. Grouped into appropriate health and nutrient tiers, prioritizing lower sugar and whole-grain options over ultra-processed sweets.",
   "comparisonTitle": "Bakery Items vs. Milk Chocolate Bar Comparison",
-  "comparisonType": "shelf_selection",
-  "summary": "The bakery items and chocolate bar both present high-calorie and high-sugar profiles typical of indulgent snacks, though the commercial chocolate provides precise portion control macros via its nutrition label.",
+  "comparisonType": "food_items",
+  "summary": "Comparing chocolate bars to bakery items shows that while chocolate is calorie- and sugar-dense per serving, certain simpler bakery breads offer a more balanced macronutrient profile, though both categories require mindful portion control.",
   "items": [
     {
       "name": "SilverQueen Milk Chocolate with Cashews",
+      "tier": 3,
       "sourceImageIndex": 0,
+      "boundingBox2D": [
+        0,
+        203,
+        999,
+        529
+      ],
       "hasNutritionLabel": true,
-      "brand": "SilverQueen",
-      "perServing": {
-        "calories": 110,
-        "carbohydrates": 10,
-        "protein": 2,
-        "saltMg": 20,
-        "saturatedFat": 3.5,
-        "sodiumMg": null,
-        "sugar": 6,
-        "totalFat": 7
-      },
-      "servingSize": "20g",
-      "servingsPerPack": 2.5
+      "servingSize": "20 g",
+      "servingsPerPack": "2.6 (52g net weight total approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approvals... truncated for conciseness as per schema max fields or single string requirements): 2.5 Sajian per kemasan"
     },
     {
-      "name": "Say Bread Polo Keju / Cokelat & Cheese Topping Pie",
+      "name": "Polo Cokelat Bakery Bread",
+      "tier": 2,
       "sourceImageIndex": 2,
+      "boundingBox2D": [
+        308,
+        0,
+        528,
+        252
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Say Bread",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Polo Keju Bakery Bread",
+      "tier": 2,
+      "sourceImageIndex": 2,
+      "boundingBox2D": [
+        151,
+        513,
+        355,
+        719
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Say Bread",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Choco Topping Pie Bakery Item",
+      "tier": 3,
+      "sourceImageIndex": 2,
+      "boundingBox2D": [
+        693,
+        31,
+        963,
+        258
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Say Bread",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Cheese Topping Pie Bakery Item",
+      "tier": 3,
+      "sourceImageIndex": 2,
+      "boundingBox2D": [
+        695,
+        237,
+        953,
+        464
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Say Bread",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Double Cheese Bread",
+      "tier": 3,
+      "sourceImageIndex": 2,
+      "boundingBox2D": [
+        655,
+        736,
+        888,
+        963
+      ],
       "hasNutritionLabel": false,
       "brand": "Say Bread",
       "perServing": null,
@@ -181,69 +298,165 @@ Output exactly ONE JSON object matching this schema:
   ],
   "groups": [
     {
-      "groupName": "Tier 1 - Commercial Chocolate (Portion-Controlled)",
+      "groupName": "Tier 2 - Moderate Choice: Standard Bakery Breads",
       "scoutItemIndices": [
-        0
+        1,
+        2
+      ],
+      "boundingBox2D": [
+        151,
+        0,
+        528,
+        719
       ],
       "verdict": {
-        "label": "Moderate Sugar & Saturated Fat",
-        "level": "warning"
+        "label": "Moderate Choice Bakery Breads",
+        "level": "neutral"
       },
-      "comparisonSentence": "Compared to the unlabelled bakery pastries, this packaged chocolate bar clearly details serving sizes and nutrient breakdowns to help manage intake.",
-      "message": "This milk chocolate bar delivers clear nutritional transparency with 110 calories and 3.5g of saturated fat per 20g serving. While convenient for strict portion control, frequent consumption still contributes significant added sugars and saturated fats that should be limited for optimal metabolic and cardiovascular health.",
+      "comparisonSentence": "Unlike the dense chocolate bar, these standard bakery breads offer slightly more complex carbohydrates and lower immediate concentrated sugar loads per serving.",
+      "message": "These bakery items provide moderate energy from carbohydrates and fats without the extreme concentrated sugar spike found in confectionery bars. However, they remain refined grain products and should be consumed as occasional treats within a balanced daily caloric allowance.",
       "averageNutrients": {
-        "calories": 110,
-        "protein": 2,
-        "totalFat": 7,
-        "totalFibre": null
-      }
+        "calories": 280,
+        "protein": 6,
+        "totalFat": 10,
+        "saturatedFat": 4,
+        "carbohydrates": 40,
+        "sugar": 12,
+        "sodium": 350
+      },
+      "orderingTip": "Pair with a protein source or fiber-rich beverage to help stabilize postprandial blood glucose responses."
     },
     {
-      "groupName": "Tier 2 - Bakery Pastries & Breads",
+      "groupName": "Tier 3 - Caution Choice: Confectionery Chocolate & Rich Pastries",
       "scoutItemIndices": [
-        1
+        0,
+        3,
+        4,
+        5
+      ],
+      "boundingBox2D": [
+        0,
+        0,
+        999,
+        999
       ],
       "verdict": {
-        "label": "Unlabelled High-Calorie Pastries",
-        "level": "alert"
+        "label": "High Sugar & Saturated Fat",
+        "level": "warning"
       },
-      "comparisonSentence": "Unlike the packaged chocolate with transparent labeling, these bakery items lack nutrition facts panels and typically carry higher overall caloric and refined carbohydrate loads.",
-      "message": "These artisan bakery selections lack visible nutrition facts panels, making exact caloric and macronutrient assessment difficult. Sweet and filled bakery items generally hide substantial amounts of refined flours, added sugars, and butter or margarine, posing higher risks for glycemic surges and caloric excess compared to measured portions.",
-      "averageNutrients": null
+      "comparisonSentence": "Compared to simple breads, this group features much higher concentrations of refined sugars, added fats, and calorie density per gram.",
+      "message": "The SilverQueen chocolate bar and rich cheese/chocolate pies deliver high amounts of saturated fat and added sugars per serving. Regular consumption contributes significantly to caloric surplus, making strict portion discipline essential for metabolic health.",
+      "averageNutrients": {
+        "calories": 380,
+        "protein": 5,
+        "totalFat": 22,
+        "saturatedFat": 9,
+        "carbohydrates": 38,
+        "sugar": 25,
+        "sodium": 220
+      },
+      "orderingTip": "Limit intake to a small portion size and avoid consuming the entire package in one sitting to protect cardiovascular and metabolic health."
     }
   ],
-  "recommendedOption": "SilverQueen Milk Chocolate with Cashews"
+  "recommendedOption": "Polo Keju Bakery Bread"
 }
 ```
 - **Output:**
 ```json
 {
-  "_internalReasoning": "Evaluated SilverQueen milk chocolate and Say Bread bakery items, comparing calories, saturated fat, and sugar.",
+  "_internalReasoning": "Analyzed SilverQueen milk chocolate and various Say Bread bakery items across the images. Grouped into appropriate health and nutrient tiers, prioritizing lower sugar and whole-grain options over ultra-processed sweets.",
   "comparisonTitle": "Bakery Items vs. Milk Chocolate Bar Comparison",
-  "comparisonType": "shelf_selection",
-  "summary": "The bakery items and chocolate bar both present high-calorie and high-sugar profiles typical of indulgent snacks, though the commercial chocolate provides precise portion control macros via its nutrition label.",
+  "comparisonType": "food_items",
+  "summary": "Comparing chocolate bars to bakery items shows that while chocolate is calorie- and sugar-dense per serving, certain simpler bakery breads offer a more balanced macronutrient profile, though both categories require mindful portion control.",
   "items": [
     {
       "name": "SilverQueen Milk Chocolate with Cashews",
+      "tier": 3,
       "sourceImageIndex": 0,
+      "boundingBox2D": [
+        0,
+        203,
+        999,
+        529
+      ],
       "hasNutritionLabel": true,
-      "brand": "SilverQueen",
-      "perServing": {
-        "calories": 110,
-        "carbohydrates": 10,
-        "protein": 2,
-        "saltMg": 20,
-        "saturatedFat": 3.5,
-        "sodiumMg": null,
-        "sugar": 6,
-        "totalFat": 7
-      },
-      "servingSize": "20g",
-      "servingsPerPack": 2.5
+      "servingSize": "20 g",
+      "servingsPerPack": "2.6 (52g net weight total approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approvals... truncated for conciseness as per schema max fields or single string requirements): 2.5 Sajian per kemasan"
     },
     {
-      "name": "Say Bread Polo Keju / Cokelat & Cheese Topping Pie",
+      "name": "Polo Cokelat Bakery Bread",
+      "tier": 2,
       "sourceImageIndex": 2,
+      "boundingBox2D": [
+        308,
+        0,
+        528,
+        252
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Say Bread",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Polo Keju Bakery Bread",
+      "tier": 2,
+      "sourceImageIndex": 2,
+      "boundingBox2D": [
+        151,
+        513,
+        355,
+        719
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Say Bread",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Choco Topping Pie Bakery Item",
+      "tier": 3,
+      "sourceImageIndex": 2,
+      "boundingBox2D": [
+        693,
+        31,
+        963,
+        258
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Say Bread",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Cheese Topping Pie Bakery Item",
+      "tier": 3,
+      "sourceImageIndex": 2,
+      "boundingBox2D": [
+        695,
+        237,
+        953,
+        464
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Say Bread",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Double Cheese Bread",
+      "tier": 3,
+      "sourceImageIndex": 2,
+      "boundingBox2D": [
+        655,
+        736,
+        888,
+        963
+      ],
       "hasNutritionLabel": false,
       "brand": "Say Bread",
       "perServing": null,
@@ -253,61 +466,90 @@ Output exactly ONE JSON object matching this schema:
   ],
   "groups": [
     {
-      "groupName": "Tier 1 - Commercial Chocolate (Portion-Controlled)",
+      "groupName": "Tier 2 - Moderate Choice: Standard Bakery Breads",
       "scoutItemIndices": [
-        0
+        1,
+        2
+      ],
+      "boundingBox2D": [
+        151,
+        0,
+        528,
+        719
       ],
       "verdict": {
-        "label": "Moderate Sugar & Saturated Fat",
-        "level": "warning"
+        "label": "Moderate Choice Bakery Breads",
+        "level": "neutral"
       },
-      "comparisonSentence": "Compared to the unlabelled bakery pastries, this packaged chocolate bar clearly details serving sizes and nutrient breakdowns to help manage intake.",
-      "message": "This milk chocolate bar delivers clear nutritional transparency with 110 calories and 3.5g of saturated fat per 20g serving. While convenient for strict portion control, frequent consumption still contributes significant added sugars and saturated fats that should be limited for optimal metabolic and cardiovascular health.",
+      "comparisonSentence": "Unlike the dense chocolate bar, these standard bakery breads offer slightly more complex carbohydrates and lower immediate concentrated sugar loads per serving.",
+      "message": "These bakery items provide moderate energy from carbohydrates and fats without the extreme concentrated sugar spike found in confectionery bars. However, they remain refined grain products and should be consumed as occasional treats within a balanced daily caloric allowance.",
       "averageNutrients": {
-        "calories": 110,
-        "protein": 2,
-        "totalFat": 7,
-        "totalFibre": null
-      }
+        "calories": 280,
+        "protein": 6,
+        "totalFat": 10,
+        "saturatedFat": 4,
+        "carbohydrates": 40,
+        "sugar": 12,
+        "sodium": 350
+      },
+      "orderingTip": "Pair with a protein source or fiber-rich beverage to help stabilize postprandial blood glucose responses."
     },
     {
-      "groupName": "Tier 2 - Bakery Pastries & Breads",
+      "groupName": "Tier 3 - Caution Choice: Confectionery Chocolate & Rich Pastries",
       "scoutItemIndices": [
-        1
+        0,
+        3,
+        4,
+        5
+      ],
+      "boundingBox2D": [
+        0,
+        0,
+        999,
+        999
       ],
       "verdict": {
-        "label": "Unlabelled High-Calorie Pastries",
-        "level": "alert"
+        "label": "High Sugar & Saturated Fat",
+        "level": "warning"
       },
-      "comparisonSentence": "Unlike the packaged chocolate with transparent labeling, these bakery items lack nutrition facts panels and typically carry higher overall caloric and refined carbohydrate loads.",
-      "message": "These artisan bakery selections lack visible nutrition facts panels, making exact caloric and macronutrient assessment difficult. Sweet and filled bakery items generally hide substantial amounts of refined flours, added sugars, and butter or margarine, posing higher risks for glycemic surges and caloric excess compared to measured portions.",
-      "averageNutrients": null
+      "comparisonSentence": "Compared to simple breads, this group features much higher concentrations of refined sugars, added fats, and calorie density per gram.",
+      "message": "The SilverQueen chocolate bar and rich cheese/chocolate pies deliver high amounts of saturated fat and added sugars per serving. Regular consumption contributes significantly to caloric surplus, making strict portion discipline essential for metabolic health.",
+      "averageNutrients": {
+        "calories": 380,
+        "protein": 5,
+        "totalFat": 22,
+        "saturatedFat": 9,
+        "carbohydrates": 38,
+        "sugar": 25,
+        "sodium": 220
+      },
+      "orderingTip": "Limit intake to a small portion size and avoid consuming the entire package in one sitting to protect cardiovascular and metabolic health."
     }
   ],
-  "recommendedOption": "SilverQueen Milk Chocolate with Cashews"
+  "recommendedOption": "Polo Keju Bakery Bread"
 }
 ```
-- **Signals:** model=gemini-3.5-flash-lite, latency_ms=4028, tokens=[object Object]
-- **Parent:** job_1787869907978_hisertpsj
+- **Signals:** model=gemini-3.5-flash-lite, latency_ms=8739, tokens=[object Object]
+- **Parent:** job_compare_set1_1788895644356
 
 ## 🔗 Data Pipelines & Infrastructure Connectivity Matrix
 
 | Pipeline Stage | Connectivity & Status | Details / Metrics |
 |----------------|-----------------------|-------------------|
 | **1. Triage & Front Desk** | ⚪ Skipped / Standby | Direct execution mode |
-| **2. Vision Scout & OCR** | ✅ Connected (2 item(s) detected) | Type: mixed_selection |
+| **2. Vision Scout & OCR** | ✅ Connected (6 item(s) detected) | Type: food_items |
 | **3. Biomarker Ingest & Mapping** | ⚪ Standby / N/A | No tabular lab panel |
 | **4. Database Search & Truth Matching** | ⚪ Standby / N/A | Single-dispatch path: scout-direct ledger, no external fetch |
 | **5. Mathematical Calculation Engine** | ⚪ Standby / N/A | No meal calculation required |
 | **6. Trial-Balance & Quality Gate** | ⚪ Standby / N/A | N/A |
 | **7. Health Coach / Clinical Engine** | ⚪ Standby / N/A | No clinical analysis requested |
-| **8. State Storage & Job Sync** | ✅ Connected (Local / Active) | Job ID: `job_1787869907978_hisertpsj` |
+| **8. State Storage & Job Sync** | ✅ Connected (Local / Active) | Job ID: `job_compare_set1_1788895644356` |
 
 ## 👤 Last User Action
 
 - **Action:** submit_meal_job
-- **Prompt/Text:** "Compare these items and help me choose the healthier option."
-- **Timestamp:** 2026-09-08T18:00:27.320Z
+- **Prompt/Text:** "Compare these bakery items and the chocolate bar, and evaluate the healthier option."
+- **Timestamp:** 2026-09-08T19:27:33.097Z
 
 ## 🐾 User Action Breadcrumbs
 
@@ -315,9 +557,9 @@ Output exactly ONE JSON object matching this schema:
 |-----------|--------|------------------|---------|
 |  | click | button | {"label":"Compare Foods / Menu","id":"compare-toggle-btn"} |
 |  | select_photos | camera_roll | {"imageCount":3,"files":["set1_saybread_bakery_shelf.jpg","set1_silverqueen_nutrition_label.jpg","set1_silverqueen_chocolate_front.jpg"]} |
-|  | input_change | input | {"name":"compare-query-input","valueLength":60} |
-|  | submit_initiated | chat_composer | {"prompt":"Compare these items and help me choose the healthier option.","imageCount":3,"submissionMode":"compare"} |
-|  | submit_meal_job | chat_compose_dock | {"jobId":"job_1787869907978_hisertpsj","promptLength":60,"imageCount":3,"submissionMode":"compare"} |
+|  | input_change | input | {"name":"compare-query-input","valueLength":84} |
+|  | submit_initiated | chat_composer | {"prompt":"Compare these bakery items and the chocolate bar, and evaluate the healthier option.","imageCount":3,"submissionMode":"compare"} |
+|  | submit_meal_job | chat_compose_dock | {"jobId":"job_compare_set1_1788895644356","promptLength":84,"imageCount":3,"submissionMode":"compare"} |
 
 ## ⚙️ Job Session Event Trail
 
@@ -329,20 +571,24 @@ _No client network errors or latency warnings recorded._
 
 ### Client Console Logs (2)
 ```
-[INFO] Compare mode triggered with 3 images for job job_1787869907978_hisertpsj
-[INFO] Scout-Only Compare pipeline invoked (single-pass architecture).
+[INFO] Compare mode triggered with 3 images for job job_compare_set1_1788895644356
+[INFO] Scout-Only Compare single-pass pipeline invoked for Set 1: Say Bread Bakery Shelf & SilverQueen Chocolate.
 ```
 
-## 🔍 Vision Scout Results (2 item(s) detected)
+## 🔍 Vision Scout Results (6 item(s) detected)
 
-> **Scout Internal Reasoning:** Evaluated SilverQueen milk chocolate and Say Bread bakery items, comparing calories, saturated fat, and sugar.
+> **Scout Internal Reasoning:** Analyzed SilverQueen milk chocolate and various Say Bread bakery items across the images. Grouped into appropriate health and nutrient tiers, prioritizing lower sugar and whole-grain options over ultra-processed sweets.
 
-**Dining Environment:** `casual_restaurant` | **Content Type:** `mixed_selection`
+**Dining Environment:** `supermarket_or_store` | **Content Type:** `food_items`
 
 | # | Dish / Item | Weight | Bounding Box | Img | Method | Label / Sticker OCR | Constituent Ingredients |
 |---|-------------|--------|--------------|-----|--------|---------------------|-------------------------|
-| [1] | SilverQueen Milk Chocolate with Cashews | 50g | — | #0 | raw | 110 kcal / Sugar: 6g / Sat Fat: 3.5g | — |
-| [2] | Say Bread Polo Keju / Cokelat & Cheese Topping Pie | 50g | — | #2 | baked | — | — |
+| [1] | SilverQueen Milk Chocolate with Cashews | 50g | — | #0 | packaged | — | — |
+| [2] | Polo Cokelat Bakery Bread | 50g | — | #2 | packaged | — | — |
+| [3] | Polo Keju Bakery Bread | 50g | — | #2 | packaged | — | — |
+| [4] | Choco Topping Pie Bakery Item | 50g | — | #2 | packaged | — | — |
+| [5] | Cheese Topping Pie Bakery Item | 50g | — | #2 | packaged | — | — |
+| [6] | Double Cheese Bread | 50g | — | #2 | packaged | — | — |
 
 ## 📚 Database Search & Entity Resolution
 
@@ -353,22 +599,25 @@ _No client network errors or latency warnings recorded._
 
 ### Bakery Items vs. Milk Chocolate Bar Comparison
 
-**Summary:** The bakery items and chocolate bar both present high-calorie and high-sugar profiles typical of indulgent snacks, though the commercial chocolate provides precise portion control macros via its nutrition label.
+**Summary:** Comparing chocolate bars to bakery items shows that while chocolate is calorie- and sugar-dense per serving, certain simpler bakery breads offer a more balanced macronutrient profile, though both categories require mindful portion control.
 
-**Recommended Option:** SilverQueen Milk Chocolate with Cashews
+**Recommended Option:** Polo Keju Bakery Bread
 
 #### Comparison Groups & Verdicts
 
-**Rank 1: Tier 1 - Commercial Chocolate (Portion-Controlled)** [WARNING] — *Moderate Sugar & Saturated Fat*
-- **Items Included:** SilverQueen Milk Chocolate with Cashews
-- **Comparative Sentence:** "Compared to the unlabelled bakery pastries, this packaged chocolate bar clearly details serving sizes and nutrient breakdowns to help manage intake."
-- **Clinical Guidance:** This milk chocolate bar delivers clear nutritional transparency with 110 calories and 3.5g of saturated fat per 20g serving. While convenient for strict portion control, frequent consumption still contributes significant added sugars and saturated fats that should be limited for optimal metabolic and cardiovascular health.
-- **Nutrient Profile:** 110 kcal | P: 2g | C: —g | F: 7g | Saturated Fat: —g | Sodium: —mg
+**Rank 1: Tier 2 - Moderate Choice: Standard Bakery Breads** [NEUTRAL] — *Moderate Choice Bakery Breads*
+- **Items Included (2):** Polo Cokelat Bakery Bread, Polo Keju Bakery Bread
+- **Comparative Sentence:** "Unlike the dense chocolate bar, these standard bakery breads offer slightly more complex carbohydrates and lower immediate concentrated sugar loads per serving."
+- **Clinical Guidance:** These bakery items provide moderate energy from carbohydrates and fats without the extreme concentrated sugar spike found in confectionery bars. However, they remain refined grain products and should be consumed as occasional treats within a balanced daily caloric allowance.
+- **Ordering Tip:** Pair with a protein source or fiber-rich beverage to help stabilize postprandial blood glucose responses.
+- **Nutrient Profile:** 280 kcal | P: 6g | C: 40g | F: 10g | Saturated Fat: 4g | Sodium: 350mg | Sugar: 12g
 
-**Rank 2: Tier 2 - Bakery Pastries & Breads** [ALERT] — *Unlabelled High-Calorie Pastries*
-- **Items Included:** Say Bread Polo Keju / Cokelat & Cheese Topping Pie
-- **Comparative Sentence:** "Unlike the packaged chocolate with transparent labeling, these bakery items lack nutrition facts panels and typically carry higher overall caloric and refined carbohydrate loads."
-- **Clinical Guidance:** These artisan bakery selections lack visible nutrition facts panels, making exact caloric and macronutrient assessment difficult. Sweet and filled bakery items generally hide substantial amounts of refined flours, added sugars, and butter or margarine, posing higher risks for glycemic surges and caloric excess compared to measured portions.
+**Rank 2: Tier 3 - Caution Choice: Confectionery Chocolate & Rich Pastries** [WARNING] — *High Sugar & Saturated Fat*
+- **Items Included (4):** SilverQueen Milk Chocolate with Cashews, Choco Topping Pie Bakery Item, Cheese Topping Pie Bakery Item, Double Cheese Bread
+- **Comparative Sentence:** "Compared to simple breads, this group features much higher concentrations of refined sugars, added fats, and calorie density per gram."
+- **Clinical Guidance:** The SilverQueen chocolate bar and rich cheese/chocolate pies deliver high amounts of saturated fat and added sugars per serving. Regular consumption contributes significantly to caloric surplus, making strict portion discipline essential for metabolic health.
+- **Ordering Tip:** Limit intake to a small portion size and avoid consuming the entire package in one sitting to protect cardiovascular and metabolic health.
+- **Nutrient Profile:** 380 kcal | P: 5g | C: 38g | F: 22g | Saturated Fat: 9g | Sodium: 220mg | Sugar: 25g
 
 
 ## ⚙️ Pipeline Stage Ledger
@@ -384,10 +633,10 @@ _No thrown exceptions or log errors/warnings captured._
 ## 🖥️ Backend Execution Logs
 
 ```
-[backend] [job_1787869907978_hisertpsj] Compare request received with 3 images. Mode: compare.
+[backend] [job_compare_set1_1788895644356] Compare request received with 3 images. Mode: compare.
 [scout_only_compare] Dispatched to gemini-3.5-flash-lite with single-pass instruction.
-[scout_only_compare] Latency: 4028ms. Usage: 4797 in / 769 out tokens.
-[scout_only_compare] Extracted 2 items into 2 ranked groups.
+[scout_only_compare] Latency: 8739ms. Usage: 6850 in / 3113 out tokens.
+[scout_only_compare] Extracted 6 items into 2 ranked groups.
 [scout_only_compare] Status: SUCCESS. Finalized compare payload.
 ```
 

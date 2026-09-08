@@ -18,32 +18,21 @@ DIET TASKS: EXHAUSTIVE DISH EXTRACTION, BOUNDING BOXES, ACTIVE MULTI-TIER GROUPI
 
 STRICT INVARIANTS:
 1. NEVER MERGE OR LOG AS A MEAL: Do NOT treat these items as components of a single consumed meal. This is a comparison/shopping evaluation. Do not calculate composite meal totals or ask portion confirmation questions.
-2. EXHAUSTIVE DISH EXTRACTION & BOUNDING BOXES (NO MISSING DISHES):
-   - CRITICAL: EXTRACT EVERY VISIBLE DISH, FOOD ITEM, BEVERAGE, OR PACKAGED OPTION.
-     * When a restaurant menu contains 30, 40, 50 or more items (e.g. Sambal Bakar Pencok, Aneka Ikan Bakar/Goreng, Seblak, Mie Tek-Tek, Nasi Goreng, Tumisan, Sayuran), YOU MUST EXTRACT ALL OF THEM into items[]. DO NOT STOP AT 5 OR 10. DO NOT TRUNCATE. Extract all distinct dishes across every section.
-     * When analyzing a beverage/juice board (e.g. 30 juice options), extract all distinct juices/drinks.
-     * When analyzing retail shelves or snack racks, scan row-by-row (top shelf, eye-level shelf, lower shelves, bottom shelf). Capture every distinct brand and flavor pack (e.g. Chitato, Lays, Qtela, Happy Tos, Doritos, Taro, Oishi, Kusuka, Lemonilo, Garuda Crunch, Chiki). Extract 40 to 60 distinct snack bags on large shelf displays.
+2. EXHAUSTIVE DISH & PRODUCT EXTRACTION VIA FAITHFUL OCR (NO SPOONFEEDING / ZERO FABRICATION):
+   - CRITICAL OCR MANDATE: Thoroughly scan and extract EVERY legible dish, beverage, packaged product, or shelf item directly from the images via pure OCR. Read top-to-bottom, column-by-column across every page, section, and panel.
+   - Do not stop after 10 or 15 items. If a menu contains 40, 60, or 80+ readable dish names across multiple columns and pages, extract ALL of them into items[].
+   - Faithfully transcribe the printed text without guessing, inventing, or hallucinating items not visible on the images.
    - JOIN MULTI-LINE MENU HEADINGS (NO ORPHAN WORDS):
-     * If a dish name wraps across multiple lines or has indented sub-lines (e.g. 'AYAM GORENG SAMBEL' on line 1 and 'LAMPUNG + NASI' on line 2, or 'AYAM GORENG GEPREK' on line 1 and 'TEPUNG + NASI' on line 2), YOU MUST JOIN THEM into a single dish entry ('Ayam Goreng Sambel Lampung + Nasi', 'Ayam Goreng Geprek Tepung + Nasi'). Do NOT emit isolated fragments like 'LAMPUNG + NASI' or 'TEPUNG + NASI' as separate dishes.
+     * If a dish name wraps across multiple lines or has indented sub-lines, YOU MUST JOIN THEM into a single dish entry. Do NOT emit isolated fragments as separate dishes.
    - BOUNDING BOX MANDATE (boundingBox2D) FOR EVERY ITEM AND GROUP:
      * For EVERY item in items[], provide "boundingBox2D": [ymin, xmin, ymax, xmax] coordinates normalized from 0 to 1000 indicating where the dish/label/item or text entry appears on the image.
-     * For EVERY group in groups[], provide "boundingBox2D": [ymin, xmin, ymax, xmax] (or the bounding region containing the items in that group).
+     * For EVERY group in groups[], provide "boundingBox2D": [ymin, xmin, ymax, xmax] covering the region of items in that group.
      * Coordinate rules: 0 <= ymin < ymax <= 1000, 0 <= xmin < xmax <= 1000.
-   - OCR ACCURACY IS CRITICAL (100% FAITHFUL TO IMAGE):
+   - OCR ACCURACY FOR PRINTED NUTRITION PANELS (100% FAITHFUL TO IMAGE):
      * Read numbers directly from printed "Informasi Nilai Gizi" / Nutrition Facts panels with ZERO hallucination, rounding, or estimation.
-     * Check serving size (Takaran Saji) and servings per pack (Jumlah Sajian per Kemasan). Transcribe them verbatim (e.g. "23g", "80g", "75g", "44g (1 bungkus)", "2.5 sajian").
-     * When hasNutritionLabel is true, YOU MUST POPULATE ALL NUTRIENT FIELDS in perServing (do NOT leave them undefined/missing):
-       - calories: Energi Total (kcal) (e.g. 90, 250, 120)
-       - protein: Protein (g) (e.g. 1.0, 8.0, 6.0, 4.0)
-       - totalFat: Lemak Total (g) (e.g. 3.0, 7.0, 6.0, 2.5)
-       - saturatedFat: Lemak Jenuh (g) (e.g. 1.0, 3.0, 4.5, 1.0)
-       - carbohydrates: Karbohidrat Total (g) (e.g. 15.0, 38.0, 42.0, 21.0)
-       - sugar: Gula (g) (Total sugar printed on label, e.g. 7.0, 4.0, 19.0, 2.0)
-       - addedSugar: Gula Tambahan (g) (Only if explicitly printed, else null or estimate for obvious confections)
-       - sodiumMg: Natrium (mg) (e.g. 20, 330, 125, 120).
-       - saltMg: Only if explicitly printed as "Garam (Salt)", else null.
-     * Never drop or omit calories, protein, totalFat, saturatedFat, carbohydrates, sugar, or sodiumMg when a nutrition table is shown.
-   - Front-only packages without a nutrition panel (e.g. bakery shelf, banana chips front cover): set hasNutritionLabel to false, transcribe product name from OCR, and do NOT fabricate or hallucinate macros or calories. Set perServing to null.
+     * Check serving size (Takaran Saji) and servings per pack (Jumlah Sajian per Kemasan). Transcribe them verbatim.
+     * When hasNutritionLabel is true, YOU MUST POPULATE ALL NUTRIENT FIELDS in perServing (calories, protein, totalFat, saturatedFat, carbohydrates, sugar, sodiumMg, saltMg).
+   - Front-only packages without a nutrition panel: set hasNutritionLabel to false, transcribe product name from OCR, and do NOT fabricate or hallucinate macros or calories. Set perServing to null.
    - NO LUMPING: Each distinct variety, flavor, or dish entry gets its own item in items[].
 
 3. ACTIVE MULTI-TIER GROUPING (ZERO ORPHANED ITEMS & NO LAZY DUMPING):
@@ -51,16 +40,11 @@ STRICT INVARIANTS:
    - NO OUT-OF-BOUNDS INDICES: All indices in scoutItemIndices must strictly be between 0 and items.length - 1. Never emit an index >= items.length.
    - NO LAZY GROUPING (1 single group is strictly forbidden for >2 items).
    - NO LAZY MIDDLE DUMPING: Never dump more than 35-40% of items into a single group on large menus.
-   - CLINICAL PREPARATION TIERING (MANDATORY 4 TIERS FOR MENUS):
-     * Tier 1 (good / safest): Steamed dishes (Pepes Tahu, Pepes Peda), raw/boiled vegetables (Lalapan Rebus, Kangkung Rebus), clear lean soups (Sayur Asem, Sop Ayam Kampung), unsweetened drinks (pure coconut water, plain water/tea).
-     * Tier 2 (neutral / moderate): Grilled lean proteins (Ikan Bakar, Ayam Bakar without thick glaze), lightly sautéed vegetables (Tumis Kangkung, Tumis Caisim, Tumis Toge), whole grain breads.
-     * Tier 3 (warning / caution): Deep-fried meats (Ayam Goreng, Lele Goreng, Bebek Goreng), fried rice (Nasi Goreng), liquid sugar drinks (Es Teh Manis, sweet fruit juices with syrup).
-     * Tier 4 (alert / severe metabolic load):
-       - Deep-fried offal and skins: Sate Kulit, Sate Usus, Kol Goreng (deep-fried cabbage absorbs massive amounts of oxidized oil!), Kerupuk Mie.
-       - Ultra-processed boiled crackers & noodles: Seblak (all variants), Mie Tek-Tek, Mie Ayam.
-       - High saturated fat offal soups: Soto Betawi.
-       - High-sugar condensed milk desserts: Es Teler, Es Campur, Sop Buah.
-       - Large family-size chip bags (>150g).
+   - CLINICAL PREPARATION TIERING (BASED ON COOKING METHOD & METABOLIC LOAD DISCERNED VIA OCR):
+     * Tier 1 (good / safest): Steamed preparations, boiled soups/clear broths, raw or boiled fresh vegetables, plain water/unsweetened tea.
+     * Tier 2 (neutral / moderate): Grilled or roasted lean proteins without heavy sugar glaze, lightly sautéed greens/vegetables, staple plain grains.
+     * Tier 3 (warning / caution): Deep-fried poultry, meats, or seafood; stir-fried noodles or fried rice; sweetened beverages and syrups.
+     * Tier 4 (alert / severe metabolic load): Deep-fried animal skins and offal; deep-fried vegetables (extreme oil absorption); ultra-processed boiled crackers or instant noodles in heavy chili/palm oil; high-sugar condensed milk and syrup bowls; large family-size snack bags.
 
 4. DIET TASK: ORDERING (Ranking) & AVOIDING THE CALORIE ILLUSION TRAP:
    - The groups in groups[] MUST be sorted in strict order of overall health ranking: BEST / SAFEST CHOICE FIRST ('good'), down to least suitable at the bottom ('alert').
@@ -73,10 +57,10 @@ STRICT INVARIANTS:
      * When comparing exclusively ultra-processed snacks (chips, crisps, fried crackers), recognize that NONE are health foods (NOVA 4).
      * Rank based on BUILT-IN PORTION CONTROL and harm reduction: A miniature 25g pouch (<130 kcal) strictly caps caloric and sodium damage compared to an open 180g family pack (>900 kcal, 35g fat). Do not give "good" to standard fried chips; use "neutral" (with a portion-control caveat) down to "alert".
    - BEVERAGE CLASSIFICATION INVARIANTS:
-     * Pure coconut water & plain tea/coffee -> Tier 1 (good).
+     * Unsweetened beverages, pure water, plain tea/coffee -> Tier 1 (good).
      * Whole unsweetened fruit juices -> Tier 2 (neutral).
-     * Liquid sugar drinks (Es Teh Manis, Es Jeruk with syrup, Lemon Jelly) -> Tier 3 (warning).
-     * Heavy condensed milk and syrup bowls (Es Teler, Es Campur, Sop Buah) -> Tier 4 (alert).
+     * Beverages with added sugar/syrups -> Tier 3 (warning).
+     * Heavy condensed milk and syrup dessert bowls -> Tier 4 (alert).
 
 5. DIET TASK: VERDICT, COMPARATIVE SENTENCE & ACTIONABLE ORDERING TIP:
    - For EVERY group in groups[], provide:
@@ -84,8 +68,25 @@ STRICT INVARIANTS:
      b) "verdict.label": Concise 3-6 words (e.g. "Lowest Sodium & Saturated Fat", "High Sugar & Calorie Alert", "Balanced High-Protein Choice", "Moderate Sodium Caution").
      c) "comparisonSentence": Exactly ONE clear, punchy sentence directly comparing this group to the other candidate groups/options.
      d) "message": 35-70 words clinical rationale explaining WHY this group received this verdict, highlighting trade-offs (saturated fat, sodium, sugar, additives) and guidance relative to cardiovascular, metabolic, and overall health targets.
-     e) "orderingTip": (Optional but strongly recommended for restaurant menus and beverages) Practical instruction for the user at ordering time to reduce metabolic harm (e.g. "Ask for 'tanpa gula dan tanpa susu kental manis' (no added syrup or condensed milk)", "Request sambal on the side and substitute fried cabbage with fresh raw lalapan", "Opt for the small 25g bag instead of the family size to enforce portion discipline").
-6. STRICT NUMBER FORMATTING: NEVER output scientific or exponential notation (NEVER write e+, e-, or 6.00e+00). Always write standard plain numbers (e.g. 6, 12, 0.5, 0) with at most 1 decimal place.
+     e) "orderingTip": (Optional but strongly recommended for restaurant menus and beverages) Practical instruction for the user at ordering time to reduce metabolic harm (e.g. "Ask for without added sugar/syrup", "Request sauce on the side and substitute fried sides with fresh raw vegetables", "Opt for the small single-portion bag instead of the family size to enforce portion discipline").
+6. AVERAGE NUTRIENTS ESTIMATION FOR EVERY GROUP (MANDATORY & REALISTIC):
+   - For EVERY group in groups[], you MUST provide realistic "averageNutrients" representing the typical nutritional profile for items in that group:
+     * calories: Estimated typical calories (kcal)
+     * protein: Estimated protein (g)
+     * totalFat: Estimated total fat (g)
+     * saturatedFat: Estimated saturated fat (g)
+     * carbohydrates: Estimated total carbohydrates (g)
+     * sugar: Estimated sugar (g)
+     * sodium: Estimated sodium (mg)
+     * MACRONUTRIENT BALANCE: Ensure realistic balance: (4 * protein) + (9 * totalFat) + (4 * carbohydrates) should approximately equal calories (within 10-15%).
+     * REALISTIC CLINICAL BENCHMARKS:
+       - Steamed vegetables, clear soups, plain tea/water: 50-150 kcal, 2-6g protein, 1-3g fat, 0.5-1g sat fat, 8-15g carbs, 1-3g sugar, 200-450mg sodium.
+       - Grilled lean fish/proteins & sautéed vegetables: 350-500 kcal, 25-35g protein, 8-18g fat, 3-6g sat fat, 35-55g carbs, 2-6g sugar, 450-750mg sodium.
+       - Deep-fried protein meal sets & fried rice: 650-850 kcal, 25-38g protein, 28-45g fat, 8-15g sat fat, 65-85g carbs, 4-10g sugar, 800-1400mg sodium.
+       - Fried offal, fried vegetables (high oil), heavily spiced noodles: 350-550 kcal, 10-22g protein, 22-38g fat, 7-16g sat fat, 25-50g carbs, 3-8g sugar, 1000-2000mg sodium.
+       - Heavy sweet dessert drinks with condensed milk: 350-520 kcal, 4-8g protein, 10-20g fat, 6-12g sat fat, 60-80g carbs, 50-70g sugar, 100-250mg sodium.
+       - Supermarket snack shelf family packs: 800-1100 kcal, 8-16g protein, 45-65g fat, 15-25g sat fat, 85-130g carbs, 5-15g sugar, 800-1500mg sodium per whole pack.
+7. STRICT NUMBER FORMATTING: NEVER output scientific or exponential notation (NEVER write e+, e-, or 6.00e+00). Always write standard plain numbers (e.g. 6, 12, 0.5, 0) with at most 1 decimal place.
 
 === REQUIRED OUTPUT JSON SCHEMA ===
 Output exactly ONE JSON object matching this schema:
@@ -169,10 +170,10 @@ export function buildScoutComparePrompt(
 
   const base = `=== ACTIVE TASK: PRODUCT EVALUATION, EXHAUSTIVE DISH EXTRACTION, DIET GROUPING, ORDERING & VERDICTS ===
 Analyze all ${imageCount} provided comparison image(s).
-1. EXHAUSTIVE EXTRACTION: Extract EVERY distinct food product, labelled snack, menu dish (do not miss any items; extract every dish across all sections), or shelf brand into items[] with precise boundingBox2D coordinates.${multiImageRule}
+1. EXHAUSTIVE EXTRACTION (NO SAMPLING): Extract EVERY distinct food product, labelled snack, or menu dish visible into items[] with precise boundingBox2D coordinates.${multiImageRule} Do NOT merely sample 5-10 dishes. On menus or shelves with many options, perform a thorough, multi-column OCR scan and transcribe as many distinct dishes/products as legible across both pages/columns.
 2. TIER ASSIGNMENT: In items[], tag every item with its diet tier (tier: 1 for safest/healthiest, 2 for moderate, 3 for caution/warning, 4 for alert/severe).
 3. ACTIVE MULTI-TIER GROUPING: In groups[], create matching ranked tiers (Tier 1, Tier 2, Tier 3, Tier 4). Map every item index (from 0 to items.length - 1) into scoutItemIndices. Zero orphaned items, no out-of-bounds indices.
-4. ORDERING & VERDICTS: Order groups from best/safest choice down to alert. Provide verdict level, 3-6 word label, comparative sentence, clinical advice message, ordering tips, and average nutrients for each group.`;
+4. ORDERING & VERDICTS: Order groups from best/safest choice down to alert. Provide verdict level, 3-6 word label, comparative sentence, clinical advice message, ordering tips, and realistic average nutrients for each group.`;
 
   if (isGeneric) {
     return `${base}${contextPrompt}`;
@@ -268,21 +269,19 @@ export const scoutOnlyCompareResponseSchema = {
           },
           averageNutrients: {
             type: Type.OBJECT,
-            nullable: true,
             properties: {
-              calories: { type: Type.NUMBER, nullable: true },
-              protein: { type: Type.NUMBER, nullable: true },
-              totalFat: { type: Type.NUMBER, nullable: true },
-              saturatedFat: { type: Type.NUMBER, nullable: true },
-              sodium: { type: Type.NUMBER, nullable: true },
-              carbohydrates: { type: Type.NUMBER, nullable: true },
-              sugar: { type: Type.NUMBER, nullable: true },
-              addedSugar: { type: Type.NUMBER, nullable: true },
-              totalFibre: { type: Type.NUMBER, nullable: true },
+              calories: { type: Type.NUMBER, description: "Typical average calories in kcal" },
+              protein: { type: Type.NUMBER, description: "Typical average protein in grams" },
+              totalFat: { type: Type.NUMBER, description: "Typical average total fat in grams" },
+              saturatedFat: { type: Type.NUMBER, description: "Typical average saturated fat in grams" },
+              carbohydrates: { type: Type.NUMBER, description: "Typical average carbohydrates in grams" },
+              sugar: { type: Type.NUMBER, description: "Typical average sugar in grams" },
+              sodium: { type: Type.NUMBER, description: "Typical average sodium in mg" },
             },
+            required: ["calories", "protein", "totalFat", "saturatedFat", "carbohydrates", "sugar", "sodium"],
           },
         },
-        required: ["groupName", "scoutItemIndices", "boundingBox2D", "verdict", "comparisonSentence", "message"],
+        required: ["groupName", "scoutItemIndices", "boundingBox2D", "verdict", "comparisonSentence", "message", "averageNutrients"],
       },
     },
   },

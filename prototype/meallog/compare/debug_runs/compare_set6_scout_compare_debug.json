@@ -1,949 +1,869 @@
 {
-  "_internalReasoning": "Extracted all visible menu items and categorized them into tiers based on cooking methods, protein quality, and metabolic load.",
-  "comparisonTitle": "Restaurant Menu Metabolic Evaluation & Ranking",
-  "comparisonType": "menu_items",
-  "summary": "This menu evaluation ranks Indonesian grilled fish and chicken dishes against fried rice, seblak, and battered seafood. Grilled and clear broth preparations (Tier 2) offer superior metabolic stability compared to deep-fried items, heavy sweet-and-sour sauces, and processed noodles (Tiers 3 and 4).",
+  "_internalReasoning": "Evaluated a shelf of ultra-processed snack chips and categorized them into tiers based on portion size, fat content, and sodium density.",
+  "comparisonTitle": "Supermarket Shelf Snack Comparison",
+  "comparisonType": "shelf_selection",
+  "summary": "This shelf consists entirely of ultra-processed, fried snack chips and crisps, which carry high caloric, sodium, and saturated fat densities. Portion control through smaller packs or lighter formulations is the key strategy for harm reduction.",
   "items": [
     {
-      "name": "NILA BAKAR / GR + NASI",
-      "tier": 2,
+      "name": "Happy Tos Tortilla Chips Corn Chips",
+      "tier": 3,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        220,
-        78,
-        240,
-        343
+        108,
+        44,
+        388,
+        303
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Happy Tos",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "BAWAL BAKAR / GR + NASI",
-      "tier": 2,
+      "name": "Happy Tos Tortilla Chips",
+      "tier": 3,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        248,
-        79,
-        267,
-        363
+        131,
+        237,
+        369,
+        442
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Happy Tos",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "BANDENG BAKAR / GR + NASI",
-      "tier": 2,
+      "name": "Oishi Popcorn",
+      "tier": 3,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        273,
-        83,
-        292,
-        401
+        189,
+        411,
+        353,
+        537
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Oishi",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "TONGKOL BAKAR / GR + NASI",
-      "tier": 2,
+      "name": "Chitato Lite",
+      "tier": 3,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        298,
-        83,
-        317,
-        404
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "CUE BAKAR / GR + NASI",
-      "tier": 2,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        323,
-        88,
+        107,
+        517,
         342,
-        338
+        742
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Chitato",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "GURAME BAKAR / GORENG + NASI",
+      "name": "Lays",
       "tier": 3,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        348,
-        92,
-        368,
-        455
+        129,
+        706,
+        327,
+        895
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Lays",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "GURAME ASAM MANIS + NASI",
+      "name": "Japota",
       "tier": 3,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        374,
-        93,
-        393,
-        406
+        57,
+        835,
+        313,
+        999
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Japota",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "GURAME VILET ASAM MANIS + NASI",
+      "name": "Jetz Tortilla",
       "tier": 3,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        397,
-        95,
-        417,
-        475
+        410,
+        36,
+        580,
+        255
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Jetz",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "IKAN QUE BAKAR / GR + NASI",
-      "tier": 2,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        421,
-        95,
-        440,
-        410
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "BARONANG BAKAR / GR + NASI",
-      "tier": 2,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        444,
-        99,
-        463,
-        422
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "IKAN BAWAL ASEM MANIS + NASI",
+      "name": "Happy Tos Snack",
       "tier": 3,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        468,
-        103,
-        487,
-        451
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "IKAN NILA GARANG ASEM + NASI",
-      "tier": 2,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        492,
-        103,
-        510,
-        453
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "AYAM GARANG ASEM + NASI",
-      "tier": 2,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        514,
-        114,
-        532,
-        403
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "TONGKOL GARANG ASEM + NASI",
-      "tier": 2,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        534,
-        115,
-        553,
-        447
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "GURAME GARANG ASEM + NASI",
-      "tier": 2,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        558,
-        118,
-        577,
-        439
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "AYAM MERCON + NASI",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        583,
-        119,
-        600,
-        348
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "TONGKOL SUIR PETE + NASI",
-      "tier": 2,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        606,
-        122,
-        622,
-        409
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "TONGKOL SUIR JENGKOL + NASI",
-      "tier": 2,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        623,
-        126,
-        642,
-        451
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "AYAM BAKAR + NASI",
-      "tier": 2,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        720,
-        142,
-        734,
-        335
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "AYAM BAKAR SAMBEL",
-      "tier": 2,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        738,
-        143,
-        752,
-        355
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "LAMPUNG + NASI",
-      "tier": 2,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        764,
-        147,
-        777,
-        319
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "AYAM GORENG SAMBEL",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        778,
-        146,
-        793,
+        399,
+        211,
+        554,
         381
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Happy Tos",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "LAMPUNG + NASI",
-      "tier": 2,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        801,
-        150,
-        814,
-        318
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "AYAM ASAM MANIS + NASI",
+      "name": "Happy Tos Blue",
       "tier": 3,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        816,
-        152,
-        832,
-        403
+        389,
+        345,
+        534,
+        489
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Happy Tos",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "AYAM GORENG GEPREK",
+      "name": "Happy Tos Yellow",
       "tier": 3,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        841,
-        156,
-        856,
-        383
+        369,
+        449,
+        521,
+        606
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Happy Tos",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "TEPUNG + NASI",
+      "name": "Qtela Singkong",
       "tier": 3,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        862,
-        160,
-        874,
-        309
+        358,
+        574,
+        506,
+        747
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Qtela",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "AYAM BAKAR SAMBEL IJO + NASI",
-      "tier": 2,
+      "name": "Lays Way",
+      "tier": 3,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        875,
+        355,
+        731,
+        486,
+        872
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Lays",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Japota Family Pack",
+      "tier": 4,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        326,
+        848,
+        471,
+        990
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Japota",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Doritos Jagung Bakar",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        595,
+        12,
+        706,
+        192
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Doritos",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Doritos Nacho Cheese",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        582,
         163,
-        891,
-        461
+        678,
+        316
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Doritos",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "AYAM GORENG SAMBEL IJO + NASI",
+      "name": "Oishi Panchos Barbeque",
       "tier": 3,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        892,
-        166,
-        907,
-        484
+        566,
+        276,
+        663,
+        417
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Oishi",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "AYAM GORENG SAMBEL JUDES",
+      "name": "Oishi Panchos Cheese",
       "tier": 3,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        912,
-        167,
-        928,
-        448
+        549,
+        396,
+        650,
+        507
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Oishi",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "NASI GORENG SEAFOOD",
+      "name": "Oishi Panchos Sweet Chili",
       "tier": 3,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        217,
-        655,
-        232,
-        910
+        538,
+        483,
+        634,
+        608
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Oishi",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "NASI GORENG SPESIAL",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        243,
-        656,
-        258,
-        892
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "NASI GORENG PETE",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        268,
-        657,
-        283,
-        856
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "NASI GORENG JENGKOL",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        294,
-        657,
-        308,
-        903
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "NASI GORENG SOSIS",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        316,
-        656,
-        332,
-        865
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "NASI GORENG BAKSO",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        340,
-        657,
-        356,
-        878
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "NASI GORENG KORNET",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        365,
-        656,
-        381,
-        890
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "NASI GORENG TELOR DADAR",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        386,
-        657,
-        401,
-        953
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "NASI GORENG AYAM",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        413,
-        656,
-        428,
-        868
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "SEBLAK COBEK VIRAL",
+      "name": "Qtela Family Pack Barbeque",
       "tier": 4,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        502,
-        653,
-        519,
-        870
+        516,
+        597,
+        630,
+        742
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Qtela",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "SEBLAK SEAFOOD",
+      "name": "Qtela Family Pack Balado",
       "tier": 4,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        530,
-        655,
-        545,
-        834
+        499,
+        725,
+        604,
+        847
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Qtela",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "SEBLAK CEKER",
-      "tier": 4,
+      "name": "Qtela Rumput Laut",
+      "tier": 3,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        555,
-        655,
-        569,
+        484,
+        834,
+        584,
+        963
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Qtela",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "GunBee Layers",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        706,
+        1,
+        804,
+        149
+      ],
+      "hasNutritionLabel": false,
+      "brand": "GunBee",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "GunsBee Layers Flavors",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        696,
+        125,
+        785,
+        258
+      ],
+      "hasNutritionLabel": false,
+      "brand": "GunsBee",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "GunBee Flavors",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        684,
+        230,
+        764,
+        363
+      ],
+      "hasNutritionLabel": false,
+      "brand": "GunBee",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Chiki Popcorn",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        671,
+        335,
+        747,
+        449
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Chiki",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Tostos Tortilla Chips",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        650,
+        427,
+        730,
+        524
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Tostos",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Tostos Green",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        642,
+        513,
+        719,
+        600
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Tostos",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Chuba Cassava",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        629,
+        608,
+        706,
+        718
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Chuba",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Chuba Cassava Balado",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        615,
+        701,
+        693,
         804
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Chuba",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "CEKER MERCON",
-      "tier": 4,
+      "name": "Chuba Singkong",
+      "tier": 3,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        577,
-        655,
+        601,
+        792,
+        679,
+        896
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Chuba",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Kusuka Singkong",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
         592,
-        801
+        887,
+        661,
+        994
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Kusuka",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "MIE TEK - TEK KUAH",
+      "name": "Chiki Twist",
       "tier": 3,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        602,
-        655,
-        616,
-        853
+        887,
+        14,
+        994,
+        142
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Chiki",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "MIE TEK - TEK SOSIS",
+      "name": "Taro Net BBQ",
       "tier": 3,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        624,
-        655,
-        638,
-        848
+        875,
+        114,
+        959,
+        256
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Taro",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "MIE TEK - TEK BAKSO",
+      "name": "Taro Net Seaweed",
       "tier": 3,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        643,
-        655,
-        657,
-        860
+        834,
+        230,
+        934,
+        355
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Taro",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "MIE TEK - TEK KORNET",
+      "name": "Krunchy Corn Tornado",
       "tier": 3,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        662,
-        655,
-        676,
+        776,
+        161,
+        863,
+        301
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Krunchy",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Wonhae Snack",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        776,
+        283,
+        834,
+        381
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Wonhae",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Wonhae Snack Variant",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        748,
+        362,
+        822,
+        451
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Wonhae",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Wonhae Snack Spicy",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        738,
+        432,
+        807,
+        526
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Wonhae",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Wonhae Black",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        727,
+        517,
+        796,
+        601
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Wonhae",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Chimi Snack",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        715,
+        590,
+        783,
+        672
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Chimi",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Chimi Cassava",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        706,
+        663,
+        770,
+        747
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Chimi",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Chimi Chips",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        696,
+        735,
+        760,
+        822
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Chimi",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Chimi Balado",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        689,
+        804,
+        748,
         878
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Chimi",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "MIE TEK - TEK SEAFOOD",
+      "name": "Qtela Snack",
       "tier": 3,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        680,
-        655,
-        696,
-        883
+        676,
+        867,
+        730,
+        942
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Qtela",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "KWETIAU GORENG BAKSO SOSIS",
+      "name": "Taro Net Original",
       "tier": 3,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        700,
-        656,
-        715,
-        959
+        738,
+        884,
+        804,
+        961
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Taro",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "KWETIAU GORENG SEAFOOD",
-      "tier": 3,
+      "name": "Kusuka Family Pack",
+      "tier": 4,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        719,
-        656,
-        734,
-        932
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "KWETIAU KUAH SOSIS BAKSO",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        737,
-        656,
-        752,
-        926
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "KWETIAU SPECIAL",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        759,
-        656,
-        773,
-        829
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "KWETIAU AYAM",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        778,
-        657,
-        792,
-        831
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "MIE TEK - TEK SPECIAL",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        798,
-        657,
-        812,
-        865
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "MIE TEK - TEK AYAM",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        816,
-        657,
+        763,
+        818,
         830,
-        840
+        887
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Kusuka",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "SEAFOOD TUMPAH",
-      "tier": 2,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        907,
-        654,
-        921,
-        831
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "CUMI GORENG TEPUNG + NASI",
-      "tier": 4,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        926,
-        654,
-        940,
-        935
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "CUMI GORENG TEPUNG",
-      "tier": 4,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        945,
-        654,
-        959,
-        875
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "ASAM MANIS + NASI",
+      "name": "Kusuka Chips",
       "tier": 3,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        964,
-        653,
-        978,
-        868
+        769,
+        755,
+        839,
+        822
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Kusuka",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "CUMI SAOS ASAM MANIS",
+      "name": "Kusuka Classic",
       "tier": 3,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        982,
-        655,
-        996,
-        876
+        781,
+        688,
+        852,
+        764
       ],
       "hasNutritionLabel": false,
-      "brand": null,
+      "brand": "Kusuka",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Kusuka Seaweed",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        789,
+        621,
+        867,
+        695
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Kusuka",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Taro Net Family",
+      "tier": 4,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        735,
+        949,
+        796,
+        999
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Taro",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Taro Net Mini",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        824,
+        52,
+        874,
+        192
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Taro",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Taro Net Pack",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        834,
+        347,
+        915,
+        461
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Taro Net",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Taro Net Snack",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        828,
+        449,
+        894,
+        540
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Taro",
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Taro Net Special",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        818,
+        517,
+        882,
+        601
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Taro",
       "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
@@ -951,63 +871,30 @@
   ],
   "groups": [
     {
-      "groupName": "Tier 2 - Grilled Fish & Clear Broths (Safest Choice)",
+      "groupName": "Tier 3 - Standard Snack Packs",
       "scoutItemIndices": [
         0,
         1,
         2,
         3,
         4,
-        8,
-        9,
-        11,
-        12,
-        13,
-        14,
-        16,
-        17,
-        18,
-        19,
-        20,
-        22,
-        26,
-        54
-      ],
-      "boundingBox2D": [
-        200,
-        70,
-        930,
-        480
-      ],
-      "verdict": {
-        "label": "Best Choice: Grilled & Broths",
-        "level": "good"
-      },
-      "comparisonSentence": "Grilled fish and clear broth dishes provide high lean protein and omega-3s with significantly lower trans-fats and sodium than fried noodles or seblak.",
-      "message": "These grilled and simmered preparations offer lean fish and poultry proteins combined with wholesome cooking methods, avoiding heavy batter absorption. They support stable glycemic control and heart health better than fried or processed alternatives.",
-      "averageNutrients": {
-        "calories": 420,
-        "protein": 30,
-        "totalFat": 12,
-        "saturatedFat": 3,
-        "carbohydrates": 45,
-        "sugar": 3,
-        "sodium": 550
-      },
-      "orderingTip": "Opt for grilled fish or chicken without sweet soy glaze and request sambal on the side."
-    },
-    {
-      "groupName": "Tier 3 - Fried Poultry, Fried Rice & Noodles (Moderate Caution)",
-      "scoutItemIndices": [
         5,
         6,
         7,
+        8,
+        9,
         10,
+        11,
+        14,
         15,
+        16,
+        17,
         21,
+        22,
         23,
         24,
         25,
+        26,
         27,
         28,
         29,
@@ -1019,10 +906,13 @@
         35,
         36,
         37,
+        38,
+        39,
+        40,
+        41,
         42,
         43,
         44,
-        45,
         46,
         47,
         48,
@@ -1030,66 +920,64 @@
         50,
         51,
         52,
-        56,
-        57
+        53
       ],
       "boundingBox2D": [
-        200,
-        480,
-        999,
-        999
+        50,
+        0,
+        950,
+        1000
       ],
       "verdict": {
-        "label": "Moderate Caution: Fried & Noodles",
+        "label": "Moderate Portion Caution",
         "level": "warning"
       },
-      "comparisonSentence": "Unlike grilled proteins, fried rice, battered items, and fried noodles introduce elevated saturated fats and refined carbohydrates.",
-      "message": "Frequent consumption of deep-fried dishes and wok-fried noodles increases cardiovascular and metabolic strain due to high oil absorption, refined carbohydrates, and elevated sodium levels.",
+      "comparisonSentence": "Unlike family-size bags, these standard-size snack packs provide moderate portions but still deliver high sodium and saturated fat.",
+      "message": "These standard bags of fried chips and extruded snacks are high in refined carbohydrates, sodium, and pro-inflammatory fats. While they represent a standard single-serving size compared to family packs, frequent consumption promotes blood pressure elevation and lipid dysregulation. Restrict intake to occasional treats and pair with hydrating water.",
       "averageNutrients": {
-        "calories": 720,
-        "protein": 24,
-        "totalFat": 32,
-        "saturatedFat": 9,
-        "carbohydrates": 82,
-        "sugar": 6,
-        "sodium": 1150
+        "calories": 160,
+        "protein": 2,
+        "totalFat": 10,
+        "saturatedFat": 3.5,
+        "carbohydrates": 16,
+        "sugar": 1,
+        "sodium": 220
       },
-      "orderingTip": "Share portions or request less oil and salt when ordering fried rice or noodle dishes."
+      "orderingTip": "Opt for smaller individual pouches rather than multi-serving bags to enforce strict portion discipline."
     },
     {
-      "groupName": "Tier 4 - Seblak & Battered Seafood (Severe Metabolic Load)",
+      "groupName": "Tier 4 - Family Size Snack Packs",
       "scoutItemIndices": [
-        38,
-        39,
-        40,
-        41,
-        53,
-        55,
-        58
+        12,
+        13,
+        18,
+        19,
+        20,
+        45
       ],
       "boundingBox2D": [
-        500,
-        640,
-        970,
+        326,
+        597,
+        830,
         990
       ],
       "verdict": {
-        "label": "High Sodium & Oil Alert",
+        "label": "High Calorie & Sodium Alert",
         "level": "alert"
       },
-      "comparisonSentence": "Seblak and heavily battered deep-fried seafood carry extreme sodium, inflammatory oils, and refined starch loads compared to clean grilled options.",
-      "message": "Seblak bowls and deep-fried battered squid combine heavy oil absorption with ultra-processed crackers, chili pastes, and high sodium additives, creating a severe metabolic load that spikes blood pressure and triglycerides.",
+      "comparisonSentence": "Compared to individual snack pouches, these large family packs present a severe metabolic load due to uncontrolled overconsumption risks.",
+      "message": "Family-sized snack bags encourage mindless overeating, easily pushing caloric intake past 800-1000 kcal per session alongside excessive sodium and trans/saturated fats. This triggers acute glycemic variability and vascular strain. Avoid purchasing these large formats if managing weight, blood pressure, or cardiovascular risk factors.",
       "averageNutrients": {
-        "calories": 680,
-        "protein": 15,
-        "totalFat": 38,
-        "saturatedFat": 12,
-        "carbohydrates": 65,
-        "sugar": 8,
-        "sodium": 1600
+        "calories": 850,
+        "protein": 8,
+        "totalFat": 50,
+        "saturatedFat": 18,
+        "carbohydrates": 90,
+        "sugar": 4,
+        "sodium": 1100
       },
-      "orderingTip": "Avoid seblak and deep-fried battered dishes entirely if managing hypertension or metabolic syndrome."
+      "orderingTip": "Avoid buying family-size formats; if purchased, decant a tiny single portion into a small bowl and seal the rest away."
     }
   ],
-  "recommendedOption": "NILA BAKAR / GR + NASI"
+  "recommendedOption": "Standard Snack Packs"
 }

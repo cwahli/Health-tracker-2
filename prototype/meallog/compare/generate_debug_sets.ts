@@ -29,6 +29,19 @@ interface SetConfig {
 
 const setsToRun: SetConfig[] = [
   {
+    key: "1",
+    name: "Set 1: Say Bread Bakery Shelf & SilverQueen Chocolate",
+    description: "Bakery bread shelf vs chocolate bar with nutrition label",
+    files: [
+      "set1_saybread_bakery_shelf.jpg",
+      "set1_silverqueen_nutrition_label.jpg",
+      "set1_silverqueen_chocolate_front.jpg",
+    ],
+    userPrompt: "Compare these bakery items and the chocolate bar, and evaluate the healthier option.",
+    contentType: "food_items",
+    outputFilename: "debug_set1_saybread_silverqueen.md",
+  },
+  {
     key: "2",
     name: "Set 2: 4 Snack & Pack Nutrition Labels",
     description: "4 snack labels and pack fronts (green bar, pack front, yellow cake, blue bread)",
@@ -50,7 +63,7 @@ const setsToRun: SetConfig[] = [
       "set3_restaurant_menu_page1.jpg",
       "set3_restaurant_menu_page2.jpg",
     ],
-    userPrompt: "What are the healthier options on this menu?",
+    userPrompt: "Extract and compare all visible dishes across both pages of this menu. Group and rank them from healthiest to least healthy.",
     contentType: "menu_items",
     outputFilename: "debug_set3_restaurant_menu.md",
   },
@@ -143,6 +156,55 @@ async function runSet(cfg: SetConfig) {
   console.log(`[Response received in ${latencyMs}ms]`);
   console.log(`Extracted ${scoutJson.items?.length || 0} items across ${scoutJson.groups?.length || 0} groups.`);
 
+  // Auto-reconcile group indices and orphan items
+  if (Array.isArray(scoutJson.groups) && Array.isArray(scoutJson.items)) {
+    const totalItems = scoutJson.items.length;
+    scoutJson.groups.forEach((g: any) => {
+      if (Array.isArray(g.scoutItemIndices)) {
+        g.scoutItemIndices = g.scoutItemIndices.filter((idx: any) => typeof idx === "number" && idx >= 0 && idx < totalItems);
+      } else {
+        g.scoutItemIndices = [];
+      }
+    });
+
+    const assigned = new Set<number>();
+    scoutJson.groups.forEach((g: any) => {
+      g.scoutItemIndices.forEach((idx: number) => assigned.add(idx));
+    });
+
+    for (let i = 0; i < totalItems; i++) {
+      if (!assigned.has(i)) {
+        const it = scoutJson.items[i];
+        const t = typeof it?.tier === "number" && it.tier >= 1 && it.tier <= scoutJson.groups.length ? it.tier : null;
+        if (t !== null && scoutJson.groups[t - 1]) {
+          scoutJson.groups[t - 1].scoutItemIndices.push(i);
+          assigned.add(i);
+        } else if (scoutJson.groups.length > 0) {
+          const target = scoutJson.groups.find((g: any) => g.verdict?.level === "neutral") || scoutJson.groups[Math.min(1, scoutJson.groups.length - 1)];
+          target.scoutItemIndices.push(i);
+          assigned.add(i);
+        }
+      }
+    }
+
+    // Ensure group bounding boxes
+    scoutJson.groups.forEach((g: any) => {
+      if (!Array.isArray(g.boundingBox2D) || g.boundingBox2D.length !== 4) {
+        let ymin = 1000, xmin = 1000, ymax = 0, xmax = 0;
+        g.scoutItemIndices.forEach((idx: number) => {
+          const b = scoutJson.items[idx]?.boundingBox2D;
+          if (Array.isArray(b) && b.length === 4) {
+            ymin = Math.min(ymin, b[0]);
+            xmin = Math.min(xmin, b[1]);
+            ymax = Math.max(ymax, b[2]);
+            xmax = Math.max(xmax, b[3]);
+          }
+        });
+        g.boundingBox2D = (ymin < ymax && xmin < xmax) ? [ymin, xmin, ymax, xmax] : [0, 0, 1000, 1000];
+      }
+    });
+  }
+
   // Ensure groups are sorted best-choice first (good -> neutral -> warning -> alert)
   const rankMap: Record<string, number> = { good: 1, neutral: 2, warning: 3, alert: 4 };
   if (Array.isArray(scoutJson.groups)) {
@@ -152,6 +214,15 @@ async function runSet(cfg: SetConfig) {
       return rA - rB;
     });
   }
+
+  // Save raw JSON debug artifact
+  const debugRunsDir = path.join(process.cwd(), "prototype", "meallog", "compare", "debug_runs");
+  if (!fs.existsSync(debugRunsDir)) {
+    fs.mkdirSync(debugRunsDir, { recursive: true });
+  }
+  const jsonDebugPath = path.join(debugRunsDir, `compare_set${cfg.key}_scout_compare_debug.json`);
+  fs.writeFileSync(jsonDebugPath, JSON.stringify(scoutJson, null, 2), "utf-8");
+  console.log(`Saved JSON debug: ${jsonDebugPath}`);
 
   // Transform extracted items into scoutItems format for debug report
   const scoutItems = (scoutJson.items || []).map((item: any, idx: number) => ({
@@ -183,11 +254,14 @@ async function runSet(cfg: SetConfig) {
   (scoutJson.groups || []).forEach((g: any, gIdx: number) => {
     const itemNames = (g.scoutItemIndices || []).map((i: number) => scoutJson.items?.[i]?.name || `Item ${i}`).join(", ");
     narrative += `\n**Rank ${gIdx + 1}: ${g.groupName}** [${g.verdict?.level?.toUpperCase()}] — *${g.verdict?.label}*\n`;
-    narrative += `- **Items Included:** ${itemNames}\n`;
+    narrative += `- **Items Included (${(g.scoutItemIndices || []).length}):** ${itemNames}\n`;
     narrative += `- **Comparative Sentence:** "${g.comparisonSentence}"\n`;
     narrative += `- **Clinical Guidance:** ${g.message}\n`;
+    if (g.orderingTip) {
+      narrative += `- **Ordering Tip:** ${g.orderingTip}\n`;
+    }
     if (g.averageNutrients) {
-      narrative += `- **Nutrient Profile:** ${g.averageNutrients.calories ?? "—"} kcal | P: ${g.averageNutrients.protein ?? "—"}g | C: ${g.averageNutrients.carbohydrates ?? "—"}g | F: ${g.averageNutrients.totalFat ?? "—"}g | Saturated Fat: ${g.averageNutrients.saturatedFat ?? "—"}g | Sodium: ${g.averageNutrients.sodium ?? "—"}mg\n`;
+      narrative += `- **Nutrient Profile:** ${g.averageNutrients.calories ?? "—"} kcal | P: ${g.averageNutrients.protein ?? "—"}g | C: ${g.averageNutrients.carbohydrates ?? "—"}g | F: ${g.averageNutrients.totalFat ?? "—"}g | Saturated Fat: ${g.averageNutrients.saturatedFat ?? "—"}g | Sodium: ${g.averageNutrients.sodium ?? "—"}mg | Sugar: ${g.averageNutrients.sugar ?? "—"}g\n`;
     }
   });
 

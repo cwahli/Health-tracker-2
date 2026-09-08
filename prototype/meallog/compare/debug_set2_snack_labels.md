@@ -1,16 +1,16 @@
 # Health Tracker — End-to-End Diagnostic Report
 
-- **Exported:** 2026-09-08T18:14:06.702Z
-- **Job ID:** `job_compare_set2_1788891240652`
+- **Exported:** 2026-09-08T19:27:41.303Z
+- **Job ID:** `job_compare_set2_1788895653115`
 - **Status:** succeeded
 - **Pack:** food
 - **Mode:** compare
 - **Version:** 3
 - **Savable:** false
-- **Photo 1:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set2_1788891240652_0.jpg
-- **Photo 2:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set2_1788891240652_1.jpg
-- **Photo 3:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set2_1788891240652_2.jpg
-- **Photo 4:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set2_1788891240652_3.jpg
+- **Photo 1:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set2_1788895653115_0.jpg
+- **Photo 2:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set2_1788895653115_1.jpg
+- **Photo 3:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set2_1788895653115_2.jpg
+- **Photo 4:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set2_1788895653115_3.jpg
 
 ## ⚖️ Contract Evaluation
 
@@ -44,7 +44,7 @@
 
 - **open:** true
 - **title:** "Food Item & Shelf Comparison"
-- **on_card:** {"totalOptions":4,"groups":4,"recommended":"Green Packaged Snack Bar"}
+- **on_card:** {"totalOptions":4,"groups":2,"recommended":"Blue Packaged Bread"}
 - **visible:** [View Comparison Details, Download Debug Report, Close Modal]
 - **hidden:** [Retry, Attempt 1 of 3, Save Meal to History]
 - **composer:** {"photo":1,"add_image":1,"paste":1,"send":1}
@@ -62,36 +62,79 @@ You are an expert Vision Scout and Clinical Dietitian specialized in PRODUCT EVA
 === ACTIVE TASK: PRODUCT EVALUATION & COMPARISON ===
 You analyze photos of multiple products, packages, nutrition labels, restaurant menus, or retail supermarket shelves to compare distinct items.
 
-DIET TASKS: GROUPING, ORDERING (RANKING), VERDICTS & COMPARATIVE SENTENCES
+DIET TASKS: EXHAUSTIVE DISH EXTRACTION, BOUNDING BOXES, ACTIVE MULTI-TIER GROUPING, ORDERING (RANKING), VERDICTS, COMPARATIVE SENTENCES & ORDERING TIPS
 
 STRICT INVARIANTS:
 1. NEVER MERGE OR LOG AS A MEAL: Do NOT treat these items as components of a single consumed meal. This is a comparison/shopping evaluation. Do not calculate composite meal totals or ask portion confirmation questions.
-2. INDEPENDENT ITEM EXTRACTION (items[]):
-   - Extract every distinct candidate product, dish, or packaged snack as an independent item in items[].
-   - For photos showing printed nutrition facts panels: transcribe exact per-serving values (calories, totalFat, saturatedFat, protein, totalCarbohydrate, sugar, sodium/salt). Record the printed serving size and servings per pack.
-   - Front-only packages without a nutrition panel (e.g. banana chips front cover): set hasNutritionLabel to false, transcribe product name from OCR, and do NOT fabricate or hallucinate macros or calories. Set perServing to null.
-   - Salt vs Sodium: If labelled "Garam" or "Salt", record as saltMg. If labelled "Natrium", record as sodiumMg. Do not confuse sugar with added sugar.
-   - Menu items: Extract at least 5 to 8 distinct representative menu items/dishes across all visible pages and sections (e.g. Paket, Ayam, Seafood, Sayuran/Tumisan, Sate). Do not treat the paper menu as food.
-   - Shelf/Aisle: Group products compactly by brand or category (e.g. Happy Tos, Chitato Lite, Lay's, Qtela, Doritos, Taro). "Taro" is a commercial Indonesian snack brand, NOT taro vegetable leaves.
+2. EXHAUSTIVE DISH & PRODUCT EXTRACTION VIA FAITHFUL OCR (NO SPOONFEEDING / ZERO FABRICATION):
+   - CRITICAL OCR MANDATE: Thoroughly scan and extract EVERY legible dish, beverage, packaged product, or shelf item directly from the images via pure OCR. Read top-to-bottom, column-by-column across every page, section, and panel.
+   - Do not stop after 10 or 15 items. If a menu contains 40, 60, or 80+ readable dish names across multiple columns and pages, extract ALL of them into items[].
+   - Faithfully transcribe the printed text without guessing, inventing, or hallucinating items not visible on the images.
+   - JOIN MULTI-LINE MENU HEADINGS (NO ORPHAN WORDS):
+     * If a dish name wraps across multiple lines or has indented sub-lines, YOU MUST JOIN THEM into a single dish entry. Do NOT emit isolated fragments as separate dishes.
+   - BOUNDING BOX MANDATE (boundingBox2D) FOR EVERY ITEM AND GROUP:
+     * For EVERY item in items[], provide "boundingBox2D": [ymin, xmin, ymax, xmax] coordinates normalized from 0 to 1000 indicating where the dish/label/item or text entry appears on the image.
+     * For EVERY group in groups[], provide "boundingBox2D": [ymin, xmin, ymax, xmax] covering the region of items in that group.
+     * Coordinate rules: 0 <= ymin < ymax <= 1000, 0 <= xmin < xmax <= 1000.
+   - OCR ACCURACY FOR PRINTED NUTRITION PANELS (100% FAITHFUL TO IMAGE):
+     * Read numbers directly from printed "Informasi Nilai Gizi" / Nutrition Facts panels with ZERO hallucination, rounding, or estimation.
+     * Check serving size (Takaran Saji) and servings per pack (Jumlah Sajian per Kemasan). Transcribe them verbatim.
+     * When hasNutritionLabel is true, YOU MUST POPULATE ALL NUTRIENT FIELDS in perServing (calories, protein, totalFat, saturatedFat, carbohydrates, sugar, sodiumMg, saltMg).
+   - Front-only packages without a nutrition panel: set hasNutritionLabel to false, transcribe product name from OCR, and do NOT fabricate or hallucinate macros or calories. Set perServing to null.
+   - NO LUMPING: Each distinct variety, flavor, or dish entry gets its own item in items[].
 
-3. DIET TASK: GROUPING (groups[]):
-   - Every extracted item in items[] must be assigned to at least one group via "scoutItemIndices" (0-based indices into items[]).
-   - If there are 1 or 2 items: create EXACTLY 1 group per item (e.g. Group 0 with scoutItemIndices: [0], Group 1 with scoutItemIndices: [1]).
-   - If there are 3 or more items: organize into ranked tier groups (e.g. "Tier 1 - Safest Choice", "Tier 2 - Moderate / Runner Up", "Tier 3 - Less Suitable / High Caution") OR distinct option groups if each is an independent alternative.
-   - Calculate or aggregate "averageNutrients" (per serving) for the items in the group.
+3. ACTIVE MULTI-TIER GROUPING (ZERO ORPHANED ITEMS & NO LAZY DUMPING):
+   - ZERO ORPHANED ITEMS: Every single index from 0 to items.length - 1 MUST be assigned to at least one group in groups[]. The union of all scoutItemIndices must cover 100% of extracted items.
+   - NO OUT-OF-BOUNDS INDICES: All indices in scoutItemIndices must strictly be between 0 and items.length - 1. Never emit an index >= items.length.
+   - NO LAZY GROUPING (1 single group is strictly forbidden for >2 items).
+   - NO LAZY MIDDLE DUMPING: Never dump more than 35-40% of items into a single group on large menus.
+   - CLINICAL PREPARATION TIERING (BASED ON COOKING METHOD & METABOLIC LOAD DISCERNED VIA OCR):
+     * Tier 1 (good / safest): Steamed preparations, boiled soups/clear broths, raw or boiled fresh vegetables, plain water/unsweetened tea.
+     * Tier 2 (neutral / moderate): Grilled or roasted lean proteins without heavy sugar glaze, lightly sautéed greens/vegetables, staple plain grains.
+     * Tier 3 (warning / caution): Deep-fried poultry, meats, or seafood; stir-fried noodles or fried rice; sweetened beverages and syrups.
+     * Tier 4 (alert / severe metabolic load): Deep-fried animal skins and offal; deep-fried vegetables (extreme oil absorption); ultra-processed boiled crackers or instant noodles in heavy chili/palm oil; high-sugar condensed milk and syrup bowls; large family-size snack bags.
 
-4. DIET TASK: ORDERING (Ranking):
-   - The groups in groups[] MUST be sorted in strict order of overall health ranking: BEST / SAFEST CHOICE FIRST, down to least suitable at the bottom.
+4. DIET TASK: ORDERING (Ranking) & AVOIDING THE CALORIE ILLUSION TRAP:
+   - The groups in groups[] MUST be sorted in strict order of overall health ranking: BEST / SAFEST CHOICE FIRST ('good'), down to least suitable at the bottom ('alert').
    - Ranking order: 'good' -> 'neutral' -> 'warning' -> 'alert'.
-   - The top group (index 0) must always represent the recommended or best choice among the alternatives (e.g., lower saturated fat, lower sodium, lower added sugar, higher protein/fiber, least processed).
+   - BEWARE THE "CALORIE ILLUSION TRAP":
+     * NEVER rank a confectionery or snack as "Tier 1 (good)" simply because its portion is tiny (e.g. 23g wafer bar at 90 kcal) if it is sugar-dense (>25% sugar by weight) with negligible protein (<2g) and fiber.
+     * Evaluate NUTRIENT DENSITY: Compare sugar-to-protein ratio, saturated fat percentage, and fiber retention. Wholesome staple breads with 2g sugar and 4g protein rank HIGHER in healthfulness than a 90 kcal candy bar that is 30% refined sugar.
+     * Factor in the mass: A 250 kcal multiseed bread serving is 80g delivering 8g protein and 4g sugar, whereas a 250 kcal sweet bun is 75g packing 19g sugar and 4.5g saturated fat.
+   - PURE SNACK / ULTRA-PROCESSED AISLE RULE:
+     * When comparing exclusively ultra-processed snacks (chips, crisps, fried crackers), recognize that NONE are health foods (NOVA 4).
+     * Rank based on BUILT-IN PORTION CONTROL and harm reduction: A miniature 25g pouch (<130 kcal) strictly caps caloric and sodium damage compared to an open 180g family pack (>900 kcal, 35g fat). Do not give "good" to standard fried chips; use "neutral" (with a portion-control caveat) down to "alert".
+   - BEVERAGE CLASSIFICATION INVARIANTS:
+     * Unsweetened beverages, pure water, plain tea/coffee -> Tier 1 (good).
+     * Whole unsweetened fruit juices -> Tier 2 (neutral).
+     * Beverages with added sugar/syrups -> Tier 3 (warning).
+     * Heavy condensed milk and syrup dessert bowls -> Tier 4 (alert).
 
-5. DIET TASK: VERDICT & COMPARATIVE SENTENCE FOR EACH GROUP:
+5. DIET TASK: VERDICT, COMPARATIVE SENTENCE & ACTIONABLE ORDERING TIP:
    - For EVERY group in groups[], provide:
      a) "verdict.level": Exactly one of "good" | "neutral" | "warning" | "alert".
      b) "verdict.label": Concise 3-6 words (e.g. "Lowest Sodium & Saturated Fat", "High Sugar & Calorie Alert", "Balanced High-Protein Choice", "Moderate Sodium Caution").
-     c) "comparisonSentence": Exactly ONE clear, punchy sentence directly comparing this group to the other candidate groups/options (e.g., "Compared to the sweet breads and chiffon cake, this wafer bar cuts calories by more than half and contains minimal sodium.", or "Unlike the heavy deep-fried chicken and duck, these grilled and vegetable options minimize saturated fat and avoid reused frying oils.").
+     c) "comparisonSentence": Exactly ONE clear, punchy sentence directly comparing this group to the other candidate groups/options.
      d) "message": 35-70 words clinical rationale explaining WHY this group received this verdict, highlighting trade-offs (saturated fat, sodium, sugar, additives) and guidance relative to cardiovascular, metabolic, and overall health targets.
-6. STRICT NUMBER FORMATTING: NEVER output scientific or exponential notation (NEVER write e+, e-, or 6.00e+00). Always write standard plain numbers (e.g. 6, 12, 0.5, 0) with at most 1 decimal place.
+     e) "orderingTip": (Optional but strongly recommended for restaurant menus and beverages) Practical instruction for the user at ordering time to reduce metabolic harm (e.g. "Ask for without added sugar/syrup", "Request sauce on the side and substitute fried sides with fresh raw vegetables", "Opt for the small single-portion bag instead of the family size to enforce portion discipline").
+6. AVERAGE NUTRIENTS ESTIMATION FOR EVERY GROUP (MANDATORY & REALISTIC):
+   - For EVERY group in groups[], you MUST provide realistic "averageNutrients" representing the typical nutritional profile for items in that group:
+     * calories: Estimated typical calories (kcal)
+     * protein: Estimated protein (g)
+     * totalFat: Estimated total fat (g)
+     * saturatedFat: Estimated saturated fat (g)
+     * carbohydrates: Estimated total carbohydrates (g)
+     * sugar: Estimated sugar (g)
+     * sodium: Estimated sodium (mg)
+     * MACRONUTRIENT BALANCE: Ensure realistic balance: (4 * protein) + (9 * totalFat) + (4 * carbohydrates) should approximately equal calories (within 10-15%).
+     * REALISTIC CLINICAL BENCHMARKS:
+       - Steamed vegetables, clear soups, plain tea/water: 50-150 kcal, 2-6g protein, 1-3g fat, 0.5-1g sat fat, 8-15g carbs, 1-3g sugar, 200-450mg sodium.
+       - Grilled lean fish/proteins & sautéed vegetables: 350-500 kcal, 25-35g protein, 8-18g fat, 3-6g sat fat, 35-55g carbs, 2-6g sugar, 450-750mg sodium.
+       - Deep-fried protein meal sets & fried rice: 650-850 kcal, 25-38g protein, 28-45g fat, 8-15g sat fat, 65-85g carbs, 4-10g sugar, 800-1400mg sodium.
+       - Fried offal, fried vegetables (high oil), heavily spiced noodles: 350-550 kcal, 10-22g protein, 22-38g fat, 7-16g sat fat, 25-50g carbs, 3-8g sugar, 1000-2000mg sodium.
+       - Heavy sweet dessert drinks with condensed milk: 350-520 kcal, 4-8g protein, 10-20g fat, 6-12g sat fat, 60-80g carbs, 50-70g sugar, 100-250mg sodium.
+       - Supermarket snack shelf family packs: 800-1100 kcal, 8-16g protein, 45-65g fat, 15-25g sat fat, 85-130g carbs, 5-15g sugar, 800-1500mg sodium per whole pack.
+7. STRICT NUMBER FORMATTING: NEVER output scientific or exponential notation (NEVER write e+, e-, or 6.00e+00). Always write standard plain numbers (e.g. 6, 12, 0.5, 0) with at most 1 decimal place.
 
 === REQUIRED OUTPUT JSON SCHEMA ===
 Output exactly ONE JSON object matching this schema:
@@ -105,7 +148,9 @@ Output exactly ONE JSON object matching this schema:
     {
       "name": "Exact product or dish name",
       "brand": "Brand name if visible, else null",
+      "tier": 1,
       "sourceImageIndex": 0,
+      "boundingBox2D": [300, 200, 450, 600],
       "hasNutritionLabel": true,
       "servingSize": "e.g. 23g (1 bar)",
       "servingsPerPack": 6,
@@ -116,6 +161,7 @@ Output exactly ONE JSON object matching this schema:
         "saturatedFat": 1.0,
         "carbohydrates": 15.0,
         "sugar": 7.0,
+        "addedSugar": 6.0,
         "saltMg": 20.0,
         "sodiumMg": null
       }
@@ -123,14 +169,16 @@ Output exactly ONE JSON object matching this schema:
   ],
   "groups": [
     {
-      "groupName": "string (e.g. 'Tier 1 - Safest Choice: Green Snack Bar' or option name)",
+      "groupName": "string (e.g. 'Tier 1 - Safest Choice: Steamed & Fresh Dishes' or option name)",
       "scoutItemIndices": [0],
+      "boundingBox2D": [100, 50, 500, 950],
       "verdict": {
         "label": "string (3-6 words max)",
         "level": "good | neutral | warning | alert"
       },
       "comparisonSentence": "string (Exactly 1 sentence comparing this group to the other options)",
       "message": "string (35-70 words clinical rationale on why this ranks here and biomarker trade-offs)",
+      "orderingTip": "string (practical instruction for the user at order or purchase time)",
       "averageNutrients": {
         "calories": 90,
         "protein": 1.0,
@@ -138,7 +186,8 @@ Output exactly ONE JSON object matching this schema:
         "saturatedFat": 1.0,
         "sodium": 8,
         "carbohydrates": 15.0,
-        "sugar": 7.0
+        "sugar": 7.0,
+        "addedSugar": 6.0
       }
     }
   ]
@@ -148,353 +197,269 @@ Output exactly ONE JSON object matching this schema:
 - **Raw Emission (Verbatim Output):**
 ```json
 {
-  "_internalReasoning": "Extracted four packaged snack products, evaluated their nutritional labels for calories, fat, sugar, and sodium, and ranked them in four distinct tiers.",
-  "comparisonTitle": "Packaged Snack Nutrition Comparison",
+  "_internalReasoning": "Evaluated 4 snack packages from images, extracted nutrition facts via OCR, categorized by macro quality, and grouped into ranked tiers.",
+  "comparisonTitle": "Supermarket Snack Nutrition Panel Comparison",
   "comparisonType": "nutrition_labels",
-  "summary": "Comparing four snack items reveals significant differences in calorie density, sugar content, and sodium. The green-packaged snack offers the lowest calorie count and minimal sodium, while the heavier bakery options contain significantly higher sugar, sodium, and saturated fats.",
+  "summary": "Comparing the four snack packages reveals varying macro profiles. The blue-packaged bread offers the best protein-to-sugar balance with lower sodium, whereas the high-sugar bread and green-packaged snack carry heavier glycemic loads and saturated fat.",
   "items": [
     {
       "name": "Green Packaged Snack Bar",
+      "tier": 3,
       "sourceImageIndex": 0,
+      "boundingBox2D": [
+        415,
+        30,
+        715,
+        951
+      ],
       "hasNutritionLabel": true,
       "brand": null,
-      "perServing": {
-        "calories": 90,
-        "carbohydrates": 15,
-        "protein": 1,
-        "saltMg": 20,
-        "saturatedFat": 1,
-        "sodiumMg": null,
-        "sugar": 7,
-        "totalFat": 3
-      },
-      "servingSize": "23g",
-      "servingsPerPack": "6"
+      "servingSize": "23 g",
+      "servingsPerPack": "6 Sajian per Kemasan / 6 Serving per Container, Energi Total 90 kkal / Total Energy 90 kcal, Lemak Total / Total Fat 3 g (4%), Lemak Jenuh / Saturated Fat 1 g (6%), Protein / Protein 1 g (2%), Karbohidrat Total / Total Carbohydrate 15 g (5%), Gula / Sugar 7 g, Garam (Natrium) / Salt (Sodium) 20 mg (1%) - Percent Daily Values based on a 2150 kcal energy. Komposisi: Tepung Terigu, Air, Es, Premiks Roti Multiseed 4.7%, Gluten, Pewarna Alami Karamel IV, Antioksidan Asam Askorbat, Gula (Mengandung Pengawet Sulfit), Kulit Gandum, Margarin (Mengandung Pengawet Kalium Sorbat, Pewarna Alami Kurkumin Cl.No.75300, (Mengandung Pengawet Kalium Sorbat, Pewarna Alami Kurkumin Cl.No.75300, Ekstrak Anato Cl.No.75120), Lemak Hewani, Premiks Susu, Kecap (Mengand- ung Kedelai), Ragi, Garam, Pengawet Kalsium Propionat, Perlakuan Tepung (Mengandung Tepung Kedelai dan Antioksidan Asam Askorbat). *Mengandung Allergen, Lihat Daftar Bahan Yang Dicetak Tebal, Kode Produksi : Baik digunakan sebelum : JANGAN DITERIMA BILA KEMASAN RUSAK, 034998, @mrbread_id, PP, 05, QR Code. Buat roti suka, makan juga suka, (Informasi Nilai Gizi / Nutrition Facts, Takaran Saji : 23 g, Serving Size : 23 g, Jumlah per Sajian / Amount per Serving, Lemak Total / Total Fat 3 g, Lemak Jenuh / Saturated Fat 1 g, Protein / Protein 1 g, Karbohidrat Total / Total Carbohydrate 15 g, Gula / Sugar 7 g, Garam (Natrium) / Salt (Sodium) 20 mg, %AKG* / %Daily Value *, *Persen AKG berdasarkan kebutuhan energi 2150 kkal. Kebutuhan energi anda mungkin lebih tinggi atau lebih rendah. *Percent Daily Values are based on a 2150 kcal. Your daily values may be higher or lower depending on your calorie needs.)"
     },
     {
-      "name": "Blue Packaged Bread Product",
-      "sourceImageIndex": 3,
-      "hasNutritionLabel": true,
-      "brand": "Mr. Bread",
-      "perServing": {
-        "calories": 120,
-        "carbohydrates": 21,
-        "protein": 4,
-        "saltMg": 150,
-        "saturatedFat": 1.5,
-        "sodiumMg": null,
-        "sugar": 2,
-        "totalFat": 2.5
-      },
-      "servingSize": "44g",
-      "servingsPerPack": "5"
-    },
-    {
-      "name": "Yellow Packaged Multiseed Bread",
+      "name": "Yellow Multiseed Bread",
+      "tier": 2,
       "sourceImageIndex": 1,
+      "boundingBox2D": [
+        345,
+        43,
+        895,
+        989
+      ],
       "hasNutritionLabel": true,
       "brand": "Mr. Bread",
-      "perServing": {
-        "calories": 250,
-        "carbohydrates": 38,
-        "protein": 8,
-        "saltMg": 330,
-        "saturatedFat": 3,
-        "sodiumMg": null,
-        "sugar": 4,
-        "totalFat": 7
-      },
-      "servingSize": "80g",
-      "servingsPerPack": "3"
+      "servingSize": "80 g",
+      "servingsPerPack": "3 sajian per kemasan / 3 serving per pack, Energi Total / Total Energy 250 kkal, Energi dari lemak / Energy from Fat 60 kkal, Energi dari lemak jenuh / Energy from Saturated Fat 30 kkal, Lemak Total / Total Fat 7 g (10%), Lemak Jenuh / Saturated Fat 3 g (15%), Protein / Protein 8 g (14%), Karbohidrat Total / Total Carbohydrate 38 g (12%), Gula / Sugar 4 g, Garam (natrium) / Salt (Sodium) 330 mg (22%) - Percent Daily Values are based on a 2150 kcal energy. Komposisi: Tepung Terigu (45.82%), Air, Es, Premiks Roti Multiseed 6.47% (Mengandung Biji Labu 5%, Gluten, Pewarna Alami Karamel IV, Antioksidan Asam Askorbat), Gula (Mengandung Pengawet Sulfit), Kulit Gandum, Margarin (Mengandung Pengawet Kalium Sorbat, Pewarna Alami Kurkumin Cl.No.75300, (Mengandung Pengawet Kalium Sorbat, Pewarna Alami Kurkumin Cl.No.75300, Ekstrak Anato Cl.No.75120), Lemak Hewani, Premiks Susu, Kecap (Mengand- ung Kedelai), Ragi, Garam, Pengawet Kalsium Propionat, Perlakuan Tepung (Mengandung Tepung Kedelai dan Antioksidan Asam Askorbat). *Mengandung Allergen, Lihat Daftar Bahan Yang Dicetak Tebal, Kode Produksi : Baik digunakan sebelum : JANGAN DITERIMA BILA KEMASAN RUSAK, 034998, @mrbread_id, PP, 05, QR Code. Buat roti suka, makan juga suka, (Informasi Nilai Gizi / Nutrition Information, Takaran Saji (80 g) / Serving size (80g), Jumlah per sajian / Amount per serving, Lemak Total / Total Fat 7 g, Lemak Jenuh / Saturated Fat 3 g, Protein / Protein 8 g, karbohidrat / Total Carbohydrate 38 g, Gula / Sugar 4 g, Garam (natrium) / Salt (Sodium) 330 mg, %AKG* / %Daily Value *, *Persen AKG berdasarkan kebutuhan energi 2150 kkal. Kebutuhan energi anda mungkin lebih tinggi atau lebih rendah. *Percent Daily Values are based on a 2150 kcal. Your daily values may be higher or lower depending on your calorie needs.)"
     },
     {
-      "name": "Yellow Packaged Sweet Bun Product",
+      "name": "Yellow Sweet Bread",
+      "tier": 3,
       "sourceImageIndex": 2,
+      "boundingBox2D": [
+        292,
+        0,
+        755,
+        1000
+      ],
       "hasNutritionLabel": true,
       "brand": "Mr. Bread",
-      "perServing": {
-        "calories": 250,
-        "carbohydrates": 42,
-        "protein": 6,
-        "saltMg": 125,
-        "saturatedFat": 4.5,
-        "sodiumMg": null,
-        "sugar": 19,
-        "totalFat": 6
-      },
-      "servingSize": "75g",
-      "servingsPerPack": "2"
+      "servingSize": "75 g",
+      "servingsPerPack": "2 Sajian Per Kemasan / 2 Serving Per Pack, Energi Total / Total Energy 250 kkal, Lemak Total / Total Fat 6 g, Lemak Jenuh / Saturated Fat 4.5 g, Protein / Protein 6 g, Karbohidrat Total / Total Carbohydrate 42 g, Gula Total / Total Sugar 19 g, Garam (Natrium) / Salt (Sodium) 125 mg - Persen AKG berdasarkan kebutuhan energi 2150 kkal. Kebutuhan energi anda mungkin lebih tinggi atau lebih rendah. Komposisi : Tepung terigu 34.28%, pasta sarikaya 29.65% (mengandung telur, pengawet (Kalium Sorbate, pewarna alami Karamel III dan IV, pewarna sintetis (Tartazin Cl No. 19140, Kuning FCF Cl No. 15985), antioksidan tokoferol, air, gula (mengandung pengawet sulfit), es batu, margarin, ragi, garam, pengawet (Kalsium Propionat), pengemulsi nabati, antioksidan BHA), garan."
+    },
+    {
+      "name": "Blue Packaged Bread",
+      "tier": 2,
+      "sourceImageIndex": 3,
+      "boundingBox2D": [
+        414,
+        91,
+        912,
+        911
+      ],
+      "hasNutritionLabel": true,
+      "brand": "Mr. Bread",
+      "servingSize": "44 g",
+      "servingsPerPack": "5 Sajian per kemasan / 5 Serving per pack, Energi Total / Total Energy 120 kkal, Energi dari lemak / Energy from fat 20 kkal, Energi dari lemak jenuh / Energy from Saturated Fat 10 kkal, Lemak Total / Total Fat 2.5 g (4%), Lemak Jenuh / Saturated Fat 1.5 g (7%), Protein / Protein 4 g (6%), Karbohidrat Total / Total Carbohydrate 21 g (6%), Gula Total / Total Sugar 2 g, Garam (Natrium) / Salt (Sodium) 150 mg (10%) - Persen AKG berdasarkan kebutuhan energi 2150 kkal. Komposisi : Tepung Terigu (56.50%), Air, Es, Gula (Mengandung Pengawet Sulfit), Lemak Reroti (Mengandung Antioksidan BHA), Susu Bubuk Full Cream, Ragi, Garam, Pengawet Kalsium Propionat, Perlakuan Tepung (Mengandung Kedelai, Gluten, Antioksidan Asam Askorbat) dan Pengemulsi Nabati."
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 1 - Safest Choice: Low Calorie Snack",
+      "groupName": "Tier 2 - Moderate Choice: Balanced Breads",
       "scoutItemIndices": [
-        0
-      ],
-      "verdict": {
-        "label": "Lowest Calories & Sodium",
-        "level": "good"
-      },
-      "comparisonSentence": "Compared to the heavier bakery breads, this green-packaged snack delivers significantly fewer calories and minimal sodium per serving.",
-      "message": "This option provides a controlled 90 calories per serving with low total fat and minimal sodium, making it a suitable choice for weight management and blood pressure control. However, monitor sugar intake as it contributes 7 grams per serving.",
-      "averageNutrients": {
-        "calories": 90,
-        "carbohydrates": 15,
-        "protein": 1,
-        "saturatedFat": 1,
-        "sodium": 20,
-        "sugar": 7,
-        "totalFat": 3,
-        "totalFibre": null
-      }
-    },
-    {
-      "groupName": "Tier 2 - Moderate Choice: Lower Sugar Bread",
-      "scoutItemIndices": [
-        1
-      ],
-      "verdict": {
-        "label": "Moderate Calories & Low Sugar",
-        "level": "neutral"
-      },
-      "comparisonSentence": "Unlike the high-sugar yellow bun, this blue-packaged bread keeps sugar minimal while offering moderate protein and energy.",
-      "message": "This blue-packaged bread offers a reasonable calorie profile and low sugar content, supporting stable glycemic responses. However, sodium is slightly elevated at 150 mg per serving, so individuals managing hypertension should consume it in moderation.",
-      "averageNutrients": {
-        "calories": 120,
-        "carbohydrates": 21,
-        "protein": 4,
-        "saturatedFat": 1.5,
-        "sodium": 150,
-        "sugar": 2,
-        "totalFat": 2.5,
-        "totalFibre": null
-      }
-    },
-    {
-      "groupName": "Tier 3 - High Caution: Elevated Sodium Multiseed Bread",
-      "scoutItemIndices": [
-        2
-      ],
-      "verdict": {
-        "label": "High Sodium Content",
-        "level": "warning"
-      },
-      "comparisonSentence": "Compared to the lighter snack options, this multiseed bread substantially increases daily sodium intake.",
-      "message": "While this option provides helpful protein and dietary seeds, its large serving size results in 250 calories and a notable 330 mg of salt per serving. Frequent consumption requires careful monitoring of daily sodium limits for cardiovascular health.",
-      "averageNutrients": {
-        "calories": 250,
-        "carbohydrates": 38,
-        "protein": 8,
-        "saturatedFat": 3,
-        "sodium": 330,
-        "sugar": 4,
-        "totalFat": 7,
-        "totalFibre": null
-      }
-    },
-    {
-      "groupName": "Tier 4 - Least Suitable: High Sugar Bun",
-      "scoutItemIndices": [
+        1,
         3
       ],
+      "boundingBox2D": [
+        292,
+        0,
+        912,
+        1000
+      ],
       "verdict": {
-        "label": "High Sugar & Saturated Fat",
-        "level": "alert"
+        "label": "Balanced Protein & Lower Sugar",
+        "level": "neutral"
       },
-      "comparisonSentence": "Unlike the lower-sugar alternatives, this sweet bun carries a heavy concentration of added sugars and saturated fats.",
-      "message": "This yellow bun presents significant metabolic trade-offs with 19 grams of sugar and 4.5 grams of saturated fat per serving. Regular intake can spike blood glucose and negatively impact lipid panels, making it the least favorable choice for metabolic health.",
+      "comparisonSentence": "Unlike the high-sugar sweet bread or confectionery snack, these bread options provide better protein content and significantly lower sugar levels.",
+      "message": "These bread products offer superior protein content (4g to 8g) and lower sugar levels (2g to 4g per serving) compared to confectionery alternatives. While sodium is present, the macro balance supports sustained satiety and steadier glycemic responses, making them acceptable choices in moderation.",
       "averageNutrients": {
-        "calories": 250,
-        "carbohydrates": 42,
+        "calories": 185,
         "protein": 6,
-        "saturatedFat": 4.5,
-        "sodium": 125,
-        "sugar": 19,
-        "totalFat": 6,
-        "totalFibre": null
-      }
+        "totalFat": 4.8,
+        "saturatedFat": 2.2,
+        "carbohydrates": 29.5,
+        "sugar": 3,
+        "sodium": 240
+      },
+      "orderingTip": "Pair with a lean protein source or healthy fats to further blunt glycemic spikes."
+    },
+    {
+      "groupName": "Tier 3 - Caution: High Sugar & Refined Snacks",
+      "scoutItemIndices": [
+        0,
+        2
+      ],
+      "boundingBox2D": [
+        292,
+        0,
+        755,
+        1000
+      ],
+      "verdict": {
+        "label": "Elevated Sugar & Saturated Fat",
+        "level": "warning"
+      },
+      "comparisonSentence": "These items contain considerably higher sugar and saturated fat concentrations than the moderate multiseed or plain white bread options.",
+      "message": "These products pack higher sugar loads (up to 19g per serving in the sweet bread) and elevated saturated fats, increasing the metabolic load and contributing to rapid blood glucose fluctuations. Frequent consumption may negatively impact metabolic health markers.",
+      "averageNutrients": {
+        "calories": 170,
+        "protein": 3.5,
+        "totalFat": 4.5,
+        "saturatedFat": 2.8,
+        "carbohydrates": 28.5,
+        "sugar": 13,
+        "sodium": 72.5
+      },
+      "orderingTip": "Limit portion sizes strictly and avoid consuming multiple servings in a single sitting."
     }
   ],
-  "recommendedOption": "Green Packaged Snack Bar"
+  "recommendedOption": "Blue Packaged Bread"
 }
 ```
 - **Output:**
 ```json
 {
-  "_internalReasoning": "Extracted four packaged snack products, evaluated their nutritional labels for calories, fat, sugar, and sodium, and ranked them in four distinct tiers.",
-  "comparisonTitle": "Packaged Snack Nutrition Comparison",
+  "_internalReasoning": "Evaluated 4 snack packages from images, extracted nutrition facts via OCR, categorized by macro quality, and grouped into ranked tiers.",
+  "comparisonTitle": "Supermarket Snack Nutrition Panel Comparison",
   "comparisonType": "nutrition_labels",
-  "summary": "Comparing four snack items reveals significant differences in calorie density, sugar content, and sodium. The green-packaged snack offers the lowest calorie count and minimal sodium, while the heavier bakery options contain significantly higher sugar, sodium, and saturated fats.",
+  "summary": "Comparing the four snack packages reveals varying macro profiles. The blue-packaged bread offers the best protein-to-sugar balance with lower sodium, whereas the high-sugar bread and green-packaged snack carry heavier glycemic loads and saturated fat.",
   "items": [
     {
       "name": "Green Packaged Snack Bar",
+      "tier": 3,
       "sourceImageIndex": 0,
+      "boundingBox2D": [
+        415,
+        30,
+        715,
+        951
+      ],
       "hasNutritionLabel": true,
       "brand": null,
-      "perServing": {
-        "calories": 90,
-        "carbohydrates": 15,
-        "protein": 1,
-        "saltMg": 20,
-        "saturatedFat": 1,
-        "sodiumMg": null,
-        "sugar": 7,
-        "totalFat": 3
-      },
-      "servingSize": "23g",
-      "servingsPerPack": "6"
+      "servingSize": "23 g",
+      "servingsPerPack": "6 Sajian per Kemasan / 6 Serving per Container, Energi Total 90 kkal / Total Energy 90 kcal, Lemak Total / Total Fat 3 g (4%), Lemak Jenuh / Saturated Fat 1 g (6%), Protein / Protein 1 g (2%), Karbohidrat Total / Total Carbohydrate 15 g (5%), Gula / Sugar 7 g, Garam (Natrium) / Salt (Sodium) 20 mg (1%) - Percent Daily Values based on a 2150 kcal energy. Komposisi: Tepung Terigu, Air, Es, Premiks Roti Multiseed 4.7%, Gluten, Pewarna Alami Karamel IV, Antioksidan Asam Askorbat, Gula (Mengandung Pengawet Sulfit), Kulit Gandum, Margarin (Mengandung Pengawet Kalium Sorbat, Pewarna Alami Kurkumin Cl.No.75300, (Mengandung Pengawet Kalium Sorbat, Pewarna Alami Kurkumin Cl.No.75300, Ekstrak Anato Cl.No.75120), Lemak Hewani, Premiks Susu, Kecap (Mengand- ung Kedelai), Ragi, Garam, Pengawet Kalsium Propionat, Perlakuan Tepung (Mengandung Tepung Kedelai dan Antioksidan Asam Askorbat). *Mengandung Allergen, Lihat Daftar Bahan Yang Dicetak Tebal, Kode Produksi : Baik digunakan sebelum : JANGAN DITERIMA BILA KEMASAN RUSAK, 034998, @mrbread_id, PP, 05, QR Code. Buat roti suka, makan juga suka, (Informasi Nilai Gizi / Nutrition Facts, Takaran Saji : 23 g, Serving Size : 23 g, Jumlah per Sajian / Amount per Serving, Lemak Total / Total Fat 3 g, Lemak Jenuh / Saturated Fat 1 g, Protein / Protein 1 g, Karbohidrat Total / Total Carbohydrate 15 g, Gula / Sugar 7 g, Garam (Natrium) / Salt (Sodium) 20 mg, %AKG* / %Daily Value *, *Persen AKG berdasarkan kebutuhan energi 2150 kkal. Kebutuhan energi anda mungkin lebih tinggi atau lebih rendah. *Percent Daily Values are based on a 2150 kcal. Your daily values may be higher or lower depending on your calorie needs.)"
     },
     {
-      "name": "Blue Packaged Bread Product",
-      "sourceImageIndex": 3,
-      "hasNutritionLabel": true,
-      "brand": "Mr. Bread",
-      "perServing": {
-        "calories": 120,
-        "carbohydrates": 21,
-        "protein": 4,
-        "saltMg": 150,
-        "saturatedFat": 1.5,
-        "sodiumMg": null,
-        "sugar": 2,
-        "totalFat": 2.5
-      },
-      "servingSize": "44g",
-      "servingsPerPack": "5"
-    },
-    {
-      "name": "Yellow Packaged Multiseed Bread",
+      "name": "Yellow Multiseed Bread",
+      "tier": 2,
       "sourceImageIndex": 1,
+      "boundingBox2D": [
+        345,
+        43,
+        895,
+        989
+      ],
       "hasNutritionLabel": true,
       "brand": "Mr. Bread",
-      "perServing": {
-        "calories": 250,
-        "carbohydrates": 38,
-        "protein": 8,
-        "saltMg": 330,
-        "saturatedFat": 3,
-        "sodiumMg": null,
-        "sugar": 4,
-        "totalFat": 7
-      },
-      "servingSize": "80g",
-      "servingsPerPack": "3"
+      "servingSize": "80 g",
+      "servingsPerPack": "3 sajian per kemasan / 3 serving per pack, Energi Total / Total Energy 250 kkal, Energi dari lemak / Energy from Fat 60 kkal, Energi dari lemak jenuh / Energy from Saturated Fat 30 kkal, Lemak Total / Total Fat 7 g (10%), Lemak Jenuh / Saturated Fat 3 g (15%), Protein / Protein 8 g (14%), Karbohidrat Total / Total Carbohydrate 38 g (12%), Gula / Sugar 4 g, Garam (natrium) / Salt (Sodium) 330 mg (22%) - Percent Daily Values are based on a 2150 kcal energy. Komposisi: Tepung Terigu (45.82%), Air, Es, Premiks Roti Multiseed 6.47% (Mengandung Biji Labu 5%, Gluten, Pewarna Alami Karamel IV, Antioksidan Asam Askorbat), Gula (Mengandung Pengawet Sulfit), Kulit Gandum, Margarin (Mengandung Pengawet Kalium Sorbat, Pewarna Alami Kurkumin Cl.No.75300, (Mengandung Pengawet Kalium Sorbat, Pewarna Alami Kurkumin Cl.No.75300, Ekstrak Anato Cl.No.75120), Lemak Hewani, Premiks Susu, Kecap (Mengand- ung Kedelai), Ragi, Garam, Pengawet Kalsium Propionat, Perlakuan Tepung (Mengandung Tepung Kedelai dan Antioksidan Asam Askorbat). *Mengandung Allergen, Lihat Daftar Bahan Yang Dicetak Tebal, Kode Produksi : Baik digunakan sebelum : JANGAN DITERIMA BILA KEMASAN RUSAK, 034998, @mrbread_id, PP, 05, QR Code. Buat roti suka, makan juga suka, (Informasi Nilai Gizi / Nutrition Information, Takaran Saji (80 g) / Serving size (80g), Jumlah per sajian / Amount per serving, Lemak Total / Total Fat 7 g, Lemak Jenuh / Saturated Fat 3 g, Protein / Protein 8 g, karbohidrat / Total Carbohydrate 38 g, Gula / Sugar 4 g, Garam (natrium) / Salt (Sodium) 330 mg, %AKG* / %Daily Value *, *Persen AKG berdasarkan kebutuhan energi 2150 kkal. Kebutuhan energi anda mungkin lebih tinggi atau lebih rendah. *Percent Daily Values are based on a 2150 kcal. Your daily values may be higher or lower depending on your calorie needs.)"
     },
     {
-      "name": "Yellow Packaged Sweet Bun Product",
+      "name": "Yellow Sweet Bread",
+      "tier": 3,
       "sourceImageIndex": 2,
+      "boundingBox2D": [
+        292,
+        0,
+        755,
+        1000
+      ],
       "hasNutritionLabel": true,
       "brand": "Mr. Bread",
-      "perServing": {
-        "calories": 250,
-        "carbohydrates": 42,
-        "protein": 6,
-        "saltMg": 125,
-        "saturatedFat": 4.5,
-        "sodiumMg": null,
-        "sugar": 19,
-        "totalFat": 6
-      },
-      "servingSize": "75g",
-      "servingsPerPack": "2"
+      "servingSize": "75 g",
+      "servingsPerPack": "2 Sajian Per Kemasan / 2 Serving Per Pack, Energi Total / Total Energy 250 kkal, Lemak Total / Total Fat 6 g, Lemak Jenuh / Saturated Fat 4.5 g, Protein / Protein 6 g, Karbohidrat Total / Total Carbohydrate 42 g, Gula Total / Total Sugar 19 g, Garam (Natrium) / Salt (Sodium) 125 mg - Persen AKG berdasarkan kebutuhan energi 2150 kkal. Kebutuhan energi anda mungkin lebih tinggi atau lebih rendah. Komposisi : Tepung terigu 34.28%, pasta sarikaya 29.65% (mengandung telur, pengawet (Kalium Sorbate, pewarna alami Karamel III dan IV, pewarna sintetis (Tartazin Cl No. 19140, Kuning FCF Cl No. 15985), antioksidan tokoferol, air, gula (mengandung pengawet sulfit), es batu, margarin, ragi, garam, pengawet (Kalsium Propionat), pengemulsi nabati, antioksidan BHA), garan."
+    },
+    {
+      "name": "Blue Packaged Bread",
+      "tier": 2,
+      "sourceImageIndex": 3,
+      "boundingBox2D": [
+        414,
+        91,
+        912,
+        911
+      ],
+      "hasNutritionLabel": true,
+      "brand": "Mr. Bread",
+      "servingSize": "44 g",
+      "servingsPerPack": "5 Sajian per kemasan / 5 Serving per pack, Energi Total / Total Energy 120 kkal, Energi dari lemak / Energy from fat 20 kkal, Energi dari lemak jenuh / Energy from Saturated Fat 10 kkal, Lemak Total / Total Fat 2.5 g (4%), Lemak Jenuh / Saturated Fat 1.5 g (7%), Protein / Protein 4 g (6%), Karbohidrat Total / Total Carbohydrate 21 g (6%), Gula Total / Total Sugar 2 g, Garam (Natrium) / Salt (Sodium) 150 mg (10%) - Persen AKG berdasarkan kebutuhan energi 2150 kkal. Komposisi : Tepung Terigu (56.50%), Air, Es, Gula (Mengandung Pengawet Sulfit), Lemak Reroti (Mengandung Antioksidan BHA), Susu Bubuk Full Cream, Ragi, Garam, Pengawet Kalsium Propionat, Perlakuan Tepung (Mengandung Kedelai, Gluten, Antioksidan Asam Askorbat) dan Pengemulsi Nabati."
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 1 - Safest Choice: Low Calorie Snack",
+      "groupName": "Tier 2 - Moderate Choice: Balanced Breads",
       "scoutItemIndices": [
-        0
-      ],
-      "verdict": {
-        "label": "Lowest Calories & Sodium",
-        "level": "good"
-      },
-      "comparisonSentence": "Compared to the heavier bakery breads, this green-packaged snack delivers significantly fewer calories and minimal sodium per serving.",
-      "message": "This option provides a controlled 90 calories per serving with low total fat and minimal sodium, making it a suitable choice for weight management and blood pressure control. However, monitor sugar intake as it contributes 7 grams per serving.",
-      "averageNutrients": {
-        "calories": 90,
-        "carbohydrates": 15,
-        "protein": 1,
-        "saturatedFat": 1,
-        "sodium": 20,
-        "sugar": 7,
-        "totalFat": 3,
-        "totalFibre": null
-      }
-    },
-    {
-      "groupName": "Tier 2 - Moderate Choice: Lower Sugar Bread",
-      "scoutItemIndices": [
-        1
-      ],
-      "verdict": {
-        "label": "Moderate Calories & Low Sugar",
-        "level": "neutral"
-      },
-      "comparisonSentence": "Unlike the high-sugar yellow bun, this blue-packaged bread keeps sugar minimal while offering moderate protein and energy.",
-      "message": "This blue-packaged bread offers a reasonable calorie profile and low sugar content, supporting stable glycemic responses. However, sodium is slightly elevated at 150 mg per serving, so individuals managing hypertension should consume it in moderation.",
-      "averageNutrients": {
-        "calories": 120,
-        "carbohydrates": 21,
-        "protein": 4,
-        "saturatedFat": 1.5,
-        "sodium": 150,
-        "sugar": 2,
-        "totalFat": 2.5,
-        "totalFibre": null
-      }
-    },
-    {
-      "groupName": "Tier 3 - High Caution: Elevated Sodium Multiseed Bread",
-      "scoutItemIndices": [
-        2
-      ],
-      "verdict": {
-        "label": "High Sodium Content",
-        "level": "warning"
-      },
-      "comparisonSentence": "Compared to the lighter snack options, this multiseed bread substantially increases daily sodium intake.",
-      "message": "While this option provides helpful protein and dietary seeds, its large serving size results in 250 calories and a notable 330 mg of salt per serving. Frequent consumption requires careful monitoring of daily sodium limits for cardiovascular health.",
-      "averageNutrients": {
-        "calories": 250,
-        "carbohydrates": 38,
-        "protein": 8,
-        "saturatedFat": 3,
-        "sodium": 330,
-        "sugar": 4,
-        "totalFat": 7,
-        "totalFibre": null
-      }
-    },
-    {
-      "groupName": "Tier 4 - Least Suitable: High Sugar Bun",
-      "scoutItemIndices": [
+        1,
         3
       ],
+      "boundingBox2D": [
+        292,
+        0,
+        912,
+        1000
+      ],
       "verdict": {
-        "label": "High Sugar & Saturated Fat",
-        "level": "alert"
+        "label": "Balanced Protein & Lower Sugar",
+        "level": "neutral"
       },
-      "comparisonSentence": "Unlike the lower-sugar alternatives, this sweet bun carries a heavy concentration of added sugars and saturated fats.",
-      "message": "This yellow bun presents significant metabolic trade-offs with 19 grams of sugar and 4.5 grams of saturated fat per serving. Regular intake can spike blood glucose and negatively impact lipid panels, making it the least favorable choice for metabolic health.",
+      "comparisonSentence": "Unlike the high-sugar sweet bread or confectionery snack, these bread options provide better protein content and significantly lower sugar levels.",
+      "message": "These bread products offer superior protein content (4g to 8g) and lower sugar levels (2g to 4g per serving) compared to confectionery alternatives. While sodium is present, the macro balance supports sustained satiety and steadier glycemic responses, making them acceptable choices in moderation.",
       "averageNutrients": {
-        "calories": 250,
-        "carbohydrates": 42,
+        "calories": 185,
         "protein": 6,
-        "saturatedFat": 4.5,
-        "sodium": 125,
-        "sugar": 19,
-        "totalFat": 6,
-        "totalFibre": null
-      }
+        "totalFat": 4.8,
+        "saturatedFat": 2.2,
+        "carbohydrates": 29.5,
+        "sugar": 3,
+        "sodium": 240
+      },
+      "orderingTip": "Pair with a lean protein source or healthy fats to further blunt glycemic spikes."
+    },
+    {
+      "groupName": "Tier 3 - Caution: High Sugar & Refined Snacks",
+      "scoutItemIndices": [
+        0,
+        2
+      ],
+      "boundingBox2D": [
+        292,
+        0,
+        755,
+        1000
+      ],
+      "verdict": {
+        "label": "Elevated Sugar & Saturated Fat",
+        "level": "warning"
+      },
+      "comparisonSentence": "These items contain considerably higher sugar and saturated fat concentrations than the moderate multiseed or plain white bread options.",
+      "message": "These products pack higher sugar loads (up to 19g per serving in the sweet bread) and elevated saturated fats, increasing the metabolic load and contributing to rapid blood glucose fluctuations. Frequent consumption may negatively impact metabolic health markers.",
+      "averageNutrients": {
+        "calories": 170,
+        "protein": 3.5,
+        "totalFat": 4.5,
+        "saturatedFat": 2.8,
+        "carbohydrates": 28.5,
+        "sugar": 13,
+        "sodium": 72.5
+      },
+      "orderingTip": "Limit portion sizes strictly and avoid consuming multiple servings in a single sitting."
     }
   ],
-  "recommendedOption": "Green Packaged Snack Bar"
+  "recommendedOption": "Blue Packaged Bread"
 }
 ```
-- **Signals:** model=gemini-3.5-flash-lite, latency_ms=6049, tokens=[object Object]
-- **Parent:** job_compare_set2_1788891240652
+- **Signals:** model=gemini-3.5-flash-lite, latency_ms=8186, tokens=[object Object]
+- **Parent:** job_compare_set2_1788895653115
 
 ## 🔗 Data Pipelines & Infrastructure Connectivity Matrix
 
@@ -507,13 +472,13 @@ Output exactly ONE JSON object matching this schema:
 | **5. Mathematical Calculation Engine** | ⚪ Standby / N/A | No meal calculation required |
 | **6. Trial-Balance & Quality Gate** | ⚪ Standby / N/A | N/A |
 | **7. Health Coach / Clinical Engine** | ⚪ Standby / N/A | No clinical analysis requested |
-| **8. State Storage & Job Sync** | ✅ Connected (Local / Active) | Job ID: `job_compare_set2_1788891240652` |
+| **8. State Storage & Job Sync** | ✅ Connected (Local / Active) | Job ID: `job_compare_set2_1788895653115` |
 
 ## 👤 Last User Action
 
 - **Action:** submit_meal_job
 - **Prompt/Text:** "Compare these 4 snacks and help me choose the healthiest one."
-- **Timestamp:** 2026-09-08T18:14:06.702Z
+- **Timestamp:** 2026-09-08T19:27:41.303Z
 
 ## 🐾 User Action Breadcrumbs
 
@@ -523,7 +488,7 @@ Output exactly ONE JSON object matching this schema:
 |  | select_photos | camera_roll | {"imageCount":4,"files":["set2_snack_green_bar_label.jpg","set2_snack_pack_front.jpg","set2_snack_yellow_cake_label.jpg","set2_snack_blue_bread_label.jpg"]} |
 |  | input_change | input | {"name":"compare-query-input","valueLength":61} |
 |  | submit_initiated | chat_composer | {"prompt":"Compare these 4 snacks and help me choose the healthiest one.","imageCount":4,"submissionMode":"compare"} |
-|  | submit_meal_job | chat_compose_dock | {"jobId":"job_compare_set2_1788891240652","promptLength":61,"imageCount":4,"submissionMode":"compare"} |
+|  | submit_meal_job | chat_compose_dock | {"jobId":"job_compare_set2_1788895653115","promptLength":61,"imageCount":4,"submissionMode":"compare"} |
 
 ## ⚙️ Job Session Event Trail
 
@@ -535,22 +500,22 @@ _No client network errors or latency warnings recorded._
 
 ### Client Console Logs (2)
 ```
-[INFO] Compare mode triggered with 4 images for job job_compare_set2_1788891240652
+[INFO] Compare mode triggered with 4 images for job job_compare_set2_1788895653115
 [INFO] Scout-Only Compare single-pass pipeline invoked for Set 2: 4 Snack & Pack Nutrition Labels.
 ```
 
 ## 🔍 Vision Scout Results (4 item(s) detected)
 
-> **Scout Internal Reasoning:** Extracted four packaged snack products, evaluated their nutritional labels for calories, fat, sugar, and sodium, and ranked them in four distinct tiers.
+> **Scout Internal Reasoning:** Evaluated 4 snack packages from images, extracted nutrition facts via OCR, categorized by macro quality, and grouped into ranked tiers.
 
 **Dining Environment:** `supermarket_or_store` | **Content Type:** `nutrition_labels`
 
 | # | Dish / Item | Weight | Bounding Box | Img | Method | Label / Sticker OCR | Constituent Ingredients |
 |---|-------------|--------|--------------|-----|--------|---------------------|-------------------------|
-| [1] | Green Packaged Snack Bar | 50g | — | #0 | packaged | 90 kcal / Sugar: 7g / Sat Fat: 1g | — |
-| [2] | Blue Packaged Bread Product | 50g | — | #3 | packaged | 120 kcal / Sugar: 2g / Sat Fat: 1.5g | — |
-| [3] | Yellow Packaged Multiseed Bread | 50g | — | #1 | packaged | 250 kcal / Sugar: 4g / Sat Fat: 3g | — |
-| [4] | Yellow Packaged Sweet Bun Product | 50g | — | #2 | packaged | 250 kcal / Sugar: 19g / Sat Fat: 4.5g | — |
+| [1] | Green Packaged Snack Bar | 50g | — | #0 | packaged | — | — |
+| [2] | Yellow Multiseed Bread | 50g | — | #1 | packaged | — | — |
+| [3] | Yellow Sweet Bread | 50g | — | #2 | packaged | — | — |
+| [4] | Blue Packaged Bread | 50g | — | #3 | packaged | — | — |
 
 ## 📚 Database Search & Entity Resolution
 
@@ -559,37 +524,27 @@ _No client network errors or latency warnings recorded._
 
 ## 💬 Agent Message & Narrative
 
-### Packaged Snack Nutrition Comparison
+### Supermarket Snack Nutrition Panel Comparison
 
-**Summary:** Comparing four snack items reveals significant differences in calorie density, sugar content, and sodium. The green-packaged snack offers the lowest calorie count and minimal sodium, while the heavier bakery options contain significantly higher sugar, sodium, and saturated fats.
+**Summary:** Comparing the four snack packages reveals varying macro profiles. The blue-packaged bread offers the best protein-to-sugar balance with lower sodium, whereas the high-sugar bread and green-packaged snack carry heavier glycemic loads and saturated fat.
 
-**Recommended Option:** Green Packaged Snack Bar
+**Recommended Option:** Blue Packaged Bread
 
 #### Comparison Groups & Verdicts
 
-**Rank 1: Tier 1 - Safest Choice: Low Calorie Snack** [GOOD] — *Lowest Calories & Sodium*
-- **Items Included:** Green Packaged Snack Bar
-- **Comparative Sentence:** "Compared to the heavier bakery breads, this green-packaged snack delivers significantly fewer calories and minimal sodium per serving."
-- **Clinical Guidance:** This option provides a controlled 90 calories per serving with low total fat and minimal sodium, making it a suitable choice for weight management and blood pressure control. However, monitor sugar intake as it contributes 7 grams per serving.
-- **Nutrient Profile:** 90 kcal | P: 1g | C: 15g | F: 3g | Saturated Fat: 1g | Sodium: 20mg
+**Rank 1: Tier 2 - Moderate Choice: Balanced Breads** [NEUTRAL] — *Balanced Protein & Lower Sugar*
+- **Items Included (2):** Yellow Multiseed Bread, Blue Packaged Bread
+- **Comparative Sentence:** "Unlike the high-sugar sweet bread or confectionery snack, these bread options provide better protein content and significantly lower sugar levels."
+- **Clinical Guidance:** These bread products offer superior protein content (4g to 8g) and lower sugar levels (2g to 4g per serving) compared to confectionery alternatives. While sodium is present, the macro balance supports sustained satiety and steadier glycemic responses, making them acceptable choices in moderation.
+- **Ordering Tip:** Pair with a lean protein source or healthy fats to further blunt glycemic spikes.
+- **Nutrient Profile:** 185 kcal | P: 6g | C: 29.5g | F: 4.8g | Saturated Fat: 2.2g | Sodium: 240mg | Sugar: 3g
 
-**Rank 2: Tier 2 - Moderate Choice: Lower Sugar Bread** [NEUTRAL] — *Moderate Calories & Low Sugar*
-- **Items Included:** Blue Packaged Bread Product
-- **Comparative Sentence:** "Unlike the high-sugar yellow bun, this blue-packaged bread keeps sugar minimal while offering moderate protein and energy."
-- **Clinical Guidance:** This blue-packaged bread offers a reasonable calorie profile and low sugar content, supporting stable glycemic responses. However, sodium is slightly elevated at 150 mg per serving, so individuals managing hypertension should consume it in moderation.
-- **Nutrient Profile:** 120 kcal | P: 4g | C: 21g | F: 2.5g | Saturated Fat: 1.5g | Sodium: 150mg
-
-**Rank 3: Tier 3 - High Caution: Elevated Sodium Multiseed Bread** [WARNING] — *High Sodium Content*
-- **Items Included:** Yellow Packaged Multiseed Bread
-- **Comparative Sentence:** "Compared to the lighter snack options, this multiseed bread substantially increases daily sodium intake."
-- **Clinical Guidance:** While this option provides helpful protein and dietary seeds, its large serving size results in 250 calories and a notable 330 mg of salt per serving. Frequent consumption requires careful monitoring of daily sodium limits for cardiovascular health.
-- **Nutrient Profile:** 250 kcal | P: 8g | C: 38g | F: 7g | Saturated Fat: 3g | Sodium: 330mg
-
-**Rank 4: Tier 4 - Least Suitable: High Sugar Bun** [ALERT] — *High Sugar & Saturated Fat*
-- **Items Included:** Yellow Packaged Sweet Bun Product
-- **Comparative Sentence:** "Unlike the lower-sugar alternatives, this sweet bun carries a heavy concentration of added sugars and saturated fats."
-- **Clinical Guidance:** This yellow bun presents significant metabolic trade-offs with 19 grams of sugar and 4.5 grams of saturated fat per serving. Regular intake can spike blood glucose and negatively impact lipid panels, making it the least favorable choice for metabolic health.
-- **Nutrient Profile:** 250 kcal | P: 6g | C: 42g | F: 6g | Saturated Fat: 4.5g | Sodium: 125mg
+**Rank 2: Tier 3 - Caution: High Sugar & Refined Snacks** [WARNING] — *Elevated Sugar & Saturated Fat*
+- **Items Included (2):** Green Packaged Snack Bar, Yellow Sweet Bread
+- **Comparative Sentence:** "These items contain considerably higher sugar and saturated fat concentrations than the moderate multiseed or plain white bread options."
+- **Clinical Guidance:** These products pack higher sugar loads (up to 19g per serving in the sweet bread) and elevated saturated fats, increasing the metabolic load and contributing to rapid blood glucose fluctuations. Frequent consumption may negatively impact metabolic health markers.
+- **Ordering Tip:** Limit portion sizes strictly and avoid consuming multiple servings in a single sitting.
+- **Nutrient Profile:** 170 kcal | P: 3.5g | C: 28.5g | F: 4.5g | Saturated Fat: 2.8g | Sodium: 72.5mg | Sugar: 13g
 
 
 ## ⚙️ Pipeline Stage Ledger
@@ -605,10 +560,10 @@ _No thrown exceptions or log errors/warnings captured._
 ## 🖥️ Backend Execution Logs
 
 ```
-[backend] [job_compare_set2_1788891240652] Compare request received with 4 images. Mode: compare.
+[backend] [job_compare_set2_1788895653115] Compare request received with 4 images. Mode: compare.
 [scout_only_compare] Dispatched to gemini-3.5-flash-lite with single-pass instruction.
-[scout_only_compare] Latency: 6049ms. Usage: 6127 in / 1765 out tokens.
-[scout_only_compare] Extracted 4 items into 4 ranked groups.
+[scout_only_compare] Latency: 8186ms. Usage: 7950 in / 2801 out tokens.
+[scout_only_compare] Extracted 4 items into 2 ranked groups.
 [scout_only_compare] Status: SUCCESS. Finalized compare payload.
 ```
 
