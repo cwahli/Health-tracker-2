@@ -305,6 +305,7 @@ export function writeSeqDebug(w1: any, w2: any, merged: ArmCMerged, issues: stri
 - **Pack:** food · **Mode:** new_log · **Photos:** 9 (global 0-8)
 - **Shown ledger:** ${t.kcal.toFixed(0)} kcal · ${t.grams.toFixed(0)} g · ${merged.dishes.length} dishes
 - **Turn verdict (W2-authored, validation net ${issues.length === 0 ? 'clean' : 'issues: ' + issues.join('; ')}):** [${v.level}] ${v.label}
+- **Photo dish coverage (report-only):** ${photoCounts}
 
 ## Contract Evaluation
 
