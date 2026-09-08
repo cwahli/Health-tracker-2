@@ -1,6 +1,6 @@
 export { scoutSystemInstruction } from '../server_vision_scout.js';
 
-export function buildVisualScoutPrompt(message: string, imageCount: number): string {
+export function buildVisualScoutPrompt(message: string, imageCount: number, isCompareMode: boolean = false): string {
   const cleanMsg = (message || '').replace(/\[+[^\]]+\]+/g, '').replace(/\s+/g, ' ').trim();
   const normalizedWords = cleanMsg.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?'"“”]/g, '').trim().toLowerCase().split(/\s+/).filter(Boolean);
   const genericTokens = new Set(['i', 'had', 'have', 'ate', 'eaten', 'and', 'with', 'all', 'the', 'food', 'foods', 'dish', 'dishes', 'item', 'items', 'in', 'picture', 'pictures', 'photo', 'photos', 'image', 'images', 'log', 'meal', 'scan', 'analyze', 'this', 'that', 'for', 'my']);
@@ -8,7 +8,11 @@ export function buildVisualScoutPrompt(message: string, imageCount: number): str
   const multiImageRule = imageCount > 1 
     ? " Audit every image independently and extract distinct food items seen across ALL images. Do not stop after analyzing a label."
     : "";
-  const baseInstruction = `Analyze the provided ${imageCount > 1 ? imageCount + ' meal images' : 'meal image'}. Inspect all visible prepared dishes, cooking pots, grocery packages, and barcode labels. Read any visible OCR text on cups, wrappers, or menus to identify fast-food brands or commercial chains, and use these to anchor the nutritional estimation (e.g. calories and fat for commercial deep-fried items) to standard commercial nutrition tables. Ingest all visible foods and packages completely into dishes and constituent foods.${multiImageRule}`;
+  let baseInstruction = `Analyze the provided ${imageCount > 1 ? imageCount + ' meal images' : 'meal image'}. Inspect all visible prepared dishes, cooking pots, grocery packages, and barcode labels. Read any visible OCR text on cups, wrappers, or menus to identify fast-food brands or commercial chains, and use these to anchor the nutritional estimation (e.g. calories and fat for commercial deep-fried items) to standard commercial nutrition tables. Ingest all visible foods and packages completely into dishes and constituent foods.${multiImageRule}`;
+
+  if (isCompareMode) {
+    baseInstruction += "\n\n=== ACTIVE TASK: PRODUCT EVALUATION & COMPARISON ===\nEvaluate each item independently. Do NOT merge distinct products into a single meal.";
+  }
 
   if (isGeneric) {
     return `${baseInstruction} Extract all physical dishes and constituent foods into the hierarchical schema with weightGrams, packGrams, and nutrients.`;

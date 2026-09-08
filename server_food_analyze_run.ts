@@ -399,7 +399,7 @@ export async function runFoodAnalyze(req: any, res: any) {
             `3. SEPARATE DISHES: Keep distinct plated items, sides, and beverages as separate distinct dishes in dishes[]. Never merge drinks into food dishes.\n` +
             `4. CLINICAL ADVICE & NARRATIVE: Provide an updated direct 35-70 word clinicalAdvice in 2nd person ("You got...") on the FULL updated meal (all dishes at their locked weights — never just the edited item). Lead with the most significant finding: flag plainly any nutrient far over budget and compounding against the 7-day average, state the health impact, then one actionable next step/movement.`;
     } else {
-          scoutPromptText = buildVisualScoutPrompt(message || '', imageCount);
+          scoutPromptText = buildVisualScoutPrompt(message || '', imageCount, userSelectedMode === 'compare');
         }
         const scoutPersonalization = buildScoutPersonalizationBlock({ biomarkersNeedingImprovement });
         const nutritionTargetStatus = buildNutritionTargetStatus({
