@@ -1,15 +1,15 @@
 # Health Tracker — End-to-End Diagnostic Report
 
-- **Exported:** 2026-09-08T19:44:05.023Z
-- **Job ID:** `job_compare_set1_1788896639752`
+- **Exported:** 2026-09-08T20:13:07.238Z
+- **Job ID:** `job_compare_set1_1788898382661`
 - **Status:** succeeded
 - **Pack:** food
 - **Mode:** compare
 - **Version:** 3
 - **Savable:** false
-- **Photo 1:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set1_1788896639752_0.jpg
-- **Photo 2:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set1_1788896639752_1.jpg
-- **Photo 3:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set1_1788896639752_2.jpg
+- **Photo 1:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set1_1788898382661_0.jpg
+- **Photo 2:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set1_1788898382661_1.jpg
+- **Photo 3:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set1_1788898382661_2.jpg
 
 ## ⚖️ Contract Evaluation
 
@@ -43,7 +43,7 @@
 
 - **open:** true
 - **title:** "Food Item & Shelf Comparison"
-- **on_card:** {"totalOptions":6,"groups":3,"recommended":"Double Cheese Bread Say Bread"}
+- **on_card:** {"totalOptions":8,"groups":2,"recommended":"Say Bread Polo Cokelat"}
 - **visible:** [View Comparison Details, Download Debug Report, Close Modal]
 - **hidden:** [Retry, Attempt 1 of 3, Save Meal to History]
 - **composer:** {"photo":1,"add_image":1,"paste":1,"send":1}
@@ -86,16 +86,16 @@ STRICT INVARIANTS:
    - Front-only packages without a nutrition panel: set hasNutritionLabel to false or omit, transcribe product name from OCR, and set perServing to null.
    - NO LUMPING: Each distinct variety, flavor, or dish entry gets its own item in items[].
 
-3. ACTIVE MULTI-TIER GROUPING (ZERO ORPHANED ITEMS & NO LAZY DUMPING):
+3. ACTIVE MULTI-TIER GROUPING & STRICT NUTRITIONAL CLUSTERING (MAX 10% VARIANCE):
    - ZERO ORPHANED ITEMS: Every single index from 0 to items.length - 1 MUST be assigned to at least one group in groups[]. The union of all scoutItemIndices must cover 100% of extracted items.
-   - NO OUT-OF-BOUNDS INDICES: All indices in scoutItemIndices must strictly be between 0 and items.length - 1. Never emit an index >= items.length.
-   - NO LAZY GROUPING (1 single group is strictly forbidden for >2 items).
-   - NO LAZY MIDDLE DUMPING: Never dump more than 35-40% of items into a single group on large menus.
-   - CLINICAL PREPARATION TIERING (BASED ON COOKING METHOD & METABOLIC LOAD DISCERNED VIA OCR):
-     * Tier 1 (good / safest): Steamed preparations, boiled soups/clear broths, raw or boiled fresh vegetables, plain water/unsweetened tea.
-     * Tier 2 (neutral / moderate): Grilled or roasted lean proteins without heavy sugar glaze, lightly sautéed greens/vegetables, staple plain grains.
-     * Tier 3 (warning / caution): Deep-fried poultry, meats, or seafood; stir-fried noodles or fried rice; sweetened beverages and syrups.
-     * Tier 4 (alert / severe metabolic load): Deep-fried animal skins and offal; deep-fried vegetables (extreme oil absorption); ultra-processed boiled crackers or instant noodles in heavy chili/palm oil; high-sugar condensed milk and syrup bowls; large family-size snack bags.
+   - NO LAZY DUMPING & MAX 10% VARIANCE RULE: You MUST NOT dump wildly different items into a single group. A group is only correct if the estimated underlying nutritional values (Calories, Protein, Fat, Carbs, Sugar, Total Fibre, Sodium) of the dishes inside it do not differ by more than 10% from one another.
+   - If dishes within a broad category (like "Fried Foods") have enormous nutritional differences (e.g., Fried Chicken vs. Fried Rice vs. Fried Vegetables), you MUST split them into distinct, separate groups (e.g., "Tier 3: Fried Proteins", "Tier 3: Fried Carb Dishes", "Tier 4: Oil-Absorbing Fried Veggies").
+   - You are NOT restricted to exactly 4 groups. You may create 5 to 10 groups if needed to satisfy the 10% variance clustering rule, while mapping them to the closest verdict level (good, neutral, warning, alert).
+   - TIERING BASES (Split further if variance >10%):
+     * Tier 1 (good / safest): Steamed preparations, boiled soups/clear broths, raw or boiled fresh vegetables.
+     * Tier 2 (neutral / moderate): Grilled or roasted lean proteins, lightly sautéed greens/vegetables, staple plain grains.
+     * Tier 3 (warning / caution): Deep-fried poultry/meats/seafood, stir-fried noodles, fried rice, sweetened beverages.
+     * Tier 4 (alert / severe metabolic load): Deep-fried animal skins/offal, deep-fried vegetables (extreme oil absorption), ultra-processed boiled crackers or instant noodles in heavy oil.
 
 4. DIET TASK: ORDERING (Ranking) & AVOIDING THE CALORIE ILLUSION TRAP:
    - The groups in groups[] MUST be sorted in strict order of overall health ranking: BEST / SAFEST CHOICE FIRST ('good'), down to least suitable at the bottom ('alert').
@@ -104,6 +104,7 @@ STRICT INVARIANTS:
      * NEVER rank a confectionery or snack as "Tier 1 (good)" simply because its portion is tiny (e.g. 23g wafer bar at 90 kcal) if it is sugar-dense (>25% sugar by weight) with negligible protein (<2g) and fiber.
      * Evaluate NUTRIENT DENSITY: Compare sugar-to-protein ratio, saturated fat percentage, and fiber retention. Wholesome staple breads with 2g sugar and 4g protein rank HIGHER in healthfulness than a 90 kcal candy bar that is 30% refined sugar.
      * Factor in the mass: A 250 kcal multiseed bread serving is 80g delivering 8g protein and 4g sugar, whereas a 250 kcal sweet bun is 75g packing 19g sugar and 4.5g saturated fat.
+   - BEYOND MACROS (HIDDEN HARMS & BENEFITS): You MUST also split groups based on critical unlisted nutrients or physiological impacts. For example, if an item contains Trans Fats, oxidized palm oil, heavy synthetic additives, or causes extreme glycemic sugar spikes, it MUST be isolated into its own 'alert' group, even if its base calories or macros closely match a cleaner food. Trans fat merits its own grouping.
    - PURE SNACK / ULTRA-PROCESSED AISLE RULE:
      * When comparing exclusively ultra-processed snacks (chips, crisps, fried crackers), recognize that NONE are health foods (NOVA 4).
      * Rank based on BUILT-IN PORTION CONTROL and harm reduction: A miniature 25g pouch (<130 kcal) strictly caps caloric and sodium damage compared to an open 180g family pack (>900 kcal, 35g fat). Do not give "good" to standard fried chips; use "neutral" (with a portion-control caveat) down to "alert".
@@ -128,6 +129,7 @@ STRICT INVARIANTS:
      * saturatedFat: Estimated saturated fat (g)
      * carbohydrates: Estimated total carbohydrates (g)
      * sugar: Estimated sugar (g)
+     * totalFibre: Estimated total fibre (g)
      * sodium: Estimated sodium (mg)
      * MACRONUTRIENT BALANCE: Ensure realistic balance: (4 * protein) + (9 * totalFat) + (4 * carbohydrates) should approximately equal calories (within 10-15%).
      * REALISTIC CLINICAL BENCHMARKS:
@@ -200,286 +202,282 @@ Output exactly ONE JSON object matching this schema:
 - **Raw Emission (Verbatim Output):**
 ```json
 {
-  "_internalReasoning": "Extracted SilverQueen chocolate bar and Say Bread items from the three images, categorized them by metabolic load, sugar density, and fiber profile into strict tiers.",
-  "comparisonTitle": "Bakery and Confectionery Product Health Evaluation",
-  "comparisonType": "shelf_selection",
-  "summary": "Comparing Say Bread bakery items and SilverQueen chocolate shows that both fall into heavier metabolic load categories due to refined grains, added sugars, and fats. Say Bread options offer higher protein content, whereas the chocolate bar is extremely dense in saturated fats and refined sugars with minimal protein and fiber.",
+  "_internalReasoning": "Comparing SilverQueen milk chocolate and various Say Bread bakery items to evaluate health trade-offs, portion impact, and metabolic burden.",
+  "comparisonTitle": "Bakery Items vs. Milk Chocolate Bar Comparison",
+  "comparisonType": "food_items",
+  "summary": "Comparing chocolate bars and sweet bakery items reveals high sugar, refined carbohydrates, and saturated fats across all selections. Portion control is critical when consuming high-calorie confectionery.",
   "items": [
     {
-      "name": "SilverQueen Milk Chocolate with Cashews 52g",
+      "name": "SilverQueen Milk Chocolate with Cashews",
       "tier": 4,
-      "sourceImageIndex": 0
+      "sourceImageIndex": 0,
+      "brand": "SilverQueen",
+      "hasNutritionLabel": true,
+      "servingSize": "20 g",
+      "servingsPerPack": "2.6 Saji/Serving"
     },
     {
-      "name": "Polo Cokelat Say Bread",
+      "name": "SilverQueen Milk Chocolate with Almonds",
+      "tier": 4,
+      "sourceImageIndex": 0,
+      "brand": "SilverQueen"
+    },
+    {
+      "name": "Magnum Pistachio Ice Cream Bar",
+      "tier": 4,
+      "sourceImageIndex": 0,
+      "brand": "Magnum"
+    },
+    {
+      "name": "Say Bread Polo Cokelat",
       "tier": 3,
-      "sourceImageIndex": 2
+      "sourceImageIndex": 2,
+      "brand": "Say Bread"
     },
     {
-      "name": "Polo Keju Say Bread",
+      "name": "Say Bread Polo Keju",
       "tier": 3,
-      "sourceImageIndex": 2
+      "sourceImageIndex": 2,
+      "brand": "Say Bread"
     },
     {
-      "name": "Choco Topping Pie Say Bread",
+      "name": "Say Bread Choco Topping Pie",
       "tier": 3,
-      "sourceImageIndex": 2
+      "sourceImageIndex": 2,
+      "brand": "Say Bread"
     },
     {
-      "name": "Cheese Topping Pie Say Bread",
+      "name": "Say Bread Cheese Topping Pie",
       "tier": 3,
-      "sourceImageIndex": 2
+      "sourceImageIndex": 2,
+      "brand": "Say Bread"
     },
     {
-      "name": "Double Cheese Bread Say Bread",
-      "tier": 2,
-      "sourceImageIndex": 2
+      "name": "Say Bread Double Cheese Bread",
+      "tier": 3,
+      "sourceImageIndex": 2,
+      "brand": "Say Bread"
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 2 - Moderate Choice: Cheese Breads",
+      "groupName": "Tier 3 - Moderate Bakery Pastries & Breads",
       "scoutItemIndices": [
-        5
-      ],
-      "boundingBox2D": [
-        580,
-        715,
-        908,
-        990
-      ],
-      "verdict": {
-        "label": "Moderate Protein & Calcium Option",
-        "level": "neutral"
-      },
-      "comparisonSentence": "Compared to the chocolate bar and sweet confectionery pastries, the double cheese bread delivers significantly higher protein content relative to its total carbohydrate load.",
-      "message": "This cheese-infused bread provides a more balanced macronutrient profile with decent protein from dairy cheese, though total sodium and saturated fats remain moderately elevated. It is a more sustaining choice for metabolic stability than pure sugar snacks, but should still be consumed in moderation.",
-      "averageNutrients": {
-        "calories": 280,
-        "protein": 9,
-        "totalFat": 12,
-        "saturatedFat": 5,
-        "carbohydrates": 34,
-        "sugar": 6,
-        "sodium": 420
-      },
-      "orderingTip": "Pair with a hot unsweetened tea or coffee to avoid adding extra liquid sugars."
-    },
-    {
-      "groupName": "Tier 3 - Caution Choice: Sweet Breads & Pastries",
-      "scoutItemIndices": [
-        1,
-        2,
         3,
-        4
+        4,
+        5,
+        6,
+        7
       ],
       "boundingBox2D": [
-        80,
         0,
-        560,
-        500
+        0,
+        1000,
+        1000
       ],
       "verdict": {
-        "label": "High Carbohydrate & Sugar Pastries",
+        "label": "Moderate Calorie Bakery Options",
         "level": "warning"
       },
-      "comparisonSentence": "Unlike pure chocolate bars, these sweet bakery items deliver substantial carbohydrate volume that can spike postprandial blood glucose levels rapidly.",
-      "message": "These sweet buns and topping pies combine refined wheat flour with substantial sugar fillings and toppings, driving up glycemic load and caloric density. While they contain slightly more structural mass and trace protein than candy bars, frequent consumption poses challenges for glycemic and weight management.",
+      "comparisonSentence": "These bakery items deliver more substantial food volume and complex carbohydrates compared to concentrated confectionery bars.",
+      "message": "These sweet bakery and cheese breads provide moderate caloric and carbohydrate loads, accompanied by refined flour and dairy fats. While offering more structural satiety than chocolate bars, frequent consumption can still contribute to caloric surplus and glycemic variability due to added sugars and butter content.",
       "averageNutrients": {
         "calories": 320,
-        "protein": 6,
+        "protein": 7,
         "totalFat": 14,
-        "saturatedFat": 6,
-        "carbohydrates": 44,
-        "sugar": 16,
-        "sodium": 350
+        "saturatedFat": 7,
+        "carbohydrates": 42,
+        "sugar": 12,
+        "totalFibre": 2,
+        "sodium": 280
       },
-      "orderingTip": "Share one pastry with a companion or split into smaller portions to limit rapid carbohydrate intake."
+      "orderingTip": "Share the bakery item with a companion or pair with unsweetened black coffee to blunt glycemic spikes."
     },
     {
-      "groupName": "Tier 4 - Alert Choice: High Sugar & Saturated Fat Chocolate",
+      "groupName": "Tier 4 - High Sugar & Saturated Fat Confectionery",
       "scoutItemIndices": [
-        0
+        0,
+        1,
+        2
       ],
       "boundingBox2D": [
         0,
-        200,
+        0,
         1000,
-        540
+        1000
       ],
       "verdict": {
-        "label": "Extreme Sugar & Saturated Fat Density",
+        "label": "High Sugar & Calorie Alert",
         "level": "alert"
       },
-      "comparisonSentence": "Unlike bakery bread options that offer some structural substance, this chocolate bar packs an extremely high concentration of refined sugars and tropical saturated fats into a tiny physical volume.",
-      "message": "The SilverQueen milk chocolate bar delivers 110 kcal per 20g serving (approx. 286 kcal for the entire 52g bar) with high sugar and saturated fat concentrations. It triggers sharp insulin spikes with minimal satiety or micronutrient benefits, making it an adverse choice for cardiovascular and metabolic health.",
+      "comparisonSentence": "Unlike the bulkier bakery breads, these dense chocolate and ice cream items pack high sugar and saturated fat concentrations into small portions.",
+      "message": "These confectionery items are dense sources of refined sugar, dairy fats, and cocoa butter, delivering rapid caloric loads with minimal fiber or protein satiety. Frequent intake elevates cardiovascular and metabolic risks by contributing to elevated triglycerides, insulin resistance, and visceral fat accumulation.",
       "averageNutrients": {
-        "calories": 286,
-        "protein": 5.2,
-        "totalFat": 18.2,
-        "saturatedFat": 9.2,
-        "carbohydrates": 26,
-        "sugar": 23.4,
-        "sodium": 52
+        "calories": 220,
+        "protein": 3,
+        "totalFat": 14,
+        "saturatedFat": 7.5,
+        "carbohydrates": 20,
+        "sugar": 16,
+        "totalFibre": 1,
+        "sodium": 45
       },
-      "orderingTip": "If consumed, limit yourself strictly to a single 20g portion rather than finishing the entire package."
+      "orderingTip": "Strictly portion-control by consuming only a single serving square rather than the entire bar."
     }
   ],
-  "recommendedOption": "Double Cheese Bread Say Bread"
+  "recommendedOption": "Say Bread Polo Cokelat"
 }
 ```
 - **Output:**
 ```json
 {
-  "_internalReasoning": "Extracted SilverQueen chocolate bar and Say Bread items from the three images, categorized them by metabolic load, sugar density, and fiber profile into strict tiers.",
-  "comparisonTitle": "Bakery and Confectionery Product Health Evaluation",
-  "comparisonType": "shelf_selection",
-  "summary": "Comparing Say Bread bakery items and SilverQueen chocolate shows that both fall into heavier metabolic load categories due to refined grains, added sugars, and fats. Say Bread options offer higher protein content, whereas the chocolate bar is extremely dense in saturated fats and refined sugars with minimal protein and fiber.",
+  "_internalReasoning": "Comparing SilverQueen milk chocolate and various Say Bread bakery items to evaluate health trade-offs, portion impact, and metabolic burden.",
+  "comparisonTitle": "Bakery Items vs. Milk Chocolate Bar Comparison",
+  "comparisonType": "food_items",
+  "summary": "Comparing chocolate bars and sweet bakery items reveals high sugar, refined carbohydrates, and saturated fats across all selections. Portion control is critical when consuming high-calorie confectionery.",
   "items": [
     {
-      "name": "SilverQueen Milk Chocolate with Cashews 52g",
+      "name": "SilverQueen Milk Chocolate with Cashews",
       "tier": 4,
-      "sourceImageIndex": 0
+      "sourceImageIndex": 0,
+      "brand": "SilverQueen",
+      "hasNutritionLabel": true,
+      "servingSize": "20 g",
+      "servingsPerPack": "2.6 Saji/Serving"
     },
     {
-      "name": "Polo Cokelat Say Bread",
+      "name": "SilverQueen Milk Chocolate with Almonds",
+      "tier": 4,
+      "sourceImageIndex": 0,
+      "brand": "SilverQueen"
+    },
+    {
+      "name": "Magnum Pistachio Ice Cream Bar",
+      "tier": 4,
+      "sourceImageIndex": 0,
+      "brand": "Magnum"
+    },
+    {
+      "name": "Say Bread Polo Cokelat",
       "tier": 3,
-      "sourceImageIndex": 2
+      "sourceImageIndex": 2,
+      "brand": "Say Bread"
     },
     {
-      "name": "Polo Keju Say Bread",
+      "name": "Say Bread Polo Keju",
       "tier": 3,
-      "sourceImageIndex": 2
+      "sourceImageIndex": 2,
+      "brand": "Say Bread"
     },
     {
-      "name": "Choco Topping Pie Say Bread",
+      "name": "Say Bread Choco Topping Pie",
       "tier": 3,
-      "sourceImageIndex": 2
+      "sourceImageIndex": 2,
+      "brand": "Say Bread"
     },
     {
-      "name": "Cheese Topping Pie Say Bread",
+      "name": "Say Bread Cheese Topping Pie",
       "tier": 3,
-      "sourceImageIndex": 2
+      "sourceImageIndex": 2,
+      "brand": "Say Bread"
     },
     {
-      "name": "Double Cheese Bread Say Bread",
-      "tier": 2,
-      "sourceImageIndex": 2
+      "name": "Say Bread Double Cheese Bread",
+      "tier": 3,
+      "sourceImageIndex": 2,
+      "brand": "Say Bread"
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 2 - Moderate Choice: Cheese Breads",
+      "groupName": "Tier 3 - Moderate Bakery Pastries & Breads",
       "scoutItemIndices": [
-        5
-      ],
-      "boundingBox2D": [
-        580,
-        715,
-        908,
-        990
-      ],
-      "verdict": {
-        "label": "Moderate Protein & Calcium Option",
-        "level": "neutral"
-      },
-      "comparisonSentence": "Compared to the chocolate bar and sweet confectionery pastries, the double cheese bread delivers significantly higher protein content relative to its total carbohydrate load.",
-      "message": "This cheese-infused bread provides a more balanced macronutrient profile with decent protein from dairy cheese, though total sodium and saturated fats remain moderately elevated. It is a more sustaining choice for metabolic stability than pure sugar snacks, but should still be consumed in moderation.",
-      "averageNutrients": {
-        "calories": 280,
-        "protein": 9,
-        "totalFat": 12,
-        "saturatedFat": 5,
-        "carbohydrates": 34,
-        "sugar": 6,
-        "sodium": 420
-      },
-      "orderingTip": "Pair with a hot unsweetened tea or coffee to avoid adding extra liquid sugars."
-    },
-    {
-      "groupName": "Tier 3 - Caution Choice: Sweet Breads & Pastries",
-      "scoutItemIndices": [
-        1,
-        2,
         3,
-        4
+        4,
+        5,
+        6,
+        7
       ],
       "boundingBox2D": [
-        80,
         0,
-        560,
-        500
+        0,
+        1000,
+        1000
       ],
       "verdict": {
-        "label": "High Carbohydrate & Sugar Pastries",
+        "label": "Moderate Calorie Bakery Options",
         "level": "warning"
       },
-      "comparisonSentence": "Unlike pure chocolate bars, these sweet bakery items deliver substantial carbohydrate volume that can spike postprandial blood glucose levels rapidly.",
-      "message": "These sweet buns and topping pies combine refined wheat flour with substantial sugar fillings and toppings, driving up glycemic load and caloric density. While they contain slightly more structural mass and trace protein than candy bars, frequent consumption poses challenges for glycemic and weight management.",
+      "comparisonSentence": "These bakery items deliver more substantial food volume and complex carbohydrates compared to concentrated confectionery bars.",
+      "message": "These sweet bakery and cheese breads provide moderate caloric and carbohydrate loads, accompanied by refined flour and dairy fats. While offering more structural satiety than chocolate bars, frequent consumption can still contribute to caloric surplus and glycemic variability due to added sugars and butter content.",
       "averageNutrients": {
         "calories": 320,
-        "protein": 6,
+        "protein": 7,
         "totalFat": 14,
-        "saturatedFat": 6,
-        "carbohydrates": 44,
-        "sugar": 16,
-        "sodium": 350
+        "saturatedFat": 7,
+        "carbohydrates": 42,
+        "sugar": 12,
+        "totalFibre": 2,
+        "sodium": 280
       },
-      "orderingTip": "Share one pastry with a companion or split into smaller portions to limit rapid carbohydrate intake."
+      "orderingTip": "Share the bakery item with a companion or pair with unsweetened black coffee to blunt glycemic spikes."
     },
     {
-      "groupName": "Tier 4 - Alert Choice: High Sugar & Saturated Fat Chocolate",
+      "groupName": "Tier 4 - High Sugar & Saturated Fat Confectionery",
       "scoutItemIndices": [
-        0
+        0,
+        1,
+        2
       ],
       "boundingBox2D": [
         0,
-        200,
+        0,
         1000,
-        540
+        1000
       ],
       "verdict": {
-        "label": "Extreme Sugar & Saturated Fat Density",
+        "label": "High Sugar & Calorie Alert",
         "level": "alert"
       },
-      "comparisonSentence": "Unlike bakery bread options that offer some structural substance, this chocolate bar packs an extremely high concentration of refined sugars and tropical saturated fats into a tiny physical volume.",
-      "message": "The SilverQueen milk chocolate bar delivers 110 kcal per 20g serving (approx. 286 kcal for the entire 52g bar) with high sugar and saturated fat concentrations. It triggers sharp insulin spikes with minimal satiety or micronutrient benefits, making it an adverse choice for cardiovascular and metabolic health.",
+      "comparisonSentence": "Unlike the bulkier bakery breads, these dense chocolate and ice cream items pack high sugar and saturated fat concentrations into small portions.",
+      "message": "These confectionery items are dense sources of refined sugar, dairy fats, and cocoa butter, delivering rapid caloric loads with minimal fiber or protein satiety. Frequent intake elevates cardiovascular and metabolic risks by contributing to elevated triglycerides, insulin resistance, and visceral fat accumulation.",
       "averageNutrients": {
-        "calories": 286,
-        "protein": 5.2,
-        "totalFat": 18.2,
-        "saturatedFat": 9.2,
-        "carbohydrates": 26,
-        "sugar": 23.4,
-        "sodium": 52
+        "calories": 220,
+        "protein": 3,
+        "totalFat": 14,
+        "saturatedFat": 7.5,
+        "carbohydrates": 20,
+        "sugar": 16,
+        "totalFibre": 1,
+        "sodium": 45
       },
-      "orderingTip": "If consumed, limit yourself strictly to a single 20g portion rather than finishing the entire package."
+      "orderingTip": "Strictly portion-control by consuming only a single serving square rather than the entire bar."
     }
   ],
-  "recommendedOption": "Double Cheese Bread Say Bread"
+  "recommendedOption": "Say Bread Polo Cokelat"
 }
 ```
-- **Signals:** model=gemini-3.5-flash-lite, latency_ms=5269, tokens=[object Object]
-- **Parent:** job_compare_set1_1788896639752
+- **Signals:** model=gemini-3.5-flash-lite, latency_ms=4575, tokens=[object Object]
+- **Parent:** job_compare_set1_1788898382661
 
 ## 🔗 Data Pipelines & Infrastructure Connectivity Matrix
 
 | Pipeline Stage | Connectivity & Status | Details / Metrics |
 |----------------|-----------------------|-------------------|
 | **1. Triage & Front Desk** | ⚪ Skipped / Standby | Direct execution mode |
-| **2. Vision Scout & OCR** | ✅ Connected (6 item(s) detected) | Type: food_items |
+| **2. Vision Scout & OCR** | ✅ Connected (8 item(s) detected) | Type: food_items |
 | **3. Biomarker Ingest & Mapping** | ⚪ Standby / N/A | No tabular lab panel |
 | **4. Database Search & Truth Matching** | ⚪ Standby / N/A | Single-dispatch path: scout-direct ledger, no external fetch |
 | **5. Mathematical Calculation Engine** | ⚪ Standby / N/A | No meal calculation required |
 | **6. Trial-Balance & Quality Gate** | ⚪ Standby / N/A | N/A |
 | **7. Health Coach / Clinical Engine** | ⚪ Standby / N/A | No clinical analysis requested |
-| **8. State Storage & Job Sync** | ✅ Connected (Local / Active) | Job ID: `job_compare_set1_1788896639752` |
+| **8. State Storage & Job Sync** | ✅ Connected (Local / Active) | Job ID: `job_compare_set1_1788898382661` |
 
 ## 👤 Last User Action
 
 - **Action:** submit_meal_job
 - **Prompt/Text:** "Compare these bakery items and the chocolate bar, and evaluate the healthier option."
-- **Timestamp:** 2026-09-08T19:44:05.023Z
+- **Timestamp:** 2026-09-08T20:13:07.238Z
 
 ## 🐾 User Action Breadcrumbs
 
@@ -489,7 +487,7 @@ Output exactly ONE JSON object matching this schema:
 |  | select_photos | camera_roll | {"imageCount":3,"files":["set1_saybread_bakery_shelf.jpg","set1_silverqueen_nutrition_label.jpg","set1_silverqueen_chocolate_front.jpg"]} |
 |  | input_change | input | {"name":"compare-query-input","valueLength":84} |
 |  | submit_initiated | chat_composer | {"prompt":"Compare these bakery items and the chocolate bar, and evaluate the healthier option.","imageCount":3,"submissionMode":"compare"} |
-|  | submit_meal_job | chat_compose_dock | {"jobId":"job_compare_set1_1788896639752","promptLength":84,"imageCount":3,"submissionMode":"compare"} |
+|  | submit_meal_job | chat_compose_dock | {"jobId":"job_compare_set1_1788898382661","promptLength":84,"imageCount":3,"submissionMode":"compare"} |
 
 ## ⚙️ Job Session Event Trail
 
@@ -501,24 +499,26 @@ _No client network errors or latency warnings recorded._
 
 ### Client Console Logs (2)
 ```
-[INFO] Compare mode triggered with 3 images for job job_compare_set1_1788896639752
+[INFO] Compare mode triggered with 3 images for job job_compare_set1_1788898382661
 [INFO] Scout-Only Compare single-pass pipeline invoked for Set 1: Say Bread Bakery Shelf & SilverQueen Chocolate.
 ```
 
-## 🔍 Vision Scout Results (6 item(s) detected)
+## 🔍 Vision Scout Results (8 item(s) detected)
 
-> **Scout Internal Reasoning:** Extracted SilverQueen chocolate bar and Say Bread items from the three images, categorized them by metabolic load, sugar density, and fiber profile into strict tiers.
+> **Scout Internal Reasoning:** Comparing SilverQueen milk chocolate and various Say Bread bakery items to evaluate health trade-offs, portion impact, and metabolic burden.
 
 **Dining Environment:** `supermarket_or_store` | **Content Type:** `food_items`
 
 | # | Dish / Item | Weight | Bounding Box | Img | Method | Label / Sticker OCR | Constituent Ingredients |
 |---|-------------|--------|--------------|-----|--------|---------------------|-------------------------|
-| [1] | SilverQueen Milk Chocolate with Cashews 52g | 50g | — | #0 | packaged | — | — |
-| [2] | Polo Cokelat Say Bread | 50g | — | #2 | packaged | — | — |
-| [3] | Polo Keju Say Bread | 50g | — | #2 | packaged | — | — |
-| [4] | Choco Topping Pie Say Bread | 50g | — | #2 | packaged | — | — |
-| [5] | Cheese Topping Pie Say Bread | 50g | — | #2 | packaged | — | — |
-| [6] | Double Cheese Bread Say Bread | 50g | — | #2 | packaged | — | — |
+| [1] | SilverQueen Milk Chocolate with Cashews | 50g | — | #0 | packaged | — | — |
+| [2] | SilverQueen Milk Chocolate with Almonds | 50g | — | #0 | packaged | — | — |
+| [3] | Magnum Pistachio Ice Cream Bar | 50g | — | #0 | packaged | — | — |
+| [4] | Say Bread Polo Cokelat | 50g | — | #2 | packaged | — | — |
+| [5] | Say Bread Polo Keju | 50g | — | #2 | packaged | — | — |
+| [6] | Say Bread Choco Topping Pie | 50g | — | #2 | packaged | — | — |
+| [7] | Say Bread Cheese Topping Pie | 50g | — | #2 | packaged | — | — |
+| [8] | Say Bread Double Cheese Bread | 50g | — | #2 | packaged | — | — |
 
 ## 📚 Database Search & Entity Resolution
 
@@ -527,34 +527,27 @@ _No client network errors or latency warnings recorded._
 
 ## 💬 Agent Message & Narrative
 
-### Bakery and Confectionery Product Health Evaluation
+### Bakery Items vs. Milk Chocolate Bar Comparison
 
-**Summary:** Comparing Say Bread bakery items and SilverQueen chocolate shows that both fall into heavier metabolic load categories due to refined grains, added sugars, and fats. Say Bread options offer higher protein content, whereas the chocolate bar is extremely dense in saturated fats and refined sugars with minimal protein and fiber.
+**Summary:** Comparing chocolate bars and sweet bakery items reveals high sugar, refined carbohydrates, and saturated fats across all selections. Portion control is critical when consuming high-calorie confectionery.
 
-**Recommended Option:** Double Cheese Bread Say Bread
+**Recommended Option:** Say Bread Polo Cokelat
 
 #### Comparison Groups & Verdicts
 
-**Rank 1: Tier 2 - Moderate Choice: Cheese Breads** [NEUTRAL] — *Moderate Protein & Calcium Option*
-- **Items Included (1):** Double Cheese Bread Say Bread
-- **Comparative Sentence:** "Compared to the chocolate bar and sweet confectionery pastries, the double cheese bread delivers significantly higher protein content relative to its total carbohydrate load."
-- **Clinical Guidance:** This cheese-infused bread provides a more balanced macronutrient profile with decent protein from dairy cheese, though total sodium and saturated fats remain moderately elevated. It is a more sustaining choice for metabolic stability than pure sugar snacks, but should still be consumed in moderation.
-- **Ordering Tip:** Pair with a hot unsweetened tea or coffee to avoid adding extra liquid sugars.
-- **Nutrient Profile:** 280 kcal | P: 9g | C: 34g | F: 12g | Saturated Fat: 5g | Sodium: 420mg | Sugar: 6g
+**Rank 1: Tier 3 - Moderate Bakery Pastries & Breads** [WARNING] — *Moderate Calorie Bakery Options*
+- **Items Included (5):** Say Bread Polo Cokelat, Say Bread Polo Keju, Say Bread Choco Topping Pie, Say Bread Cheese Topping Pie, Say Bread Double Cheese Bread
+- **Comparative Sentence:** "These bakery items deliver more substantial food volume and complex carbohydrates compared to concentrated confectionery bars."
+- **Clinical Guidance:** These sweet bakery and cheese breads provide moderate caloric and carbohydrate loads, accompanied by refined flour and dairy fats. While offering more structural satiety than chocolate bars, frequent consumption can still contribute to caloric surplus and glycemic variability due to added sugars and butter content.
+- **Ordering Tip:** Share the bakery item with a companion or pair with unsweetened black coffee to blunt glycemic spikes.
+- **Nutrient Profile:** 320 kcal | P: 7g | C: 42g | F: 14g | Saturated Fat: 7g | Sodium: 280mg | Sugar: 12g
 
-**Rank 2: Tier 3 - Caution Choice: Sweet Breads & Pastries** [WARNING] — *High Carbohydrate & Sugar Pastries*
-- **Items Included (4):** Polo Cokelat Say Bread, Polo Keju Say Bread, Choco Topping Pie Say Bread, Cheese Topping Pie Say Bread
-- **Comparative Sentence:** "Unlike pure chocolate bars, these sweet bakery items deliver substantial carbohydrate volume that can spike postprandial blood glucose levels rapidly."
-- **Clinical Guidance:** These sweet buns and topping pies combine refined wheat flour with substantial sugar fillings and toppings, driving up glycemic load and caloric density. While they contain slightly more structural mass and trace protein than candy bars, frequent consumption poses challenges for glycemic and weight management.
-- **Ordering Tip:** Share one pastry with a companion or split into smaller portions to limit rapid carbohydrate intake.
-- **Nutrient Profile:** 320 kcal | P: 6g | C: 44g | F: 14g | Saturated Fat: 6g | Sodium: 350mg | Sugar: 16g
-
-**Rank 3: Tier 4 - Alert Choice: High Sugar & Saturated Fat Chocolate** [ALERT] — *Extreme Sugar & Saturated Fat Density*
-- **Items Included (1):** SilverQueen Milk Chocolate with Cashews 52g
-- **Comparative Sentence:** "Unlike bakery bread options that offer some structural substance, this chocolate bar packs an extremely high concentration of refined sugars and tropical saturated fats into a tiny physical volume."
-- **Clinical Guidance:** The SilverQueen milk chocolate bar delivers 110 kcal per 20g serving (approx. 286 kcal for the entire 52g bar) with high sugar and saturated fat concentrations. It triggers sharp insulin spikes with minimal satiety or micronutrient benefits, making it an adverse choice for cardiovascular and metabolic health.
-- **Ordering Tip:** If consumed, limit yourself strictly to a single 20g portion rather than finishing the entire package.
-- **Nutrient Profile:** 286 kcal | P: 5.2g | C: 26g | F: 18.2g | Saturated Fat: 9.2g | Sodium: 52mg | Sugar: 23.4g
+**Rank 2: Tier 4 - High Sugar & Saturated Fat Confectionery** [ALERT] — *High Sugar & Calorie Alert*
+- **Items Included (3):** SilverQueen Milk Chocolate with Cashews, SilverQueen Milk Chocolate with Almonds, Magnum Pistachio Ice Cream Bar
+- **Comparative Sentence:** "Unlike the bulkier bakery breads, these dense chocolate and ice cream items pack high sugar and saturated fat concentrations into small portions."
+- **Clinical Guidance:** These confectionery items are dense sources of refined sugar, dairy fats, and cocoa butter, delivering rapid caloric loads with minimal fiber or protein satiety. Frequent intake elevates cardiovascular and metabolic risks by contributing to elevated triglycerides, insulin resistance, and visceral fat accumulation.
+- **Ordering Tip:** Strictly portion-control by consuming only a single serving square rather than the entire bar.
+- **Nutrient Profile:** 220 kcal | P: 3g | C: 20g | F: 14g | Saturated Fat: 7.5g | Sodium: 45mg | Sugar: 16g
 
 
 ## ⚙️ Pipeline Stage Ledger
@@ -570,10 +563,10 @@ _No thrown exceptions or log errors/warnings captured._
 ## 🖥️ Backend Execution Logs
 
 ```
-[backend] [job_compare_set1_1788896639752] Compare request received with 3 images. Mode: compare.
+[backend] [job_compare_set1_1788898382661] Compare request received with 3 images. Mode: compare.
 [scout_only_compare] Dispatched to gemini-3.5-flash-lite with single-pass instruction.
-[scout_only_compare] Latency: 5269ms. Usage: 7124 in / 1300 out tokens.
-[scout_only_compare] Extracted 6 items into 3 ranked groups.
+[scout_only_compare] Latency: 4575ms. Usage: 7390 in / 1159 out tokens.
+[scout_only_compare] Extracted 8 items into 2 ranked groups.
 [scout_only_compare] Status: SUCCESS. Finalized compare payload.
 ```
 

@@ -1,13 +1,13 @@
 # Health Tracker — End-to-End Diagnostic Report
 
-- **Exported:** 2026-09-08T19:44:42.787Z
-- **Job ID:** `job_compare_set5_1788896672720`
+- **Exported:** 2026-09-08T20:13:42.190Z
+- **Job ID:** `job_compare_set5_1788898413730`
 - **Status:** succeeded
 - **Pack:** food
 - **Mode:** compare
 - **Version:** 3
 - **Savable:** false
-- **Photo 1:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set5_1788896672720_0.jpg
+- **Photo 1:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set5_1788898413730_0.jpg
 
 ## ⚖️ Contract Evaluation
 
@@ -41,7 +41,7 @@
 
 - **open:** true
 - **title:** "Food Item & Shelf Comparison"
-- **on_card:** {"totalOptions":56,"groups":4,"recommended":"IKAN NILA GARANG ASEM + NASI"}
+- **on_card:** {"totalOptions":42,"groups":4,"recommended":"NILA BAKAR / GR + NASI"}
 - **visible:** [View Comparison Details, Download Debug Report, Close Modal]
 - **hidden:** [Retry, Attempt 1 of 3, Save Meal to History]
 - **composer:** {"photo":1,"add_image":1,"paste":1,"send":1}
@@ -84,16 +84,16 @@ STRICT INVARIANTS:
    - Front-only packages without a nutrition panel: set hasNutritionLabel to false or omit, transcribe product name from OCR, and set perServing to null.
    - NO LUMPING: Each distinct variety, flavor, or dish entry gets its own item in items[].
 
-3. ACTIVE MULTI-TIER GROUPING (ZERO ORPHANED ITEMS & NO LAZY DUMPING):
+3. ACTIVE MULTI-TIER GROUPING & STRICT NUTRITIONAL CLUSTERING (MAX 10% VARIANCE):
    - ZERO ORPHANED ITEMS: Every single index from 0 to items.length - 1 MUST be assigned to at least one group in groups[]. The union of all scoutItemIndices must cover 100% of extracted items.
-   - NO OUT-OF-BOUNDS INDICES: All indices in scoutItemIndices must strictly be between 0 and items.length - 1. Never emit an index >= items.length.
-   - NO LAZY GROUPING (1 single group is strictly forbidden for >2 items).
-   - NO LAZY MIDDLE DUMPING: Never dump more than 35-40% of items into a single group on large menus.
-   - CLINICAL PREPARATION TIERING (BASED ON COOKING METHOD & METABOLIC LOAD DISCERNED VIA OCR):
-     * Tier 1 (good / safest): Steamed preparations, boiled soups/clear broths, raw or boiled fresh vegetables, plain water/unsweetened tea.
-     * Tier 2 (neutral / moderate): Grilled or roasted lean proteins without heavy sugar glaze, lightly sautéed greens/vegetables, staple plain grains.
-     * Tier 3 (warning / caution): Deep-fried poultry, meats, or seafood; stir-fried noodles or fried rice; sweetened beverages and syrups.
-     * Tier 4 (alert / severe metabolic load): Deep-fried animal skins and offal; deep-fried vegetables (extreme oil absorption); ultra-processed boiled crackers or instant noodles in heavy chili/palm oil; high-sugar condensed milk and syrup bowls; large family-size snack bags.
+   - NO LAZY DUMPING & MAX 10% VARIANCE RULE: You MUST NOT dump wildly different items into a single group. A group is only correct if the estimated underlying nutritional values (Calories, Protein, Fat, Carbs, Sugar, Total Fibre, Sodium) of the dishes inside it do not differ by more than 10% from one another.
+   - If dishes within a broad category (like "Fried Foods") have enormous nutritional differences (e.g., Fried Chicken vs. Fried Rice vs. Fried Vegetables), you MUST split them into distinct, separate groups (e.g., "Tier 3: Fried Proteins", "Tier 3: Fried Carb Dishes", "Tier 4: Oil-Absorbing Fried Veggies").
+   - You are NOT restricted to exactly 4 groups. You may create 5 to 10 groups if needed to satisfy the 10% variance clustering rule, while mapping them to the closest verdict level (good, neutral, warning, alert).
+   - TIERING BASES (Split further if variance >10%):
+     * Tier 1 (good / safest): Steamed preparations, boiled soups/clear broths, raw or boiled fresh vegetables.
+     * Tier 2 (neutral / moderate): Grilled or roasted lean proteins, lightly sautéed greens/vegetables, staple plain grains.
+     * Tier 3 (warning / caution): Deep-fried poultry/meats/seafood, stir-fried noodles, fried rice, sweetened beverages.
+     * Tier 4 (alert / severe metabolic load): Deep-fried animal skins/offal, deep-fried vegetables (extreme oil absorption), ultra-processed boiled crackers or instant noodles in heavy oil.
 
 4. DIET TASK: ORDERING (Ranking) & AVOIDING THE CALORIE ILLUSION TRAP:
    - The groups in groups[] MUST be sorted in strict order of overall health ranking: BEST / SAFEST CHOICE FIRST ('good'), down to least suitable at the bottom ('alert').
@@ -102,6 +102,7 @@ STRICT INVARIANTS:
      * NEVER rank a confectionery or snack as "Tier 1 (good)" simply because its portion is tiny (e.g. 23g wafer bar at 90 kcal) if it is sugar-dense (>25% sugar by weight) with negligible protein (<2g) and fiber.
      * Evaluate NUTRIENT DENSITY: Compare sugar-to-protein ratio, saturated fat percentage, and fiber retention. Wholesome staple breads with 2g sugar and 4g protein rank HIGHER in healthfulness than a 90 kcal candy bar that is 30% refined sugar.
      * Factor in the mass: A 250 kcal multiseed bread serving is 80g delivering 8g protein and 4g sugar, whereas a 250 kcal sweet bun is 75g packing 19g sugar and 4.5g saturated fat.
+   - BEYOND MACROS (HIDDEN HARMS & BENEFITS): You MUST also split groups based on critical unlisted nutrients or physiological impacts. For example, if an item contains Trans Fats, oxidized palm oil, heavy synthetic additives, or causes extreme glycemic sugar spikes, it MUST be isolated into its own 'alert' group, even if its base calories or macros closely match a cleaner food. Trans fat merits its own grouping.
    - PURE SNACK / ULTRA-PROCESSED AISLE RULE:
      * When comparing exclusively ultra-processed snacks (chips, crisps, fried crackers), recognize that NONE are health foods (NOVA 4).
      * Rank based on BUILT-IN PORTION CONTROL and harm reduction: A miniature 25g pouch (<130 kcal) strictly caps caloric and sodium damage compared to an open 180g family pack (>900 kcal, 35g fat). Do not give "good" to standard fried chips; use "neutral" (with a portion-control caveat) down to "alert".
@@ -126,6 +127,7 @@ STRICT INVARIANTS:
      * saturatedFat: Estimated saturated fat (g)
      * carbohydrates: Estimated total carbohydrates (g)
      * sugar: Estimated sugar (g)
+     * totalFibre: Estimated total fibre (g)
      * sodium: Estimated sodium (mg)
      * MACRONUTRIENT BALANCE: Ensure realistic balance: (4 * protein) + (9 * totalFat) + (4 * carbohydrates) should approximately equal calories (within 10-15%).
      * REALISTIC CLINICAL BENCHMARKS:
@@ -198,33 +200,63 @@ Output exactly ONE JSON object matching this schema:
 - **Raw Emission (Verbatim Output):**
 ```json
 {
-  "_internalReasoning": "Extracted all visible menu items across categories, categorized by culinary method into balanced tiered groups with realistic nutritional estimates.",
-  "comparisonTitle": "Menu Item Health Evaluation & Comparative Ranking",
+  "_internalReasoning": "Extracted 42 visible menu items via OCR and categorized them into strict nutritional tiers based on preparation method (grilled/boiled vs fried/saucy).",
+  "comparisonTitle": "Restaurant Menu Health & Preparation Comparison",
   "comparisonType": "menu_items",
-  "summary": "This menu features diverse Indonesian seafood, poultry, fried rice, and noodle dishes. Grilled and clear soup options offer the most balanced metabolic profiles, whereas deep-fried selections and sweet/spicy sauces introduce high sodium, saturated fat, and refined carbohydrates.",
+  "summary": "This menu analysis categorizes 42 dishes into 4 distinct health tiers. Grilled fish and clear preparations represent the safest choices, whereas heavy fried rice, seblak, and fried seafood present high sodium and saturated fat risks.",
   "items": [
     {
       "name": "NILA BAKAR / GR + NASI",
-      "tier": 2,
+      "tier": 1,
       "sourceImageIndex": 0
     },
     {
       "name": "BAWAL BAKAR / GR + NASI",
-      "tier": 2,
+      "tier": 1,
       "sourceImageIndex": 0
     },
     {
       "name": "BANDENG BAKAR / GR + NASI",
-      "tier": 2,
+      "tier": 1,
       "sourceImageIndex": 0
     },
     {
       "name": "TONGKOL BAKAR / GR + NASI",
-      "tier": 2,
+      "tier": 1,
       "sourceImageIndex": 0
     },
     {
       "name": "CUE BAKAR / GR + NASI",
+      "tier": 1,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "IKAN QUE BAKAR / GR + NASI",
+      "tier": 1,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "BARONANG BAKAR / GR + NASI",
+      "tier": 1,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "AYAM BAKAR + NASI",
+      "tier": 2,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "AYAM BAKAR SAMBEL",
+      "tier": 2,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "LAMPUNG + NASI",
+      "tier": 2,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "AYAM BAKAR SAMBEL IJO + NASI",
       "tier": 2,
       "sourceImageIndex": 0
     },
@@ -244,43 +276,28 @@ Output exactly ONE JSON object matching this schema:
       "sourceImageIndex": 0
     },
     {
-      "name": "IKAN QUE BAKAR / GR + NASI",
-      "tier": 2,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "BARONANG BAKAR / GR + NASI",
-      "tier": 2,
-      "sourceImageIndex": 0
-    },
-    {
       "name": "IKAN BAWAL ASEM MANIS + NASI",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
       "name": "IKAN NILA GARANG ASEM + NASI",
-      "tier": 1,
+      "tier": 3,
       "sourceImageIndex": 0
     },
     {
       "name": "AYAM GARANG ASEM + NASI",
-      "tier": 1,
+      "tier": 3,
       "sourceImageIndex": 0
     },
     {
       "name": "TONGKOL GARANG ASEM + NASI",
-      "tier": 1,
+      "tier": 3,
       "sourceImageIndex": 0
     },
     {
       "name": "GURAME GARANG ASEM + NASI",
-      "tier": 1,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "AYAM MERCON + NASI",
-      "tier": 4,
+      "tier": 3,
       "sourceImageIndex": 0
     },
     {
@@ -290,21 +307,16 @@ Output exactly ONE JSON object matching this schema:
     },
     {
       "name": "TONGKOL SUIR JENGKOL + NASI",
-      "tier": 4,
+      "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "AYAM BAKAR + NASI",
-      "tier": 2,
+      "name": "AYAM GORENG SAMBEL",
+      "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "AYAM BAKAR SAMBEL LAMPUNG + NASI",
-      "tier": 2,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "AYAM GORENG SAMBEL LAMPUNG + NASI",
+      "name": "LAMPUNG + NASI",
       "tier": 3,
       "sourceImageIndex": 0
     },
@@ -314,13 +326,8 @@ Output exactly ONE JSON object matching this schema:
       "sourceImageIndex": 0
     },
     {
-      "name": "AYAM GORENG GEPREK TEPUNG + NASI",
-      "tier": 4,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "AYAM BAKAR SAMBEL IJO + NASI",
-      "tier": 2,
+      "name": "AYAM GORENG GIEPREK TEPUNG + NASI",
+      "tier": 3,
       "sourceImageIndex": 0
     },
     {
@@ -334,18 +341,23 @@ Output exactly ONE JSON object matching this schema:
       "sourceImageIndex": 0
     },
     {
+      "name": "AYAM MERCON + NASI",
+      "tier": 4,
+      "sourceImageIndex": 0
+    },
+    {
       "name": "NASI GORENG SEAFOOD",
-      "tier": 3,
+      "tier": 4,
       "sourceImageIndex": 0
     },
     {
       "name": "NASI GORENG SPESIAL",
-      "tier": 3,
+      "tier": 4,
       "sourceImageIndex": 0
     },
     {
       "name": "NASI GORENG PETE",
-      "tier": 3,
+      "tier": 4,
       "sourceImageIndex": 0
     },
     {
@@ -355,27 +367,27 @@ Output exactly ONE JSON object matching this schema:
     },
     {
       "name": "NASI GORENG SOSIS",
-      "tier": 3,
+      "tier": 4,
       "sourceImageIndex": 0
     },
     {
       "name": "NASI GORENG BAKSO",
-      "tier": 3,
+      "tier": 4,
       "sourceImageIndex": 0
     },
     {
       "name": "NASI GORENG KORNET",
-      "tier": 3,
+      "tier": 4,
       "sourceImageIndex": 0
     },
     {
       "name": "NASI GORENG TELOR DADAR",
-      "tier": 3,
+      "tier": 4,
       "sourceImageIndex": 0
     },
     {
       "name": "NASI GORENG AYAM",
-      "tier": 3,
+      "tier": 4,
       "sourceImageIndex": 0
     },
     {
@@ -400,289 +412,229 @@ Output exactly ONE JSON object matching this schema:
     },
     {
       "name": "MIE TEK - TEK KUAH",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "MIE TEK - TEK SOSIS",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "MIE TEK - TEK BAKSO",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "MIE TEK - TEK KORNET",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "MIE TEK - TEK SEAFOOD",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "KWETIAU GORENG BAKSO SOSIS",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "KWETIAU GORENG SEAFOOD",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "KWETIAU KUAH SOSIS BAKSO",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "KWETIAU SPECIAL",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "KWETIAU AYAM",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "MIE TEK - TEK SPECIAL",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "MIE TEK - TEK AYAM",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "SEAFOOD TUMPAH",
-      "tier": 2,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "CUMI GORENG TEPUNG + NASI",
-      "tier": 4,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "CUMI GORENG TEPUNG",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "ASAM MANIS + NASI",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "CUMI SAOS ASAM MANIS TEPUNG + NASI",
       "tier": 4,
       "sourceImageIndex": 0
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 1 - Safest Choice: Clear Broth & Herbal Soups",
-      "scoutItemIndices": [
-        11,
-        12,
-        13,
-        14
-      ],
-      "boundingBox2D": [
-        475,
-        80,
-        575,
-        550
-      ],
-      "verdict": {
-        "label": "Lowest Saturated Fat & Sodium",
-        "level": "good"
-      },
-      "comparisonSentence": "These clear broth soups provide significantly lower saturated fat and empty calories compared to deep-fried or stir-fried options.",
-      "message": "Garang Asem dishes utilize boiled or simmered fish and poultry with fresh herbs, offering lean protein and high hydration with minimal absorbed cooking oils, making them the safest metabolic choice on the menu.",
-      "averageNutrients": {
-        "calories": 400,
-        "protein": 30,
-        "totalFat": 8,
-        "saturatedFat": 2,
-        "carbohydrates": 45,
-        "sugar": 3,
-        "sodium": 550
-      },
-      "orderingTip": "Request less salt in the broth and enjoy with a moderate portion of steamed rice."
-    },
-    {
-      "groupName": "Tier 2 - Moderate Choice: Grilled Fish & Seafood",
+      "groupName": "Tier 1 - Safest Choice: Grilled Whole Fish & Rice",
       "scoutItemIndices": [
         0,
         1,
         2,
         3,
         4,
-        8,
-        9,
-        18,
-        19,
-        23,
-        51
+        5,
+        6
       ],
       "boundingBox2D": [
-        160,
-        70,
-        460,
-        550
+        150,
+        40,
+        430,
+        580
       ],
       "verdict": {
-        "label": "Balanced Lean Protein Choice",
-        "level": "neutral"
+        "label": "Lowest Saturated Fat & Sodium",
+        "level": "good"
       },
-      "comparisonSentence": "Grilled fish and poultry options retain high protein quality with lower fat absorption than their deep-fried counterparts.",
-      "message": "Grilled preparations (Bakar) minimize added cooking oils while delivering high-quality omega-3 fatty acids from fish and lean protein from poultry, though sauces and marinades can elevate sodium levels.",
+      "comparisonSentence": "This grilled fish group provides high-quality lean protein and omega-3 fatty acids with substantially lower saturated fat and sodium compared to the fried options.",
+      "message": "Grilled whole fish preparations offer an excellent nutritional profile, delivering high-quality protein and essential omega-3 fatty acids without the heavy burden of deep-frying oils. These dishes support cardiovascular and metabolic health when consumed with moderate portions of white or brown rice.",
       "averageNutrients": {
-        "calories": 480,
-        "protein": 35,
-        "totalFat": 12,
-        "saturatedFat": 3,
+        "calories": 420,
+        "protein": 32,
+        "totalFat": 10,
+        "saturatedFat": 2.5,
         "carbohydrates": 48,
-        "sugar": 4,
-        "sodium": 680
+        "sugar": 2,
+        "totalFibre": 2,
+        "sodium": 520
       },
-      "orderingTip": "Ask for sweet soy glaze (kecap) or chili sambal on the side to control sodium and sugar intake."
+      "orderingTip": "Opt for grilled fish with minimal sweet soy glaze and request sambal on the side to control sodium intake."
     },
     {
-      "groupName": "Tier 3 - Warning Choice: Stir-Fried Noodles & Fried Rice",
+      "groupName": "Tier 2 - Moderate Choice: Grilled Poultry Dishes",
       "scoutItemIndices": [
-        5,
-        6,
         7,
-        10,
+        8,
+        9,
+        10
+      ],
+      "boundingBox2D": [
+        650,
+        40,
+        890,
+        580
+      ],
+      "verdict": {
+        "label": "Moderate Protein & Balanced Fats",
+        "level": "neutral"
+      },
+      "comparisonSentence": "Compared to simple grilled fish, grilled poultry offers comparable protein but slightly higher sodium and surface oils from marinades.",
+      "message": "Grilled chicken dishes provide a reliable source of lean poultry protein. However, sweet marinades and accompanying chili pastes can introduce moderate levels of added sugars and sodium. Ensure balanced vegetable intake alongside these items.",
+      "averageNutrients": {
+        "calories": 480,
+        "protein": 34,
+        "totalFat": 14,
+        "saturatedFat": 3.5,
+        "carbohydrates": 50,
+        "sugar": 5,
+        "totalFibre": 1.5,
+        "sodium": 650
+      },
+      "orderingTip": "Request chicken skin to be removed if managing lipid profiles, and limit sweet marinade residues."
+    },
+    {
+      "groupName": "Tier 3 - Caution: Fried Fish & Sweet-Sour Dishes",
+      "scoutItemIndices": [
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
         20,
         21,
+        22,
+        23,
         24,
         25,
-        26,
+        26
+      ],
+      "boundingBox2D": [
+        340,
+        40,
+        930,
+        580
+      ],
+      "verdict": {
+        "label": "High Sodium & Fried Oil Caution",
+        "level": "warning"
+      },
+      "comparisonSentence": "Unlike clean grilled proteins, these fried and sweet-sour dishes carry significantly higher caloric loads and oxidized cooking fats.",
+      "message": "Deep-frying and heavy sweet-and-sour sauces substantially increase the caloric density, saturated fat, and sugar content of these meals. Regular consumption may negatively impact lipid panels and glycemic control.",
+      "averageNutrients": {
+        "calories": 680,
+        "protein": 30,
+        "totalFat": 32,
+        "saturatedFat": 8,
+        "carbohydrates": 65,
+        "sugar": 12,
+        "totalFibre": 2,
+        "sodium": 1100
+      },
+      "orderingTip": "Ask for sweet-sour sauces served in a separate bowl so you can moderate the sugar intake."
+    },
+    {
+      "groupName": "Tier 4 - Alert: Fried Rice, Seblak & Spicy Noodles",
+      "scoutItemIndices": [
         27,
         28,
+        29,
         30,
         31,
         32,
         33,
         34,
-        40,
-        41,
-        42,
-        43,
-        44,
-        45,
-        46,
-        47,
-        48,
-        49,
-        50,
-        53,
-        54,
-        16
-      ],
-      "boundingBox2D": [
-        170,
-        590,
-        890,
-        990
-      ],
-      "verdict": {
-        "label": "High Sodium & Carb Load",
-        "level": "warning"
-      },
-      "comparisonSentence": "These noodle and fried rice dishes pack significantly higher glycemic loads and sodium than plain grilled or boiled selections.",
-      "message": "Stir-fried noodles, fried rice, and sweet-and-sour dishes combine refined starches with substantial cooking oils and sodium-rich seasonings, increasing postprandial glucose spikes and cardiovascular strain.",
-      "averageNutrients": {
-        "calories": 680,
-        "protein": 20,
-        "totalFat": 26,
-        "saturatedFat": 7,
-        "carbohydrates": 85,
-        "sugar": 8,
-        "sodium": 1150
-      },
-      "orderingTip": "Share portions or request extra vegetables and reduced oil during preparation."
-    },
-    {
-      "groupName": "Tier 4 - Alert Choice: Deep-Fried Batter & Spicy Offal",
-      "scoutItemIndices": [
-        15,
-        17,
-        22,
-        29,
         35,
         36,
         37,
         38,
         39,
-        52,
-        55
+        40,
+        41
       ],
       "boundingBox2D": [
-        560,
-        70,
+        150,
+        590,
         950,
-        580
+        990
       ],
       "verdict": {
-        "label": "Severe Metabolic Load Alert",
+        "label": "Excessive Sodium & Refined Carbs Alert",
         "level": "alert"
       },
-      "comparisonSentence": "Heavy batter frying and offal preparations introduce the highest levels of trans fats, oxidized oils, and sodium on the menu.",
-      "message": "Deep-fried battered items and spicy offal (jengkol, ceker mercon) undergo intense thermal processing in reused cooking oils, causing substantial inflammation, high saturated/trans fat intake, and extreme sodium spikes.",
+      "comparisonSentence": "Representing the highest metabolic load on this menu, these fried rice, seblak, and noodle dishes combine refined carbohydrates with heavy oils and soaring sodium levels.",
+      "message": "Dishes like Nasi Goreng, Seblak, and Mie Tek-Tek are ultra-processed or oil-saturated carbohydrate bombs. They deliver very high sodium counts and refined starches that can provoke rapid glycemic spikes and long-term cardiovascular strain.",
       "averageNutrients": {
-        "calories": 820,
-        "protein": 22,
-        "totalFat": 42,
-        "saturatedFat": 14,
-        "carbohydrates": 70,
-        "sugar": 6,
-        "sodium": 1400
+        "calories": 780,
+        "protein": 18,
+        "totalFat": 38,
+        "saturatedFat": 12,
+        "carbohydrates": 92,
+        "sugar": 8,
+        "totalFibre": 2.5,
+        "sodium": 1550
       },
-      "orderingTip": "Avoid entirely if managing hypertension, dyslipidemia, or cardiovascular disease risk."
+      "orderingTip": "Share these portions with a dining companion or pair with an abundant side of fresh raw vegetables to buffer glycemic impact."
     }
   ],
-  "recommendedOption": "IKAN NILA GARANG ASEM + NASI"
+  "recommendedOption": "NILA BAKAR / GR + NASI"
 }
 ```
 - **Output:**
 ```json
 {
-  "_internalReasoning": "Extracted all visible menu items across categories, categorized by culinary method into balanced tiered groups with realistic nutritional estimates.",
-  "comparisonTitle": "Menu Item Health Evaluation & Comparative Ranking",
+  "_internalReasoning": "Extracted 42 visible menu items via OCR and categorized them into strict nutritional tiers based on preparation method (grilled/boiled vs fried/saucy).",
+  "comparisonTitle": "Restaurant Menu Health & Preparation Comparison",
   "comparisonType": "menu_items",
-  "summary": "This menu features diverse Indonesian seafood, poultry, fried rice, and noodle dishes. Grilled and clear soup options offer the most balanced metabolic profiles, whereas deep-fried selections and sweet/spicy sauces introduce high sodium, saturated fat, and refined carbohydrates.",
+  "summary": "This menu analysis categorizes 42 dishes into 4 distinct health tiers. Grilled fish and clear preparations represent the safest choices, whereas heavy fried rice, seblak, and fried seafood present high sodium and saturated fat risks.",
   "items": [
     {
       "name": "NILA BAKAR / GR + NASI",
-      "tier": 2,
+      "tier": 1,
       "sourceImageIndex": 0
     },
     {
       "name": "BAWAL BAKAR / GR + NASI",
-      "tier": 2,
+      "tier": 1,
       "sourceImageIndex": 0
     },
     {
       "name": "BANDENG BAKAR / GR + NASI",
-      "tier": 2,
+      "tier": 1,
       "sourceImageIndex": 0
     },
     {
       "name": "TONGKOL BAKAR / GR + NASI",
-      "tier": 2,
+      "tier": 1,
       "sourceImageIndex": 0
     },
     {
       "name": "CUE BAKAR / GR + NASI",
+      "tier": 1,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "IKAN QUE BAKAR / GR + NASI",
+      "tier": 1,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "BARONANG BAKAR / GR + NASI",
+      "tier": 1,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "AYAM BAKAR + NASI",
+      "tier": 2,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "AYAM BAKAR SAMBEL",
+      "tier": 2,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "LAMPUNG + NASI",
+      "tier": 2,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "AYAM BAKAR SAMBEL IJO + NASI",
       "tier": 2,
       "sourceImageIndex": 0
     },
@@ -702,43 +654,28 @@ Output exactly ONE JSON object matching this schema:
       "sourceImageIndex": 0
     },
     {
-      "name": "IKAN QUE BAKAR / GR + NASI",
-      "tier": 2,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "BARONANG BAKAR / GR + NASI",
-      "tier": 2,
-      "sourceImageIndex": 0
-    },
-    {
       "name": "IKAN BAWAL ASEM MANIS + NASI",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
       "name": "IKAN NILA GARANG ASEM + NASI",
-      "tier": 1,
+      "tier": 3,
       "sourceImageIndex": 0
     },
     {
       "name": "AYAM GARANG ASEM + NASI",
-      "tier": 1,
+      "tier": 3,
       "sourceImageIndex": 0
     },
     {
       "name": "TONGKOL GARANG ASEM + NASI",
-      "tier": 1,
+      "tier": 3,
       "sourceImageIndex": 0
     },
     {
       "name": "GURAME GARANG ASEM + NASI",
-      "tier": 1,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "AYAM MERCON + NASI",
-      "tier": 4,
+      "tier": 3,
       "sourceImageIndex": 0
     },
     {
@@ -748,21 +685,16 @@ Output exactly ONE JSON object matching this schema:
     },
     {
       "name": "TONGKOL SUIR JENGKOL + NASI",
-      "tier": 4,
+      "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "AYAM BAKAR + NASI",
-      "tier": 2,
+      "name": "AYAM GORENG SAMBEL",
+      "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "AYAM BAKAR SAMBEL LAMPUNG + NASI",
-      "tier": 2,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "AYAM GORENG SAMBEL LAMPUNG + NASI",
+      "name": "LAMPUNG + NASI",
       "tier": 3,
       "sourceImageIndex": 0
     },
@@ -772,13 +704,8 @@ Output exactly ONE JSON object matching this schema:
       "sourceImageIndex": 0
     },
     {
-      "name": "AYAM GORENG GEPREK TEPUNG + NASI",
-      "tier": 4,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "AYAM BAKAR SAMBEL IJO + NASI",
-      "tier": 2,
+      "name": "AYAM GORENG GIEPREK TEPUNG + NASI",
+      "tier": 3,
       "sourceImageIndex": 0
     },
     {
@@ -792,18 +719,23 @@ Output exactly ONE JSON object matching this schema:
       "sourceImageIndex": 0
     },
     {
+      "name": "AYAM MERCON + NASI",
+      "tier": 4,
+      "sourceImageIndex": 0
+    },
+    {
       "name": "NASI GORENG SEAFOOD",
-      "tier": 3,
+      "tier": 4,
       "sourceImageIndex": 0
     },
     {
       "name": "NASI GORENG SPESIAL",
-      "tier": 3,
+      "tier": 4,
       "sourceImageIndex": 0
     },
     {
       "name": "NASI GORENG PETE",
-      "tier": 3,
+      "tier": 4,
       "sourceImageIndex": 0
     },
     {
@@ -813,27 +745,27 @@ Output exactly ONE JSON object matching this schema:
     },
     {
       "name": "NASI GORENG SOSIS",
-      "tier": 3,
+      "tier": 4,
       "sourceImageIndex": 0
     },
     {
       "name": "NASI GORENG BAKSO",
-      "tier": 3,
+      "tier": 4,
       "sourceImageIndex": 0
     },
     {
       "name": "NASI GORENG KORNET",
-      "tier": 3,
+      "tier": 4,
       "sourceImageIndex": 0
     },
     {
       "name": "NASI GORENG TELOR DADAR",
-      "tier": 3,
+      "tier": 4,
       "sourceImageIndex": 0
     },
     {
       "name": "NASI GORENG AYAM",
-      "tier": 3,
+      "tier": 4,
       "sourceImageIndex": 0
     },
     {
@@ -858,279 +790,190 @@ Output exactly ONE JSON object matching this schema:
     },
     {
       "name": "MIE TEK - TEK KUAH",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "MIE TEK - TEK SOSIS",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "MIE TEK - TEK BAKSO",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "MIE TEK - TEK KORNET",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "MIE TEK - TEK SEAFOOD",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "KWETIAU GORENG BAKSO SOSIS",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "KWETIAU GORENG SEAFOOD",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "KWETIAU KUAH SOSIS BAKSO",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "KWETIAU SPECIAL",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "KWETIAU AYAM",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "MIE TEK - TEK SPECIAL",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "MIE TEK - TEK AYAM",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "SEAFOOD TUMPAH",
-      "tier": 2,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "CUMI GORENG TEPUNG + NASI",
-      "tier": 4,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "CUMI GORENG TEPUNG",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "ASAM MANIS + NASI",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "CUMI SAOS ASAM MANIS TEPUNG + NASI",
       "tier": 4,
       "sourceImageIndex": 0
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 1 - Safest Choice: Clear Broth & Herbal Soups",
-      "scoutItemIndices": [
-        11,
-        12,
-        13,
-        14
-      ],
-      "boundingBox2D": [
-        475,
-        80,
-        575,
-        550
-      ],
-      "verdict": {
-        "label": "Lowest Saturated Fat & Sodium",
-        "level": "good"
-      },
-      "comparisonSentence": "These clear broth soups provide significantly lower saturated fat and empty calories compared to deep-fried or stir-fried options.",
-      "message": "Garang Asem dishes utilize boiled or simmered fish and poultry with fresh herbs, offering lean protein and high hydration with minimal absorbed cooking oils, making them the safest metabolic choice on the menu.",
-      "averageNutrients": {
-        "calories": 400,
-        "protein": 30,
-        "totalFat": 8,
-        "saturatedFat": 2,
-        "carbohydrates": 45,
-        "sugar": 3,
-        "sodium": 550
-      },
-      "orderingTip": "Request less salt in the broth and enjoy with a moderate portion of steamed rice."
-    },
-    {
-      "groupName": "Tier 2 - Moderate Choice: Grilled Fish & Seafood",
+      "groupName": "Tier 1 - Safest Choice: Grilled Whole Fish & Rice",
       "scoutItemIndices": [
         0,
         1,
         2,
         3,
         4,
-        8,
-        9,
-        18,
-        19,
-        23,
-        51
+        5,
+        6
       ],
       "boundingBox2D": [
-        160,
-        70,
-        460,
-        550
+        150,
+        40,
+        430,
+        580
       ],
       "verdict": {
-        "label": "Balanced Lean Protein Choice",
-        "level": "neutral"
+        "label": "Lowest Saturated Fat & Sodium",
+        "level": "good"
       },
-      "comparisonSentence": "Grilled fish and poultry options retain high protein quality with lower fat absorption than their deep-fried counterparts.",
-      "message": "Grilled preparations (Bakar) minimize added cooking oils while delivering high-quality omega-3 fatty acids from fish and lean protein from poultry, though sauces and marinades can elevate sodium levels.",
+      "comparisonSentence": "This grilled fish group provides high-quality lean protein and omega-3 fatty acids with substantially lower saturated fat and sodium compared to the fried options.",
+      "message": "Grilled whole fish preparations offer an excellent nutritional profile, delivering high-quality protein and essential omega-3 fatty acids without the heavy burden of deep-frying oils. These dishes support cardiovascular and metabolic health when consumed with moderate portions of white or brown rice.",
       "averageNutrients": {
-        "calories": 480,
-        "protein": 35,
-        "totalFat": 12,
-        "saturatedFat": 3,
+        "calories": 420,
+        "protein": 32,
+        "totalFat": 10,
+        "saturatedFat": 2.5,
         "carbohydrates": 48,
-        "sugar": 4,
-        "sodium": 680
+        "sugar": 2,
+        "totalFibre": 2,
+        "sodium": 520
       },
-      "orderingTip": "Ask for sweet soy glaze (kecap) or chili sambal on the side to control sodium and sugar intake."
+      "orderingTip": "Opt for grilled fish with minimal sweet soy glaze and request sambal on the side to control sodium intake."
     },
     {
-      "groupName": "Tier 3 - Warning Choice: Stir-Fried Noodles & Fried Rice",
+      "groupName": "Tier 2 - Moderate Choice: Grilled Poultry Dishes",
       "scoutItemIndices": [
-        5,
-        6,
         7,
-        10,
+        8,
+        9,
+        10
+      ],
+      "boundingBox2D": [
+        650,
+        40,
+        890,
+        580
+      ],
+      "verdict": {
+        "label": "Moderate Protein & Balanced Fats",
+        "level": "neutral"
+      },
+      "comparisonSentence": "Compared to simple grilled fish, grilled poultry offers comparable protein but slightly higher sodium and surface oils from marinades.",
+      "message": "Grilled chicken dishes provide a reliable source of lean poultry protein. However, sweet marinades and accompanying chili pastes can introduce moderate levels of added sugars and sodium. Ensure balanced vegetable intake alongside these items.",
+      "averageNutrients": {
+        "calories": 480,
+        "protein": 34,
+        "totalFat": 14,
+        "saturatedFat": 3.5,
+        "carbohydrates": 50,
+        "sugar": 5,
+        "totalFibre": 1.5,
+        "sodium": 650
+      },
+      "orderingTip": "Request chicken skin to be removed if managing lipid profiles, and limit sweet marinade residues."
+    },
+    {
+      "groupName": "Tier 3 - Caution: Fried Fish & Sweet-Sour Dishes",
+      "scoutItemIndices": [
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
         20,
         21,
+        22,
+        23,
         24,
         25,
-        26,
+        26
+      ],
+      "boundingBox2D": [
+        340,
+        40,
+        930,
+        580
+      ],
+      "verdict": {
+        "label": "High Sodium & Fried Oil Caution",
+        "level": "warning"
+      },
+      "comparisonSentence": "Unlike clean grilled proteins, these fried and sweet-sour dishes carry significantly higher caloric loads and oxidized cooking fats.",
+      "message": "Deep-frying and heavy sweet-and-sour sauces substantially increase the caloric density, saturated fat, and sugar content of these meals. Regular consumption may negatively impact lipid panels and glycemic control.",
+      "averageNutrients": {
+        "calories": 680,
+        "protein": 30,
+        "totalFat": 32,
+        "saturatedFat": 8,
+        "carbohydrates": 65,
+        "sugar": 12,
+        "totalFibre": 2,
+        "sodium": 1100
+      },
+      "orderingTip": "Ask for sweet-sour sauces served in a separate bowl so you can moderate the sugar intake."
+    },
+    {
+      "groupName": "Tier 4 - Alert: Fried Rice, Seblak & Spicy Noodles",
+      "scoutItemIndices": [
         27,
         28,
+        29,
         30,
         31,
         32,
         33,
         34,
-        40,
-        41,
-        42,
-        43,
-        44,
-        45,
-        46,
-        47,
-        48,
-        49,
-        50,
-        53,
-        54
-      ],
-      "boundingBox2D": [
-        170,
-        590,
-        890,
-        990
-      ],
-      "verdict": {
-        "label": "High Sodium & Carb Load",
-        "level": "warning"
-      },
-      "comparisonSentence": "These noodle and fried rice dishes pack significantly higher glycemic loads and sodium than plain grilled or boiled selections.",
-      "message": "Stir-fried noodles, fried rice, and sweet-and-sour dishes combine refined starches with substantial cooking oils and sodium-rich seasonings, increasing postprandial glucose spikes and cardiovascular strain.",
-      "averageNutrients": {
-        "calories": 680,
-        "protein": 20,
-        "totalFat": 26,
-        "saturatedFat": 7,
-        "carbohydrates": 85,
-        "sugar": 8,
-        "sodium": 1150
-      },
-      "orderingTip": "Share portions or request extra vegetables and reduced oil during preparation."
-    },
-    {
-      "groupName": "Tier 4 - Alert Choice: Deep-Fried Batter & Spicy Offal",
-      "scoutItemIndices": [
-        15,
-        17,
-        22,
-        29,
         35,
         36,
         37,
         38,
         39,
-        52,
-        55
+        40,
+        41
       ],
       "boundingBox2D": [
-        560,
-        70,
+        150,
+        590,
         950,
-        580
+        990
       ],
       "verdict": {
-        "label": "Severe Metabolic Load Alert",
+        "label": "Excessive Sodium & Refined Carbs Alert",
         "level": "alert"
       },
-      "comparisonSentence": "Heavy batter frying and offal preparations introduce the highest levels of trans fats, oxidized oils, and sodium on the menu.",
-      "message": "Deep-fried battered items and spicy offal (jengkol, ceker mercon) undergo intense thermal processing in reused cooking oils, causing substantial inflammation, high saturated/trans fat intake, and extreme sodium spikes.",
+      "comparisonSentence": "Representing the highest metabolic load on this menu, these fried rice, seblak, and noodle dishes combine refined carbohydrates with heavy oils and soaring sodium levels.",
+      "message": "Dishes like Nasi Goreng, Seblak, and Mie Tek-Tek are ultra-processed or oil-saturated carbohydrate bombs. They deliver very high sodium counts and refined starches that can provoke rapid glycemic spikes and long-term cardiovascular strain.",
       "averageNutrients": {
-        "calories": 820,
-        "protein": 22,
-        "totalFat": 42,
-        "saturatedFat": 14,
-        "carbohydrates": 70,
-        "sugar": 6,
-        "sodium": 1400
+        "calories": 780,
+        "protein": 18,
+        "totalFat": 38,
+        "saturatedFat": 12,
+        "carbohydrates": 92,
+        "sugar": 8,
+        "totalFibre": 2.5,
+        "sodium": 1550
       },
-      "orderingTip": "Avoid entirely if managing hypertension, dyslipidemia, or cardiovascular disease risk."
+      "orderingTip": "Share these portions with a dining companion or pair with an abundant side of fresh raw vegetables to buffer glycemic impact."
     }
   ],
-  "recommendedOption": "IKAN NILA GARANG ASEM + NASI"
+  "recommendedOption": "NILA BAKAR / GR + NASI"
 }
 ```
-- **Signals:** model=gemini-3.5-flash-lite, latency_ms=10066, tokens=[object Object]
-- **Parent:** job_compare_set5_1788896672720
+- **Signals:** model=gemini-3.5-flash-lite, latency_ms=8459, tokens=[object Object]
+- **Parent:** job_compare_set5_1788898413730
 
 ## 🔗 Data Pipelines & Infrastructure Connectivity Matrix
 
 | Pipeline Stage | Connectivity & Status | Details / Metrics |
 |----------------|-----------------------|-------------------|
 | **1. Triage & Front Desk** | ⚪ Skipped / Standby | Direct execution mode |
-| **2. Vision Scout & OCR** | ✅ Connected (56 item(s) detected) | Type: product_item |
+| **2. Vision Scout & OCR** | ✅ Connected (42 item(s) detected) | Type: product_item |
 | **3. Biomarker Ingest & Mapping** | ⚪ Standby / N/A | No tabular lab panel |
 | **4. Database Search & Truth Matching** | ⚪ Standby / N/A | Single-dispatch path: scout-direct ledger, no external fetch |
 | **5. Mathematical Calculation Engine** | ⚪ Standby / N/A | No meal calculation required |
 | **6. Trial-Balance & Quality Gate** | ⚪ Standby / N/A | N/A |
 | **7. Health Coach / Clinical Engine** | ⚪ Standby / N/A | No clinical analysis requested |
-| **8. State Storage & Job Sync** | ✅ Connected (Local / Active) | Job ID: `job_compare_set5_1788896672720` |
+| **8. State Storage & Job Sync** | ✅ Connected (Local / Active) | Job ID: `job_compare_set5_1788898413730` |
 
 ## 👤 Last User Action
 
 - **Action:** submit_meal_job
 - **Prompt/Text:** "Evaluate and analyze this product."
-- **Timestamp:** 2026-09-08T19:44:42.787Z
+- **Timestamp:** 2026-09-08T20:13:42.190Z
 
 ## 🐾 User Action Breadcrumbs
 
@@ -1140,7 +983,7 @@ Output exactly ONE JSON object matching this schema:
 |  | select_photos | camera_roll | {"imageCount":1,"files":["set5_packaged_product_photo.jpg"]} |
 |  | input_change | input | {"name":"compare-query-input","valueLength":34} |
 |  | submit_initiated | chat_composer | {"prompt":"Evaluate and analyze this product.","imageCount":1,"submissionMode":"compare"} |
-|  | submit_meal_job | chat_compose_dock | {"jobId":"job_compare_set5_1788896672720","promptLength":34,"imageCount":1,"submissionMode":"compare"} |
+|  | submit_meal_job | chat_compose_dock | {"jobId":"job_compare_set5_1788898413730","promptLength":34,"imageCount":1,"submissionMode":"compare"} |
 
 ## ⚙️ Job Session Event Trail
 
@@ -1152,13 +995,13 @@ _No client network errors or latency warnings recorded._
 
 ### Client Console Logs (2)
 ```
-[INFO] Compare mode triggered with 1 images for job job_compare_set5_1788896672720
+[INFO] Compare mode triggered with 1 images for job job_compare_set5_1788898413730
 [INFO] Scout-Only Compare single-pass pipeline invoked for Set 5: Packaged Product Item.
 ```
 
-## 🔍 Vision Scout Results (56 item(s) detected)
+## 🔍 Vision Scout Results (42 item(s) detected)
 
-> **Scout Internal Reasoning:** Extracted all visible menu items across categories, categorized by culinary method into balanced tiered groups with realistic nutritional estimates.
+> **Scout Internal Reasoning:** Extracted 42 visible menu items via OCR and categorized them into strict nutritional tiers based on preparation method (grilled/boiled vs fried/saucy).
 
 **Dining Environment:** `supermarket_or_store` | **Content Type:** `product_item`
 
@@ -1169,31 +1012,31 @@ _No client network errors or latency warnings recorded._
 | [3] | BANDENG BAKAR / GR + NASI | 50g | — | #0 | packaged | — | — |
 | [4] | TONGKOL BAKAR / GR + NASI | 50g | — | #0 | packaged | — | — |
 | [5] | CUE BAKAR / GR + NASI | 50g | — | #0 | packaged | — | — |
-| [6] | GURAME BAKAR / GORENG + NASI | 50g | — | #0 | fried | — | — |
-| [7] | GURAME ASAM MANIS + NASI | 50g | — | #0 | packaged | — | — |
-| [8] | GURAME VILET ASAM MANIS + NASI | 50g | — | #0 | packaged | — | — |
-| [9] | IKAN QUE BAKAR / GR + NASI | 50g | — | #0 | packaged | — | — |
-| [10] | BARONANG BAKAR / GR + NASI | 50g | — | #0 | packaged | — | — |
-| [11] | IKAN BAWAL ASEM MANIS + NASI | 50g | — | #0 | packaged | — | — |
-| [12] | IKAN NILA GARANG ASEM + NASI | 50g | — | #0 | packaged | — | — |
-| [13] | AYAM GARANG ASEM + NASI | 50g | — | #0 | packaged | — | — |
-| [14] | TONGKOL GARANG ASEM + NASI | 50g | — | #0 | packaged | — | — |
-| [15] | GURAME GARANG ASEM + NASI | 50g | — | #0 | packaged | — | — |
-| [16] | AYAM MERCON + NASI | 50g | — | #0 | packaged | — | — |
-| [17] | TONGKOL SUIR PETE + NASI | 50g | — | #0 | packaged | — | — |
-| [18] | TONGKOL SUIR JENGKOL + NASI | 50g | — | #0 | packaged | — | — |
-| [19] | AYAM BAKAR + NASI | 50g | — | #0 | packaged | — | — |
-| [20] | AYAM BAKAR SAMBEL LAMPUNG + NASI | 50g | — | #0 | packaged | — | — |
-| [21] | AYAM GORENG SAMBEL LAMPUNG + NASI | 50g | — | #0 | fried | — | — |
-| [22] | AYAM ASAM MANIS + NASI | 50g | — | #0 | packaged | — | — |
-| [23] | AYAM GORENG GEPREK TEPUNG + NASI | 50g | — | #0 | fried | — | — |
-| [24] | AYAM BAKAR SAMBEL IJO + NASI | 50g | — | #0 | packaged | — | — |
-| [25] | AYAM GORENG SAMBEL IJO + NASI | 50g | — | #0 | fried | — | — |
-| [26] | AYAM GORENG SAMBEL JUDES | 50g | — | #0 | fried | — | — |
-| [27] | NASI GORENG SEAFOOD | 50g | — | #0 | fried | — | — |
-| [28] | NASI GORENG SPESIAL | 50g | — | #0 | fried | — | — |
-| [29] | NASI GORENG PETE | 50g | — | #0 | fried | — | — |
-| [30] | NASI GORENG JENGKOL | 50g | — | #0 | fried | — | — |
+| [6] | IKAN QUE BAKAR / GR + NASI | 50g | — | #0 | packaged | — | — |
+| [7] | BARONANG BAKAR / GR + NASI | 50g | — | #0 | packaged | — | — |
+| [8] | AYAM BAKAR + NASI | 50g | — | #0 | packaged | — | — |
+| [9] | AYAM BAKAR SAMBEL | 50g | — | #0 | packaged | — | — |
+| [10] | LAMPUNG + NASI | 50g | — | #0 | packaged | — | — |
+| [11] | AYAM BAKAR SAMBEL IJO + NASI | 50g | — | #0 | packaged | — | — |
+| [12] | GURAME BAKAR / GORENG + NASI | 50g | — | #0 | fried | — | — |
+| [13] | GURAME ASAM MANIS + NASI | 50g | — | #0 | packaged | — | — |
+| [14] | GURAME VILET ASAM MANIS + NASI | 50g | — | #0 | packaged | — | — |
+| [15] | IKAN BAWAL ASEM MANIS + NASI | 50g | — | #0 | packaged | — | — |
+| [16] | IKAN NILA GARANG ASEM + NASI | 50g | — | #0 | packaged | — | — |
+| [17] | AYAM GARANG ASEM + NASI | 50g | — | #0 | packaged | — | — |
+| [18] | TONGKOL GARANG ASEM + NASI | 50g | — | #0 | packaged | — | — |
+| [19] | GURAME GARANG ASEM + NASI | 50g | — | #0 | packaged | — | — |
+| [20] | TONGKOL SUIR PETE + NASI | 50g | — | #0 | packaged | — | — |
+| [21] | TONGKOL SUIR JENGKOL + NASI | 50g | — | #0 | packaged | — | — |
+| [22] | AYAM GORENG SAMBEL | 50g | — | #0 | fried | — | — |
+| [23] | LAMPUNG + NASI | 50g | — | #0 | packaged | — | — |
+| [24] | AYAM ASAM MANIS + NASI | 50g | — | #0 | packaged | — | — |
+| [25] | AYAM GORENG GIEPREK TEPUNG + NASI | 50g | — | #0 | fried | — | — |
+| [26] | AYAM GORENG SAMBEL IJO + NASI | 50g | — | #0 | fried | — | — |
+| [27] | AYAM GORENG SAMBEL JUDES | 50g | — | #0 | fried | — | — |
+| [28] | AYAM MERCON + NASI | 50g | — | #0 | packaged | — | — |
+| [29] | NASI GORENG SEAFOOD | 50g | — | #0 | fried | — | — |
+| [30] | NASI GORENG SPESIAL | 50g | — | #0 | fried | — | — |
 
 ## 📚 Database Search & Entity Resolution
 
@@ -1202,41 +1045,41 @@ _No client network errors or latency warnings recorded._
 
 ## 💬 Agent Message & Narrative
 
-### Menu Item Health Evaluation & Comparative Ranking
+### Restaurant Menu Health & Preparation Comparison
 
-**Summary:** This menu features diverse Indonesian seafood, poultry, fried rice, and noodle dishes. Grilled and clear soup options offer the most balanced metabolic profiles, whereas deep-fried selections and sweet/spicy sauces introduce high sodium, saturated fat, and refined carbohydrates.
+**Summary:** This menu analysis categorizes 42 dishes into 4 distinct health tiers. Grilled fish and clear preparations represent the safest choices, whereas heavy fried rice, seblak, and fried seafood present high sodium and saturated fat risks.
 
-**Recommended Option:** IKAN NILA GARANG ASEM + NASI
+**Recommended Option:** NILA BAKAR / GR + NASI
 
 #### Comparison Groups & Verdicts
 
-**Rank 1: Tier 1 - Safest Choice: Clear Broth & Herbal Soups** [GOOD] — *Lowest Saturated Fat & Sodium*
-- **Items Included (4):** IKAN NILA GARANG ASEM + NASI, AYAM GARANG ASEM + NASI, TONGKOL GARANG ASEM + NASI, GURAME GARANG ASEM + NASI
-- **Comparative Sentence:** "These clear broth soups provide significantly lower saturated fat and empty calories compared to deep-fried or stir-fried options."
-- **Clinical Guidance:** Garang Asem dishes utilize boiled or simmered fish and poultry with fresh herbs, offering lean protein and high hydration with minimal absorbed cooking oils, making them the safest metabolic choice on the menu.
-- **Ordering Tip:** Request less salt in the broth and enjoy with a moderate portion of steamed rice.
-- **Nutrient Profile:** 400 kcal | P: 30g | C: 45g | F: 8g | Saturated Fat: 2g | Sodium: 550mg | Sugar: 3g
+**Rank 1: Tier 1 - Safest Choice: Grilled Whole Fish & Rice** [GOOD] — *Lowest Saturated Fat & Sodium*
+- **Items Included (7):** NILA BAKAR / GR + NASI, BAWAL BAKAR / GR + NASI, BANDENG BAKAR / GR + NASI, TONGKOL BAKAR / GR + NASI, CUE BAKAR / GR + NASI, IKAN QUE BAKAR / GR + NASI, BARONANG BAKAR / GR + NASI
+- **Comparative Sentence:** "This grilled fish group provides high-quality lean protein and omega-3 fatty acids with substantially lower saturated fat and sodium compared to the fried options."
+- **Clinical Guidance:** Grilled whole fish preparations offer an excellent nutritional profile, delivering high-quality protein and essential omega-3 fatty acids without the heavy burden of deep-frying oils. These dishes support cardiovascular and metabolic health when consumed with moderate portions of white or brown rice.
+- **Ordering Tip:** Opt for grilled fish with minimal sweet soy glaze and request sambal on the side to control sodium intake.
+- **Nutrient Profile:** 420 kcal | P: 32g | C: 48g | F: 10g | Saturated Fat: 2.5g | Sodium: 520mg | Sugar: 2g
 
-**Rank 2: Tier 2 - Moderate Choice: Grilled Fish & Seafood** [NEUTRAL] — *Balanced Lean Protein Choice*
-- **Items Included (11):** NILA BAKAR / GR + NASI, BAWAL BAKAR / GR + NASI, BANDENG BAKAR / GR + NASI, TONGKOL BAKAR / GR + NASI, CUE BAKAR / GR + NASI, IKAN QUE BAKAR / GR + NASI, BARONANG BAKAR / GR + NASI, AYAM BAKAR + NASI, AYAM BAKAR SAMBEL LAMPUNG + NASI, AYAM BAKAR SAMBEL IJO + NASI, SEAFOOD TUMPAH
-- **Comparative Sentence:** "Grilled fish and poultry options retain high protein quality with lower fat absorption than their deep-fried counterparts."
-- **Clinical Guidance:** Grilled preparations (Bakar) minimize added cooking oils while delivering high-quality omega-3 fatty acids from fish and lean protein from poultry, though sauces and marinades can elevate sodium levels.
-- **Ordering Tip:** Ask for sweet soy glaze (kecap) or chili sambal on the side to control sodium and sugar intake.
-- **Nutrient Profile:** 480 kcal | P: 35g | C: 48g | F: 12g | Saturated Fat: 3g | Sodium: 680mg | Sugar: 4g
+**Rank 2: Tier 2 - Moderate Choice: Grilled Poultry Dishes** [NEUTRAL] — *Moderate Protein & Balanced Fats*
+- **Items Included (4):** AYAM BAKAR + NASI, AYAM BAKAR SAMBEL, LAMPUNG + NASI, AYAM BAKAR SAMBEL IJO + NASI
+- **Comparative Sentence:** "Compared to simple grilled fish, grilled poultry offers comparable protein but slightly higher sodium and surface oils from marinades."
+- **Clinical Guidance:** Grilled chicken dishes provide a reliable source of lean poultry protein. However, sweet marinades and accompanying chili pastes can introduce moderate levels of added sugars and sodium. Ensure balanced vegetable intake alongside these items.
+- **Ordering Tip:** Request chicken skin to be removed if managing lipid profiles, and limit sweet marinade residues.
+- **Nutrient Profile:** 480 kcal | P: 34g | C: 50g | F: 14g | Saturated Fat: 3.5g | Sodium: 650mg | Sugar: 5g
 
-**Rank 3: Tier 3 - Warning Choice: Stir-Fried Noodles & Fried Rice** [WARNING] — *High Sodium & Carb Load*
-- **Items Included (30):** GURAME BAKAR / GORENG + NASI, GURAME ASAM MANIS + NASI, GURAME VILET ASAM MANIS + NASI, IKAN BAWAL ASEM MANIS + NASI, AYAM GORENG SAMBEL LAMPUNG + NASI, AYAM ASAM MANIS + NASI, AYAM GORENG SAMBEL IJO + NASI, AYAM GORENG SAMBEL JUDES, NASI GORENG SEAFOOD, NASI GORENG SPESIAL, NASI GORENG PETE, NASI GORENG SOSIS, NASI GORENG BAKSO, NASI GORENG KORNET, NASI GORENG TELOR DADAR, NASI GORENG AYAM, MIE TEK - TEK SOSIS, MIE TEK - TEK BAKSO, MIE TEK - TEK KORNET, MIE TEK - TEK SEAFOOD, KWETIAU GORENG BAKSO SOSIS, KWETIAU GORENG SEAFOOD, KWETIAU KUAH SOSIS BAKSO, KWETIAU SPECIAL, KWETIAU AYAM, MIE TEK - TEK SPECIAL, MIE TEK - TEK AYAM, CUMI GORENG TEPUNG, ASAM MANIS + NASI, TONGKOL SUIR PETE + NASI
-- **Comparative Sentence:** "These noodle and fried rice dishes pack significantly higher glycemic loads and sodium than plain grilled or boiled selections."
-- **Clinical Guidance:** Stir-fried noodles, fried rice, and sweet-and-sour dishes combine refined starches with substantial cooking oils and sodium-rich seasonings, increasing postprandial glucose spikes and cardiovascular strain.
-- **Ordering Tip:** Share portions or request extra vegetables and reduced oil during preparation.
-- **Nutrient Profile:** 680 kcal | P: 20g | C: 85g | F: 26g | Saturated Fat: 7g | Sodium: 1150mg | Sugar: 8g
+**Rank 3: Tier 3 - Caution: Fried Fish & Sweet-Sour Dishes** [WARNING] — *High Sodium & Fried Oil Caution*
+- **Items Included (16):** GURAME BAKAR / GORENG + NASI, GURAME ASAM MANIS + NASI, GURAME VILET ASAM MANIS + NASI, IKAN BAWAL ASEM MANIS + NASI, IKAN NILA GARANG ASEM + NASI, AYAM GARANG ASEM + NASI, TONGKOL GARANG ASEM + NASI, GURAME GARANG ASEM + NASI, TONGKOL SUIR PETE + NASI, TONGKOL SUIR JENGKOL + NASI, AYAM GORENG SAMBEL, LAMPUNG + NASI, AYAM ASAM MANIS + NASI, AYAM GORENG GIEPREK TEPUNG + NASI, AYAM GORENG SAMBEL IJO + NASI, AYAM GORENG SAMBEL JUDES
+- **Comparative Sentence:** "Unlike clean grilled proteins, these fried and sweet-sour dishes carry significantly higher caloric loads and oxidized cooking fats."
+- **Clinical Guidance:** Deep-frying and heavy sweet-and-sour sauces substantially increase the caloric density, saturated fat, and sugar content of these meals. Regular consumption may negatively impact lipid panels and glycemic control.
+- **Ordering Tip:** Ask for sweet-sour sauces served in a separate bowl so you can moderate the sugar intake.
+- **Nutrient Profile:** 680 kcal | P: 30g | C: 65g | F: 32g | Saturated Fat: 8g | Sodium: 1100mg | Sugar: 12g
 
-**Rank 4: Tier 4 - Alert Choice: Deep-Fried Batter & Spicy Offal** [ALERT] — *Severe Metabolic Load Alert*
-- **Items Included (11):** AYAM MERCON + NASI, TONGKOL SUIR JENGKOL + NASI, AYAM GORENG GEPREK TEPUNG + NASI, NASI GORENG JENGKOL, SEBLAK COBEK VIRAL, SEBLAK SEAFOOD, SEBLAK CEKER, CEKER MERCON, MIE TEK - TEK KUAH, CUMI GORENG TEPUNG + NASI, CUMI SAOS ASAM MANIS TEPUNG + NASI
-- **Comparative Sentence:** "Heavy batter frying and offal preparations introduce the highest levels of trans fats, oxidized oils, and sodium on the menu."
-- **Clinical Guidance:** Deep-fried battered items and spicy offal (jengkol, ceker mercon) undergo intense thermal processing in reused cooking oils, causing substantial inflammation, high saturated/trans fat intake, and extreme sodium spikes.
-- **Ordering Tip:** Avoid entirely if managing hypertension, dyslipidemia, or cardiovascular disease risk.
-- **Nutrient Profile:** 820 kcal | P: 22g | C: 70g | F: 42g | Saturated Fat: 14g | Sodium: 1400mg | Sugar: 6g
+**Rank 4: Tier 4 - Alert: Fried Rice, Seblak & Spicy Noodles** [ALERT] — *Excessive Sodium & Refined Carbs Alert*
+- **Items Included (15):** AYAM MERCON + NASI, NASI GORENG SEAFOOD, NASI GORENG SPESIAL, NASI GORENG PETE, NASI GORENG JENGKOL, NASI GORENG SOSIS, NASI GORENG BAKSO, NASI GORENG KORNET, NASI GORENG TELOR DADAR, NASI GORENG AYAM, SEBLAK COBEK VIRAL, SEBLAK SEAFOOD, SEBLAK CEKER, CEKER MERCON, MIE TEK - TEK KUAH
+- **Comparative Sentence:** "Representing the highest metabolic load on this menu, these fried rice, seblak, and noodle dishes combine refined carbohydrates with heavy oils and soaring sodium levels."
+- **Clinical Guidance:** Dishes like Nasi Goreng, Seblak, and Mie Tek-Tek are ultra-processed or oil-saturated carbohydrate bombs. They deliver very high sodium counts and refined starches that can provoke rapid glycemic spikes and long-term cardiovascular strain.
+- **Ordering Tip:** Share these portions with a dining companion or pair with an abundant side of fresh raw vegetables to buffer glycemic impact.
+- **Nutrient Profile:** 780 kcal | P: 18g | C: 92g | F: 38g | Saturated Fat: 12g | Sodium: 1550mg | Sugar: 8g
 
 
 ## ⚙️ Pipeline Stage Ledger
@@ -1252,10 +1095,10 @@ _No thrown exceptions or log errors/warnings captured._
 ## 🖥️ Backend Execution Logs
 
 ```
-[backend] [job_compare_set5_1788896672720] Compare request received with 1 images. Mode: compare.
+[backend] [job_compare_set5_1788898413730] Compare request received with 1 images. Mode: compare.
 [scout_only_compare] Dispatched to gemini-3.5-flash-lite with single-pass instruction.
-[scout_only_compare] Latency: 10066ms. Usage: 4882 in / 3765 out tokens.
-[scout_only_compare] Extracted 56 items into 4 ranked groups.
+[scout_only_compare] Latency: 8459ms. Usage: 5148 in / 3156 out tokens.
+[scout_only_compare] Extracted 42 items into 4 ranked groups.
 [scout_only_compare] Status: SUCCESS. Finalized compare payload.
 ```
 

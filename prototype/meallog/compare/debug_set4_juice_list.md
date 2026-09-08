@@ -1,13 +1,13 @@
 # Health Tracker — End-to-End Diagnostic Report
 
-- **Exported:** 2026-09-08T19:44:32.710Z
-- **Job ID:** `job_compare_set4_1788896666184`
+- **Exported:** 2026-09-08T20:13:33.724Z
+- **Job ID:** `job_compare_set4_1788898406896`
 - **Status:** succeeded
 - **Pack:** food
 - **Mode:** compare
 - **Version:** 3
 - **Savable:** false
-- **Photo 1:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set4_1788896666184_0.jpg
+- **Photo 1:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set4_1788898406896_0.jpg
 
 ## ⚖️ Contract Evaluation
 
@@ -41,7 +41,7 @@
 
 - **open:** true
 - **title:** "Food Item & Shelf Comparison"
-- **on_card:** {"totalOptions":28,"groups":4,"recommended":"Es Kelapa Muda"}
+- **on_card:** {"totalOptions":28,"groups":4,"recommended":"ES KELAPA MUDA"}
 - **visible:** [View Comparison Details, Download Debug Report, Close Modal]
 - **hidden:** [Retry, Attempt 1 of 3, Save Meal to History]
 - **composer:** {"photo":1,"add_image":1,"paste":1,"send":1}
@@ -84,16 +84,16 @@ STRICT INVARIANTS:
    - Front-only packages without a nutrition panel: set hasNutritionLabel to false or omit, transcribe product name from OCR, and set perServing to null.
    - NO LUMPING: Each distinct variety, flavor, or dish entry gets its own item in items[].
 
-3. ACTIVE MULTI-TIER GROUPING (ZERO ORPHANED ITEMS & NO LAZY DUMPING):
+3. ACTIVE MULTI-TIER GROUPING & STRICT NUTRITIONAL CLUSTERING (MAX 10% VARIANCE):
    - ZERO ORPHANED ITEMS: Every single index from 0 to items.length - 1 MUST be assigned to at least one group in groups[]. The union of all scoutItemIndices must cover 100% of extracted items.
-   - NO OUT-OF-BOUNDS INDICES: All indices in scoutItemIndices must strictly be between 0 and items.length - 1. Never emit an index >= items.length.
-   - NO LAZY GROUPING (1 single group is strictly forbidden for >2 items).
-   - NO LAZY MIDDLE DUMPING: Never dump more than 35-40% of items into a single group on large menus.
-   - CLINICAL PREPARATION TIERING (BASED ON COOKING METHOD & METABOLIC LOAD DISCERNED VIA OCR):
-     * Tier 1 (good / safest): Steamed preparations, boiled soups/clear broths, raw or boiled fresh vegetables, plain water/unsweetened tea.
-     * Tier 2 (neutral / moderate): Grilled or roasted lean proteins without heavy sugar glaze, lightly sautéed greens/vegetables, staple plain grains.
-     * Tier 3 (warning / caution): Deep-fried poultry, meats, or seafood; stir-fried noodles or fried rice; sweetened beverages and syrups.
-     * Tier 4 (alert / severe metabolic load): Deep-fried animal skins and offal; deep-fried vegetables (extreme oil absorption); ultra-processed boiled crackers or instant noodles in heavy chili/palm oil; high-sugar condensed milk and syrup bowls; large family-size snack bags.
+   - NO LAZY DUMPING & MAX 10% VARIANCE RULE: You MUST NOT dump wildly different items into a single group. A group is only correct if the estimated underlying nutritional values (Calories, Protein, Fat, Carbs, Sugar, Total Fibre, Sodium) of the dishes inside it do not differ by more than 10% from one another.
+   - If dishes within a broad category (like "Fried Foods") have enormous nutritional differences (e.g., Fried Chicken vs. Fried Rice vs. Fried Vegetables), you MUST split them into distinct, separate groups (e.g., "Tier 3: Fried Proteins", "Tier 3: Fried Carb Dishes", "Tier 4: Oil-Absorbing Fried Veggies").
+   - You are NOT restricted to exactly 4 groups. You may create 5 to 10 groups if needed to satisfy the 10% variance clustering rule, while mapping them to the closest verdict level (good, neutral, warning, alert).
+   - TIERING BASES (Split further if variance >10%):
+     * Tier 1 (good / safest): Steamed preparations, boiled soups/clear broths, raw or boiled fresh vegetables.
+     * Tier 2 (neutral / moderate): Grilled or roasted lean proteins, lightly sautéed greens/vegetables, staple plain grains.
+     * Tier 3 (warning / caution): Deep-fried poultry/meats/seafood, stir-fried noodles, fried rice, sweetened beverages.
+     * Tier 4 (alert / severe metabolic load): Deep-fried animal skins/offal, deep-fried vegetables (extreme oil absorption), ultra-processed boiled crackers or instant noodles in heavy oil.
 
 4. DIET TASK: ORDERING (Ranking) & AVOIDING THE CALORIE ILLUSION TRAP:
    - The groups in groups[] MUST be sorted in strict order of overall health ranking: BEST / SAFEST CHOICE FIRST ('good'), down to least suitable at the bottom ('alert').
@@ -102,6 +102,7 @@ STRICT INVARIANTS:
      * NEVER rank a confectionery or snack as "Tier 1 (good)" simply because its portion is tiny (e.g. 23g wafer bar at 90 kcal) if it is sugar-dense (>25% sugar by weight) with negligible protein (<2g) and fiber.
      * Evaluate NUTRIENT DENSITY: Compare sugar-to-protein ratio, saturated fat percentage, and fiber retention. Wholesome staple breads with 2g sugar and 4g protein rank HIGHER in healthfulness than a 90 kcal candy bar that is 30% refined sugar.
      * Factor in the mass: A 250 kcal multiseed bread serving is 80g delivering 8g protein and 4g sugar, whereas a 250 kcal sweet bun is 75g packing 19g sugar and 4.5g saturated fat.
+   - BEYOND MACROS (HIDDEN HARMS & BENEFITS): You MUST also split groups based on critical unlisted nutrients or physiological impacts. For example, if an item contains Trans Fats, oxidized palm oil, heavy synthetic additives, or causes extreme glycemic sugar spikes, it MUST be isolated into its own 'alert' group, even if its base calories or macros closely match a cleaner food. Trans fat merits its own grouping.
    - PURE SNACK / ULTRA-PROCESSED AISLE RULE:
      * When comparing exclusively ultra-processed snacks (chips, crisps, fried crackers), recognize that NONE are health foods (NOVA 4).
      * Rank based on BUILT-IN PORTION CONTROL and harm reduction: A miniature 25g pouch (<130 kcal) strictly caps caloric and sodium damage compared to an open 180g family pack (>900 kcal, 35g fat). Do not give "good" to standard fried chips; use "neutral" (with a portion-control caveat) down to "alert".
@@ -126,6 +127,7 @@ STRICT INVARIANTS:
      * saturatedFat: Estimated saturated fat (g)
      * carbohydrates: Estimated total carbohydrates (g)
      * sugar: Estimated sugar (g)
+     * totalFibre: Estimated total fibre (g)
      * sodium: Estimated sodium (mg)
      * MACRONUTRIENT BALANCE: Ensure realistic balance: (4 * protein) + (9 * totalFat) + (4 * carbohydrates) should approximately equal calories (within 10-15%).
      * REALISTIC CLINICAL BENCHMARKS:
@@ -198,223 +200,225 @@ Output exactly ONE JSON object matching this schema:
 - **Raw Emission (Verbatim Output):**
 ```json
 {
-  "_internalReasoning": "Extracted all beverage menu items, categorized by sugar and dairy load into ranked tiers, and calculated average nutrients.",
-  "comparisonTitle": "Cafe Crisda Beverage Menu Evaluation",
+  "_internalReasoning": "Extracted all beverages from the Cafe Crisn menu, grouped by sugar and calorie profile following nutritional and diet rules.",
+  "comparisonTitle": "Cafe Crisn Beverage Menu Evaluation",
   "comparisonType": "menu_items",
-  "summary": "Beverages on the menu range from plain tea and fresh coconut water to heavily sweetened dessert drinks and shakes packed with condensed milk and syrups. Opt for unsweetened or lightly prepared choices to minimize metabolic strain.",
+  "summary": "Beverages on this menu range from unsweetened tea and plain coconut water to extremely high-sugar milk and syrup-based dessert drinks. Opt for plain tea or fresh coconut water to minimize glycemic impact.",
   "items": [
     {
-      "name": "Es Teh Manis",
+      "name": "ES TEH MANIS",
       "tier": 1,
       "sourceImageIndex": 0
     },
     {
-      "name": "Kopi",
+      "name": "WEDANG JAHE",
       "tier": 1,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Kelapa Muda",
+      "name": "KOPI",
       "tier": 1,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Jeruk",
+      "name": "ES KELAPA MUDA",
+      "tier": 1,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "JUS ALPUKAT",
       "tier": 2,
       "sourceImageIndex": 0
     },
     {
-      "name": "Jus Alpukat",
+      "name": "JUS MELON",
       "tier": 2,
       "sourceImageIndex": 0
     },
     {
-      "name": "Jus Melon",
+      "name": "ES JERUK",
       "tier": 2,
       "sourceImageIndex": 0
     },
     {
-      "name": "Jus Kedondong",
+      "name": "ES JERUK KELAPA",
       "tier": 2,
       "sourceImageIndex": 0
     },
     {
-      "name": "Jus Sirsak",
+      "name": "JUS MANGGA",
       "tier": 2,
       "sourceImageIndex": 0
     },
     {
-      "name": "Jus Mangga",
+      "name": "JUS DURIAN",
       "tier": 2,
       "sourceImageIndex": 0
     },
     {
-      "name": "Jus Durian",
+      "name": "JUS KEDONDONG",
       "tier": 2,
       "sourceImageIndex": 0
     },
     {
-      "name": "Jus Pisang",
+      "name": "JUS SIRSAK",
       "tier": 2,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Leci Jelly",
+      "name": "JUS PISANG",
+      "tier": 2,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "ES LECI JELLY",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Bango Ager Item",
+      "name": "ES BANGO AGER ITEM",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Moctail Renbow",
+      "name": "ES MOCTAIL RENBOW",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Wedang Jahe",
+      "name": "ES LECI YAKULT",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Leci Yakult",
+      "name": "ES LECI KELAPA",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Leci Kelapa",
+      "name": "ES NIPIS JELY SELASIH",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Nipis Jely Selasih",
+      "name": "ES LEMON JELY SELASIH",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Lemon Jely Selasih",
+      "name": "ES KUWUT BALI",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Kuwut Bali",
+      "name": "ES KUWUT NANAS",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Kuwut Nanas",
+      "name": "ES VIRGIN MOJITO",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Virgin Mojito",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Es Jeruk Kelapa",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Sop Buah",
+      "name": "ES CAMPUR",
       "tier": 4,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Campur",
+      "name": "ES ALPUKAT KOCOK",
       "tier": 4,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Alpukat Kocok",
+      "name": "ES TELER ALPUKAT",
       "tier": 4,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Teler Alpukat",
+      "name": "ES TELER DURIAN",
       "tier": 4,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Teler Durian",
+      "name": "SOP BUAH",
       "tier": 4,
       "sourceImageIndex": 0
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 1 - Safest Choice: Plain Teas & Fresh Coconut Water",
+      "groupName": "Tier 1 - Safest Choice: Plain Teas & Coconut Water",
       "scoutItemIndices": [
         0,
         1,
-        2
+        2,
+        3
       ],
       "boundingBox2D": [
-        133,
-        179,
-        307,
-        526
+        290,
+        170,
+        760,
+        710
       ],
       "verdict": {
-        "label": "Safest Hydration Option",
+        "label": "Lowest Sugar & Calorie Beverages",
         "level": "good"
       },
-      "comparisonSentence": "Unlike the heavy dessert beverages, these simple options deliver minimal added sugars and offer clean hydration.",
-      "message": "These beverages are the best choices on the menu because they avoid dense syrups and condensed milk, minimizing sharp blood glucose spikes. Ideal for maintaining metabolic stability while providing basic hydration or natural electrolytes from coconut water.",
+      "comparisonSentence": "These plain teas, ginger infusions, black coffee, and fresh coconut water contain minimal added sugars compared to the heavily sweetened fruit juices and dessert bowls.",
+      "message": "These selections provide hydration and natural electrolytes with negligible added sugars and calories. They are ideal for maintaining stable blood glucose and avoiding unnecessary liquid empty calories.",
       "averageNutrients": {
-        "calories": 60,
-        "protein": 1,
-        "totalFat": 0.5,
+        "calories": 45,
+        "protein": 0.5,
+        "totalFat": 0.2,
         "saturatedFat": 0.1,
-        "carbohydrates": 14,
-        "sugar": 12,
-        "sodium": 15
+        "carbohydrates": 10,
+        "sugar": 8,
+        "totalFibre": 0.5,
+        "sodium": 20
       },
-      "orderingTip": "Request less sugar or unsweetened preparation when possible."
+      "orderingTip": "Request with no added sugar or syrup where applicable."
     },
     {
-      "groupName": "Tier 2 - Moderate Choice: Fresh Fruit Juices & Purees",
+      "groupName": "Tier 2 - Moderate Choice: Fresh Fruit Juices",
       "scoutItemIndices": [
-        3,
         4,
         5,
         6,
         7,
         8,
         9,
-        10
+        10,
+        11,
+        12
       ],
       "boundingBox2D": [
-        140,
-        525,
+        605,
+        50,
         990,
-        966
+        970
       ],
       "verdict": {
-        "label": "Moderate Fruit Sugar Load",
+        "label": "Natural Vitamins with Moderate Fructose",
         "level": "neutral"
       },
-      "comparisonSentence": "Compared to the extreme dessert drinks, pure fruit juices contain natural vitamins and fiber despite their higher fructose content.",
-      "message": "Fresh fruit juices provide valuable micronutrients, antioxidants, and vitamin C. However, juicing breaks down dietary fiber, leading to faster fructose absorption into the bloodstream. Consume in moderation if monitoring blood glucose or insulin resistance.",
+      "comparisonSentence": "Unlike plain teas, these whole fruit juices deliver beneficial vitamins and fiber but introduce higher levels of natural fruit sugars and calories.",
+      "message": "Fresh fruit juices offer valuable micronutrients and antioxidants, though the liquefaction of fruit breaks down cellular walls and accelerates fructose absorption into the bloodstream.",
       "averageNutrients": {
         "calories": 140,
-        "protein": 2,
-        "totalFat": 2.5,
-        "saturatedFat": 0.5,
-        "carbohydrates": 30,
-        "sugar": 24,
-        "sodium": 20
+        "protein": 1.5,
+        "totalFat": 1,
+        "saturatedFat": 0.2,
+        "carbohydrates": 32,
+        "sugar": 26,
+        "totalFibre": 2,
+        "sodium": 15
       },
-      "orderingTip": "Ask for no added simple syrup or sugar in your fruit juice."
+      "orderingTip": "Ask for no added simple syrup or condensed milk in your juice."
     },
     {
-      "groupName": "Tier 3 - Caution Choice: Mocktails, Jelly Drinks & Sweetened Teas",
+      "groupName": "Tier 3 - Caution Choice: Flavored Jellies & Syrups",
       "scoutItemIndices": [
-        11,
-        12,
         13,
         14,
         15,
@@ -427,30 +431,31 @@ Output exactly ONE JSON object matching this schema:
         22
       ],
       "boundingBox2D": [
-        116,
-        1,
-        764,
-        436
+        110,
+        0,
+        520,
+        960
       ],
       "verdict": {
-        "label": "Added Syrup & Sugar Caution",
+        "label": "Added Syrups & Sweet Jellies Caution",
         "level": "warning"
       },
-      "comparisonSentence": "These flavored mocktails and jelly drinks carry significantly more refined sugars and syrups than plain teas or fresh coconut water.",
-      "message": "These drinks rely heavily on flavored syrups, gelatin jellies, and sweeteners, which contribute empty calories and promote rapid glycemic responses. Frequent consumption increases long-term cardiometabolic risk and visceral fat accumulation.",
+      "comparisonSentence": "These flavored mojitos, yakult drinks, and jelly sodas contain significantly higher amounts of refined syrups and artificial additives than pure fruit juices.",
+      "message": "These specialty beverages combine flavored syrups, carbonated soda, and sugary jellies, which substantially increase glycemic load and chemical additive intake without providing meaningful nutritional benefits.",
       "averageNutrients": {
         "calories": 210,
-        "protein": 1.5,
-        "totalFat": 1,
-        "saturatedFat": 0.2,
-        "carbohydrates": 50,
-        "sugar": 42,
-        "sodium": 35
+        "protein": 1,
+        "totalFat": 0.5,
+        "saturatedFat": 0.1,
+        "carbohydrates": 52,
+        "sugar": 45,
+        "totalFibre": 0.5,
+        "sodium": 45
       },
-      "orderingTip": "Request half syrup or fewer jelly toppings to cut down sugar."
+      "orderingTip": "Request half syrup or skip the flavored jellies to reduce sugar."
     },
     {
-      "groupName": "Tier 4 - Alert Choice: Heavy Dessert Shakes & Condensed Milk Bowls",
+      "groupName": "Tier 4 - Alert Choice: Heavy Dessert Drinks & Condensed Milk",
       "scoutItemIndices": [
         23,
         24,
@@ -459,252 +464,255 @@ Output exactly ONE JSON object matching this schema:
         27
       ],
       "boundingBox2D": [
-        549,
-        431,
-        715,
-        955
+        550,
+        430,
+        720,
+        960
       ],
       "verdict": {
-        "label": "High Sugar & Calorie Alert",
+        "label": "High Sugar and Calorie Dessert Load",
         "level": "alert"
       },
-      "comparisonSentence": "Unlike simple fresh juices, these heavy dessert bowls pack massive amounts of condensed milk, rich syrups, and saturated fats.",
-      "message": "Representing a severe metabolic load, these traditional dessert concoctions combine dense fruit mixtures with heavy condensed milk and sugary syrups. They deliver high calories, saturated fats, and rapid sugar spikes, making them unsuitable for frequent or casual consumption.",
+      "comparisonSentence": "These rich dessert beverages and mixed fruit soups pack excessive saturated fats and condensed milk sugars, far exceeding the caloric density of simple teas or plain juices.",
+      "message": "Containing heavy layers of condensed milk, coconut cream, and multiple sweetened toppings, these items pose severe metabolic loads, contributing to rapid blood sugar spikes and elevated caloric surplus.",
       "averageNutrients": {
         "calories": 420,
-        "protein": 6,
+        "protein": 5,
         "totalFat": 14,
-        "saturatedFat": 8,
-        "carbohydrates": 72,
+        "saturatedFat": 9,
+        "carbohydrates": 68,
         "sugar": 58,
-        "sodium": 110
+        "totalFibre": 3,
+        "sodium": 95
       },
-      "orderingTip": "Share this dessert item with others or avoid adding extra condensed milk."
+      "orderingTip": "Treat these as an occasional dessert rather than a standard beverage accompaniment."
     }
   ],
-  "recommendedOption": "Es Kelapa Muda"
+  "recommendedOption": "ES KELAPA MUDA"
 }
 ```
 - **Output:**
 ```json
 {
-  "_internalReasoning": "Extracted all beverage menu items, categorized by sugar and dairy load into ranked tiers, and calculated average nutrients.",
-  "comparisonTitle": "Cafe Crisda Beverage Menu Evaluation",
+  "_internalReasoning": "Extracted all beverages from the Cafe Crisn menu, grouped by sugar and calorie profile following nutritional and diet rules.",
+  "comparisonTitle": "Cafe Crisn Beverage Menu Evaluation",
   "comparisonType": "menu_items",
-  "summary": "Beverages on the menu range from plain tea and fresh coconut water to heavily sweetened dessert drinks and shakes packed with condensed milk and syrups. Opt for unsweetened or lightly prepared choices to minimize metabolic strain.",
+  "summary": "Beverages on this menu range from unsweetened tea and plain coconut water to extremely high-sugar milk and syrup-based dessert drinks. Opt for plain tea or fresh coconut water to minimize glycemic impact.",
   "items": [
     {
-      "name": "Es Teh Manis",
+      "name": "ES TEH MANIS",
       "tier": 1,
       "sourceImageIndex": 0
     },
     {
-      "name": "Kopi",
+      "name": "WEDANG JAHE",
       "tier": 1,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Kelapa Muda",
+      "name": "KOPI",
       "tier": 1,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Jeruk",
+      "name": "ES KELAPA MUDA",
+      "tier": 1,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "JUS ALPUKAT",
       "tier": 2,
       "sourceImageIndex": 0
     },
     {
-      "name": "Jus Alpukat",
+      "name": "JUS MELON",
       "tier": 2,
       "sourceImageIndex": 0
     },
     {
-      "name": "Jus Melon",
+      "name": "ES JERUK",
       "tier": 2,
       "sourceImageIndex": 0
     },
     {
-      "name": "Jus Kedondong",
+      "name": "ES JERUK KELAPA",
       "tier": 2,
       "sourceImageIndex": 0
     },
     {
-      "name": "Jus Sirsak",
+      "name": "JUS MANGGA",
       "tier": 2,
       "sourceImageIndex": 0
     },
     {
-      "name": "Jus Mangga",
+      "name": "JUS DURIAN",
       "tier": 2,
       "sourceImageIndex": 0
     },
     {
-      "name": "Jus Durian",
+      "name": "JUS KEDONDONG",
       "tier": 2,
       "sourceImageIndex": 0
     },
     {
-      "name": "Jus Pisang",
+      "name": "JUS SIRSAK",
       "tier": 2,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Leci Jelly",
+      "name": "JUS PISANG",
+      "tier": 2,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "ES LECI JELLY",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Bango Ager Item",
+      "name": "ES BANGO AGER ITEM",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Moctail Renbow",
+      "name": "ES MOCTAIL RENBOW",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Wedang Jahe",
+      "name": "ES LECI YAKULT",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Leci Yakult",
+      "name": "ES LECI KELAPA",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Leci Kelapa",
+      "name": "ES NIPIS JELY SELASIH",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Nipis Jely Selasih",
+      "name": "ES LEMON JELY SELASIH",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Lemon Jely Selasih",
+      "name": "ES KUWUT BALI",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Kuwut Bali",
+      "name": "ES KUWUT NANAS",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Kuwut Nanas",
+      "name": "ES VIRGIN MOJITO",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Virgin Mojito",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Es Jeruk Kelapa",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Sop Buah",
+      "name": "ES CAMPUR",
       "tier": 4,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Campur",
+      "name": "ES ALPUKAT KOCOK",
       "tier": 4,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Alpukat Kocok",
+      "name": "ES TELER ALPUKAT",
       "tier": 4,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Teler Alpukat",
+      "name": "ES TELER DURIAN",
       "tier": 4,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Teler Durian",
+      "name": "SOP BUAH",
       "tier": 4,
       "sourceImageIndex": 0
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 1 - Safest Choice: Plain Teas & Fresh Coconut Water",
+      "groupName": "Tier 1 - Safest Choice: Plain Teas & Coconut Water",
       "scoutItemIndices": [
         0,
         1,
-        2
+        2,
+        3
       ],
       "boundingBox2D": [
-        133,
-        179,
-        307,
-        526
+        290,
+        170,
+        760,
+        710
       ],
       "verdict": {
-        "label": "Safest Hydration Option",
+        "label": "Lowest Sugar & Calorie Beverages",
         "level": "good"
       },
-      "comparisonSentence": "Unlike the heavy dessert beverages, these simple options deliver minimal added sugars and offer clean hydration.",
-      "message": "These beverages are the best choices on the menu because they avoid dense syrups and condensed milk, minimizing sharp blood glucose spikes. Ideal for maintaining metabolic stability while providing basic hydration or natural electrolytes from coconut water.",
+      "comparisonSentence": "These plain teas, ginger infusions, black coffee, and fresh coconut water contain minimal added sugars compared to the heavily sweetened fruit juices and dessert bowls.",
+      "message": "These selections provide hydration and natural electrolytes with negligible added sugars and calories. They are ideal for maintaining stable blood glucose and avoiding unnecessary liquid empty calories.",
       "averageNutrients": {
-        "calories": 60,
-        "protein": 1,
-        "totalFat": 0.5,
+        "calories": 45,
+        "protein": 0.5,
+        "totalFat": 0.2,
         "saturatedFat": 0.1,
-        "carbohydrates": 14,
-        "sugar": 12,
-        "sodium": 15
+        "carbohydrates": 10,
+        "sugar": 8,
+        "totalFibre": 0.5,
+        "sodium": 20
       },
-      "orderingTip": "Request less sugar or unsweetened preparation when possible."
+      "orderingTip": "Request with no added sugar or syrup where applicable."
     },
     {
-      "groupName": "Tier 2 - Moderate Choice: Fresh Fruit Juices & Purees",
+      "groupName": "Tier 2 - Moderate Choice: Fresh Fruit Juices",
       "scoutItemIndices": [
-        3,
         4,
         5,
         6,
         7,
         8,
         9,
-        10
+        10,
+        11,
+        12
       ],
       "boundingBox2D": [
-        140,
-        525,
+        605,
+        50,
         990,
-        966
+        970
       ],
       "verdict": {
-        "label": "Moderate Fruit Sugar Load",
+        "label": "Natural Vitamins with Moderate Fructose",
         "level": "neutral"
       },
-      "comparisonSentence": "Compared to the extreme dessert drinks, pure fruit juices contain natural vitamins and fiber despite their higher fructose content.",
-      "message": "Fresh fruit juices provide valuable micronutrients, antioxidants, and vitamin C. However, juicing breaks down dietary fiber, leading to faster fructose absorption into the bloodstream. Consume in moderation if monitoring blood glucose or insulin resistance.",
+      "comparisonSentence": "Unlike plain teas, these whole fruit juices deliver beneficial vitamins and fiber but introduce higher levels of natural fruit sugars and calories.",
+      "message": "Fresh fruit juices offer valuable micronutrients and antioxidants, though the liquefaction of fruit breaks down cellular walls and accelerates fructose absorption into the bloodstream.",
       "averageNutrients": {
         "calories": 140,
-        "protein": 2,
-        "totalFat": 2.5,
-        "saturatedFat": 0.5,
-        "carbohydrates": 30,
-        "sugar": 24,
-        "sodium": 20
+        "protein": 1.5,
+        "totalFat": 1,
+        "saturatedFat": 0.2,
+        "carbohydrates": 32,
+        "sugar": 26,
+        "totalFibre": 2,
+        "sodium": 15
       },
-      "orderingTip": "Ask for no added simple syrup or sugar in your fruit juice."
+      "orderingTip": "Ask for no added simple syrup or condensed milk in your juice."
     },
     {
-      "groupName": "Tier 3 - Caution Choice: Mocktails, Jelly Drinks & Sweetened Teas",
+      "groupName": "Tier 3 - Caution Choice: Flavored Jellies & Syrups",
       "scoutItemIndices": [
-        11,
-        12,
         13,
         14,
         15,
@@ -717,30 +725,31 @@ Output exactly ONE JSON object matching this schema:
         22
       ],
       "boundingBox2D": [
-        116,
-        1,
-        764,
-        436
+        110,
+        0,
+        520,
+        960
       ],
       "verdict": {
-        "label": "Added Syrup & Sugar Caution",
+        "label": "Added Syrups & Sweet Jellies Caution",
         "level": "warning"
       },
-      "comparisonSentence": "These flavored mocktails and jelly drinks carry significantly more refined sugars and syrups than plain teas or fresh coconut water.",
-      "message": "These drinks rely heavily on flavored syrups, gelatin jellies, and sweeteners, which contribute empty calories and promote rapid glycemic responses. Frequent consumption increases long-term cardiometabolic risk and visceral fat accumulation.",
+      "comparisonSentence": "These flavored mojitos, yakult drinks, and jelly sodas contain significantly higher amounts of refined syrups and artificial additives than pure fruit juices.",
+      "message": "These specialty beverages combine flavored syrups, carbonated soda, and sugary jellies, which substantially increase glycemic load and chemical additive intake without providing meaningful nutritional benefits.",
       "averageNutrients": {
         "calories": 210,
-        "protein": 1.5,
-        "totalFat": 1,
-        "saturatedFat": 0.2,
-        "carbohydrates": 50,
-        "sugar": 42,
-        "sodium": 35
+        "protein": 1,
+        "totalFat": 0.5,
+        "saturatedFat": 0.1,
+        "carbohydrates": 52,
+        "sugar": 45,
+        "totalFibre": 0.5,
+        "sodium": 45
       },
-      "orderingTip": "Request half syrup or fewer jelly toppings to cut down sugar."
+      "orderingTip": "Request half syrup or skip the flavored jellies to reduce sugar."
     },
     {
-      "groupName": "Tier 4 - Alert Choice: Heavy Dessert Shakes & Condensed Milk Bowls",
+      "groupName": "Tier 4 - Alert Choice: Heavy Dessert Drinks & Condensed Milk",
       "scoutItemIndices": [
         23,
         24,
@@ -749,34 +758,35 @@ Output exactly ONE JSON object matching this schema:
         27
       ],
       "boundingBox2D": [
-        549,
-        431,
-        715,
-        955
+        550,
+        430,
+        720,
+        960
       ],
       "verdict": {
-        "label": "High Sugar & Calorie Alert",
+        "label": "High Sugar and Calorie Dessert Load",
         "level": "alert"
       },
-      "comparisonSentence": "Unlike simple fresh juices, these heavy dessert bowls pack massive amounts of condensed milk, rich syrups, and saturated fats.",
-      "message": "Representing a severe metabolic load, these traditional dessert concoctions combine dense fruit mixtures with heavy condensed milk and sugary syrups. They deliver high calories, saturated fats, and rapid sugar spikes, making them unsuitable for frequent or casual consumption.",
+      "comparisonSentence": "These rich dessert beverages and mixed fruit soups pack excessive saturated fats and condensed milk sugars, far exceeding the caloric density of simple teas or plain juices.",
+      "message": "Containing heavy layers of condensed milk, coconut cream, and multiple sweetened toppings, these items pose severe metabolic loads, contributing to rapid blood sugar spikes and elevated caloric surplus.",
       "averageNutrients": {
         "calories": 420,
-        "protein": 6,
+        "protein": 5,
         "totalFat": 14,
-        "saturatedFat": 8,
-        "carbohydrates": 72,
+        "saturatedFat": 9,
+        "carbohydrates": 68,
         "sugar": 58,
-        "sodium": 110
+        "totalFibre": 3,
+        "sodium": 95
       },
-      "orderingTip": "Share this dessert item with others or avoid adding extra condensed milk."
+      "orderingTip": "Treat these as an occasional dessert rather than a standard beverage accompaniment."
     }
   ],
-  "recommendedOption": "Es Kelapa Muda"
+  "recommendedOption": "ES KELAPA MUDA"
 }
 ```
-- **Signals:** model=gemini-3.5-flash-lite, latency_ms=6525, tokens=[object Object]
-- **Parent:** job_compare_set4_1788896666184
+- **Signals:** model=gemini-3.5-flash-lite, latency_ms=6827, tokens=[object Object]
+- **Parent:** job_compare_set4_1788898406896
 
 ## 🔗 Data Pipelines & Infrastructure Connectivity Matrix
 
@@ -789,13 +799,13 @@ Output exactly ONE JSON object matching this schema:
 | **5. Mathematical Calculation Engine** | ⚪ Standby / N/A | No meal calculation required |
 | **6. Trial-Balance & Quality Gate** | ⚪ Standby / N/A | N/A |
 | **7. Health Coach / Clinical Engine** | ⚪ Standby / N/A | No clinical analysis requested |
-| **8. State Storage & Job Sync** | ✅ Connected (Local / Active) | Job ID: `job_compare_set4_1788896666184` |
+| **8. State Storage & Job Sync** | ✅ Connected (Local / Active) | Job ID: `job_compare_set4_1788898406896` |
 
 ## 👤 Last User Action
 
 - **Action:** submit_meal_job
 - **Prompt/Text:** "Compare the juices on this list and recommend the best option."
-- **Timestamp:** 2026-09-08T19:44:32.710Z
+- **Timestamp:** 2026-09-08T20:13:33.724Z
 
 ## 🐾 User Action Breadcrumbs
 
@@ -805,7 +815,7 @@ Output exactly ONE JSON object matching this schema:
 |  | select_photos | camera_roll | {"imageCount":1,"files":["set4_juice_and_beverage_list.jpg"]} |
 |  | input_change | input | {"name":"compare-query-input","valueLength":62} |
 |  | submit_initiated | chat_composer | {"prompt":"Compare the juices on this list and recommend the best option.","imageCount":1,"submissionMode":"compare"} |
-|  | submit_meal_job | chat_compose_dock | {"jobId":"job_compare_set4_1788896666184","promptLength":62,"imageCount":1,"submissionMode":"compare"} |
+|  | submit_meal_job | chat_compose_dock | {"jobId":"job_compare_set4_1788898406896","promptLength":62,"imageCount":1,"submissionMode":"compare"} |
 
 ## ⚙️ Job Session Event Trail
 
@@ -817,46 +827,46 @@ _No client network errors or latency warnings recorded._
 
 ### Client Console Logs (2)
 ```
-[INFO] Compare mode triggered with 1 images for job job_compare_set4_1788896666184
+[INFO] Compare mode triggered with 1 images for job job_compare_set4_1788898406896
 [INFO] Scout-Only Compare single-pass pipeline invoked for Set 4: Juice & Beverage List.
 ```
 
 ## 🔍 Vision Scout Results (28 item(s) detected)
 
-> **Scout Internal Reasoning:** Extracted all beverage menu items, categorized by sugar and dairy load into ranked tiers, and calculated average nutrients.
+> **Scout Internal Reasoning:** Extracted all beverages from the Cafe Crisn menu, grouped by sugar and calorie profile following nutritional and diet rules.
 
 **Dining Environment:** `supermarket_or_store` | **Content Type:** `menu_items`
 
 | # | Dish / Item | Weight | Bounding Box | Img | Method | Label / Sticker OCR | Constituent Ingredients |
 |---|-------------|--------|--------------|-----|--------|---------------------|-------------------------|
-| [1] | Es Teh Manis | 50g | — | #0 | packaged | — | — |
-| [2] | Kopi | 50g | — | #0 | packaged | — | — |
-| [3] | Es Kelapa Muda | 50g | — | #0 | packaged | — | — |
-| [4] | Es Jeruk | 50g | — | #0 | packaged | — | — |
-| [5] | Jus Alpukat | 50g | — | #0 | packaged | — | — |
-| [6] | Jus Melon | 50g | — | #0 | packaged | — | — |
-| [7] | Jus Kedondong | 50g | — | #0 | packaged | — | — |
-| [8] | Jus Sirsak | 50g | — | #0 | packaged | — | — |
-| [9] | Jus Mangga | 50g | — | #0 | packaged | — | — |
-| [10] | Jus Durian | 50g | — | #0 | packaged | — | — |
-| [11] | Jus Pisang | 50g | — | #0 | packaged | — | — |
-| [12] | Es Leci Jelly | 50g | — | #0 | packaged | — | — |
-| [13] | Es Bango Ager Item | 50g | — | #0 | packaged | — | — |
-| [14] | Es Moctail Renbow | 50g | — | #0 | packaged | — | — |
-| [15] | Wedang Jahe | 50g | — | #0 | packaged | — | — |
-| [16] | Es Leci Yakult | 50g | — | #0 | packaged | — | — |
-| [17] | Es Leci Kelapa | 50g | — | #0 | packaged | — | — |
-| [18] | Es Nipis Jely Selasih | 50g | — | #0 | packaged | — | — |
-| [19] | Es Lemon Jely Selasih | 50g | — | #0 | packaged | — | — |
-| [20] | Es Kuwut Bali | 50g | — | #0 | packaged | — | — |
-| [21] | Es Kuwut Nanas | 50g | — | #0 | packaged | — | — |
-| [22] | Es Virgin Mojito | 50g | — | #0 | packaged | — | — |
-| [23] | Es Jeruk Kelapa | 50g | — | #0 | packaged | — | — |
-| [24] | Sop Buah | 50g | — | #0 | packaged | — | — |
-| [25] | Es Campur | 50g | — | #0 | packaged | — | — |
-| [26] | Es Alpukat Kocok | 50g | — | #0 | packaged | — | — |
-| [27] | Es Teler Alpukat | 50g | — | #0 | packaged | — | — |
-| [28] | Es Teler Durian | 50g | — | #0 | packaged | — | — |
+| [1] | ES TEH MANIS | 50g | — | #0 | packaged | — | — |
+| [2] | WEDANG JAHE | 50g | — | #0 | packaged | — | — |
+| [3] | KOPI | 50g | — | #0 | packaged | — | — |
+| [4] | ES KELAPA MUDA | 50g | — | #0 | packaged | — | — |
+| [5] | JUS ALPUKAT | 50g | — | #0 | packaged | — | — |
+| [6] | JUS MELON | 50g | — | #0 | packaged | — | — |
+| [7] | ES JERUK | 50g | — | #0 | packaged | — | — |
+| [8] | ES JERUK KELAPA | 50g | — | #0 | packaged | — | — |
+| [9] | JUS MANGGA | 50g | — | #0 | packaged | — | — |
+| [10] | JUS DURIAN | 50g | — | #0 | packaged | — | — |
+| [11] | JUS KEDONDONG | 50g | — | #0 | packaged | — | — |
+| [12] | JUS SIRSAK | 50g | — | #0 | packaged | — | — |
+| [13] | JUS PISANG | 50g | — | #0 | packaged | — | — |
+| [14] | ES LECI JELLY | 50g | — | #0 | packaged | — | — |
+| [15] | ES BANGO AGER ITEM | 50g | — | #0 | packaged | — | — |
+| [16] | ES MOCTAIL RENBOW | 50g | — | #0 | packaged | — | — |
+| [17] | ES LECI YAKULT | 50g | — | #0 | packaged | — | — |
+| [18] | ES LECI KELAPA | 50g | — | #0 | packaged | — | — |
+| [19] | ES NIPIS JELY SELASIH | 50g | — | #0 | packaged | — | — |
+| [20] | ES LEMON JELY SELASIH | 50g | — | #0 | packaged | — | — |
+| [21] | ES KUWUT BALI | 50g | — | #0 | packaged | — | — |
+| [22] | ES KUWUT NANAS | 50g | — | #0 | packaged | — | — |
+| [23] | ES VIRGIN MOJITO | 50g | — | #0 | packaged | — | — |
+| [24] | ES CAMPUR | 50g | — | #0 | packaged | — | — |
+| [25] | ES ALPUKAT KOCOK | 50g | — | #0 | packaged | — | — |
+| [26] | ES TELER ALPUKAT | 50g | — | #0 | packaged | — | — |
+| [27] | ES TELER DURIAN | 50g | — | #0 | packaged | — | — |
+| [28] | SOP BUAH | 50g | — | #0 | packaged | — | — |
 
 ## 📚 Database Search & Entity Resolution
 
@@ -865,41 +875,41 @@ _No client network errors or latency warnings recorded._
 
 ## 💬 Agent Message & Narrative
 
-### Cafe Crisda Beverage Menu Evaluation
+### Cafe Crisn Beverage Menu Evaluation
 
-**Summary:** Beverages on the menu range from plain tea and fresh coconut water to heavily sweetened dessert drinks and shakes packed with condensed milk and syrups. Opt for unsweetened or lightly prepared choices to minimize metabolic strain.
+**Summary:** Beverages on this menu range from unsweetened tea and plain coconut water to extremely high-sugar milk and syrup-based dessert drinks. Opt for plain tea or fresh coconut water to minimize glycemic impact.
 
-**Recommended Option:** Es Kelapa Muda
+**Recommended Option:** ES KELAPA MUDA
 
 #### Comparison Groups & Verdicts
 
-**Rank 1: Tier 1 - Safest Choice: Plain Teas & Fresh Coconut Water** [GOOD] — *Safest Hydration Option*
-- **Items Included (3):** Es Teh Manis, Kopi, Es Kelapa Muda
-- **Comparative Sentence:** "Unlike the heavy dessert beverages, these simple options deliver minimal added sugars and offer clean hydration."
-- **Clinical Guidance:** These beverages are the best choices on the menu because they avoid dense syrups and condensed milk, minimizing sharp blood glucose spikes. Ideal for maintaining metabolic stability while providing basic hydration or natural electrolytes from coconut water.
-- **Ordering Tip:** Request less sugar or unsweetened preparation when possible.
-- **Nutrient Profile:** 60 kcal | P: 1g | C: 14g | F: 0.5g | Saturated Fat: 0.1g | Sodium: 15mg | Sugar: 12g
+**Rank 1: Tier 1 - Safest Choice: Plain Teas & Coconut Water** [GOOD] — *Lowest Sugar & Calorie Beverages*
+- **Items Included (4):** ES TEH MANIS, WEDANG JAHE, KOPI, ES KELAPA MUDA
+- **Comparative Sentence:** "These plain teas, ginger infusions, black coffee, and fresh coconut water contain minimal added sugars compared to the heavily sweetened fruit juices and dessert bowls."
+- **Clinical Guidance:** These selections provide hydration and natural electrolytes with negligible added sugars and calories. They are ideal for maintaining stable blood glucose and avoiding unnecessary liquid empty calories.
+- **Ordering Tip:** Request with no added sugar or syrup where applicable.
+- **Nutrient Profile:** 45 kcal | P: 0.5g | C: 10g | F: 0.2g | Saturated Fat: 0.1g | Sodium: 20mg | Sugar: 8g
 
-**Rank 2: Tier 2 - Moderate Choice: Fresh Fruit Juices & Purees** [NEUTRAL] — *Moderate Fruit Sugar Load*
-- **Items Included (8):** Es Jeruk, Jus Alpukat, Jus Melon, Jus Kedondong, Jus Sirsak, Jus Mangga, Jus Durian, Jus Pisang
-- **Comparative Sentence:** "Compared to the extreme dessert drinks, pure fruit juices contain natural vitamins and fiber despite their higher fructose content."
-- **Clinical Guidance:** Fresh fruit juices provide valuable micronutrients, antioxidants, and vitamin C. However, juicing breaks down dietary fiber, leading to faster fructose absorption into the bloodstream. Consume in moderation if monitoring blood glucose or insulin resistance.
-- **Ordering Tip:** Ask for no added simple syrup or sugar in your fruit juice.
-- **Nutrient Profile:** 140 kcal | P: 2g | C: 30g | F: 2.5g | Saturated Fat: 0.5g | Sodium: 20mg | Sugar: 24g
+**Rank 2: Tier 2 - Moderate Choice: Fresh Fruit Juices** [NEUTRAL] — *Natural Vitamins with Moderate Fructose*
+- **Items Included (9):** JUS ALPUKAT, JUS MELON, ES JERUK, ES JERUK KELAPA, JUS MANGGA, JUS DURIAN, JUS KEDONDONG, JUS SIRSAK, JUS PISANG
+- **Comparative Sentence:** "Unlike plain teas, these whole fruit juices deliver beneficial vitamins and fiber but introduce higher levels of natural fruit sugars and calories."
+- **Clinical Guidance:** Fresh fruit juices offer valuable micronutrients and antioxidants, though the liquefaction of fruit breaks down cellular walls and accelerates fructose absorption into the bloodstream.
+- **Ordering Tip:** Ask for no added simple syrup or condensed milk in your juice.
+- **Nutrient Profile:** 140 kcal | P: 1.5g | C: 32g | F: 1g | Saturated Fat: 0.2g | Sodium: 15mg | Sugar: 26g
 
-**Rank 3: Tier 3 - Caution Choice: Mocktails, Jelly Drinks & Sweetened Teas** [WARNING] — *Added Syrup & Sugar Caution*
-- **Items Included (12):** Es Leci Jelly, Es Bango Ager Item, Es Moctail Renbow, Wedang Jahe, Es Leci Yakult, Es Leci Kelapa, Es Nipis Jely Selasih, Es Lemon Jely Selasih, Es Kuwut Bali, Es Kuwut Nanas, Es Virgin Mojito, Es Jeruk Kelapa
-- **Comparative Sentence:** "These flavored mocktails and jelly drinks carry significantly more refined sugars and syrups than plain teas or fresh coconut water."
-- **Clinical Guidance:** These drinks rely heavily on flavored syrups, gelatin jellies, and sweeteners, which contribute empty calories and promote rapid glycemic responses. Frequent consumption increases long-term cardiometabolic risk and visceral fat accumulation.
-- **Ordering Tip:** Request half syrup or fewer jelly toppings to cut down sugar.
-- **Nutrient Profile:** 210 kcal | P: 1.5g | C: 50g | F: 1g | Saturated Fat: 0.2g | Sodium: 35mg | Sugar: 42g
+**Rank 3: Tier 3 - Caution Choice: Flavored Jellies & Syrups** [WARNING] — *Added Syrups & Sweet Jellies Caution*
+- **Items Included (10):** ES LECI JELLY, ES BANGO AGER ITEM, ES MOCTAIL RENBOW, ES LECI YAKULT, ES LECI KELAPA, ES NIPIS JELY SELASIH, ES LEMON JELY SELASIH, ES KUWUT BALI, ES KUWUT NANAS, ES VIRGIN MOJITO
+- **Comparative Sentence:** "These flavored mojitos, yakult drinks, and jelly sodas contain significantly higher amounts of refined syrups and artificial additives than pure fruit juices."
+- **Clinical Guidance:** These specialty beverages combine flavored syrups, carbonated soda, and sugary jellies, which substantially increase glycemic load and chemical additive intake without providing meaningful nutritional benefits.
+- **Ordering Tip:** Request half syrup or skip the flavored jellies to reduce sugar.
+- **Nutrient Profile:** 210 kcal | P: 1g | C: 52g | F: 0.5g | Saturated Fat: 0.1g | Sodium: 45mg | Sugar: 45g
 
-**Rank 4: Tier 4 - Alert Choice: Heavy Dessert Shakes & Condensed Milk Bowls** [ALERT] — *High Sugar & Calorie Alert*
-- **Items Included (5):** Sop Buah, Es Campur, Es Alpukat Kocok, Es Teler Alpukat, Es Teler Durian
-- **Comparative Sentence:** "Unlike simple fresh juices, these heavy dessert bowls pack massive amounts of condensed milk, rich syrups, and saturated fats."
-- **Clinical Guidance:** Representing a severe metabolic load, these traditional dessert concoctions combine dense fruit mixtures with heavy condensed milk and sugary syrups. They deliver high calories, saturated fats, and rapid sugar spikes, making them unsuitable for frequent or casual consumption.
-- **Ordering Tip:** Share this dessert item with others or avoid adding extra condensed milk.
-- **Nutrient Profile:** 420 kcal | P: 6g | C: 72g | F: 14g | Saturated Fat: 8g | Sodium: 110mg | Sugar: 58g
+**Rank 4: Tier 4 - Alert Choice: Heavy Dessert Drinks & Condensed Milk** [ALERT] — *High Sugar and Calorie Dessert Load*
+- **Items Included (5):** ES CAMPUR, ES ALPUKAT KOCOK, ES TELER ALPUKAT, ES TELER DURIAN, SOP BUAH
+- **Comparative Sentence:** "These rich dessert beverages and mixed fruit soups pack excessive saturated fats and condensed milk sugars, far exceeding the caloric density of simple teas or plain juices."
+- **Clinical Guidance:** Containing heavy layers of condensed milk, coconut cream, and multiple sweetened toppings, these items pose severe metabolic loads, contributing to rapid blood sugar spikes and elevated caloric surplus.
+- **Ordering Tip:** Treat these as an occasional dessert rather than a standard beverage accompaniment.
+- **Nutrient Profile:** 420 kcal | P: 5g | C: 68g | F: 14g | Saturated Fat: 9g | Sodium: 95mg | Sugar: 58g
 
 
 ## ⚙️ Pipeline Stage Ledger
@@ -915,9 +925,9 @@ _No thrown exceptions or log errors/warnings captured._
 ## 🖥️ Backend Execution Logs
 
 ```
-[backend] [job_compare_set4_1788896666184] Compare request received with 1 images. Mode: compare.
+[backend] [job_compare_set4_1788898406896] Compare request received with 1 images. Mode: compare.
 [scout_only_compare] Dispatched to gemini-3.5-flash-lite with single-pass instruction.
-[scout_only_compare] Latency: 6525ms. Usage: 4888 in / 2049 out tokens.
+[scout_only_compare] Latency: 6827ms. Usage: 5154 in / 2421 out tokens.
 [scout_only_compare] Extracted 28 items into 4 ranked groups.
 [scout_only_compare] Status: SUCCESS. Finalized compare payload.
 ```

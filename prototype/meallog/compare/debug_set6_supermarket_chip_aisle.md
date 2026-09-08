@@ -1,13 +1,13 @@
 # Health Tracker — End-to-End Diagnostic Report
 
-- **Exported:** 2026-09-08T19:44:48.461Z
-- **Job ID:** `job_compare_set6_1788896682792`
+- **Exported:** 2026-09-08T20:13:47.037Z
+- **Job ID:** `job_compare_set6_1788898422194`
 - **Status:** succeeded
 - **Pack:** food
 - **Mode:** compare
 - **Version:** 3
 - **Savable:** false
-- **Photo 1:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set6_1788896682792_0.jpg
+- **Photo 1:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set6_1788898422194_0.jpg
 
 ## ⚖️ Contract Evaluation
 
@@ -41,7 +41,7 @@
 
 - **open:** true
 - **title:** "Food Item & Shelf Comparison"
-- **on_card:** {"totalOptions":16,"groups":3,"recommended":"Chitato Lite"}
+- **on_card:** {"totalOptions":19,"groups":2,"recommended":"Portion-Controlled Mini Snack Pouches"}
 - **visible:** [View Comparison Details, Download Debug Report, Close Modal]
 - **hidden:** [Retry, Attempt 1 of 3, Save Meal to History]
 - **composer:** {"photo":1,"add_image":1,"paste":1,"send":1}
@@ -84,16 +84,16 @@ STRICT INVARIANTS:
    - Front-only packages without a nutrition panel: set hasNutritionLabel to false or omit, transcribe product name from OCR, and set perServing to null.
    - NO LUMPING: Each distinct variety, flavor, or dish entry gets its own item in items[].
 
-3. ACTIVE MULTI-TIER GROUPING (ZERO ORPHANED ITEMS & NO LAZY DUMPING):
+3. ACTIVE MULTI-TIER GROUPING & STRICT NUTRITIONAL CLUSTERING (MAX 10% VARIANCE):
    - ZERO ORPHANED ITEMS: Every single index from 0 to items.length - 1 MUST be assigned to at least one group in groups[]. The union of all scoutItemIndices must cover 100% of extracted items.
-   - NO OUT-OF-BOUNDS INDICES: All indices in scoutItemIndices must strictly be between 0 and items.length - 1. Never emit an index >= items.length.
-   - NO LAZY GROUPING (1 single group is strictly forbidden for >2 items).
-   - NO LAZY MIDDLE DUMPING: Never dump more than 35-40% of items into a single group on large menus.
-   - CLINICAL PREPARATION TIERING (BASED ON COOKING METHOD & METABOLIC LOAD DISCERNED VIA OCR):
-     * Tier 1 (good / safest): Steamed preparations, boiled soups/clear broths, raw or boiled fresh vegetables, plain water/unsweetened tea.
-     * Tier 2 (neutral / moderate): Grilled or roasted lean proteins without heavy sugar glaze, lightly sautéed greens/vegetables, staple plain grains.
-     * Tier 3 (warning / caution): Deep-fried poultry, meats, or seafood; stir-fried noodles or fried rice; sweetened beverages and syrups.
-     * Tier 4 (alert / severe metabolic load): Deep-fried animal skins and offal; deep-fried vegetables (extreme oil absorption); ultra-processed boiled crackers or instant noodles in heavy chili/palm oil; high-sugar condensed milk and syrup bowls; large family-size snack bags.
+   - NO LAZY DUMPING & MAX 10% VARIANCE RULE: You MUST NOT dump wildly different items into a single group. A group is only correct if the estimated underlying nutritional values (Calories, Protein, Fat, Carbs, Sugar, Total Fibre, Sodium) of the dishes inside it do not differ by more than 10% from one another.
+   - If dishes within a broad category (like "Fried Foods") have enormous nutritional differences (e.g., Fried Chicken vs. Fried Rice vs. Fried Vegetables), you MUST split them into distinct, separate groups (e.g., "Tier 3: Fried Proteins", "Tier 3: Fried Carb Dishes", "Tier 4: Oil-Absorbing Fried Veggies").
+   - You are NOT restricted to exactly 4 groups. You may create 5 to 10 groups if needed to satisfy the 10% variance clustering rule, while mapping them to the closest verdict level (good, neutral, warning, alert).
+   - TIERING BASES (Split further if variance >10%):
+     * Tier 1 (good / safest): Steamed preparations, boiled soups/clear broths, raw or boiled fresh vegetables.
+     * Tier 2 (neutral / moderate): Grilled or roasted lean proteins, lightly sautéed greens/vegetables, staple plain grains.
+     * Tier 3 (warning / caution): Deep-fried poultry/meats/seafood, stir-fried noodles, fried rice, sweetened beverages.
+     * Tier 4 (alert / severe metabolic load): Deep-fried animal skins/offal, deep-fried vegetables (extreme oil absorption), ultra-processed boiled crackers or instant noodles in heavy oil.
 
 4. DIET TASK: ORDERING (Ranking) & AVOIDING THE CALORIE ILLUSION TRAP:
    - The groups in groups[] MUST be sorted in strict order of overall health ranking: BEST / SAFEST CHOICE FIRST ('good'), down to least suitable at the bottom ('alert').
@@ -102,6 +102,7 @@ STRICT INVARIANTS:
      * NEVER rank a confectionery or snack as "Tier 1 (good)" simply because its portion is tiny (e.g. 23g wafer bar at 90 kcal) if it is sugar-dense (>25% sugar by weight) with negligible protein (<2g) and fiber.
      * Evaluate NUTRIENT DENSITY: Compare sugar-to-protein ratio, saturated fat percentage, and fiber retention. Wholesome staple breads with 2g sugar and 4g protein rank HIGHER in healthfulness than a 90 kcal candy bar that is 30% refined sugar.
      * Factor in the mass: A 250 kcal multiseed bread serving is 80g delivering 8g protein and 4g sugar, whereas a 250 kcal sweet bun is 75g packing 19g sugar and 4.5g saturated fat.
+   - BEYOND MACROS (HIDDEN HARMS & BENEFITS): You MUST also split groups based on critical unlisted nutrients or physiological impacts. For example, if an item contains Trans Fats, oxidized palm oil, heavy synthetic additives, or causes extreme glycemic sugar spikes, it MUST be isolated into its own 'alert' group, even if its base calories or macros closely match a cleaner food. Trans fat merits its own grouping.
    - PURE SNACK / ULTRA-PROCESSED AISLE RULE:
      * When comparing exclusively ultra-processed snacks (chips, crisps, fried crackers), recognize that NONE are health foods (NOVA 4).
      * Rank based on BUILT-IN PORTION CONTROL and harm reduction: A miniature 25g pouch (<130 kcal) strictly caps caloric and sodium damage compared to an open 180g family pack (>900 kcal, 35g fat). Do not give "good" to standard fried chips; use "neutral" (with a portion-control caveat) down to "alert".
@@ -126,6 +127,7 @@ STRICT INVARIANTS:
      * saturatedFat: Estimated saturated fat (g)
      * carbohydrates: Estimated total carbohydrates (g)
      * sugar: Estimated sugar (g)
+     * totalFibre: Estimated total fibre (g)
      * sodium: Estimated sodium (mg)
      * MACRONUTRIENT BALANCE: Ensure realistic balance: (4 * protein) + (9 * totalFat) + (4 * carbohydrates) should approximately equal calories (within 10-15%).
      * REALISTIC CLINICAL BENCHMARKS:
@@ -198,38 +200,38 @@ Output exactly ONE JSON object matching this schema:
 - **Raw Emission (Verbatim Output):**
 ```json
 {
-  "_internalReasoning": "Extracted shelf items exhaustively across multiple rows, categorized by portion size, packaging, and processing level to evaluate metabolic impact.",
-  "comparisonTitle": "Supermarket Snack Shelf Product Evaluation",
+  "_internalReasoning": "Extracted chip products from shelf image, grouped by packaging size/fat load and ranked for healthfulness.",
+  "comparisonTitle": "Supermarket Snack Shelf: Chip & Crisp Comparison",
   "comparisonType": "shelf_selection",
-  "summary": "Comparing snack and chip options on this shelf reveals that all items are ultra-processed (NOVA 4) with high sodium, saturated fat, and refined carbohydrates. However, choosing smaller single-portion bags or lighter baked options significantly helps limit overall calorie and sodium intake compared to large family-size packs.",
+  "summary": "Supermarket chip shelves consist entirely of ultra-processed, fried snack options (NOVA 4) high in saturated fat and sodium. Healthier choices do not exist here; harm reduction through strict portion control and smaller single-serve pouches is the only viable strategy to limit excess caloric and sodium damage.",
   "items": [
     {
       "name": "Chitato Lite",
-      "tier": 2,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Lay's",
-      "tier": 2,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Happy Tos Tortilla Chips Small",
-      "tier": 2,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Oishi Popcorn",
-      "tier": 2,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Jetz Tortilla",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Happy Tos Tortilla Chips Medium",
+      "name": "Lay's",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Happy Tos Tortilla Chips",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Oishi Popcorn",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Japota",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Jetz Tortilla",
       "tier": 3,
       "sourceImageIndex": 0
     },
@@ -239,28 +241,48 @@ Output exactly ONE JSON object matching this schema:
       "sourceImageIndex": 0
     },
     {
-      "name": "Lay's Way",
+      "name": "Lay's Wavy",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Doritos Jagung Bakar",
+      "name": "Panchos Tortilla Chips",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Oishi Panchos",
+      "name": "Doritos",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Qtela Family Pack",
-      "tier": 4,
+      "name": "Tostitos",
+      "tier": 3,
       "sourceImageIndex": 0
     },
     {
       "name": "Chuba Cassava Chips",
-      "tier": 4,
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "GunBee Layers",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Chiki",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Wonhae",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Crunchy Corn Tornado",
+      "tier": 3,
       "sourceImageIndex": 0
     },
     {
@@ -270,157 +292,130 @@ Output exactly ONE JSON object matching this schema:
     },
     {
       "name": "Chiki Twist",
-      "tier": 4,
+      "tier": 3,
       "sourceImageIndex": 0
     },
     {
       "name": "Kusuka Singkong",
       "tier": 3,
       "sourceImageIndex": 0
-    },
-    {
-      "name": "GunjBee Layers",
-      "tier": 3,
-      "sourceImageIndex": 0
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 2 - Moderate Choice: Portion-Controlled & Lighter Snacks",
+      "groupName": "Tier 3 - Portion-Controlled Mini Snack Pouches",
+      "scoutItemIndices": [
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
+      "boundingBox2D": [
+        700,
+        0,
+        1000,
+        1000
+      ],
+      "verdict": {
+        "label": "Portion-Controlled Snack Pouch",
+        "level": "neutral"
+      },
+      "comparisonSentence": "Unlike massive family-size bags, these smaller snack pouches strictly cap caloric intake and sodium exposure.",
+      "message": "These miniature and smaller-format snack bags remain ultra-processed foods lacking significant micronutrients or fiber, but their restricted physical size inherently limits maximum caloric and sodium overconsumption compared to large family bags.",
+      "averageNutrients": {
+        "calories": 140,
+        "protein": 1.5,
+        "totalFat": 7,
+        "saturatedFat": 2.5,
+        "carbohydrates": 18,
+        "sugar": 1.5,
+        "totalFibre": 0.5,
+        "sodium": 180
+      },
+      "orderingTip": "Opt for the small single-serving pouch instead of the family size to enforce portion discipline and avoid mindless overeating."
+    },
+    {
+      "groupName": "Tier 4 - Large Family Size Fried Chips & Crisps",
       "scoutItemIndices": [
         0,
         1,
         2,
-        3
-      ],
-      "boundingBox2D": [
-        90,
-        390,
-        350,
-        890
-      ],
-      "verdict": {
-        "label": "Moderate Choice Portion Control",
-        "level": "neutral"
-      },
-      "comparisonSentence": "Compared to large family-size packs, these moderately sized or lighter snack options limit immediate caloric overload and sodium spikes.",
-      "message": "While still ultra-processed snack items, selecting smaller package formats or lighter variants helps enforce portion discipline, keeping sodium and saturated fat exposure relatively contained for occasional indulgence.",
-      "averageNutrients": {
-        "calories": 160,
-        "protein": 2,
-        "totalFat": 9,
-        "saturatedFat": 3,
-        "carbohydrates": 18,
-        "sugar": 1,
-        "sodium": 180
-      },
-      "orderingTip": "Opt for single-serving pouches to avoid mindless overeating straight from a large bag."
-    },
-    {
-      "groupName": "Tier 3 - Warning Choice: Standard Corn & Cassava Chips",
-      "scoutItemIndices": [
+        3,
         4,
         5,
         6,
         7,
         8,
         9,
-        12,
-        14,
-        15
+        10
       ],
       "boundingBox2D": [
-        350,
+        100,
         0,
-        850,
-        990
-      ],
-      "verdict": {
-        "label": "High Sodium & Fat Warning",
-        "level": "warning"
-      },
-      "comparisonSentence": "Unlike portion-controlled bags, these standard packages deliver higher levels of refined oils and sodium that can strain cardiovascular health.",
-      "message": "Regular consumption of fried corn and cassava chips contributes significant amounts of inflammatory omega-6 vegetable oils, refined starches, and sodium, elevating blood pressure risks and promoting metabolic inflammation.",
-      "averageNutrients": {
-        "calories": 320,
-        "protein": 3,
-        "totalFat": 18,
-        "saturatedFat": 6,
-        "carbohydrates": 36,
-        "sugar": 2,
-        "sodium": 420
-      },
-      "orderingTip": "Limit frequency to occasional treats and pair with water to help manage sodium load."
-    },
-    {
-      "groupName": "Tier 4 - Alert Choice: Family Packs & Dense Fried Snacks",
-      "scoutItemIndices": [
-        10,
-        11,
-        13
-      ],
-      "boundingBox2D": [
-        500,
-        600,
-        850,
+        700,
         1000
       ],
       "verdict": {
-        "label": "High Calorie Family Pack Alert",
+        "label": "High Sodium & Saturated Fat",
         "level": "alert"
       },
-      "comparisonSentence": "Compared to moderate individual snacks, these family-size packs present an extreme metabolic load of sodium and saturated fat when consumed unmonitored.",
-      "message": "Large family packs and dense extruded snacks encourage overconsumption, easily delivering over 800 calories and excessive sodium in a single sitting, which directly undermines metabolic health and weight management goals.",
+      "comparisonSentence": "Compared to smaller snack pouches, these large family-size bags deliver excessive sodium loads and oxidized fats that strain cardiovascular health.",
+      "message": "Large packs of deep-fried corn and cassava chips pack concentrated refined carbohydrates, heavy palm or vegetable oils, and elevated sodium levels. Frequent consumption promotes systemic inflammation, arterial plaque buildup, and severe metabolic burden.",
       "averageNutrients": {
-        "calories": 650,
-        "protein": 5,
-        "totalFat": 35,
-        "saturatedFat": 12,
-        "carbohydrates": 75,
-        "sugar": 4,
-        "sodium": 850
+        "calories": 950,
+        "protein": 8,
+        "totalFat": 52,
+        "saturatedFat": 18,
+        "carbohydrates": 110,
+        "sugar": 5,
+        "totalFibre": 3,
+        "sodium": 1100
       },
-      "orderingTip": "Avoid buying family-size bags; if purchased, decant a small portion into a bowl and seal the rest away."
+      "orderingTip": "Avoid purchasing large family-size chip bags to eliminate the temptation of consuming excessive trans-fat and sodium in a single sitting."
     }
   ],
-  "recommendedOption": "Chitato Lite"
+  "recommendedOption": "Portion-Controlled Mini Snack Pouches"
 }
 ```
 - **Output:**
 ```json
 {
-  "_internalReasoning": "Extracted shelf items exhaustively across multiple rows, categorized by portion size, packaging, and processing level to evaluate metabolic impact.",
-  "comparisonTitle": "Supermarket Snack Shelf Product Evaluation",
+  "_internalReasoning": "Extracted chip products from shelf image, grouped by packaging size/fat load and ranked for healthfulness.",
+  "comparisonTitle": "Supermarket Snack Shelf: Chip & Crisp Comparison",
   "comparisonType": "shelf_selection",
-  "summary": "Comparing snack and chip options on this shelf reveals that all items are ultra-processed (NOVA 4) with high sodium, saturated fat, and refined carbohydrates. However, choosing smaller single-portion bags or lighter baked options significantly helps limit overall calorie and sodium intake compared to large family-size packs.",
+  "summary": "Supermarket chip shelves consist entirely of ultra-processed, fried snack options (NOVA 4) high in saturated fat and sodium. Healthier choices do not exist here; harm reduction through strict portion control and smaller single-serve pouches is the only viable strategy to limit excess caloric and sodium damage.",
   "items": [
     {
       "name": "Chitato Lite",
-      "tier": 2,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Lay's",
-      "tier": 2,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Happy Tos Tortilla Chips Small",
-      "tier": 2,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Oishi Popcorn",
-      "tier": 2,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Jetz Tortilla",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Happy Tos Tortilla Chips Medium",
+      "name": "Lay's",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Happy Tos Tortilla Chips",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Oishi Popcorn",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Japota",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Jetz Tortilla",
       "tier": 3,
       "sourceImageIndex": 0
     },
@@ -430,28 +425,48 @@ Output exactly ONE JSON object matching this schema:
       "sourceImageIndex": 0
     },
     {
-      "name": "Lay's Way",
+      "name": "Lay's Wavy",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Doritos Jagung Bakar",
+      "name": "Panchos Tortilla Chips",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Oishi Panchos",
+      "name": "Doritos",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Qtela Family Pack",
-      "tier": 4,
+      "name": "Tostitos",
+      "tier": 3,
       "sourceImageIndex": 0
     },
     {
       "name": "Chuba Cassava Chips",
-      "tier": 4,
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "GunBee Layers",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Chiki",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Wonhae",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Crunchy Corn Tornado",
+      "tier": 3,
       "sourceImageIndex": 0
     },
     {
@@ -461,143 +476,116 @@ Output exactly ONE JSON object matching this schema:
     },
     {
       "name": "Chiki Twist",
-      "tier": 4,
+      "tier": 3,
       "sourceImageIndex": 0
     },
     {
       "name": "Kusuka Singkong",
       "tier": 3,
       "sourceImageIndex": 0
-    },
-    {
-      "name": "GunjBee Layers",
-      "tier": 3,
-      "sourceImageIndex": 0
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 2 - Moderate Choice: Portion-Controlled & Lighter Snacks",
+      "groupName": "Tier 3 - Portion-Controlled Mini Snack Pouches",
+      "scoutItemIndices": [
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
+      "boundingBox2D": [
+        700,
+        0,
+        1000,
+        1000
+      ],
+      "verdict": {
+        "label": "Portion-Controlled Snack Pouch",
+        "level": "neutral"
+      },
+      "comparisonSentence": "Unlike massive family-size bags, these smaller snack pouches strictly cap caloric intake and sodium exposure.",
+      "message": "These miniature and smaller-format snack bags remain ultra-processed foods lacking significant micronutrients or fiber, but their restricted physical size inherently limits maximum caloric and sodium overconsumption compared to large family bags.",
+      "averageNutrients": {
+        "calories": 140,
+        "protein": 1.5,
+        "totalFat": 7,
+        "saturatedFat": 2.5,
+        "carbohydrates": 18,
+        "sugar": 1.5,
+        "totalFibre": 0.5,
+        "sodium": 180
+      },
+      "orderingTip": "Opt for the small single-serving pouch instead of the family size to enforce portion discipline and avoid mindless overeating."
+    },
+    {
+      "groupName": "Tier 4 - Large Family Size Fried Chips & Crisps",
       "scoutItemIndices": [
         0,
         1,
         2,
-        3
-      ],
-      "boundingBox2D": [
-        90,
-        390,
-        350,
-        890
-      ],
-      "verdict": {
-        "label": "Moderate Choice Portion Control",
-        "level": "neutral"
-      },
-      "comparisonSentence": "Compared to large family-size packs, these moderately sized or lighter snack options limit immediate caloric overload and sodium spikes.",
-      "message": "While still ultra-processed snack items, selecting smaller package formats or lighter variants helps enforce portion discipline, keeping sodium and saturated fat exposure relatively contained for occasional indulgence.",
-      "averageNutrients": {
-        "calories": 160,
-        "protein": 2,
-        "totalFat": 9,
-        "saturatedFat": 3,
-        "carbohydrates": 18,
-        "sugar": 1,
-        "sodium": 180
-      },
-      "orderingTip": "Opt for single-serving pouches to avoid mindless overeating straight from a large bag."
-    },
-    {
-      "groupName": "Tier 3 - Warning Choice: Standard Corn & Cassava Chips",
-      "scoutItemIndices": [
+        3,
         4,
         5,
         6,
         7,
         8,
         9,
-        12,
-        14,
-        15
+        10
       ],
       "boundingBox2D": [
-        350,
+        100,
         0,
-        850,
-        990
-      ],
-      "verdict": {
-        "label": "High Sodium & Fat Warning",
-        "level": "warning"
-      },
-      "comparisonSentence": "Unlike portion-controlled bags, these standard packages deliver higher levels of refined oils and sodium that can strain cardiovascular health.",
-      "message": "Regular consumption of fried corn and cassava chips contributes significant amounts of inflammatory omega-6 vegetable oils, refined starches, and sodium, elevating blood pressure risks and promoting metabolic inflammation.",
-      "averageNutrients": {
-        "calories": 320,
-        "protein": 3,
-        "totalFat": 18,
-        "saturatedFat": 6,
-        "carbohydrates": 36,
-        "sugar": 2,
-        "sodium": 420
-      },
-      "orderingTip": "Limit frequency to occasional treats and pair with water to help manage sodium load."
-    },
-    {
-      "groupName": "Tier 4 - Alert Choice: Family Packs & Dense Fried Snacks",
-      "scoutItemIndices": [
-        10,
-        11,
-        13
-      ],
-      "boundingBox2D": [
-        500,
-        600,
-        850,
+        700,
         1000
       ],
       "verdict": {
-        "label": "High Calorie Family Pack Alert",
+        "label": "High Sodium & Saturated Fat",
         "level": "alert"
       },
-      "comparisonSentence": "Compared to moderate individual snacks, these family-size packs present an extreme metabolic load of sodium and saturated fat when consumed unmonitored.",
-      "message": "Large family packs and dense extruded snacks encourage overconsumption, easily delivering over 800 calories and excessive sodium in a single sitting, which directly undermines metabolic health and weight management goals.",
+      "comparisonSentence": "Compared to smaller snack pouches, these large family-size bags deliver excessive sodium loads and oxidized fats that strain cardiovascular health.",
+      "message": "Large packs of deep-fried corn and cassava chips pack concentrated refined carbohydrates, heavy palm or vegetable oils, and elevated sodium levels. Frequent consumption promotes systemic inflammation, arterial plaque buildup, and severe metabolic burden.",
       "averageNutrients": {
-        "calories": 650,
-        "protein": 5,
-        "totalFat": 35,
-        "saturatedFat": 12,
-        "carbohydrates": 75,
-        "sugar": 4,
-        "sodium": 850
+        "calories": 950,
+        "protein": 8,
+        "totalFat": 52,
+        "saturatedFat": 18,
+        "carbohydrates": 110,
+        "sugar": 5,
+        "totalFibre": 3,
+        "sodium": 1100
       },
-      "orderingTip": "Avoid buying family-size bags; if purchased, decant a small portion into a bowl and seal the rest away."
+      "orderingTip": "Avoid purchasing large family-size chip bags to eliminate the temptation of consuming excessive trans-fat and sodium in a single sitting."
     }
   ],
-  "recommendedOption": "Chitato Lite"
+  "recommendedOption": "Portion-Controlled Mini Snack Pouches"
 }
 ```
-- **Signals:** model=gemini-3.5-flash-lite, latency_ms=5668, tokens=[object Object]
-- **Parent:** job_compare_set6_1788896682792
+- **Signals:** model=gemini-3.5-flash-lite, latency_ms=4842, tokens=[object Object]
+- **Parent:** job_compare_set6_1788898422194
 
 ## 🔗 Data Pipelines & Infrastructure Connectivity Matrix
 
 | Pipeline Stage | Connectivity & Status | Details / Metrics |
 |----------------|-----------------------|-------------------|
 | **1. Triage & Front Desk** | ⚪ Skipped / Standby | Direct execution mode |
-| **2. Vision Scout & OCR** | ✅ Connected (16 item(s) detected) | Type: shelf_selection |
+| **2. Vision Scout & OCR** | ✅ Connected (19 item(s) detected) | Type: shelf_selection |
 | **3. Biomarker Ingest & Mapping** | ⚪ Standby / N/A | No tabular lab panel |
 | **4. Database Search & Truth Matching** | ⚪ Standby / N/A | Single-dispatch path: scout-direct ledger, no external fetch |
 | **5. Mathematical Calculation Engine** | ⚪ Standby / N/A | No meal calculation required |
 | **6. Trial-Balance & Quality Gate** | ⚪ Standby / N/A | N/A |
 | **7. Health Coach / Clinical Engine** | ⚪ Standby / N/A | No clinical analysis requested |
-| **8. State Storage & Job Sync** | ✅ Connected (Local / Active) | Job ID: `job_compare_set6_1788896682792` |
+| **8. State Storage & Job Sync** | ✅ Connected (Local / Active) | Job ID: `job_compare_set6_1788898422194` |
 
 ## 👤 Last User Action
 
 - **Action:** submit_meal_job
 - **Prompt/Text:** "Compare the chip options on this shelf and advise on healthier choices."
-- **Timestamp:** 2026-09-08T19:44:48.461Z
+- **Timestamp:** 2026-09-08T20:13:47.037Z
 
 ## 🐾 User Action Breadcrumbs
 
@@ -607,7 +595,7 @@ Output exactly ONE JSON object matching this schema:
 |  | select_photos | camera_roll | {"imageCount":1,"files":["set6_supermarket_chip_aisle_shelf.jpg"]} |
 |  | input_change | input | {"name":"compare-query-input","valueLength":71} |
 |  | submit_initiated | chat_composer | {"prompt":"Compare the chip options on this shelf and advise on healthier choices.","imageCount":1,"submissionMode":"compare"} |
-|  | submit_meal_job | chat_compose_dock | {"jobId":"job_compare_set6_1788896682792","promptLength":71,"imageCount":1,"submissionMode":"compare"} |
+|  | submit_meal_job | chat_compose_dock | {"jobId":"job_compare_set6_1788898422194","promptLength":71,"imageCount":1,"submissionMode":"compare"} |
 
 ## ⚙️ Job Session Event Trail
 
@@ -619,13 +607,13 @@ _No client network errors or latency warnings recorded._
 
 ### Client Console Logs (2)
 ```
-[INFO] Compare mode triggered with 1 images for job job_compare_set6_1788896682792
+[INFO] Compare mode triggered with 1 images for job job_compare_set6_1788898422194
 [INFO] Scout-Only Compare single-pass pipeline invoked for Set 6: Supermarket Chip Aisle Shelf.
 ```
 
-## 🔍 Vision Scout Results (16 item(s) detected)
+## 🔍 Vision Scout Results (19 item(s) detected)
 
-> **Scout Internal Reasoning:** Extracted shelf items exhaustively across multiple rows, categorized by portion size, packaging, and processing level to evaluate metabolic impact.
+> **Scout Internal Reasoning:** Extracted chip products from shelf image, grouped by packaging size/fat load and ranked for healthfulness.
 
 **Dining Environment:** `supermarket_or_store` | **Content Type:** `shelf_selection`
 
@@ -633,20 +621,23 @@ _No client network errors or latency warnings recorded._
 |---|-------------|--------|--------------|-----|--------|---------------------|-------------------------|
 | [1] | Chitato Lite | 50g | — | #0 | packaged | — | — |
 | [2] | Lay's | 50g | — | #0 | packaged | — | — |
-| [3] | Happy Tos Tortilla Chips Small | 50g | — | #0 | packaged | — | — |
+| [3] | Happy Tos Tortilla Chips | 50g | — | #0 | packaged | — | — |
 | [4] | Oishi Popcorn | 50g | — | #0 | packaged | — | — |
-| [5] | Jetz Tortilla | 50g | — | #0 | packaged | — | — |
-| [6] | Happy Tos Tortilla Chips Medium | 50g | — | #0 | packaged | — | — |
+| [5] | Japota | 50g | — | #0 | packaged | — | — |
+| [6] | Jetz Tortilla | 50g | — | #0 | packaged | — | — |
 | [7] | Qtela Singkong | 50g | — | #0 | packaged | — | — |
-| [8] | Lay's Way | 50g | — | #0 | packaged | — | — |
-| [9] | Doritos Jagung Bakar | 50g | — | #0 | packaged | — | — |
-| [10] | Oishi Panchos | 50g | — | #0 | packaged | — | — |
-| [11] | Qtela Family Pack | 50g | — | #0 | packaged | — | — |
+| [8] | Lay's Wavy | 50g | — | #0 | packaged | — | — |
+| [9] | Panchos Tortilla Chips | 50g | — | #0 | packaged | — | — |
+| [10] | Doritos | 50g | — | #0 | packaged | — | — |
+| [11] | Tostitos | 50g | — | #0 | packaged | — | — |
 | [12] | Chuba Cassava Chips | 50g | — | #0 | packaged | — | — |
-| [13] | Taro Net | 50g | — | #0 | packaged | — | — |
-| [14] | Chiki Twist | 50g | — | #0 | packaged | — | — |
-| [15] | Kusuka Singkong | 50g | — | #0 | packaged | — | — |
-| [16] | GunjBee Layers | 50g | — | #0 | packaged | — | — |
+| [13] | GunBee Layers | 50g | — | #0 | packaged | — | — |
+| [14] | Chiki | 50g | — | #0 | packaged | — | — |
+| [15] | Wonhae | 50g | — | #0 | packaged | — | — |
+| [16] | Crunchy Corn Tornado | 50g | — | #0 | packaged | — | — |
+| [17] | Taro Net | 50g | — | #0 | packaged | — | — |
+| [18] | Chiki Twist | 50g | — | #0 | packaged | — | — |
+| [19] | Kusuka Singkong | 50g | — | #0 | packaged | — | — |
 
 ## 📚 Database Search & Entity Resolution
 
@@ -655,34 +646,27 @@ _No client network errors or latency warnings recorded._
 
 ## 💬 Agent Message & Narrative
 
-### Supermarket Snack Shelf Product Evaluation
+### Supermarket Snack Shelf: Chip & Crisp Comparison
 
-**Summary:** Comparing snack and chip options on this shelf reveals that all items are ultra-processed (NOVA 4) with high sodium, saturated fat, and refined carbohydrates. However, choosing smaller single-portion bags or lighter baked options significantly helps limit overall calorie and sodium intake compared to large family-size packs.
+**Summary:** Supermarket chip shelves consist entirely of ultra-processed, fried snack options (NOVA 4) high in saturated fat and sodium. Healthier choices do not exist here; harm reduction through strict portion control and smaller single-serve pouches is the only viable strategy to limit excess caloric and sodium damage.
 
-**Recommended Option:** Chitato Lite
+**Recommended Option:** Portion-Controlled Mini Snack Pouches
 
 #### Comparison Groups & Verdicts
 
-**Rank 1: Tier 2 - Moderate Choice: Portion-Controlled & Lighter Snacks** [NEUTRAL] — *Moderate Choice Portion Control*
-- **Items Included (4):** Chitato Lite, Lay's, Happy Tos Tortilla Chips Small, Oishi Popcorn
-- **Comparative Sentence:** "Compared to large family-size packs, these moderately sized or lighter snack options limit immediate caloric overload and sodium spikes."
-- **Clinical Guidance:** While still ultra-processed snack items, selecting smaller package formats or lighter variants helps enforce portion discipline, keeping sodium and saturated fat exposure relatively contained for occasional indulgence.
-- **Ordering Tip:** Opt for single-serving pouches to avoid mindless overeating straight from a large bag.
-- **Nutrient Profile:** 160 kcal | P: 2g | C: 18g | F: 9g | Saturated Fat: 3g | Sodium: 180mg | Sugar: 1g
+**Rank 1: Tier 3 - Portion-Controlled Mini Snack Pouches** [NEUTRAL] — *Portion-Controlled Snack Pouch*
+- **Items Included (8):** Chuba Cassava Chips, GunBee Layers, Chiki, Wonhae, Crunchy Corn Tornado, Taro Net, Chiki Twist, Kusuka Singkong
+- **Comparative Sentence:** "Unlike massive family-size bags, these smaller snack pouches strictly cap caloric intake and sodium exposure."
+- **Clinical Guidance:** These miniature and smaller-format snack bags remain ultra-processed foods lacking significant micronutrients or fiber, but their restricted physical size inherently limits maximum caloric and sodium overconsumption compared to large family bags.
+- **Ordering Tip:** Opt for the small single-serving pouch instead of the family size to enforce portion discipline and avoid mindless overeating.
+- **Nutrient Profile:** 140 kcal | P: 1.5g | C: 18g | F: 7g | Saturated Fat: 2.5g | Sodium: 180mg | Sugar: 1.5g
 
-**Rank 2: Tier 3 - Warning Choice: Standard Corn & Cassava Chips** [WARNING] — *High Sodium & Fat Warning*
-- **Items Included (9):** Jetz Tortilla, Happy Tos Tortilla Chips Medium, Qtela Singkong, Lay's Way, Doritos Jagung Bakar, Oishi Panchos, Taro Net, Kusuka Singkong, GunjBee Layers
-- **Comparative Sentence:** "Unlike portion-controlled bags, these standard packages deliver higher levels of refined oils and sodium that can strain cardiovascular health."
-- **Clinical Guidance:** Regular consumption of fried corn and cassava chips contributes significant amounts of inflammatory omega-6 vegetable oils, refined starches, and sodium, elevating blood pressure risks and promoting metabolic inflammation.
-- **Ordering Tip:** Limit frequency to occasional treats and pair with water to help manage sodium load.
-- **Nutrient Profile:** 320 kcal | P: 3g | C: 36g | F: 18g | Saturated Fat: 6g | Sodium: 420mg | Sugar: 2g
-
-**Rank 3: Tier 4 - Alert Choice: Family Packs & Dense Fried Snacks** [ALERT] — *High Calorie Family Pack Alert*
-- **Items Included (3):** Qtela Family Pack, Chuba Cassava Chips, Chiki Twist
-- **Comparative Sentence:** "Compared to moderate individual snacks, these family-size packs present an extreme metabolic load of sodium and saturated fat when consumed unmonitored."
-- **Clinical Guidance:** Large family packs and dense extruded snacks encourage overconsumption, easily delivering over 800 calories and excessive sodium in a single sitting, which directly undermines metabolic health and weight management goals.
-- **Ordering Tip:** Avoid buying family-size bags; if purchased, decant a small portion into a bowl and seal the rest away.
-- **Nutrient Profile:** 650 kcal | P: 5g | C: 75g | F: 35g | Saturated Fat: 12g | Sodium: 850mg | Sugar: 4g
+**Rank 2: Tier 4 - Large Family Size Fried Chips & Crisps** [ALERT] — *High Sodium & Saturated Fat*
+- **Items Included (11):** Chitato Lite, Lay's, Happy Tos Tortilla Chips, Oishi Popcorn, Japota, Jetz Tortilla, Qtela Singkong, Lay's Wavy, Panchos Tortilla Chips, Doritos, Tostitos
+- **Comparative Sentence:** "Compared to smaller snack pouches, these large family-size bags deliver excessive sodium loads and oxidized fats that strain cardiovascular health."
+- **Clinical Guidance:** Large packs of deep-fried corn and cassava chips pack concentrated refined carbohydrates, heavy palm or vegetable oils, and elevated sodium levels. Frequent consumption promotes systemic inflammation, arterial plaque buildup, and severe metabolic burden.
+- **Ordering Tip:** Avoid purchasing large family-size chip bags to eliminate the temptation of consuming excessive trans-fat and sodium in a single sitting.
+- **Nutrient Profile:** 950 kcal | P: 8g | C: 110g | F: 52g | Saturated Fat: 18g | Sodium: 1100mg | Sugar: 5g
 
 
 ## ⚙️ Pipeline Stage Ledger
@@ -698,10 +682,10 @@ _No thrown exceptions or log errors/warnings captured._
 ## 🖥️ Backend Execution Logs
 
 ```
-[backend] [job_compare_set6_1788896682792] Compare request received with 1 images. Mode: compare.
+[backend] [job_compare_set6_1788898422194] Compare request received with 1 images. Mode: compare.
 [scout_only_compare] Dispatched to gemini-3.5-flash-lite with single-pass instruction.
-[scout_only_compare] Latency: 5668ms. Usage: 4889 in / 1633 out tokens.
-[scout_only_compare] Extracted 16 items into 3 ranked groups.
+[scout_only_compare] Latency: 4842ms. Usage: 5155 in / 1495 out tokens.
+[scout_only_compare] Extracted 19 items into 2 ranked groups.
 [scout_only_compare] Status: SUCCESS. Finalized compare payload.
 ```
 
