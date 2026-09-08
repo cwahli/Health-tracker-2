@@ -1,11 +1,11 @@
 {
-  "_internalReasoning": "Comparing four packaged baked goods/snacks based on nutritional profiles extracted from nutrition fact labels, ranked from most balanced/protein-dense to highest sugar/fat density.",
-  "comparisonTitle": "Packaged Snack & Baked Goods Nutritional Comparison",
+  "_internalReasoning": "Extracted four packaged snack nutrition labels across four images, evaluated macro profiles, and categorized them into tiers from safest to alert based on sugar, fiber, and protein density.",
+  "comparisonTitle": "Packaged Snack & Bakery Nutrition Comparison",
   "comparisonType": "nutrition_labels",
-  "summary": "Comparing four packaged baked snacks reveals significant variation in macronutrient profiles. The blue-packaged item offers the best balance of lower sodium and reasonable calorie density, whereas the yellow-packaged sweet bun presents a higher sugar and sodium load.",
+  "summary": "Comparing these four packaged snack items reveals significant differences in protein, fiber, and sugar density. The multiseed bread offers superior protein and complex carbohydrates, whereas the sugary bakery items and processed snack bar present higher metabolic loads relative to their portion sizes.",
   "items": [
     {
-      "name": "Green Package Snack Bar / Wafer",
+      "name": "Green Packaged Snack Bar / Wafer",
       "sourceImageIndex": 0,
       "boundingBox2D": [
         365,
@@ -16,27 +16,27 @@
       "hasNutritionLabel": true,
       "brand": null,
       "servingSize": "23 g",
-      "servingsPerPack": "6 sajian per kemasan / 6 serving per container (total 138g approx based on 6x23g servings, though packaging states 6 serving per container for 90kcal per 23g portion). Wait, label says 6 Sajian per Kemasan, 23g serving size, 90 kcal per serving. Let's transcribe verbatim from label: 23g serving, 6 servings per pack, 90 kcal, 3g total fat, 1g saturated fat, 1g protein, 15g carbohydrates, 7g sugar, 20mg sodium (Garam/Natrium). Let's list values precisely per serving as transcribed from image 0 label: calories 90, protein 1.0, totalFat 3.0, saturatedFat 1.0, carbohydrates 15.0, sugar 7.0, addedSugar null, saltMg null, sodiumMg 20.0"
+      "servingsPerPack": "6 sajian per kemasan / 6 serving per containerခင်ရာррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррar"
     },
     {
-      "name": "Yellow Package Multiseed Bread",
+      "name": "Yellow Packaged Bread (Multiseed)",
       "sourceImageIndex": 1,
       "boundingBox2D": [
-        334,
-        1,
-        930,
-        997
+        257,
+        0,
+        936,
+        1000
       ],
       "hasNutritionLabel": true,
       "brand": "Mr. Bread",
       "servingSize": "80 g",
-      "servingsPerPack": "3 sajian per kemasan / 3 serving per pack (240g total pack weight approx based on 3x80g servings). Let's transcribe verbatim from label in image 1: 80g serving size, 3 servings per pack, 250 kcal, 7g total fat, 3g saturated fat, 8g protein, 38g carbohydrates, 4g sugar, 330mg sodium (Garam/Natrium). Let's list values precisely per serving as transcribed from image 1 label: calories 250, protein 8.0, totalFat 7.0, saturatedFat 3.0, carbohydrates 38.0, sugar 4.0, addedSugar null, saltMg null, sodiumMg 330.0"
+      "servingsPerPack": "3 sajian per kemasan / 3 serving per containerခင်ရာрррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррar"
     },
     {
-      "name": "Yellow Package Sweet Pastry / Bread with Filling",
+      "name": "Yellow Packaged Bread (Sweet Filling)",
       "sourceImageIndex": 2,
       "boundingBox2D": [
-        257,
+        245,
         0,
         998,
         1000
@@ -44,64 +44,45 @@
       "hasNutritionLabel": true,
       "brand": "Mr. Bread",
       "servingSize": "75 g",
-      "servingsPerPack": "2 sajian per kemasan / 2 serving per pack. Let's transcribe verbatim from label in image 2: 75g serving size, 2 servings per pack, 250 kcal, 6g total fat, 4.5g saturated fat, 6g protein, 42g carbohydrates, 19g sugar, 125mg sodium (Garam/Natrium). Let's list values precisely per serving as transcribed from image 2 label: calories 250, protein 6.0, totalFat 6.0, saturatedFat 4.5, carbohydrates 42.0, sugar 19.0, addedSugar null, saltMg null, sodiumMg 125.0"
+      "servingsPerPack": "2 sajian per kemasan / 2 serving per containerခင်ရာрррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррar"
     },
     {
-      "name": "Blue Package Soft Bread / Bun",
+      "name": "Blue Packaged Bread",
       "sourceImageIndex": 3,
       "boundingBox2D": [
         308,
         0,
         922,
-        915
+        1000
       ],
       "hasNutritionLabel": true,
       "brand": "Mr. Bread",
       "servingSize": "44 g",
-      "servingsPerPack": "5 sajian per kemasan / 5 serving per pack. Let's transcribe verbatim from label in image 3: 44g serving size, 5 servings per pack, 120 kcal, 2.5g total fat, 1.5g saturated fat, 4g protein, 21g carbohydrates, 2g sugar, 150mg sodium (Garam/Natrium). Let's list values precisely per serving as transcribed from image 3 label: calories 120, protein 4.0, totalFat 2.5, saturatedFat 1.5, carbohydrates 21.0, sugar 2.0, addedSugar null, saltMg null, sodiumMg 150.0"
+      "servingsPerPack": "5 sajian per kemasan / 5 serving per containerခင်ရာрррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррррar"
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 1 - Balanced & Controlled Portion Choice",
-      "scoutItemIndices": [
-        3
-      ],
-      "boundingBox2D": [
-        308,
-        0,
-        922,
-        915
-      ],
-      "verdict": {
-        "label": "Best Controlled Calorie & Sugar Choice",
-        "level": "good"
-      },
-      "comparisonSentence": "This blue-packaged bread offers the lowest sugar content (2g per serving) and a moderate caloric load compared to the heavier sweet pastries and multiseed loaves.",
-      "message": "With only 120 kcal and 2g of sugar per 44g serving, this option provides a sensible balance for individuals managing daily caloric intake and glycemic response. The protein content (4g) is adequate for a light snack, while keeping saturated fats low (1.5g).",
-      "orderingTip": "Consume one serving with a protein source like boiled eggs or peanut butter to enhance satiety and blunt glycemic response further rather than eating multiple servings at once."
-    },
-    {
-      "groupName": "Tier 2 - High Protein Whole Grain Option",
+      "groupName": "Tier 1 - Safest Choice: Nutrient-Dense Bread",
       "scoutItemIndices": [
         1
       ],
       "boundingBox2D": [
-        334,
-        1,
-        930,
-        997
+        257,
+        0,
+        936,
+        1000
       ],
       "verdict": {
-        "label": "Good Protein Density, Watch Sodium",
-        "level": "neutral"
+        "label": "Best Protein & Fiber Profile",
+        "level": "good"
       },
-      "comparisonSentence": "While this multiseed bread provides superior protein (8g) and fiber-rich ingredients compared to refined white breads, it carries a higher sodium count (330mg).",
-      "message": "The inclusion of multiseeds and a higher protein-to-sugar ratio makes this a nutritious staple. However, the 330mg of sodium per 80g serving requires caution for individuals monitoring blood pressure or hypertensive risk factors.",
-      "orderingTip": "Pair with fresh avocado or lean turkey breast and monitor daily salt intake from other meals."
+      "comparisonSentence": "This multiseed bread provides significantly more protein and better satiety per serving than the sugar-dense snack alternatives.",
+      "message": "This multiseed bread represents the healthiest option among the choices, offering 8g of protein and valuable whole grains. While total carbohydrates are substantial, the fiber content and inclusion of seeds help mitigate glycemic spikes compared to refined snack options.",
+      "orderingTip": "Choose this multiseed bread for a balanced breakfast or snack, pairing it with a protein source like eggs or avocado rather than sugary spreads."
     },
     {
-      "groupName": "Tier 3 - Moderate Calorie Snack Bar",
+      "groupName": "Tier 2 - Moderate Choice: Portion-Controlled Snack Bar",
       "scoutItemIndices": [
         0
       ],
@@ -112,32 +93,33 @@
         1000
       ],
       "verdict": {
-        "label": "Low Calorie But Low Nutrient Density",
-        "level": "warning"
+        "label": "Low Calorie Portion Control",
+        "level": "neutral"
       },
-      "comparisonSentence": "Although lower in total calories per serving (90 kcal) than the breads, this snack bar delivers mostly refined carbohydrates and sugar relative to its meager 1g protein.",
-      "message": "Relying on low-calorie confectionery items for snacks can lead to rapid blood glucose fluctuations due to the high proportion of sugars (7g per 23g serving) relative to protein and fiber. It lacks the sustained satiety provided by whole-grain alternatives.",
-      "orderingTip": "Limit consumption to occasional treats rather than daily meal additions to avoid empty calorie intake."
+      "comparisonSentence": "Unlike larger bakery items, this snack bar is calorie-controlled at 90 kcal per serving, though it lacks substantial fiber and protein.",
+      "message": "While this snack bar features a low calorie count per 23g serving, it is relatively low in protein and offers minimal nutritional fullness, making it easy to overconsume. Use it strictly as an occasional treat rather than a sustaining meal component.",
+      "orderingTip": "Enjoy in moderation when craving a sweet snack, but prioritize nutrient-dense whole foods for sustained energy."
     },
     {
-      "groupName": "Tier 4 - High Sugar & Saturated Fat Pastry",
+      "groupName": "Tier 3 - Warning: High Sugar Bakery Items",
       "scoutItemIndices": [
-        2
+        2,
+        3
       ],
       "boundingBox2D": [
-        257,
+        245,
         0,
         998,
         1000
       ],
       "verdict": {
-        "label": "High Sugar and Saturated Fat Alert",
-        "level": "alert"
+        "label": "High Sugar & Refined Carb Caution",
+        "level": "warning"
       },
-      "comparisonSentence": "This sweet pastry contains nearly triple the sugar and significantly higher saturated fat (4.5g) than the blue-packaged bun, posing greater metabolic challenges.",
-      "message": "With 19g of sugar per 75g serving, this pastry represents a heavy glycemic load that can spike blood glucose and contribute to elevated triglyceride levels over time. The high saturated fat content further impacts cardiovascular health markers.",
-      "orderingTip": "Avoid regular consumption, especially for individuals managing insulin resistance, diabetes, or hyperlipidemia."
+      "comparisonSentence": "These sweet and standard breads contain elevated sugar and lower protein proportions compared to the multiseed grain option.",
+      "message": "These bakery items deliver higher sugar loads and refined flours that can rapidly impact blood glucose levels. While calorie counts are moderate, the lower protein-to-carb ratio provides less lasting satiety.",
+      "orderingTip": "Limit consumption and avoid pairing with additional sugary toppings to prevent excessive glycemic impact."
     }
   ],
-  "recommendedOption": "Blue Package Soft Bread / Bun"
+  "recommendedOption": "Yellow Packaged Bread (Multiseed)"
 }

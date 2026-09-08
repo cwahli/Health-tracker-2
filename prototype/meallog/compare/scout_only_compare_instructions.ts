@@ -22,7 +22,9 @@ STRICT INVARIANTS:
    - CRITICAL: EXTRACT EVERY VISIBLE DISH, FOOD ITEM, BEVERAGE, OR PACKAGED OPTION.
      * When a restaurant menu contains 30, 40, 50 or more items (e.g. Sambal Bakar Pencok, Aneka Ikan Bakar/Goreng, Seblak, Mie Tek-Tek, Nasi Goreng, Tumisan, Sayuran), YOU MUST EXTRACT ALL OF THEM into items[]. DO NOT STOP AT 5 OR 10. DO NOT TRUNCATE. Extract all distinct dishes across every section.
      * When analyzing a beverage/juice board (e.g. 30 juice options), extract all distinct juices/drinks.
-     * When analyzing retail shelves or snack racks, extract every identifiable distinct product variety/flavor.
+     * When analyzing retail shelves or snack racks, scan row-by-row (top shelf, eye-level shelf, lower shelves, bottom shelf). Capture every distinct brand and flavor pack (e.g. Chitato, Lays, Qtela, Happy Tos, Doritos, Taro, Oishi, Kusuka, Lemonilo, Garuda Crunch, Chiki). Extract 40 to 60 distinct snack bags on large shelf displays.
+   - JOIN MULTI-LINE MENU HEADINGS (NO ORPHAN WORDS):
+     * If a dish name wraps across multiple lines or has indented sub-lines (e.g. 'AYAM GORENG SAMBEL' on line 1 and 'LAMPUNG + NASI' on line 2, or 'AYAM GORENG GEPREK' on line 1 and 'TEPUNG + NASI' on line 2), YOU MUST JOIN THEM into a single dish entry ('Ayam Goreng Sambel Lampung + Nasi', 'Ayam Goreng Geprek Tepung + Nasi'). Do NOT emit isolated fragments like 'LAMPUNG + NASI' or 'TEPUNG + NASI' as separate dishes.
    - BOUNDING BOX MANDATE (boundingBox2D) FOR EVERY ITEM AND GROUP:
      * For EVERY item in items[], provide "boundingBox2D": [ymin, xmin, ymax, xmax] coordinates normalized from 0 to 1000 indicating where the dish/label/item or text entry appears on the image.
      * For EVERY group in groups[], provide "boundingBox2D": [ymin, xmin, ymax, xmax] (or the bounding region containing the items in that group).
@@ -44,14 +46,21 @@ STRICT INVARIANTS:
    - Front-only packages without a nutrition panel (e.g. bakery shelf, banana chips front cover): set hasNutritionLabel to false, transcribe product name from OCR, and do NOT fabricate or hallucinate macros or calories. Set perServing to null.
    - NO LUMPING: Each distinct variety, flavor, or dish entry gets its own item in items[].
 
-3. ACTIVE MULTI-TIER GROUPING (NO LAZY GROUPING):
-   - LAZY GROUPING IS STRICTLY FORBIDDEN: Putting all items or almost all items into a single group is a critical failure.
-   - For menus or large sets (>10 items): You MUST partition items into AT LEAST 3 to 6 distinct clinical/culinary tiers or categories based on healthiness, preparation style, and macronutrient profile:
-     * Tier 1 (good / safest): Steamed dishes (Pepes), raw/boiled vegetables (Lalapan Rebus, Kangkung Rebus), clear lean soups (Sop Ayam Kampung), pure unsweetened juices, portion-controlled healthy snacks.
-     * Tier 2 (neutral / moderate): Grilled proteins (Ikan Bakar, Ayam Bakar without heavy glaze), sautéed vegetables (Tumis Kangkung, Tumis Caisim), whole grain/multiseed breads.
-     * Tier 3 (warning / high caution): Deep-fried meats & seafood (Ayam Goreng, Lele Goreng, Bebek Goreng), sweet pastries, high-sodium fried rices (Nasi Goreng), sugary juices/condensed milk desserts.
-     * Tier 4 (alert / severe metabolic load): Deep-fried offal/skins (Sate Kulit, Kol Goreng, Kerupuk), heavy saturated fat/organ meats, ultra-processed family-size chip bags.
-   - Every single item in items[] must be assigned to exactly one (or more) group via scoutItemIndices. No items left orphaned.
+3. ACTIVE MULTI-TIER GROUPING (ZERO ORPHANED ITEMS & NO LAZY DUMPING):
+   - ZERO ORPHANED ITEMS: Every single index from 0 to items.length - 1 MUST be assigned to at least one group in groups[]. The union of all scoutItemIndices must cover 100% of extracted items.
+   - NO OUT-OF-BOUNDS INDICES: All indices in scoutItemIndices must strictly be between 0 and items.length - 1. Never emit an index >= items.length.
+   - NO LAZY GROUPING (1 single group is strictly forbidden for >2 items).
+   - NO LAZY MIDDLE DUMPING: Never dump more than 35-40% of items into a single group on large menus.
+   - CLINICAL PREPARATION TIERING (MANDATORY 4 TIERS FOR MENUS):
+     * Tier 1 (good / safest): Steamed dishes (Pepes Tahu, Pepes Peda), raw/boiled vegetables (Lalapan Rebus, Kangkung Rebus), clear lean soups (Sayur Asem, Sop Ayam Kampung), unsweetened drinks (pure coconut water, plain water/tea).
+     * Tier 2 (neutral / moderate): Grilled lean proteins (Ikan Bakar, Ayam Bakar without thick glaze), lightly sautéed vegetables (Tumis Kangkung, Tumis Caisim, Tumis Toge), whole grain breads.
+     * Tier 3 (warning / caution): Deep-fried meats (Ayam Goreng, Lele Goreng, Bebek Goreng), fried rice (Nasi Goreng), liquid sugar drinks (Es Teh Manis, sweet fruit juices with syrup).
+     * Tier 4 (alert / severe metabolic load):
+       - Deep-fried offal and skins: Sate Kulit, Sate Usus, Kol Goreng (deep-fried cabbage absorbs massive amounts of oxidized oil!), Kerupuk Mie.
+       - Ultra-processed boiled crackers & noodles: Seblak (all variants), Mie Tek-Tek, Mie Ayam.
+       - High saturated fat offal soups: Soto Betawi.
+       - High-sugar condensed milk desserts: Es Teler, Es Campur, Sop Buah.
+       - Large family-size chip bags (>150g).
 
 4. DIET TASK: ORDERING (Ranking) & AVOIDING THE CALORIE ILLUSION TRAP:
    - The groups in groups[] MUST be sorted in strict order of overall health ranking: BEST / SAFEST CHOICE FIRST ('good'), down to least suitable at the bottom ('alert').
@@ -63,6 +72,11 @@ STRICT INVARIANTS:
    - PURE SNACK / ULTRA-PROCESSED AISLE RULE:
      * When comparing exclusively ultra-processed snacks (chips, crisps, fried crackers), recognize that NONE are health foods (NOVA 4).
      * Rank based on BUILT-IN PORTION CONTROL and harm reduction: A miniature 25g pouch (<130 kcal) strictly caps caloric and sodium damage compared to an open 180g family pack (>900 kcal, 35g fat). Do not give "good" to standard fried chips; use "neutral" (with a portion-control caveat) down to "alert".
+   - BEVERAGE CLASSIFICATION INVARIANTS:
+     * Pure coconut water & plain tea/coffee -> Tier 1 (good).
+     * Whole unsweetened fruit juices -> Tier 2 (neutral).
+     * Liquid sugar drinks (Es Teh Manis, Es Jeruk with syrup, Lemon Jelly) -> Tier 3 (warning).
+     * Heavy condensed milk and syrup bowls (Es Teler, Es Campur, Sop Buah) -> Tier 4 (alert).
 
 5. DIET TASK: VERDICT, COMPARATIVE SENTENCE & ACTIONABLE ORDERING TIP:
    - For EVERY group in groups[], provide:
@@ -85,6 +99,7 @@ Output exactly ONE JSON object matching this schema:
     {
       "name": "Exact product or dish name",
       "brand": "Brand name if visible, else null",
+      "tier": 1,
       "sourceImageIndex": 0,
       "boundingBox2D": [300, 200, 450, 600],
       "hasNutritionLabel": true,
@@ -152,7 +167,12 @@ export function buildScoutComparePrompt(
     contextPrompt += `\n\nPATIENT BIOMARKER PRIORITIES:\n${list}\nPrioritize these biomarkers when ordering groups and assigning verdicts.`;
   }
 
-  const base = `=== ACTIVE TASK: PRODUCT EVALUATION, EXHAUSTIVE DISH EXTRACTION, DIET GROUPING, ORDERING & VERDICTS ===\nAnalyze all ${imageCount} provided comparison image(s). Extract EVERY distinct food product, labelled snack, menu dish (do not miss any of the items on menus or lists; extract every dish across all sections), or shelf brand into items[] with precise boundingBox2D coordinates.${multiImageRule}\nThen execute the Diet tasks:\n1. GROUPING: Assign every item to groups[] using scoutItemIndices with group boundingBox2D. No lazy grouping (create at least 3-6 distinct tiers for menus/large sets).\n2. ORDERING: Sort groups[] with the healthiest/safest choice FIRST down to alert/less suitable.\n3. VERDICTS: Provide verdict level, 3-6 word label, comparative sentence, clinical advice message, ordering tips, and average nutrients for each group.`;
+  const base = `=== ACTIVE TASK: PRODUCT EVALUATION, EXHAUSTIVE DISH EXTRACTION, DIET GROUPING, ORDERING & VERDICTS ===
+Analyze all ${imageCount} provided comparison image(s).
+1. EXHAUSTIVE EXTRACTION: Extract EVERY distinct food product, labelled snack, menu dish (do not miss any items; extract every dish across all sections), or shelf brand into items[] with precise boundingBox2D coordinates.${multiImageRule}
+2. TIER ASSIGNMENT: In items[], tag every item with its diet tier (tier: 1 for safest/healthiest, 2 for moderate, 3 for caution/warning, 4 for alert/severe).
+3. ACTIVE MULTI-TIER GROUPING: In groups[], create matching ranked tiers (Tier 1, Tier 2, Tier 3, Tier 4). Map every item index (from 0 to items.length - 1) into scoutItemIndices. Zero orphaned items, no out-of-bounds indices.
+4. ORDERING & VERDICTS: Order groups from best/safest choice down to alert. Provide verdict level, 3-6 word label, comparative sentence, clinical advice message, ordering tips, and average nutrients for each group.`;
 
   if (isGeneric) {
     return `${base}${contextPrompt}`;
@@ -178,6 +198,10 @@ export const scoutOnlyCompareResponseSchema = {
         properties: {
           name: { type: Type.STRING },
           brand: { type: Type.STRING, nullable: true },
+          tier: {
+            type: Type.INTEGER,
+            description: "Assigned diet tier: 1 (safest/best) to 4 (caution/alert)",
+          },
           sourceImageIndex: { type: Type.INTEGER },
           boundingBox2D: {
             type: Type.ARRAY,
@@ -203,7 +227,7 @@ export const scoutOnlyCompareResponseSchema = {
             },
           },
         },
-        required: ["name", "sourceImageIndex", "boundingBox2D", "hasNutritionLabel"],
+        required: ["name", "tier", "sourceImageIndex", "boundingBox2D", "hasNutritionLabel"],
       },
     },
     groups: {

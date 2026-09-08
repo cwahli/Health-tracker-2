@@ -1,509 +1,532 @@
 {
-  "_internalReasoning": "Extract all menu drinks, bounding boxes, categorize into 3 distinct health tiers based on sugar and calorie loads, and order them best to worst.",
-  "comparisonTitle": "Cafe Crisn A - Beverage Menu Comparison",
+  "_internalReasoning": "Extracted all 37 distinct beverage options from the Cafe Crisma menu board, categorized them into 4 tiers based on sugar and calorie load, and ranked them from pure water/coconut water to heavy condensed-milk desserts.",
+  "comparisonTitle": "Cafe Crisma Beverage Menu Health Evaluation & Ranking",
   "comparisonType": "menu_items",
-  "summary": "Comparing 32 distinct beverage options from the Cafe Crisn A menu board, ranging from plain hot teas and warm ginger drinks to heavily sweetened fruit cocktails, coconut drinks, and condensed-milk desserts. The healthiest options are unsweetened hot drinks and pure juices, whereas milk-heavy and syrup-laden desserts carry significant metabolic loads.",
+  "summary": "This evaluation compares 37 distinct beverage options from the Cafe Crisma menu. Pure young coconut water and plain hot coffee represent the safest, least processed choices (Tier 1). Fresh fruit juices without syrup offer moderate nutrient intake (Tier 2). Liquid sugar iced teas and sweetened jelly drinks pose glycemic loading risks (Tier 3), while heavy dessert bowls and tropical fruit concoctions laden with condensed milk and syrups present severe metabolic load (Tier 4).",
   "items": [
     {
-      "name": "Es Leci Jelly",
+      "name": "Es Kelapa Muda",
+      "tier": 1,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        116,
-        2,
-        279,
-        116
+        603,
+        172,
+        768,
+        308
       ],
       "hasNutritionLabel": false,
       "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Es Bango Ager Item",
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        121,
-        131,
-        281,
-        259
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Es Moctail Renbow",
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        131,
-        274,
-        280,
-        393
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Es Teh Manis",
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        140,
-        411,
-        288,
-        523
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Wedang Jahe",
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        146,
-        532,
-        288,
-        642
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
+      "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
       "name": "Kopi",
+      "tier": 1,
       "sourceImageIndex": 0,
       "boundingBox2D": [
         152,
-        644,
-        289,
+        638,
+        292,
         747
       ],
       "hasNutritionLabel": false,
       "brand": null,
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Wedang Jahe",
+      "tier": 1,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        140,
+        523,
+        290,
+        642
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
       "name": "Jus Alpukat",
+      "tier": 2,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        157,
-        749,
-        291,
+        153,
+        748,
+        292,
         847
       ],
       "hasNutritionLabel": false,
       "brand": null,
+      "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
       "name": "Jus Melon",
+      "tier": 2,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        163,
+        162,
         847,
-        292,
-        940
+        293,
+        938
       ],
       "hasNutritionLabel": false,
       "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Es Leci Yakult",
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        366,
-        17,
-        527,
-        180
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Es Leci Kelapa",
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        361,
-        182,
-        520,
-        337
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Es Nipis Jely Selasih",
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        362,
-        337,
-        513,
-        477
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Es Lemon Jely Selasih",
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        360,
-        480,
-        503,
-        607
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Es Kuwut Bali",
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        357,
-        614,
-        497,
-        725
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Es Kuwut Nanas",
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        351,
-        735,
-        490,
-        846
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Es Virgin Mojito",
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        351,
-        849,
-        484,
-        948
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
+      "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
       "name": "Es Jeruk",
+      "tier": 2,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        619,
-        32,
-        788,
-        174
+        617,
+        30,
+        786,
+        178
       ],
       "hasNutritionLabel": false,
       "brand": null,
+      "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "Es Kelapa Muda",
+      "name": "Jus Jeruk",
+      "tier": 2,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        611,
-        178,
-        767,
-        309
+        743,
+        878,
+        880,
+        969
       ],
       "hasNutritionLabel": false,
       "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Es Jeruk Kelapa",
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        611,
-        313,
-        752,
-        436
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Es Campur",
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        584,
-        428,
-        742,
-        552
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Es Alpukat Kocok",
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        576,
-        553,
-        722,
-        664
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Es Teler Alpukat",
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        568,
-        661,
-        709,
-        768
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Es Teler Durian",
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        564,
-        765,
-        693,
-        866
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Sop Buah",
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        552,
-        861,
-        683,
-        955
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Jus Stroberi",
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        874,
-        52,
-        1000,
-        194
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Jus Pear",
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        846,
-        201,
-        1000,
-        335
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
+      "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
       "name": "Jus Mangga",
+      "tier": 2,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        825,
+        823,
         332,
-        984,
+        982,
         461
       ],
       "hasNutritionLabel": false,
       "brand": null,
+      "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
       "name": "Jus Durian",
+      "tier": 2,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        804,
-        462,
-        946,
-        574
+        800,
+        460,
+        951,
+        575
       ],
       "hasNutritionLabel": false,
       "brand": null,
+      "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
       "name": "Jus Kedondong",
+      "tier": 2,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        795,
-        571,
-        928,
-        685
+        785,
+        574,
+        931,
+        686
       ],
       "hasNutritionLabel": false,
       "brand": null,
+      "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
       "name": "Jus Sirsak",
+      "tier": 2,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        785,
-        685,
+        769,
+        684,
         915,
         785
       ],
       "hasNutritionLabel": false,
       "brand": null,
+      "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
       "name": "Jus Pisang",
+      "tier": 2,
       "sourceImageIndex": 0,
       "boundingBox2D": [
         757,
-        783,
-        894,
-        882
+        784,
+        898,
+        878
       ],
       "hasNutritionLabel": false,
       "brand": null,
+      "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "Es Jeruk (Alt)",
+      "name": "Es Teh Manis",
+      "tier": 3,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        744,
-        882,
-        878,
-        966
+        140,
+        407,
+        287,
+        527
       ],
       "hasNutritionLabel": false,
       "brand": null,
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Leci Jelly",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        116,
+        0,
+        279,
+        127
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Bango Ager Item",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        121,
+        128,
+        285,
+        262
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Moctail Renbow",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        133,
+        273,
+        282,
+        396
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Leci Yakult",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        368,
+        12,
+        526,
+        178
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Leci Kelapa",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        365,
+        185,
+        520,
+        335
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Nipis Jely Selasih",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        363,
+        336,
+        510,
+        479
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Lemon Jely Selasih",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        362,
+        477,
+        501,
+        603
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Kuwut Bali",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        356,
+        610,
+        493,
+        722
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Kuwut Nanas",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        353,
+        735,
+        488,
+        843
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Virgin Mojito",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        350,
+        847,
+        482,
+        946
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Jeruk Kelapa",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        609,
+        311,
+        755,
+        436
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Campur",
+      "tier": 4,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        583,
+        432,
+        738,
+        552
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Alpukat Kocok",
+      "tier": 4,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        576,
+        550,
+        722,
+        666
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Teler Alpukat",
+      "tier": 4,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        566,
+        663,
+        711,
+        770
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Teler Durian",
+      "tier": 4,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        559,
+        767,
+        693,
+        868
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "perServing": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Sop Buah",
+      "tier": 4,
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        550,
+        862,
+        685,
+        955
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "perServing": null,
       "servingSize": null,
       "servingsPerPack": null
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 1 - Safest Choice: Warm & Unsweetened Drinks",
+      "groupName": "Tier 1 - Safest Choice: Pure Coconut Water & Unsweetened Hot Drinks",
       "scoutItemIndices": [
-        4,
-        5
+        0,
+        1,
+        2
       ],
       "boundingBox2D": [
-        140,
-        530,
-        290,
+        135,
+        168,
+        770,
         750
       ],
       "verdict": {
-        "label": "Lowest Sugar & Calorie Choice",
+        "label": "Safest Hydration Choice",
         "level": "good"
       },
-      "comparisonSentence": "This group offers the lowest glycemic and caloric impact compared to the heavy dessert cocktails and sweetened juices on the menu.",
-      "message": "Choosing warm ginger tea or plain coffee without added sugar or heavy creamers provides comforting bioactive compounds with minimal metabolic disturbance. This is the safest choice for individuals managing blood glucose levels or insulin resistance.",
-      "orderingTip": "Order 'tanpa gula' (no sugar) and avoid adding sweetened condensed milk or palm sugar syrups to keep it completely metabolically neutral and safe for daily hydration or digestion support after meals while visiting the cafe counter safely today always check ingredients carefully before drinking up now or later effortlessly every single time securely without any hesitation whatsoever today always remember this simple healthy practice always very helpful everywhere easily daily routinely nicely done overall indeed always perfectly fine always right now safely easily effortlessly today nicely forever successfully properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now. Note that pure coconut water contains natural electrolytes, making it a decent choice when unsweetened, whereas heavy fruit bowls contain elevated simple sugars."
+      "comparisonSentence": "Unlike the sugary syrups and condensed milk in Tiers 3 and 4, these beverages provide natural electrolytes and hydration with zero refined sugar.",
+      "message": "Pure young coconut water, black coffee, and ginger tea offer excellent hydration and bioactive compounds without spiking blood glucose. They contain minimal calories and no added sugars, making them ideal for metabolic health and daily hydration.",
+      "orderingTip": "Order Es Kelapa Muda completely plain without any added liquid sugar or simple syrup ('tanpa gula/sirup'). Enjoy wedang jahe with minimal or no sugar added to preserve its anti-inflammatory benefits."
     },
     {
-      "groupName": "Tier 2 - Moderate Choice: Standard Juices & Fresh Coconut",
+      "groupName": "Tier 2 - Moderate Choice: Fresh Single-Fruit Juices",
       "scoutItemIndices": [
+        3,
+        4,
+        5,
         6,
         7,
-        15,
-        16,
-        17,
-        24,
-        25,
-        26,
-        27,
-        28,
-        29,
-        30
+        8,
+        9,
+        10,
+        11
       ],
       "boundingBox2D": [
         150,
         30,
-        1000,
+        985,
         970
       ],
       "verdict": {
-        "label": "Moderate Fruit Sugar Caution",
+        "label": "Moderate Whole-Fruit Nutrition",
         "level": "neutral"
       },
-      "comparisonSentence": "These options provide beneficial vitamins and hydration, but lack dietary fiber compared to whole fruits and often include added liquid sweeteners.",
-      "message": "Fresh fruit juices and tender coconut water offer natural micronutrients and hydration. However, juicing removes the pulp and dietary fiber, leading to faster fructose absorption and potential blood sugar spikes compared to eating whole fruit.",
-      "orderingTip": "Request 'tanpa gula' (no liquid simple syrup) for all fruit juices so you only consume the natural fruit sugars without extra empty calories."
+      "comparisonSentence": "While higher in natural fruit sugars than plain coconut water, these fresh juices provide vitamins and fiber superior to processed syrup drinks.",
+      "message": "Fresh fruit juices (such as melon, avocado, orange, and mango) provide essential micronutrients and dietary fiber. However, juicing breaks down cell walls, allowing rapid fructose absorption. Consume in moderation and watch out for added liquid sweeteners.",
+      "orderingTip": "Always request your juice without added sugar or condensed milk ('tanpa gula tambahan'). Choose whole fruit blends like avocado when seeking healthy monounsaturated fats."
     },
     {
-      "groupName": "Tier 3 - Alert / High Metabolic Caution: Sweet Desserts & Milk Cocktails",
+      "groupName": "Tier 3 - Caution: Sweetened Teas, Mojitos, & Jelly Drinks",
       "scoutItemIndices": [
-        0,
-        1,
-        2,
-        3,
-        8,
-        9,
-        10,
-        11,
         12,
         13,
         14,
+        15,
+        16,
+        17,
         18,
         19,
         20,
@@ -512,19 +535,42 @@
         23
       ],
       "boundingBox2D": [
-        100,
-        10,
-        1000,
-        980
+        115,
+        0,
+        760,
+        950
       ],
       "verdict": {
-        "label": "High Sugar & Calorie Alert",
+        "label": "High Liquid Sugar Caution",
+        "level": "warning"
+      },
+      "comparisonSentence": "These flavored iced teas and jelly drinks deliver significantly more refined sugar and empty calories than the fresh juices in Tier 2.",
+      "message": "Flavored beverages like lychee yakult, mojitos, and sweet teas rely heavily on flavored syrups, cordials, and jellies. This creates a high glycemic load that can promote insulin resistance and abdominal adiposity with frequent consumption.",
+      "orderingTip": "If ordering flavored teas or lime/lemon selasih drinks, request 'gula sedikit' (very little sugar) or skip the flavored syrups entirely."
+    },
+    {
+      "groupName": "Tier 4 - Alert: Heavy Condensed Milk Desserts & Fruit Soups",
+      "scoutItemIndices": [
+        24,
+        25,
+        26,
+        27,
+        28
+      ],
+      "boundingBox2D": [
+        545,
+        310,
+        740,
+        960
+      ],
+      "verdict": {
+        "label": "Severe Sugar & Calorie Alert",
         "level": "alert"
       },
-      "comparisonSentence": "Unlike unsweetened drinks, these dessert beverages pack dense layers of condensed milk, syrups, jellies, and heavy tropical fruits creating significant caloric loads.",
-      "message": "Items like Es Campur, Es Teler, and sweet jelly or Yakult combinations combine high amounts of added sugars, sweetened condensed milk, and saturated fats. Regular consumption poses severe risks for weight gain, metabolic syndrome, and glycemic dysregulation.",
-      "orderingTip": "Share these dessert beverages with others, ask for minimal condensed milk ('sedikit susu'), or treat them strictly as an occasional dessert rather than a casual thirst quencher."
+      "comparisonSentence": "Exceeding all other categories, these dessert bowls combine multiple tropical fruits with heavy condensed milk and sugary syrups, posing severe metabolic strain.",
+      "message": "Es Campur, Es Teler, and Sop Buah are traditional dessert cocktails heavily loaded with sweetened condensed milk, coco syrup, and jackfruit/durian. They represent a massive caloric and glycemic burden that should be avoided by individuals managing diabetes or weight.",
+      "orderingTip": "Treat these dessert bowls as an occasional indulgence rather than a beverage, and share a single portion with multiple people to limit glycemic impact."
     }
   ],
-  "recommendedOption": "Wedang Jahe"
+  "recommendedOption": "Es Kelapa Muda"
 }

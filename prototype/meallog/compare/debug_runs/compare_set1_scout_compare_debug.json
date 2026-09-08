@@ -1,11 +1,12 @@
 {
-  "_internalReasoning": "Extracted SilverQueen milk chocolate and various bakery items across images. Grouped by nutrient density and metabolic impact, ranked from caution/snack to bakery items.",
-  "comparisonTitle": "Retail Snack & Bakery Product Evaluation",
+  "_internalReasoning": "Extracted packaged chocolate and bakery items across images, classified and grouped by nutritional profile.",
+  "comparisonTitle": "Retail Snack & Bakery Comparison",
   "comparisonType": "shelf_selection",
-  "summary": "Comparing chocolate confectionery bars and bakery items highlights significant variations in sugar and fat content. Bakery items provide a more substantial source of carbohydrates and protein compared to calorie-dense, sugar-heavy chocolate bars.",
+  "summary": "Comparing chocolate snacks with bakery items shows that calorie-dense sweets and pastries carry heavy sugar and saturated fat loads. Portion control or choosing lower sugar options is vital.",
   "items": [
     {
-      "name": "Milk Chocolate with Cashews",
+      "name": "SilverQueen Milk Chocolate with Cashews",
+      "tier": 4,
       "sourceImageIndex": 0,
       "boundingBox2D": [
         0,
@@ -15,117 +16,155 @@
       ],
       "hasNutritionLabel": true,
       "servingSize": "20g",
-      "servingsPerPack": "2.5 sajian per kemasan (52g bar total approx.) / 2.5 sajian per kemasan indicated on label for 52g net weight? Wait, label states Takaran saji = 20g, Jumlah Sajian per Kemasan = 2.5 sajian (approx 50g total). Net weight 52g on front package. Let's list servingsPerPack as '2.5 sajian'. Let's record perServing from the back label exactly: 110 kcal, 7g total fat, 3.5g saturated fat, 2g protein, 10g carbohydrates, 6g sugar, 20mg sodium (0.02g salt). Let's use 20mg sodiumMg and null for saltMg if not explicitly 'Garam (Salt)' printed (Wait, label says Garam 20mg or Natrium 20mg? Label says 'Garam (Natrium) / Salt (Sodium): 20 mg', so put 20mg in sodiumMg). brand='SilverQueen'. Let's record accurately from label: calories=110, protein=2.0, totalFat=7.0, saturatedFat=3.5, carbohydrates=10.0, sugar=6.0, addedSugar=null, sodiumMg=20.0, saltMg=null, brand='SilverQueen'. Let's check servingSize = '20g'. servingsPerPack = '2.5 sajian'. Note that back label is image 1, front is image 0. So sourceImageIndex=0 for front, 1 for back label - but let's assign sourceImageIndex=1 for the label item, or 0 since it's the same physical item. Let's use sourceImageIndex=0 for the front view item and point boundingBox2D to the front bar in image 0. Let's create an item for SilverQueen back label or combine into one item using image 0 bounding box and label data from image 1."
+      "servingsPerPack": "2.5 sajian per kemasan (52g bar total approx 2.6 servings, label states 2.5 sajian per kemasan for 50g equivalent basis or similar total mass per serving table breakdown approx 110 kcal per 20g serving). Let's record verbatim from label: 2.5 Sajian per kemasan, takaran saji 20g per serving, energi total 110 kkal, lemak total 7g, lemak jenuh 3.5g, protein 2g, karbohidrat 10g, gula 6g, natrium 20mg."
     },
     {
-      "name": "Polo Cokelat",
+      "name": "SilverQueen Milk Chocolate with Cashews (Back Panel Nutrition)",
+      "tier": 4,
+      "sourceImageIndex": 1,
+      "boundingBox2D": [
+        0,
+        46,
+        1000,
+        564
+      ],
+      "hasNutritionLabel": true,
+      "servingSize": "20g",
+      "servingsPerPack": "2.5 sajian per kemasan (Jumlah Sajian per Kemasan: 2.5 sajian per kemasan, Takaran Saji: 20g). Per Serving: Energi Total 110 kkal, Lemak Total 7g, Lemak Jenuh 3.5g, Protein 2g, Karbohidrat Total 10g, Gula 6g, Natrium 20mg."
+    },
+    {
+      "name": "Say Bread Polo Cokelat",
+      "tier": 3,
       "sourceImageIndex": 2,
       "boundingBox2D": [
-        698,
-        30,
-        963,
-        252
+        201,
+        79,
+        342,
+        292
       ],
       "hasNutritionLabel": false,
-      "servingSize": null,
-      "servingsPerPack": null
+      "servingSize": "1 bun",
+      "servingsPerPack": "1"
     },
     {
-      "name": "Polo Keju",
+      "name": "Say Bread Polo Keju",
+      "tier": 3,
       "sourceImageIndex": 2,
       "boundingBox2D": [
-        706,
+        317,
+        248,
+        513,
+        497
+      ],
+      "hasNutritionLabel": false,
+      "servingSize": "1 bun",
+      "servingsPerPack": "1"
+    },
+    {
+      "name": "Say Bread Choco Topping Pie",
+      "tier": 3,
+      "sourceImageIndex": 2,
+      "boundingBox2D": [
+        693,
+        26,
+        966,
+        258
+      ],
+      "hasNutritionLabel": false,
+      "servingSize": "1 piece",
+      "servingsPerPack": "1"
+    },
+    {
+      "name": "Say Bread Cheese Topping Pie",
+      "tier": 3,
+      "sourceImageIndex": 2,
+      "boundingBox2D": [
+        701,
         237,
-        959,
-        459
+        955,
+        467
       ],
       "hasNutritionLabel": false,
-      "servingSize": null,
-      "servingsPerPack": null
+      "servingSize": "1 piece",
+      "servingsPerPack": "1"
     },
     {
-      "name": "Chose Topping Pie",
-      "sourceImageIndex": 2,
-      "boundingBox2D": [
-        694,
-        485,
-        936,
-        695
-      ],
-      "hasNutritionLabel": false,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Double Cheese Bread",
+      "name": "Say Bread Double Cheese Bread",
+      "tier": 2,
       "sourceImageIndex": 2,
       "boundingBox2D": [
         648,
         730,
-        887,
-        963
+        888,
+        967
       ],
       "hasNutritionLabel": false,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Say Bread Assorted Top Shelf (Polo Cokelat / Polo Keju variants)",
-      "sourceImageIndex": 2,
-      "boundingBox2D": [
-        212,
-        73,
-        537,
-        506
-      ],
-      "hasNutritionLabel": false,
-      "servingSize": null,
-      "servingsPerPack": null
+      "servingSize": "1 bread",
+      "servingsPerPack": "1"
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 1 - Baked Goods & Pastries (Moderate Nutrient Density)",
+      "groupName": "Tier 2 - Moderate Choice: Cheese Breads",
       "scoutItemIndices": [
-        1,
+        6
+      ],
+      "boundingBox2D": [
+        648,
+        730,
+        888,
+        967
+      ],
+      "verdict": {
+        "label": "Moderate Cheese Bread Option",
+        "level": "neutral"
+      },
+      "comparisonSentence": "Unlike high-sugar confectionery bars and chocolate pastries, this cheese bread offers higher protein content relative to its simple carbohydrate baseline.",
+      "message": "This cheese bread provides a more substantial baked option with balanced protein and moderate caloric load compared to dense sugary chocolate bars and sweet topping pies. Enjoy in moderation as part of a balanced daily energy intake.",
+      "orderingTip": "Pair with unsweetened tea or coffee without added condensed milk or simple syrups to avoid spiking overall glycemic load during snack time."
+    },
+    {
+      "groupName": "Tier 3 - Caution: Sweet Bakery Buns & Pies",
+      "scoutItemIndices": [
         2,
         3,
         4,
         5
       ],
       "boundingBox2D": [
-        100,
-        0,
-        968,
-        1000
+        201,
+        26,
+        966,
+        497
       ],
       "verdict": {
-        "label": "Moderate Carbohydrate & Satiety Option",
-        "level": "neutral"
+        "label": "High Sugar Bakery Caution",
+        "level": "warning"
       },
-      "comparisonSentence": "Unlike confectionery chocolate bars which are dominated by refined sugars and saturated fats, these baked goods provide more sustained carbohydrate energy and dietary satisfaction.",
-      "message": "Bakery items such as Polo bread and cheese buns offer larger food volume and greater satiating value per calorie than pure chocolate confectionery. However, they remain processed baked goods containing refined flour, added sugars, and fats. Consume in moderation as part of a balanced diet, particularly monitoring total carbohydrate and caloric intake.",
-      "orderingTip": "Pair these bakery items with an unsweetened beverage like black coffee or tea, and share portions to manage caloric intake effectively without spiking blood glucose excessivelyype='shelf_selection'. Check ingredients for trans fats if sensitive and opt for cheese variants for slightly higher protein content when available."
+      "comparisonSentence": "These sweet bakery items contain elevated refined carbohydrates and added sugars compared to standard grain loaves, posing moderate glycemic challenges.",
+      "message": "Sweet bakery treats like Polo Buns and Topping Pies feature refined wheat flours, sugars, and butter fillings that elevate blood glucose rapidly. Limit consumption if managing metabolic health or diabetes.",
+      "orderingTip": "Share the pastry with a companion or limit portion sizes to half to moderate your daily intake of refined sugars and total fats."
     },
     {
-      "groupName": "Tier 2 - Confectionery Chocolate Bar (High Sugar & Saturated Fat)",
+      "groupName": "Tier 4 - Alert: High Saturated Fat & Sugar Chocolate",
       "scoutItemIndices": [
-        0
+        0,
+        1
       ],
       "boundingBox2D": [
         0,
-        203,
+        0,
         1000,
-        532
+        564
       ],
       "verdict": {
-        "label": "High Sugar & Saturated Fat",
-        "level": "warning"
+        "label": "High Saturated Fat & Sugar",
+        "level": "alert"
       },
-      "comparisonSentence": "Compared to larger bakery items, this confectionery bar delivers a concentrated surge of refined sugar and saturated fat in a small portion, posing higher glycemic and metabolic loads relative to its volume.",
-      "message": "SilverQueen Milk Chocolate with Cashews delivers 110 kcal, 7g total fat (3.5g saturated fat), and 6g of sugar per modest 20g serving. Frequent consumption contributes significant added sugars and saturated fats that can negatively impact lipid profiles and metabolic health. Cashews provide minimal protein (2g), but cannot offset the high glycemic and caloric density.",
-      "orderingTip": "Limit consumption to a single serving (20g portion) rather than consuming the entire bar at once, and avoid pairing with other sugary snacks to protect metabolic health."
+      "comparisonSentence": "This milk chocolate bar delivers higher saturated fat and concentrated added sugars per serving than any of the baked bread items.",
+      "message": "Consuming milk chocolate bars contributes concentrated sugar and saturated fats with minimal dietary fiber or protein. Frequent intake can negatively impact cardiovascular and metabolic profiles.",
+      "orderingTip": "Opt for smaller portion sizes or choose dark chocolate with higher cocoa content (>70%) to reduce overall sugar exposure."
     }
   ],
-  "recommendedOption": "Polo Keju or Double Cheese Bread"
+  "recommendedOption": "Say Bread Double Cheese Bread"
 }

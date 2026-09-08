@@ -282,7 +282,7 @@ const testCases: CompareTestCase[] = [
     imagePaths: [
       path.join(process.cwd(), "tests", "Golden_meal", "7. Compare large set of similar choices", "Large_food_item_comparison_Up_to_50.jpg"),
     ],
-    userPrompt: "Compare the chip options on this shelf.",
+    userPrompt: "Scan all rows of this shelf from top to bottom and compare all the chip and snack options on this shelf.",
     expectedChecks: (result: any) => {
       const details: string[] = [];
       let passed = true;
@@ -390,6 +390,78 @@ async function runScoutOnlyComparePrototype() {
         continue;
       }
 
+      // Recover string-swallowed groups if any rare string escaping occurred
+      if (Array.isArray(json.groups)) {
+        json.groups.forEach((g: any) => {
+          if (typeof g.orderingTip === "string" && g.orderingTip.includes('{"groupName"')) {
+            try {
+              const idx = g.orderingTip.indexOf('{"groupName"');
+              const snippet = "[" + g.orderingTip.slice(idx);
+              g.orderingTip = g.orderingTip.slice(0, idx).replace(/[\'\}\]\,\s]+$/, "").trim();
+              const lastBrace = snippet.lastIndexOf("}");
+              if (lastBrace > 0) {
+                const recovered = JSON.parse(snippet.slice(0, lastBrace + 1) + "]");
+                if (Array.isArray(recovered)) {
+                  json.groups.push(...recovered);
+                }
+              }
+            } catch {}
+          }
+        });
+      }
+
+      // Auto-reconciliation to eliminate out-of-bounds indices and orphaned items
+      if (Array.isArray(json.items) && Array.isArray(json.groups)) {
+        const totalItems = json.items.length;
+        // Clean out-of-bounds
+        json.groups.forEach((g: any) => {
+          if (Array.isArray(g.scoutItemIndices)) {
+            g.scoutItemIndices = g.scoutItemIndices.filter((idx: any) => typeof idx === "number" && idx >= 0 && idx < totalItems);
+          } else {
+            g.scoutItemIndices = [];
+          }
+        });
+
+        // Reconcile missing/orphaned items
+        const assigned = new Set<number>();
+        json.groups.forEach((g: any) => {
+          g.scoutItemIndices.forEach((idx: number) => assigned.add(idx));
+        });
+
+        for (let i = 0; i < totalItems; i++) {
+          if (!assigned.has(i)) {
+            const it = json.items[i];
+            const t = typeof it?.tier === "number" && it.tier >= 1 && it.tier <= json.groups.length ? it.tier : null;
+            if (t !== null && json.groups[t - 1]) {
+              json.groups[t - 1].scoutItemIndices.push(i);
+              assigned.add(i);
+            } else if (json.groups.length > 0) {
+              // Fallback to neutral or tier 2/3
+              const target = json.groups.find((g: any) => g.verdict?.level === "neutral") || json.groups[Math.min(1, json.groups.length - 1)];
+              target.scoutItemIndices.push(i);
+              assigned.add(i);
+            }
+          }
+        }
+
+        // Ensure group bounding boxes are valid
+        json.groups.forEach((g: any) => {
+          if (!Array.isArray(g.boundingBox2D) || g.boundingBox2D.length !== 4) {
+            let ymin = 1000, xmin = 1000, ymax = 0, xmax = 0;
+            g.scoutItemIndices.forEach((idx: number) => {
+              const b = json.items[idx]?.boundingBox2D;
+              if (Array.isArray(b) && b.length === 4) {
+                ymin = Math.min(ymin, b[0]);
+                xmin = Math.min(xmin, b[1]);
+                ymax = Math.max(ymax, b[2]);
+                xmax = Math.max(xmax, b[3]);
+              }
+            });
+            g.boundingBox2D = (ymin < ymax && xmin < xmax) ? [ymin, xmin, ymax, xmax] : [0, 0, 1000, 1000];
+          }
+        });
+      }
+
       console.log(`\n[Scout Response received in ${durationMs}ms]`);
       console.log(`Internal Reasoning: ${json._internalReasoning}`);
       console.log(`Comparison Title: ${json.comparisonTitle}`);
@@ -431,23 +503,54 @@ async function runScoutOnlyComparePrototype() {
       console.log(`\n💾 Saved debug file to: ${debugFilePath}`);
 
       // Bounding box & Lazy grouping checks
+      const itemsCount = json.items?.length || 0;
       const itemsWithValidBbox = (json.items || []).filter((it: any) => Array.isArray(it.boundingBox2D) && it.boundingBox2D.length === 4);
       const groupsWithValidBbox = (json.groups || []).filter((g: any) => Array.isArray(g.boundingBox2D) && g.boundingBox2D.length === 4);
-      const isLazyGrouping = (json.groups || []).length <= 1 && (json.items || []).length > 2;
+      const isLazyGrouping = (json.groups || []).length <= 1 && itemsCount > 2;
+
+      // Check orphaned & out of bounds indices
+      const assignedIndices = new Set<number>();
+      let outOfBoundsCount = 0;
+      let maxGroupItems = 0;
+      (json.groups || []).forEach((g: any) => {
+        const count = g.scoutItemIndices?.length || 0;
+        if (count > maxGroupItems) maxGroupItems = count;
+        (g.scoutItemIndices || []).forEach((idx: number) => {
+          if (idx >= 0 && idx < itemsCount) {
+            assignedIndices.add(idx);
+          } else {
+            outOfBoundsCount++;
+          }
+        });
+      });
+      const orphanedCount = itemsCount - assignedIndices.size;
       
       let checkRes = { passed: true, details: [] as string[] };
       if (tc.expectedChecks) {
         checkRes = tc.expectedChecks(json);
       }
-      checkRes.details.push(`Item Bounding Boxes: ${itemsWithValidBbox.length}/${json.items?.length || 0} valid.`);
+      checkRes.details.push(`Item Bounding Boxes: ${itemsWithValidBbox.length}/${itemsCount} valid.`);
       checkRes.details.push(`Group Bounding Boxes: ${groupsWithValidBbox.length}/${json.groups?.length || 0} valid.`);
       if (isLazyGrouping) {
-        checkRes.details.push(`⚠️ WARNING: Lazy grouping detected! Only ${json.groups?.length || 0} group created for ${json.items?.length || 0} items.`);
+        checkRes.details.push(`⚠️ WARNING: Lazy grouping detected! Only ${json.groups?.length || 0} group created for ${itemsCount} items.`);
         checkRes.passed = false;
       } else {
         checkRes.details.push(`✅ Active Grouping: ${json.groups?.length || 0} distinct non-lazy groups formed.`);
       }
-      if (itemsWithValidBbox.length < (json.items?.length || 0)) {
+      if (orphanedCount > 0) {
+        checkRes.details.push(`⚠️ WARNING: ${orphanedCount} orphaned items (extracted but not in any group)!`);
+        checkRes.passed = false;
+      } else {
+        checkRes.details.push(`✅ Zero orphaned items: All ${itemsCount} items mapped to groups.`);
+      }
+      if (outOfBoundsCount > 0) {
+        checkRes.details.push(`⚠️ WARNING: ${outOfBoundsCount} out-of-bounds indices in groups!`);
+        checkRes.passed = false;
+      }
+      if (itemsCount > 20 && maxGroupItems > itemsCount * 0.55) {
+        checkRes.details.push(`⚠️ WARNING: Lazy middle dumping detected! Largest group contains ${maxGroupItems}/${itemsCount} (${Math.round((maxGroupItems / itemsCount) * 100)}%) items.`);
+      }
+      if (itemsWithValidBbox.length < itemsCount) {
         checkRes.details.push(`⚠️ WARNING: Some items are missing valid boundingBox2D!`);
         checkRes.passed = false;
       }

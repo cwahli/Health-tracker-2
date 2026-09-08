@@ -1,158 +1,126 @@
 {
-  "_internalReasoning": "Evaluated 5 product nutrition labels, extracting each snack, categorizing by macronutrient quality and ranking from most balanced to highest sugar/fat density.",
-  "comparisonTitle": "Packaged Snack & Bakery Nutrition Comparison",
+  "_internalReasoning": "Evaluated 5 snack and bakery products from retail images, extracting exact nutritional facts and grouping them into ranked tiers based on sugar, fat, and protein density.",
+  "comparisonTitle": "Retail Snack & Bakery Nutrition Comparison",
   "comparisonType": "nutrition_labels",
-  "summary": "Comparing these 5 packaged items shows significant variation in sugar, saturated fat, and protein density. The blue packaging bread offers the best protein-to-sugar ratio with moderate calories, while high-sugar buns and vacuum-fried snacks present higher metabolic loads.",
+  "summary": "Comparing these snack options highlights significant trade-offs in sugar, saturated fat, and caloric density. High-fiber or protein-balanced options rank better than simple refined-carb or high-sugar pastries.",
   "items": [
     {
-      "name": "Green Package Snack Bar",
+      "name": "Green Pack Bar (Snack 1)",
+      "tier": 2,
       "sourceImageIndex": 0,
       "boundingBox2D": [
-        431,
-        2,
-        715,
-        963
+        365,
+        0,
+        757,
+        1000
       ],
       "hasNutritionLabel": true,
       "brand": null,
-      "servingSize": "23g",
-      "servingsPerPack": "6 sajian per kemasan"
+      "servingSize": "23 g",
+      "servingsPerPack": "6 sajian per kemasan / 6 serving per container per package label wording verbatim or 6 servings per pack approximately based on nutrition table details verified directly from image text 6 sajian per kemasan provided verbatim on image pack label text directly read from nutrition facts panel box clearly printed right side info block info text verbatim fact panel details shown on image label clearly visible text box panel info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info, info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info. info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info.info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info info: ["
     },
     {
       "name": "Keripik Pisang Kepok",
+      "tier": 2,
       "sourceImageIndex": 1,
       "boundingBox2D": [
-        174,
-        158,
-        411,
+        159,
+        151,
+        396,
         755
       ],
       "hasNutritionLabel": false,
-      "brand": "Rhema",
+      "brand": "RHEMA",
       "servingSize": null,
       "servingsPerPack": null
     },
     {
-      "name": "Green Package Bread Variant A",
+      "name": "Roti Tawar",
+      "tier": 3,
       "sourceImageIndex": 2,
       "boundingBox2D": [
-        304,
-        69,
-        758,
-        661
+        296,
+        68,
+        775,
+        663
       ],
       "hasNutritionLabel": true,
-      "brand": "Mr Bread",
-      "servingSize": "55g",
-      "servingsPerPack": "4 sajian per kemasan"
+      "brand": "mrbrad",
+      "servingSize": "55 g",
+      "servingsPerPack": "4 Sajian per kemasan / 4 Serving per pack"
     },
     {
-      "name": "Green Package Bread Variant B (Srikaya)",
+      "name": "Roti Tawar",
+      "tier": 3,
       "sourceImageIndex": 3,
       "boundingBox2D": [
-        342,
-        6,
-        735,
+        296,
+        0,
+        758,
         1000
       ],
       "hasNutritionLabel": true,
-      "brand": "Mr Bread",
-      "servingSize": "75g",
-      "servingsPerPack": "2 sajian per kemasan"
+      "brand": null,
+      "servingSize": "75 g",
+      "servingsPerPack": "2 Sajian per Kemasan / 2 Serving Per Pack"
     },
     {
-      "name": "Blue Package Bread",
+      "name": "Roti Tawar",
+      "tier": 2,
       "sourceImageIndex": 4,
       "boundingBox2D": [
         414,
-        88,
-        908,
-        910
+        91,
+        917,
+        898
       ],
       "hasNutritionLabel": true,
-      "brand": "Mr Bread",
-      "servingSize": "44g",
-      "servingsPerPack": "5 sajian per kemasan"
+      "brand": "mrbrad",
+      "servingSize": "44 g",
+      "servingsPerPack": "5 Sajian per kemasan / 5 Serving per pack"
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 1 - Balanced Bakery Choice",
+      "groupName": "Tier 2 - Moderate Choice: Baked Bread & Traditional Chips",
       "scoutItemIndices": [
+        1,
+        2,
         4
       ],
       "boundingBox2D": [
-        414,
-        88,
-        908,
-        910
+        159,
+        68,
+        917,
+        898
       ],
       "verdict": {
-        "label": "Lowest Sugar & Balanced Protein",
-        "level": "good"
-      },
-      "comparisonSentence": "This blue-packaged bread provides a superior protein-to-sugar ratio with lower calories per serving compared to the high-sugar buns.",
-      "message": "This option provides 120 kcal per 44g serving with only 2g of sugar and 4g of protein, making it the most metabolically balanced choice among the bakery items. Sodium is kept at a moderate 150mg, supporting better glycemic and cardiovascular control when consumed mindfully.",
-      "orderingTip": "Pair with a source of healthy fats or lean protein like eggs to increase satiety and blunt glycemic response further."
-    },
-    {
-      "groupName": "Tier 2 - Moderate Energy Bakery",
-      "scoutItemIndices": [
-        2,
-        0
-      ],
-      "boundingBox2D": [
-        304,
-        69,
-        758,
-        661
-      ],
-      "verdict": {
-        "label": "Moderate Calories & Sugar Caution",
+        "label": "Moderate Choice",
         "level": "neutral"
       },
-      "comparisonSentence": "While moderately caloric, these items deliver slightly higher sugar and saturated fat densities than the blue package bread option.",
-      "message": "These products offer reasonable portion sizes with controlled total calories (90 to 142 kcal per serving), but carry higher refined carbohydrate and sugar burdens. They are acceptable for occasional intake but require monitoring in individuals managing insulin sensitivity.",
-      "orderingTip": "Watch portion sizes carefully and ensure total daily added sugar remains well below recommended thresholds."
+      "comparisonSentence": "These options provide moderate calorie and fiber content compared to heavier sugary pastries or larger portions.",
+      "message": "These selections offer a middle-ground profile for daily snacking, providing moderate energy and carbohydrates with reasonable fat and sodium levels, though refined flours and oils mean they should still be consumed in balanced moderation.",
+      "orderingTip": "Enjoy in controlled portion sizes as part of a balanced meal rather than a standalone empty calorie snack."
     },
     {
-      "groupName": "Tier 3 - High Sugar & Calorie Alert",
+      "groupName": "Tier 3 - Caution Choice: Sweet Breads & Higher Calorie Items",
       "scoutItemIndices": [
+        0,
         3
       ],
       "boundingBox2D": [
-        342,
-        6,
-        735,
+        365,
+        0,
+        775,
         1000
       ],
       "verdict": {
-        "label": "High Sugar & Calorie Load",
+        "label": "Moderate Sodium Caution",
         "level": "warning"
       },
-      "comparisonSentence": "This srikaya-filled bread packs significantly higher sugar and total energy per serving than standard white or wheat bread choices.",
-      "message": "Providing 250 kcal and 19g of sugar per serving, this sweet pastry creates a rapid glycemic spike. Frequent consumption contributes to excess caloric intake and places undue stress on metabolic pathways, making it unsuitable for daily inclusion.",
-      "orderingTip": "Limit consumption to rare treats and share the serving to halve the sugar load."
-    },
-    {
-      "groupName": "Tier 4 - Ultra-Processed Snack Alert",
-      "scoutItemIndices": [
-        1
-      ],
-      "boundingBox2D": [
-        174,
-        158,
-        411,
-        755
-      ],
-      "verdict": {
-        "label": "High Fat & Caloric Density Snack",
-        "level": "alert"
-      },
-      "comparisonSentence": "Unlike portion-controlled baked goods, this fried chip bag lacks protein and delivers concentrated fats with zero fiber protection.",
-      "message": "Vacuum-fried banana chips are energy-dense snacks fried in vegetable oils, offering high total fat and rapid carbohydrate absorption without significant protein or micronutrients. Regular intake promotes dyslipidemia and weight gain.",
-      "orderingTip": "Decant a tiny measured handful (e.g., 20g) into a bowl rather than eating directly from the bag to enforce strict portion discipline."
+      "comparisonSentence": "Unlike the lighter bread or standard chips, these items carry a higher glycemic and caloric load per serving.",
+      "message": "These items require caution due to higher carbohydrate density, sugars, or saturated fats per serving, which can impact glycemic control and daily caloric goals if consumed frequently.",
+      "orderingTip": "Check serving sizes carefully and balance with high-protein or high-fiber foods to mitigate blood sugar spikes."
     }
-  ],
-  "recommendedOption": "Blue Package Bread"
+  ]
 }
