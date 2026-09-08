@@ -1,187 +1,187 @@
 {
-  "_internalReasoning": "Extracted and evaluated 5 snack and bakery items across images. Grouped by nutritional density, saturated fat, and sugar content based on user's targets.",
-  "comparisonTitle": "Packaged Snack & Bakery Evaluation & Comparison",
-  "comparisonType": "shelf_selection",
-  "summary": "Comparison of packaged baked goods and snacks. Given the user's elevated daily intake of calories, saturated fat, carbohydrates, and added sugar, most items require careful moderation or avoidance, particularly those high in refined flour and sugar.",
+  "_internalReasoning": "Evaluated 5 packaged food items with nutrition labels, grouped by nutritional quality, and ranked considering user's excess calorie, sodium, and saturated fat intake.",
+  "comparisonTitle": "Packaged Snack & Bread Product Evaluation",
+  "comparisonType": "nutrition_labels",
+  "summary": "Comparison of five packaged food items reveals significant variations in calorie density, saturated fat, and sodium. The plain bread option offers better portion control and lower sugar, while dessert-style filled breads and packaged chips present substantial challenges for the user's elevated calorie and sodium targets.",
   "items": [
     {
-      "name": "Green Bar Snack (Green wrapper)",
+      "name": "Soft Bread Green Pack / Plain Bread Roll",
       "tier": 2,
-      "sourceImageIndex": 0,
-      "brand": null,
-      "hasNutritionLabel": true,
-      "servingSize": "23 g",
-      "servingsPerPack": "6 Sajian per Kemasan / 6 Serving per Container"
-    },
-    {
-      "name": "Blue Buns / Bread Snack",
-      "tier": 3,
-      "sourceImageIndex": 3,
-      "brand": null,
-      "hasNutritionLabel": true,
-      "servingSize": "44 g",
-      "servingsPerPack": "5 Sajian per Kemasan / 5 Serving per pack"
-    },
-    {
-      "name": "Green Buns / Bread Snack",
-      "tier": 3,
-      "sourceImageIndex": 2,
-      "brand": null,
-      "hasNutritionLabel": true,
-      "servingSize": "55 g",
-      "servingsPerPack": "4 Sajian per Kemasan / 4 Serving per pack"
-    },
-    {
-      "name": "Yellow Buns / Bread Snack (Srikaya)",
-      "tier": 4,
       "sourceImageIndex": 4,
-      "brand": null,
+      "brand": "Mr. Bread",
       "hasNutritionLabel": true,
-      "servingSize": "75 g",
-      "servingsPerPack": "2 Sajian per Kemasan / 2 Serving Per Pack"
+      "servingSize": "44g",
+      "servingsPerPack": "5 per pack / 5 Serving per pack"
     },
     {
-      "name": "Keripik Pisang Kepok",
-      "tier": 4,
+      "name": "Green Bread Pack / Pandan Flavored Bread",
+      "tier": 3,
+      "sourceImageIndex": 0,
+      "brand": "Mr. Bread",
+      "hasNutritionLabel": true,
+      "servingSize": "23g",
+      "servingsPerPack": "6 per pack / 6 Serving per pack"
+    },
+    {
+      "name": "Keripik Pisang Kepok / Kepok Banana Chips",
+      "tier": 3,
       "sourceImageIndex": 1,
-      "brand": "RHEMA",
+      "brand": "Rhema",
       "hasNutritionLabel": false,
       "servingSize": null,
       "servingsPerPack": null
+    },
+    {
+      "name": "Green Bread Pack / Filled Sweet Bread",
+      "tier": 3,
+      "sourceImageIndex": 2,
+      "brand": "Mr. Bread",
+      "hasNutritionLabel": true,
+      "servingSize": "55g",
+      "servingsPerPack": "4 per pack / 4 Serving per pack"
+    },
+    {
+      "name": "Yellow Bread Pack / Kaya Filled Bread",
+      "tier": 4,
+      "sourceImageIndex": 3,
+      "brand": "Mr. Bread",
+      "hasNutritionLabel": true,
+      "servingSize": "75g",
+      "servingsPerPack": "2 per pack / 2 Serving per pack"
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 2 - Moderate Portion-Controlled Snack Bar",
+      "groupName": "Tier 2 - Moderate Choice: Plain Bread Rolls",
       "scoutItemIndices": [
         0
       ],
       "boundingBox2D": [
-        380,
-        0,
-        750,
-        1000
+        300,
+        300,
+        930,
+        930
       ],
       "verdict": {
-        "label": "Moderate Portion-Controlled Snack",
+        "label": "Moderate Calorie and Sodium Choice",
         "level": "neutral"
       },
-      "comparisonSentence": "This snack bar offers a lower calorie and fat load per serving compared to the dense bakery breads and fried chips.",
-      "message": "Providing 90 kcal and 3g of total fat per serving, this item allows easier portion management relative to heavy bakery items. However, it still contains refined carbohydrates and added sugars. Balance your overall carbohydrate intake carefully to support your wellness goals while enjoying small portions.",
+      "comparisonSentence": "This plain bread roll offers lower sugar and calorie density per serving compared to the heavy dessert breads and fried chips.",
+      "message": "This plain bread provides a moderate calorie count of 120 kcal per 44g serving and controlled sugar, aligning better with your daily targets than sweet pastries. However, watch out for the 150mg sodium content if consuming multiple slices.",
       "averageNutrients": {
-        "calories": 90,
-        "protein": 1,
-        "totalFat": 3,
-        "saturatedFat": 1,
-        "carbohydrates": 15,
-        "sugar": 7,
-        "totalFibre": 1,
-        "sodium": 20,
-        "addedSugar": 6,
-        "potassium": 50,
-        "solubleFibre": 0.5,
-        "transFat": 0
-      },
-      "averageNutrientsPer100g": {
-        "calories": 391,
-        "protein": 4.3,
-        "totalFat": 13,
-        "saturatedFat": 4.3,
-        "carbohydrates": 65.2,
-        "sugar": 30.4,
-        "totalFibre": 4.3,
-        "sodium": 87
-      },
-      "orderingTip": "Consume strictly as a single-serving snack and pair with water or unsweetened tea."
-    },
-    {
-      "groupName": "Tier 3 - Standard Commercial Breads & Pastries",
-      "scoutItemIndices": [
-        1,
-        2
-      ],
-      "boundingBox2D": [
-        300,
-        0,
-        750,
-        1000
-      ],
-      "verdict": {
-        "label": "High Carb & Saturated Fat",
-        "level": "warning"
-      },
-      "comparisonSentence": "These commercial bakery items contribute significantly more carbohydrates and saturated fats per serving than the smaller snack bar.",
-      "message": "These packaged buns offer convenient energy and moderate protein, but they exceed recommended thresholds for saturated fat and refined carbohydrates. Given your current 38% surplus in saturated fat and 32% surplus in carbohydrates, frequent consumption will hinder metabolic progress.",
-      "averageNutrients": {
-        "calories": 135,
-        "protein": 3.5,
-        "totalFat": 3,
+        "calories": 120,
+        "protein": 4,
+        "totalFat": 2.5,
         "saturatedFat": 1.5,
-        "carbohydrates": 23.5,
-        "sugar": 2.5,
-        "totalFibre": 1,
-        "sodium": 175,
-        "addedSugar": 2,
-        "potassium": 80,
+        "carbohydrates": 21,
+        "sugar": 2,
+        "totalFibre": 1.5,
+        "sodium": 150,
+        "addedSugar": 1.5,
+        "potassium": 90,
         "solubleFibre": 0.3,
         "transFat": 0
       },
       "averageNutrientsPer100g": {
-        "calories": 272,
-        "protein": 7.3,
-        "totalFat": 6.2,
-        "saturatedFat": 3.1,
-        "carbohydrates": 47.9,
-        "sugar": 5.1,
-        "totalFibre": 2,
-        "sodium": 357
+        "calories": 273,
+        "protein": 9.1,
+        "totalFat": 5.7,
+        "saturatedFat": 3.4,
+        "carbohydrates": 47.7,
+        "sugar": 4.5,
+        "totalFibre": 3.4,
+        "sodium": 341
       },
-      "orderingTip": "Limit intake to one small portion and pair with high-fiber vegetables or lean protein."
+      "orderingTip": "Consume a single portion to keep your carbohydrate and sodium intake within reasonable limits."
     },
     {
-      "groupName": "Tier 4 - High Sugar Filled Pastry & Fried Chips",
+      "groupName": "Tier 3 - Warning Choice: Flavored and Filled Breads",
       "scoutItemIndices": [
-        3,
+        1,
+        2,
+        3
+      ],
+      "boundingBox2D": [
+        0,
+        0,
+        950,
+        980
+      ],
+      "verdict": {
+        "label": "Higher Sugar and Saturated Fat",
+        "level": "warning"
+      },
+      "comparisonSentence": "Compared to plain bread, these filled and flavored varieties contribute significantly more sugar and saturated fat, worsening your current surplus intake.",
+      "message": "These products pack higher amounts of saturated fats and added sugars per serving. Given your current 38% excess in saturated fat and 50% excess in added sugar, consuming these will further exacerbate your metabolic load. Balance intake carefully.",
+      "averageNutrients": {
+        "calories": 150,
+        "protein": 3.5,
+        "totalFat": 4.5,
+        "saturatedFat": 2.2,
+        "carbohydrates": 24,
+        "sugar": 7,
+        "totalFibre": 1,
+        "sodium": 120,
+        "addedSugar": 6,
+        "potassium": 75,
+        "solubleFibre": 0.2,
+        "transFat": 0
+      },
+      "averageNutrientsPer100g": {
+        "calories": 315,
+        "protein": 7.4,
+        "totalFat": 9.5,
+        "saturatedFat": 4.6,
+        "carbohydrates": 50.5,
+        "sugar": 14.7,
+        "totalFibre": 2.1,
+        "sodium": 252
+      },
+      "orderingTip": "Limit frequency and stick to strict portion control to avoid pushing your daily sugar limit."
+    },
+    {
+      "groupName": "Tier 4 - Alert Choice: High-Calorie Sweet Filled Bread",
+      "scoutItemIndices": [
         4
       ],
       "boundingBox2D": [
         0,
         0,
-        1000,
+        950,
         1000
       ],
       "verdict": {
-        "label": "High Added Sugar & Fat Alert",
+        "label": "High Calorie and Fat Alert",
         "level": "alert"
       },
-      "comparisonSentence": "These items present the highest concentration of added sugars, refined starches, and fats among all evaluated choices.",
-      "message": "The srikaya-filled bread and fried banana chips deliver substantial caloric density, saturated fats, and sugars. Because your profile already shows a 50% surplus in added sugar and 39% excess in total calories, consuming these dense processed snacks directly worsens your metabolic load.",
+      "comparisonSentence": "This rich kaya-filled bread exhibits much higher calorie density and saturated fat levels than all other compared options.",
+      "message": "With 250 kcal and 4.5g of saturated fat per serving, this item conflicts directly with your goal to manage elevated calories and saturated fats. While protein is present, the heavy sugar and fat profile poses a severe metabolic penalty.",
       "averageNutrients": {
         "calories": 250,
-        "protein": 5,
+        "protein": 6,
         "totalFat": 6,
         "saturatedFat": 4.5,
         "carbohydrates": 42,
         "sugar": 19,
-        "totalFibre": 1.5,
+        "totalFibre": 1.2,
         "sodium": 125,
         "addedSugar": 15,
-        "potassium": 120,
-        "solubleFibre": 0.5,
+        "potassium": 110,
+        "solubleFibre": 0.4,
         "transFat": 0.1
       },
       "averageNutrientsPer100g": {
-        "calories": 362,
-        "protein": 6.9,
+        "calories": 333,
+        "protein": 8,
         "totalFat": 8,
         "saturatedFat": 6,
-        "carbohydrates": 57.3,
-        "sugar": 22.7,
-        "totalFibre": 2,
-        "sodium": 182
+        "carbohydrates": 56,
+        "sugar": 25.3,
+        "totalFibre": 1.6,
+        "sodium": 167
       },
-      "orderingTip": "Avoid these options entirely to support your targets for calorie reduction and blood sugar management."
+      "orderingTip": "Avoid purchasing or split the portion into quarters if consumption is unavoidable."
     }
   ],
-  "recommendedOption": "Green Bar Snack (Green wrapper)"
+  "recommendedOption": "Soft Bread Green Pack / Plain Bread Roll"
 }

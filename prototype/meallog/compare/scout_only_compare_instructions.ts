@@ -39,6 +39,11 @@ STRICT INVARIANTS:
      * NORMALIZED COMPARISON (per100g): Packaged foods often manipulate serving sizes (e.g. 20g candy bar vs. 80g bread). Whenever serving size in grams is known or printed (or can be determined from the pack), calculate and populate per100g alongside perServing. This eliminates serving-size distortion across all sets.
    - ESTIMATED NUTRIENTS FOR UNLABELLED PREPARED FOODS (NO NULL AVERAGE NUTRIENTS):
      * When bakery, deli, buffet, or restaurant menu items lack a printed nutrition table, DO NOT return null or empty averageNutrients for the group. The agent MUST provide realistic clinical estimates for averageNutrients and averageNutrientsPer100g based on typical culinary preparation, standard bakery benchmarks, and typical single portion sizes (e.g. sweet bun ~70-80g, savory pastry ~85-100g).
+   - DISH NAME BILINGUAL TRANSLATION (NO ADDITIONAL FIELDS):
+     * If a menu or product name is in a local or non-English language (e.g. Indonesian), provide its English translation appended to the name using the format:
+       "Original Name / English Translation" (e.g., "KWETIAU KUAH SOSIS BAKSO / Flat Rice Noodle Soup with Sausage and Meatballs", "SAYUR ASEM / Tamarind Vegetable Soup", "TONGKOL BAKAR / Grilled Mackerel Tuna").
+     * If the dish name is already in English or is a universal brand name (e.g., "SilverQueen Milk Chocolate", "Doritos Nacho Cheese"), keep it as is without repeating.
+     * This ensures instant comprehension without creating an additional schema field.
    - Front-only packages without a nutrition panel: set hasNutritionLabel to false or omit, transcribe product name from OCR, and set perServing to null.
    - NO LUMPING: Each distinct variety, flavor, or dish entry gets its own item in items[].
    - STRICT OVERALL ITEM RANKING: Items in items[] MUST be ordered primarily from best/healthiest tier down to least favorable tier, and within each tier from best to least favorable.
@@ -228,7 +233,7 @@ export function buildScoutComparePrompt(
 Analyze all ${imageCount} provided comparison image(s).
 1. EXHAUSTIVE EXTRACTION (NO SAMPLING, CONDENSED FORMAT):
    - Extract EVERY distinct food product, labelled snack, or menu dish visible into items[].${multiImageRule} Do NOT merely sample 5-10 dishes. On menus or shelves with many options, perform a thorough, multi-column OCR scan and transcribe as many distinct dishes/products as legible across both pages/columns.
-   - CONDENSED ITEM FORMAT: Keep each item object minimal with only "name", "tier", and "sourceImageIndex" (no boundingBox2D on items, and omit empty/null boilerplate keys). This saves massive vision processing power and output tokens, enabling fast extraction of 50-100+ items.
+   - CONDENSED ITEM FORMAT & BILINGUAL NAMES: Keep each item object minimal with only "name", "tier", and "sourceImageIndex" (no boundingBox2D on items, and omit empty/null boilerplate keys). For non-English dish names, append the English translation directly in the name string formatted as "Original Name / English Translation" (e.g., "KWETIAU KUAH SOSIS BAKSO / Flat Rice Noodle Soup with Sausage and Meatballs").
 2. GROUP BOUNDING BOXES:
    - Provide "boundingBox2D": [ymin, xmin, ymax, xmax] ONLY on each group in groups[], demarcating the region of the image containing those items.
 3. TIER ASSIGNMENT & SUB-ITEM ORDERING:

@@ -1,64 +1,64 @@
 {
-  "_internalReasoning": "Extracted 4 packaged snack items with Nutrition Facts panels across the 4 images, grouped and ranked based on nutritional density and user's high calorie, saturated fat, sodium, and carbohydrate profile.",
-  "comparisonTitle": "Packaged Snack & Bakery Product Evaluation",
+  "_internalReasoning": "Extracted four packaged bakery items from nutrition facts labels across four source images, grouped and ranked based on nutritional density and user targets.",
+  "comparisonTitle": "Packaged Bakery Product Comparison",
   "comparisonType": "nutrition_labels",
-  "summary": "Comparison of packaged bakery items reveals significant variations in calorie density, saturated fat, and sodium. The blue-packaged product offers better portion control and lower calorie load relative to the dense 250 kcal pastry and high-fat options.",
+  "summary": "Comparison of packaged bakery products based on calorie density, sugar content, and sodium levels relative to user's daily targets.",
   "items": [
     {
-      "name": "Packaged Bakery Product (Blue Pack)",
+      "name": "Sari Roti Roti Manis Isian Coklat / Sweet Bread with Chocolate Filling (Blue Pack)",
       "tier": 2,
       "sourceImageIndex": 3,
-      "brand": null,
+      "brand": "Sari Roti",
       "hasNutritionLabel": true,
       "servingSize": "44 g",
-      "servingsPerPack": "5 Serving per pack"
+      "servingsPerPack": "5 Sajian per kemasan / 5 Serving per pack"
     },
     {
-      "name": "Packaged Snack Product (Green Pack)",
+      "name": "Green Tea / Pandan Bread Product (Green Pack)",
       "tier": 3,
       "sourceImageIndex": 0,
-      "brand": null,
+      "brand": "Sari Roti",
       "hasNutritionLabel": true,
       "servingSize": "23 g",
-      "servingsPerPack": "6 Serving per Container"
+      "servingsPerPack": "6 Sajian per kemasan / 6 Serving per pack"
     },
     {
-      "name": "Packaged Croissant / Bakery Product (Yellow/Red Pack)",
+      "name": "Sari Roti Roti Tawar / White Bread (Yellow Pack)",
       "tier": 3,
       "sourceImageIndex": 1,
-      "brand": null,
+      "brand": "Sari Roti",
       "hasNutritionLabel": true,
       "servingSize": "80 g",
-      "servingsPerPack": "3 serving per pack"
+      "servingsPerPack": "3 Sajian per kemasan / 3 serving per pack"
     },
     {
-      "name": "Packaged Bakery Product (Yellow Pack - 250 kcal)",
-      "tier": 4,
+      "name": "Sari Roti Roti Manis Isian Keju / Sweet Bread with Cheese Filling (Yellowish-Green Pack)",
+      "tier": 3,
       "sourceImageIndex": 2,
-      "brand": null,
+      "brand": "Sari Roti",
       "hasNutritionLabel": true,
       "servingSize": "75 g",
-      "servingsPerPack": "2 Serving Per Pack"
+      "servingsPerPack": "2 Sajian per kemasan / 2 Serving per pack"
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 2 - Moderate Choice: Portion-Controlled Baked Snack",
+      "groupName": "Tier 2 - Moderate Choice: Lower Calorie Sweet Bread",
       "scoutItemIndices": [
         0
       ],
       "boundingBox2D": [
-        300,
-        300,
-        920,
-        900
+        0,
+        0,
+        1000,
+        1000
       ],
       "verdict": {
-        "label": "Moderate Choice with Portion Control",
+        "label": "Moderate Choice Lower Calories",
         "level": "neutral"
       },
-      "comparisonSentence": "This blue-packaged bakery item provides a lower calorie load per serving compared to the dense pastries.",
-      "message": "This option provides a controlled calorie and sodium profile per serving, making it easier to manage against your high calorie and sodium targets. However, it still contains refined carbohydrates and added sugars. Balance this choice by increasing dietary fiber and lean protein intake throughout the day to support your nutritional targets.",
+      "comparisonSentence": "This option provides a controlled portion size with lower absolute calories and sodium compared to larger bakery items.",
+      "message": "This packaged sweet bread offers a smaller serving size which helps manage overall caloric intake, though it still contains added sugars. Given your elevated calorie and added sugar targets, consume in moderation and pair with a protein source to improve satiety.",
       "averageNutrients": {
         "calories": 120,
         "protein": 4,
@@ -66,7 +66,7 @@
         "saturatedFat": 1.5,
         "carbohydrates": 21,
         "sugar": 2,
-        "totalFibre": 1.5,
+        "totalFibre": 1,
         "sodium": 150,
         "addedSugar": 2,
         "potassium": 80,
@@ -74,104 +74,62 @@
         "transFat": 0
       },
       "averageNutrientsPer100g": {
-        "calories": 273,
+        "calories": 272.7,
         "protein": 9.1,
         "totalFat": 5.7,
         "saturatedFat": 3.4,
         "carbohydrates": 47.7,
         "sugar": 4.5,
-        "totalFibre": 3.4,
-        "sodium": 341
+        "totalFibre": 2.3,
+        "sodium": 340.9
       },
-      "orderingTip": "Consume a single portion strictly and pair with a protein source to stabilize blood sugar."
+      "orderingTip": "Opt for the single smaller portion pack to strictly limit your carbohydrate and added sugar intake."
     },
     {
-      "groupName": "Tier 3 - Caution: Packaged Snacks & Pastries",
+      "groupName": "Tier 3 - Caution: Higher Calorie & Sodium Bakery Items",
       "scoutItemIndices": [
         1,
-        2
-      ],
-      "boundingBox2D": [
-        350,
-        0,
-        980,
-        990
-      ],
-      "verdict": {
-        "label": "High Carbohydrate & Sodium Caution",
-        "level": "warning"
-      },
-      "comparisonSentence": "These items contribute moderately to your daily carbohydrate and saturated fat excesses without providing significant protein or fiber.",
-      "message": "These snacks and pastries present nutritional challenges due to substantial carbohydrate and moderate saturated fat levels. Given that you are already exceeding your carbohydrate and calorie targets, consuming these items will widen your deficit. They lack sufficient protein and fiber to promote satiety, requiring careful portion management.",
-      "averageNutrients": {
-        "calories": 170,
-        "protein": 4,
-        "totalFat": 5,
-        "saturatedFat": 2,
-        "carbohydrates": 23,
-        "sugar": 7.5,
-        "totalFibre": 1,
-        "sodium": 175,
-        "addedSugar": 6,
-        "potassium": 90,
-        "solubleFibre": 0.3,
-        "transFat": 0
-      },
-      "averageNutrientsPer100g": {
-        "calories": 361,
-        "protein": 6.8,
-        "totalFat": 11.2,
-        "saturatedFat": 4.4,
-        "carbohydrates": 54.3,
-        "sugar": 20.4,
-        "totalFibre": 1.8,
-        "sodium": 298
-      },
-      "orderingTip": "Limit intake to the smallest available portion size to avoid compounding your caloric surplus."
-    },
-    {
-      "groupName": "Tier 4 - Alert: High Saturated Fat & Calorie Load",
-      "scoutItemIndices": [
+        2,
         3
       ],
       "boundingBox2D": [
-        250,
         0,
-        950,
-        990
+        0,
+        1000,
+        1000
       ],
       "verdict": {
-        "label": "High Saturated Fat & Calorie Alert",
-        "level": "alert"
+        "label": "Caution High Sodium & Carbs",
+        "level": "warning"
       },
-      "comparisonSentence": "This item has a significantly higher saturated fat and calorie density than the blue-packaged alternative.",
-      "message": "This yellow-packaged bakery item delivers a heavy load of saturated fat and total calories per serving, directly exacerbating your current 38 percent surplus in saturated fat and 39 percent calorie surplus. While it offers a modest amount of protein, the metabolic cost of the excess saturated fat and refined carbohydrates makes this a high-risk choice for your profile.",
+      "comparisonSentence": "These products deliver higher sodium loads and carbohydrate densities that compound your existing dietary excesses.",
+      "message": "These selections contribute significantly to your carbohydrate and sodium overages while lacking substantial dietary fiber and protein. Given your current high sodium and carbohydrate status, frequent consumption may hinder metabolic health progress.",
       "averageNutrients": {
-        "calories": 250,
-        "protein": 6,
-        "totalFat": 6,
-        "saturatedFat": 6,
-        "carbohydrates": 42,
-        "sugar": 19,
+        "calories": 196.7,
+        "protein": 4.7,
+        "totalFat": 5.3,
+        "saturatedFat": 2.5,
+        "carbohydrates": 29,
+        "sugar": 16.3,
         "totalFibre": 1.5,
-        "sodium": 125,
-        "addedSugar": 15,
+        "sodium": 195,
+        "addedSugar": 12,
         "potassium": 110,
         "solubleFibre": 0.5,
-        "transFat": 0.1
+        "transFat": 0
       },
       "averageNutrientsPer100g": {
-        "calories": 333,
-        "protein": 8,
-        "totalFat": 8,
-        "saturatedFat": 8,
-        "carbohydrates": 56,
-        "sugar": 25.3,
-        "totalFibre": 2,
-        "sodium": 167
+        "calories": 310,
+        "protein": 7.5,
+        "totalFat": 8.1,
+        "saturatedFat": 3.9,
+        "carbohydrates": 48,
+        "sugar": 21.5,
+        "totalFibre": 2.2,
+        "sodium": 310
       },
-      "orderingTip": "Avoid selecting this item entirely given your elevated saturated fat and calorie intake over the last 3 days."
+      "orderingTip": "Portion control is critical; divide servings or balance with high-fiber raw vegetables to offset glycemic spikes."
     }
   ],
-  "recommendedOption": "Packaged Bakery Product (Blue Pack)"
+  "recommendedOption": "Sari Roti Roti Manis Isian Coklat / Sweet Bread with Chocolate Filling (Blue Pack)"
 }

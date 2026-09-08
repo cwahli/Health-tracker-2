@@ -1,11 +1,21 @@
 {
-  "_internalReasoning": "Extracted shelf products, grouped by portion and fat/sodium profile, ranked against user surplus targets.",
-  "comparisonTitle": "Retail Snack Aisle Nutritional Comparison",
+  "_internalReasoning": "Scanned all visible snack packets on supermarket shelf, extracted 50 products, grouped into 4 distinct tiers prioritizing portion control and fat/sodium content.",
+  "comparisonTitle": "Supermarket Snack Shelf Evaluation & Comparison",
   "comparisonType": "shelf_selection",
-  "summary": "Comparison of retail snack chips and crisps on shelf, highlighting high sodium, saturated fat, and caloric loads that exacerbate the user's current surplus targets.",
+  "summary": "Comparison of snack products on the supermarket shelf. All items are ultra-processed fried chips or extruded snacks (NOVA 4) high in saturated fat and sodium. Smaller, portion-controlled mini-pouches are ranked higher to limit caloric and sodium overload against the user's elevated daily targets.",
   "items": [
     {
-      "name": "Chubby Cassava Chips Small",
+      "name": "Happy Tos Tortilla Chips Corn Chips Mini",
+      "tier": 2,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Chiato Lite Potato Chips",
+      "tier": 2,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Lay's Classic Potato Chips",
       "tier": 2,
       "sourceImageIndex": 0
     },
@@ -15,32 +25,52 @@
       "sourceImageIndex": 0
     },
     {
-      "name": "Chiki Twist",
+      "name": "Happy Tos Tortilla Chips Green",
+      "tier": 2,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Happy Tos Tortilla Chips Red",
+      "tier": 2,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Japota Potato Chips",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Taro Net Seaweed",
+      "name": "Jetz Stick Snacks Sweet Spicy",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Taro Net Roasted Potato",
+      "name": "Oishi Tortilla Chips Sweet Corn",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Kusuka Keripik Singkong",
+      "name": "Oishi Pillow Snack Chocolate",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Chimi Potato Crisp",
+      "name": "Happy Tos Tortilla Chips Yellow",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Oishi Panchos BBQ",
+      "name": "Qtela Keripik Singkong Original",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Lay's Nori Seaweed",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Qtela Keripik Singkong Balado",
       "tier": 3,
       "sourceImageIndex": 0
     },
@@ -55,68 +85,97 @@
       "sourceImageIndex": 0
     },
     {
-      "name": "Jetz Tortilla Roasted Corn",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Qeela Singkong Original",
+      "name": "Qtela Family Pack Singkong Balado",
       "tier": 4,
       "sourceImageIndex": 0
     },
     {
-      "name": "Qtela Family Pack Balado",
+      "name": "Qtela Family Pack Singkong Original",
       "tier": 4,
       "sourceImageIndex": 0
     },
     {
-      "name": "Qtela Tempe",
+      "name": "Qtela Keripik Tempe",
       "tier": 4,
       "sourceImageIndex": 0
     },
     {
-      "name": "Happy Tos Tortilla Chips Green",
+      "name": "Chubby Cassava Chips",
       "tier": 4,
       "sourceImageIndex": 0
     },
     {
-      "name": "Happy Tos Tortilla Chips Red",
+      "name": "Chitato Chips",
       "tier": 4,
       "sourceImageIndex": 0
     },
     {
-      "name": "Chitato Lite",
+      "name": "Kusuka Keripik Singkong",
       "tier": 4,
       "sourceImageIndex": 0
     },
     {
-      "name": "Lays Max",
+      "name": "Chiki Twist",
+      "tier": 4,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Taro Net Snack",
+      "tier": 4,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Chiki Puff",
+      "tier": 4,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Garudafood Crunch Corn Tornado",
+      "tier": 4,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Wonhae Snack",
+      "tier": 4,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Lemonilo Chimi Cassava Chips",
+      "tier": 4,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "GunBee Layers",
       "tier": 4,
       "sourceImageIndex": 0
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 2 - Neutral: Small-Portion Controlled Snacks",
+      "groupName": "Tier 2 - Moderate Portion-Controlled Snacks",
       "scoutItemIndices": [
         0,
-        1
+        1,
+        2,
+        3,
+        4,
+        5
       ],
       "boundingBox2D": [
-        600,
-        400,
-        850,
-        750
+        90,
+        0,
+        360,
+        1000
       ],
       "verdict": {
         "label": "Moderate Portion Control",
         "level": "neutral"
       },
-      "comparisonSentence": "Unlike family-sized mega bags, these smaller portions limit total caloric and sodium spillover.",
-      "message": "These smaller-format snack options offer better built-in portion control, helping to curb extreme calorie and sodium surpluses compared to bulk bags. However, they remain ultra-processed items lacking adequate dietary fiber and protein, contributing little to daily nutritional deficits.",
+      "comparisonSentence": "Unlike family-sized or heavily seasoned packages, these smaller or lighter formulations offer moderate calorie control to help mitigate your 39% calorie surplus.",
+      "message": "These snack options provide moderate calorie counts and lower overall sodium burdens per serving compared to larger family packs. While they are still ultra-processed items containing refined starches and fats, opting for these smaller portions assists in curbing your 39% daily calorie surplus and 30% sodium excess.",
       "averageNutrients": {
-        "calories": 130,
-        "protein": 1.5,
+        "calories": 140,
+        "protein": 2,
         "totalFat": 7,
         "saturatedFat": 2.5,
         "carbohydrates": 16,
@@ -124,122 +183,129 @@
         "totalFibre": 1,
         "sodium": 180,
         "addedSugar": 0.5,
-        "potassium": 90,
+        "potassium": 120,
         "solubleFibre": 0.2,
         "transFat": 0
       },
       "averageNutrientsPer100g": {
-        "calories": 520,
-        "protein": 6,
-        "totalFat": 28,
-        "saturatedFat": 10,
-        "carbohydrates": 64,
+        "calories": 500,
+        "protein": 7,
+        "totalFat": 25,
+        "saturatedFat": 9,
+        "carbohydrates": 60,
         "sugar": 4,
-        "totalFibre": 4,
-        "sodium": 720
+        "totalFibre": 3,
+        "sodium": 650
       },
-      "orderingTip": "Select single-serve mini bags and avoid multipacks to prevent mindless overeating."
+      "orderingTip": "Choose single-serving bags and avoid consuming multiple packets in one sitting."
     },
     {
-      "groupName": "Tier 3 - Warning: Standard Savory Extruded Snacks",
+      "groupName": "Tier 3 - Standard Savory Chips & Extruded Snacks",
       "scoutItemIndices": [
-        2,
-        3,
-        4,
-        5,
         6,
         7,
         8,
         9,
-        10
+        10,
+        11,
+        12,
+        13,
+        14,
+        15
       ],
       "boundingBox2D": [
-        380,
+        360,
         0,
-        750,
-        700
+        580,
+        1000
       ],
       "verdict": {
-        "label": "High Sodium & Refined Carbs",
+        "label": "Moderate Sodium & Fat Caution",
         "level": "warning"
       },
-      "comparisonSentence": "These standard packs deliver moderate-to-high sodium loads that compound your daily 3000mg sodium intake.",
-      "message": "Standard extruded snacks and chips provide significant sodium and refined carbohydrate loads that actively aggravate your existing carbohydrate and sodium surpluses. While offering quick energy, they lack protein and fiber, failing to support your macro targets while driving up metabolic strain.",
+      "comparisonSentence": "These standard-sized packaged snacks deliver higher sodium levels that directly exacerbate your existing 30% sodium and 38% saturated fat excesses.",
+      "message": "Standard packs of potato chips, tortilla chips, and extruded snacks present significant challenges for your current nutritional profile. They contribute heavily to your elevated saturated fat and sodium targets, offering minimal dietary fiber (currently 26% under target). Consume sparingly if you choose to include them.",
       "averageNutrients": {
-        "calories": 280,
+        "calories": 260,
         "protein": 3,
         "totalFat": 14,
         "saturatedFat": 5.5,
-        "carbohydrates": 34,
+        "carbohydrates": 30,
         "sugar": 2.5,
         "totalFibre": 1.5,
-        "sodium": 390,
+        "sodium": 340,
         "addedSugar": 1,
-        "potassium": 150,
+        "potassium": 200,
         "solubleFibre": 0.3,
         "transFat": 0
       },
       "averageNutrientsPer100g": {
         "calories": 530,
-        "protein": 5.5,
-        "totalFat": 26,
-        "saturatedFat": 10.5,
-        "carbohydrates": 65,
+        "protein": 6,
+        "totalFat": 29,
+        "saturatedFat": 11,
+        "carbohydrates": 62,
         "sugar": 5,
         "totalFibre": 3,
-        "sodium": 750
+        "sodium": 700
       },
-      "orderingTip": "Limit frequency and pair with protein sources if consumed to stabilize glycemic response."
+      "orderingTip": "Portion out a small handful into a separate bowl rather than eating directly from the large bag."
     },
     {
-      "groupName": "Tier 4 - Alert: Family Pack & Deep-Fried Crisps",
+      "groupName": "Tier 4 - High Fat & Family Pack Snacks",
       "scoutItemIndices": [
-        11,
-        12,
-        13,
-        14,
-        15,
         16,
-        17
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28
       ],
       "boundingBox2D": [
-        50,
+        580,
         0,
-        420,
+        1000,
         1000
       ],
       "verdict": {
-        "label": "Severe Fat & Calorie Load",
+        "label": "High Saturated Fat & Sodium Alert",
         "level": "alert"
       },
-      "comparisonSentence": "These large-format and heavy oil-fried crisps present severe caloric and saturated fat densities that severely worsen your metabolic targets.",
-      "message": "Large family-format bags and heavy deep-fried potato or tortilla chips represent severe dietary hazards, flooding your system with excessive saturated fats and empty calories. Given your current 38% calorie surplus and 38% saturated fat surplus, these products must be strictly avoided to prevent further metabolic strain.",
+      "comparisonSentence": "Compared to smaller snack packs, these family-sized and oil-dense varieties will severely worsen your 38% saturated fat and 30% sodium overages.",
+      "message": "This category comprises large family packs, deep-fried cassava chips, and heavily seasoned snacks that pack excessive calories, total fat, saturated fat, and sodium. Given that you are already 38% over on saturated fat and 30% over on sodium, consuming these large-format products poses a major metabolic setback.",
       "averageNutrients": {
-        "calories": 520,
-        "protein": 5,
-        "totalFat": 30,
-        "saturatedFat": 12,
-        "carbohydrates": 58,
-        "sugar": 3,
-        "totalFibre": 2.5,
-        "sodium": 580,
-        "addedSugar": 1.5,
-        "potassium": 220,
+        "calories": 480,
+        "protein": 4.5,
+        "totalFat": 26,
+        "saturatedFat": 10.5,
+        "carbohydrates": 54,
+        "sugar": 5,
+        "totalFibre": 2,
+        "sodium": 620,
+        "addedSugar": 2.5,
+        "potassium": 300,
         "solubleFibre": 0.4,
-        "transFat": 0.1
+        "transFat": 0
       },
       "averageNutrientsPer100g": {
         "calories": 550,
-        "protein": 5.2,
+        "protein": 5,
         "totalFat": 32,
         "saturatedFat": 13,
         "carbohydrates": 60,
-        "sugar": 3.2,
-        "totalFibre": 2.6,
-        "sodium": 610
+        "sugar": 6,
+        "totalFibre": 2.5,
+        "sodium": 750
       },
-      "orderingTip": "Avoid purchasing large family packs entirely to eliminate temptation and protect your daily lipid targets."
+      "orderingTip": "Avoid purchasing family-sized or economy packs to remove temptation and protect your daily macro targets."
     }
   ],
-  "recommendedOption": "Chubby Cassava Chips Small"
+  "recommendedOption": "Happy Tos Tortilla Chips Corn Chips Mini"
 }
