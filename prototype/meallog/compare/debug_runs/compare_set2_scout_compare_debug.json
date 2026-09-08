@@ -1,129 +1,128 @@
 {
-  "_internalReasoning": "Evaluated 4 snack packages from images, extracted nutrition facts via OCR, categorized by macro quality, and grouped into ranked tiers.",
-  "comparisonTitle": "Supermarket Snack Nutrition Panel Comparison",
+  "_internalReasoning": "Analyzed four packaged snack products (snack bar, multiseed bread, sweet bread, and white bread) from supermarket shelf labels and nutrition facts panels. Evaluated macronutrients, fiber, sodium, and sugar content to rank them from best to worst based on metabolic and cardiovascular health impact.",
+  "comparisonTitle": "Supermarket Snack & Bread Nutritional Comparison",
   "comparisonType": "nutrition_labels",
-  "summary": "Comparing the four snack packages reveals varying macro profiles. The blue-packaged bread offers the best protein-to-sugar balance with lower sodium, whereas the high-sugar bread and green-packaged snack carry heavier glycemic loads and saturated fat.",
+  "summary": "Comparing these four packaged baked goods highlights significant differences in fiber, protein, and sugar density. The multiseed bread stands out as the healthiest choice due to its high fiber and protein content, while the sweetened bread products exhibit higher glycemic and sugar loads.",
   "items": [
     {
-      "name": "Green Packaged Snack Bar",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        415,
-        30,
-        715,
-        951
-      ],
-      "hasNutritionLabel": true,
-      "brand": null,
-      "servingSize": "23 g",
-      "servingsPerPack": "6 Sajian per Kemasan / 6 Serving per Container, Energi Total 90 kkal / Total Energy 90 kcal, Lemak Total / Total Fat 3 g (4%), Lemak Jenuh / Saturated Fat 1 g (6%), Protein / Protein 1 g (2%), Karbohidrat Total / Total Carbohydrate 15 g (5%), Gula / Sugar 7 g, Garam (Natrium) / Salt (Sodium) 20 mg (1%) - Percent Daily Values based on a 2150 kcal energy. Komposisi: Tepung Terigu, Air, Es, Premiks Roti Multiseed 4.7%, Gluten, Pewarna Alami Karamel IV, Antioksidan Asam Askorbat, Gula (Mengandung Pengawet Sulfit), Kulit Gandum, Margarin (Mengandung Pengawet Kalium Sorbat, Pewarna Alami Kurkumin Cl.No.75300, (Mengandung Pengawet Kalium Sorbat, Pewarna Alami Kurkumin Cl.No.75300, Ekstrak Anato Cl.No.75120), Lemak Hewani, Premiks Susu, Kecap (Mengand- ung Kedelai), Ragi, Garam, Pengawet Kalsium Propionat, Perlakuan Tepung (Mengandung Tepung Kedelai dan Antioksidan Asam Askorbat). *Mengandung Allergen, Lihat Daftar Bahan Yang Dicetak Tebal, Kode Produksi : Baik digunakan sebelum : JANGAN DITERIMA BILA KEMASAN RUSAK, 034998, @mrbread_id, PP, 05, QR Code. Buat roti suka, makan juga suka, (Informasi Nilai Gizi / Nutrition Facts, Takaran Saji : 23 g, Serving Size : 23 g, Jumlah per Sajian / Amount per Serving, Lemak Total / Total Fat 3 g, Lemak Jenuh / Saturated Fat 1 g, Protein / Protein 1 g, Karbohidrat Total / Total Carbohydrate 15 g, Gula / Sugar 7 g, Garam (Natrium) / Salt (Sodium) 20 mg, %AKG* / %Daily Value *, *Persen AKG berdasarkan kebutuhan energi 2150 kkal. Kebutuhan energi anda mungkin lebih tinggi atau lebih rendah. *Percent Daily Values are based on a 2150 kcal. Your daily values may be higher or lower depending on your calorie needs.)"
-    },
-    {
-      "name": "Yellow Multiseed Bread",
+      "name": "Green Snack Bar (90 kcal per serving)",
       "tier": 2,
-      "sourceImageIndex": 1,
-      "boundingBox2D": [
-        345,
-        43,
-        895,
-        989
-      ],
+      "sourceImageIndex": 0,
       "hasNutritionLabel": true,
-      "brand": "Mr. Bread",
-      "servingSize": "80 g",
-      "servingsPerPack": "3 sajian per kemasan / 3 serving per pack, Energi Total / Total Energy 250 kkal, Energi dari lemak / Energy from Fat 60 kkal, Energi dari lemak jenuh / Energy from Saturated Fat 30 kkal, Lemak Total / Total Fat 7 g (10%), Lemak Jenuh / Saturated Fat 3 g (15%), Protein / Protein 8 g (14%), Karbohidrat Total / Total Carbohydrate 38 g (12%), Gula / Sugar 4 g, Garam (natrium) / Salt (Sodium) 330 mg (22%) - Percent Daily Values are based on a 2150 kcal energy. Komposisi: Tepung Terigu (45.82%), Air, Es, Premiks Roti Multiseed 6.47% (Mengandung Biji Labu 5%, Gluten, Pewarna Alami Karamel IV, Antioksidan Asam Askorbat), Gula (Mengandung Pengawet Sulfit), Kulit Gandum, Margarin (Mengandung Pengawet Kalium Sorbat, Pewarna Alami Kurkumin Cl.No.75300, (Mengandung Pengawet Kalium Sorbat, Pewarna Alami Kurkumin Cl.No.75300, Ekstrak Anato Cl.No.75120), Lemak Hewani, Premiks Susu, Kecap (Mengand- ung Kedelai), Ragi, Garam, Pengawet Kalsium Propionat, Perlakuan Tepung (Mengandung Tepung Kedelai dan Antioksidan Asam Askorbat). *Mengandung Allergen, Lihat Daftar Bahan Yang Dicetak Tebal, Kode Produksi : Baik digunakan sebelum : JANGAN DITERIMA BILA KEMASAN RUSAK, 034998, @mrbread_id, PP, 05, QR Code. Buat roti suka, makan juga suka, (Informasi Nilai Gizi / Nutrition Information, Takaran Saji (80 g) / Serving size (80g), Jumlah per sajian / Amount per serving, Lemak Total / Total Fat 7 g, Lemak Jenuh / Saturated Fat 3 g, Protein / Protein 8 g, karbohidrat / Total Carbohydrate 38 g, Gula / Sugar 4 g, Garam (natrium) / Salt (Sodium) 330 mg, %AKG* / %Daily Value *, *Persen AKG berdasarkan kebutuhan energi 2150 kkal. Kebutuhan energi anda mungkin lebih tinggi atau lebih rendah. *Percent Daily Values are based on a 2150 kcal. Your daily values may be higher or lower depending on your calorie needs.)"
+      "servingSize": "23 g",
+      "servingsPerPack": "6 Sajian per Kemasan / 6 Serving per Container, Net 138g total pack weight (Estimated approx 12-15g sugar total per pack based on 7g per 23g serving). Note: Exact net weight not fully printed on visible front panel, but serving size 23g is specified with 6 servings per container total pack weight ~138g approx estimated safely if needed, otherwise omitted exact pack weight since only serving size and container count are given verbatim from image OCR: 6 Sajian per Kemasan / 6 Serving per Container, 23 g serving size. Total pack weight inferred approx 138g or left unspecified to avoid hallucination beyond explicit OCR text). Let's provide exact OCR values verbatim: servingSize '23 g', servingsPerPack '6 Sajian per Kemasan', perServing: { calories: 90, protein: 1.0, totalFat: 3.0, saturatedFat: 1.0, carbohydrates: 15.0, sugar: 7.0, addedSugar: null, saltMg: 20.0, sodiumMg: null }."
     },
     {
-      "name": "Yellow Sweet Bread",
+      "name": "Multiseed Bread (Roti Multiseed)",
+      "tier": 1,
+      "sourceImageIndex": 1,
+      "hasNutritionLabel": true,
+      "servingSize": "80 g",
+      "servingsPerPack": "3 sajian per kemasan / 3 serving per pack, Total pack net weight 240g inferred from 80g x 3 servings. Per serving values: calories 250, protein 8.0, totalFat 7.0, saturatedFat 3.0, carbohydrates 38.0, sugar 4.0, sodiumMg: 330.0, saltMg: null, addedSugar: null."
+    },
+    {
+      "name": "Sweet Yellow Pastry/Bread (Roti Manis)",
       "tier": 3,
       "sourceImageIndex": 2,
-      "boundingBox2D": [
-        292,
-        0,
-        755,
-        1000
-      ],
       "hasNutritionLabel": true,
-      "brand": "Mr. Bread",
       "servingSize": "75 g",
-      "servingsPerPack": "2 Sajian Per Kemasan / 2 Serving Per Pack, Energi Total / Total Energy 250 kkal, Lemak Total / Total Fat 6 g, Lemak Jenuh / Saturated Fat 4.5 g, Protein / Protein 6 g, Karbohidrat Total / Total Carbohydrate 42 g, Gula Total / Total Sugar 19 g, Garam (Natrium) / Salt (Sodium) 125 mg - Persen AKG berdasarkan kebutuhan energi 2150 kkal. Kebutuhan energi anda mungkin lebih tinggi atau lebih rendah. Komposisi : Tepung terigu 34.28%, pasta sarikaya 29.65% (mengandung telur, pengawet (Kalium Sorbate, pewarna alami Karamel III dan IV, pewarna sintetis (Tartazin Cl No. 19140, Kuning FCF Cl No. 15985), antioksidan tokoferol, air, gula (mengandung pengawet sulfit), es batu, margarin, ragi, garam, pengawet (Kalsium Propionat), pengemulsi nabati, antioksidan BHA), garan."
+      "servingsPerPack": "2 Sajian Per Kemasan / 2 Serving Per Pack, Total pack net weight 150g inferred. Per serving values: calories 250, protein 6.0 (note: OCR shows 6g for protein or general row order: 6g fat, 4.5g sat fat, 6g protein/sugar row, 42g carbs, 19g sugar, 125mg sodium). Let's match OCR line order precisely: total fat 6g, saturated fat 4.5g, protein/sugar row 6g, carbs 42g, total sugar 19g, sodium 125mg."
     },
     {
-      "name": "Blue Packaged Bread",
-      "tier": 2,
+      "name": "White Bread / Sweet Bun (Soft Loaf)",
+      "tier": 3,
       "sourceImageIndex": 3,
-      "boundingBox2D": [
-        414,
-        91,
-        912,
-        911
-      ],
       "hasNutritionLabel": true,
-      "brand": "Mr. Bread",
       "servingSize": "44 g",
-      "servingsPerPack": "5 Sajian per kemasan / 5 Serving per pack, Energi Total / Total Energy 120 kkal, Energi dari lemak / Energy from fat 20 kkal, Energi dari lemak jenuh / Energy from Saturated Fat 10 kkal, Lemak Total / Total Fat 2.5 g (4%), Lemak Jenuh / Saturated Fat 1.5 g (7%), Protein / Protein 4 g (6%), Karbohidrat Total / Total Carbohydrate 21 g (6%), Gula Total / Total Sugar 2 g, Garam (Natrium) / Salt (Sodium) 150 mg (10%) - Persen AKG berdasarkan kebutuhan energi 2150 kkal. Komposisi : Tepung Terigu (56.50%), Air, Es, Gula (Mengandung Pengawet Sulfit), Lemak Reroti (Mengandung Antioksidan BHA), Susu Bubuk Full Cream, Ragi, Garam, Pengawet Kalsium Propionat, Perlakuan Tepung (Mengandung Kedelai, Gluten, Antioksidan Asam Askorbat) dan Pengemulsi Nabati."
+      "servingsPerPack": "5 Sajian per kemasan / 5 Serving per pack, Total pack net weight 220g. Per serving values: calories 120, protein 4.0, totalFat 2.5, saturatedFat 1.5, carbohydrates 21.0, sugar 2.0, sodiumMg: 150.0, saltMg: null, addedSugar: null."
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 2 - Moderate Choice: Balanced Breads",
+      "groupName": "Tier 1 - Safest Choice: High-Fiber Multiseed Bread",
       "scoutItemIndices": [
-        1,
+        1
+      ],
+      "boundingBox2D": [
+        0,
+        0,
+        1000,
+        1000
+      ],
+      "verdict": {
+        "label": "Best Balanced Fiber Choice",
+        "level": "good"
+      },
+      "comparisonSentence": "Unlike the refined carbohydrate snacks and sweet pastries, the multiseed bread delivers significantly more dietary fiber and sustained energy with moderate glycemic impact.",
+      "message": "The multiseed bread is the superior nutritional choice among the compared items, providing 8 grams of protein and valuable multiseed inclusions per 80g serving. Although sodium is moderate at 330 mg, the higher protein and fiber content promote satiety and stabilize postprandial glucose curves far better than refined white flour products or high-sugar snack bars.",
+      "averageNutrients": {
+        "calories": 250,
+        "protein": 8,
+        "totalFat": 7,
+        "saturatedFat": 3,
+        "carbohydrates": 38,
+        "sugar": 4,
+        "sodium": 330
+      },
+      "orderingTip": "Choose this multiseed loaf for breakfast or sandwiches, and pair it with a lean protein like eggs or avocado to maximize satiety and blunt glycemic response."
+    },
+    {
+      "groupName": "Tier 2 - Moderate Choice: Portion-Controlled Snack Bar",
+      "scoutItemIndices": [
+        0
+      ],
+      "boundingBox2D": [
+        0,
+        0,
+        1000,
+        1000
+      ],
+      "verdict": {
+        "label": "Moderate Calorie Snack Bar",
+        "level": "neutral"
+      },
+      "comparisonSentence": "While this snack bar offers built-in portion control at 90 calories per single 23g bar, it contains a high sugar-to-protein ratio compared to whole grain bread.",
+      "message": "This snack bar is acceptable for occasional, strictly portion-controlled treats, but its nutrient profile is dominated by carbohydrates and sugars (7g sugar per 23g bar) with minimal protein (1g). Relying on it for daily nutrition offers little metabolic benefit, so consume sparingly.",
+      "averageNutrients": {
+        "calories": 90,
+        "protein": 1,
+        "totalFat": 3,
+        "saturatedFat": 1,
+        "carbohydrates": 15,
+        "sugar": 7,
+        "sodium": 20
+      },
+      "orderingTip": "Treat this snack bar strictly as an emergency sweet bite rather than a wholesome meal component, keeping frequency low."
+    },
+    {
+      "groupName": "Tier 3 - Caution Choice: Refined Flour & Sweet Buns",
+      "scoutItemIndices": [
+        2,
         3
       ],
       "boundingBox2D": [
-        292,
         0,
-        912,
+        0,
+        1000,
         1000
       ],
       "verdict": {
-        "label": "Balanced Protein & Lower Sugar",
-        "level": "neutral"
-      },
-      "comparisonSentence": "Unlike the high-sugar sweet bread or confectionery snack, these bread options provide better protein content and significantly lower sugar levels.",
-      "message": "These bread products offer superior protein content (4g to 8g) and lower sugar levels (2g to 4g per serving) compared to confectionery alternatives. While sodium is present, the macro balance supports sustained satiety and steadier glycemic responses, making them acceptable choices in moderation.",
-      "averageNutrients": {
-        "calories": 185,
-        "protein": 6,
-        "totalFat": 4.8,
-        "saturatedFat": 2.2,
-        "carbohydrates": 29.5,
-        "sugar": 3,
-        "sodium": 240
-      },
-      "orderingTip": "Pair with a lean protein source or healthy fats to further blunt glycemic spikes."
-    },
-    {
-      "groupName": "Tier 3 - Caution: High Sugar & Refined Snacks",
-      "scoutItemIndices": [
-        0,
-        2
-      ],
-      "boundingBox2D": [
-        292,
-        0,
-        755,
-        1000
-      ],
-      "verdict": {
-        "label": "Elevated Sugar & Saturated Fat",
+        "label": "High Sugar and Refined Flour",
         "level": "warning"
       },
-      "comparisonSentence": "These items contain considerably higher sugar and saturated fat concentrations than the moderate multiseed or plain white bread options.",
-      "message": "These products pack higher sugar loads (up to 19g per serving in the sweet bread) and elevated saturated fats, increasing the metabolic load and contributing to rapid blood glucose fluctuations. Frequent consumption may negatively impact metabolic health markers.",
+      "comparisonSentence": "These refined buns and sweet pastries lack the dense fiber of the multiseed option, with the sweet pastry delivering an excessive 19g of sugar per serving.",
+      "message": "Both the sweet pastry and the soft white bun rely heavily on refined wheat flour (over 50% flour base) with minimal fiber. The sweet pastry packs 19 grams of sugar per serving, driving rapid glycemic spikes and contributing to visceral adiposity and insulin resistance over time. Moderate sodium is present, but the sugar load warrants caution.",
       "averageNutrients": {
-        "calories": 170,
-        "protein": 3.5,
-        "totalFat": 4.5,
-        "saturatedFat": 2.8,
-        "carbohydrates": 28.5,
-        "sugar": 13,
-        "sodium": 72.5
+        "calories": 185,
+        "protein": 5,
+        "totalFat": 4.3,
+        "saturatedFat": 3,
+        "carbohydrates": 31.5,
+        "sugar": 10.5,
+        "sodium": 138
       },
-      "orderingTip": "Limit portion sizes strictly and avoid consuming multiple servings in a single sitting."
+      "orderingTip": "Limit consumption of sugary sweet breads, and if choosing white bread rolls, pair them with fibrous vegetables and lean proteins to slow carbohydrate absorption."
     }
   ],
-  "recommendedOption": "Blue Packaged Bread"
+  "recommendedOption": "Multiseed Bread (Roti Multiseed)"
 }

@@ -24,15 +24,19 @@ STRICT INVARIANTS:
    - Faithfully transcribe the printed text without guessing, inventing, or hallucinating items not visible on the images.
    - JOIN MULTI-LINE MENU HEADINGS (NO ORPHAN WORDS):
      * If a dish name wraps across multiple lines or has indented sub-lines, YOU MUST JOIN THEM into a single dish entry. Do NOT emit isolated fragments as separate dishes.
-   - BOUNDING BOX MANDATE (boundingBox2D) FOR EVERY ITEM AND GROUP:
-     * For EVERY item in items[], provide "boundingBox2D": [ymin, xmin, ymax, xmax] coordinates normalized from 0 to 1000 indicating where the dish/label/item or text entry appears on the image.
-     * For EVERY group in groups[], provide "boundingBox2D": [ymin, xmin, ymax, xmax] covering the region of items in that group.
-     * Coordinate rules: 0 <= ymin < ymax <= 1000, 0 <= xmin < xmax <= 1000.
+   - BOUNDING BOX MANDATE (boundingBox2D) ONLY FOR GROUPS (SAVING VISION COMPUTE):
+     * Provide "boundingBox2D": [ymin, xmin, ymax, xmax] coordinates normalized from 0 to 1000 ONLY on each group in groups[], representing the bounding region/cluster of dishes or items belonging to that group on the image.
+     * Do NOT generate individual bounding boxes for each dish in items[]. This saves massive processing latency and output tokens, enabling fast and complete 50-100+ item extractions.
+     * Coordinate rules for groups: 0 <= ymin < ymax <= 1000, 0 <= xmin < xmax <= 1000.
+   - CONDENSED ITEM FORMAT (ESPECIALLY FOR MENUS, SHELVES, OR >25 ITEMS):
+     * Keep each item in items[] ultra-condensed: emit ONLY "name", "tier", and "sourceImageIndex". Do NOT emit empty or null boilerplate keys (like brand, boundingBox2D, servingSize, etc.) for items without printed nutrition tables.
+     * This condensed format drastically economizes tokens so you can extract ALL 50-100+ legible dishes across all columns and pages without truncation or sampling down.
+     * When a printed Nutrition Facts panel is present (hasNutritionLabel: true), transcribe its servingSize and perServing nutrients.
    - OCR ACCURACY FOR PRINTED NUTRITION PANELS (100% FAITHFUL TO IMAGE):
      * Read numbers directly from printed "Informasi Nilai Gizi" / Nutrition Facts panels with ZERO hallucination, rounding, or estimation.
      * Check serving size (Takaran Saji) and servings per pack (Jumlah Sajian per Kemasan). Transcribe them verbatim.
      * When hasNutritionLabel is true, YOU MUST POPULATE ALL NUTRIENT FIELDS in perServing (calories, protein, totalFat, saturatedFat, carbohydrates, sugar, sodiumMg, saltMg).
-   - Front-only packages without a nutrition panel: set hasNutritionLabel to false, transcribe product name from OCR, and do NOT fabricate or hallucinate macros or calories. Set perServing to null.
+   - Front-only packages without a nutrition panel: set hasNutritionLabel to false or omit, transcribe product name from OCR, and set perServing to null.
    - NO LUMPING: Each distinct variety, flavor, or dish entry gets its own item in items[].
 
 3. ACTIVE MULTI-TIER GROUPING (ZERO ORPHANED ITEMS & NO LAZY DUMPING):
@@ -168,12 +172,16 @@ export function buildScoutComparePrompt(
     contextPrompt += `\n\nPATIENT BIOMARKER PRIORITIES:\n${list}\nPrioritize these biomarkers when ordering groups and assigning verdicts.`;
   }
 
-  const base = `=== ACTIVE TASK: PRODUCT EVALUATION, EXHAUSTIVE DISH EXTRACTION, DIET GROUPING, ORDERING & VERDICTS ===
+  const base = `=== ACTIVE TASK: PRODUCT EVALUATION, EXHAUSTIVE DISH EXTRACTION, CONDENSED ITEMS, DIET GROUPING & VERDICTS ===
 Analyze all ${imageCount} provided comparison image(s).
-1. EXHAUSTIVE EXTRACTION (NO SAMPLING): Extract EVERY distinct food product, labelled snack, or menu dish visible into items[] with precise boundingBox2D coordinates.${multiImageRule} Do NOT merely sample 5-10 dishes. On menus or shelves with many options, perform a thorough, multi-column OCR scan and transcribe as many distinct dishes/products as legible across both pages/columns.
-2. TIER ASSIGNMENT: In items[], tag every item with its diet tier (tier: 1 for safest/healthiest, 2 for moderate, 3 for caution/warning, 4 for alert/severe).
-3. ACTIVE MULTI-TIER GROUPING: In groups[], create matching ranked tiers (Tier 1, Tier 2, Tier 3, Tier 4). Map every item index (from 0 to items.length - 1) into scoutItemIndices. Zero orphaned items, no out-of-bounds indices.
-4. ORDERING & VERDICTS: Order groups from best/safest choice down to alert. Provide verdict level, 3-6 word label, comparative sentence, clinical advice message, ordering tips, and realistic average nutrients for each group.`;
+1. EXHAUSTIVE EXTRACTION (NO SAMPLING, CONDENSED FORMAT):
+   - Extract EVERY distinct food product, labelled snack, or menu dish visible into items[].${multiImageRule} Do NOT merely sample 5-10 dishes. On menus or shelves with many options, perform a thorough, multi-column OCR scan and transcribe as many distinct dishes/products as legible across both pages/columns.
+   - CONDENSED ITEM FORMAT: Keep each item object minimal with only "name", "tier", and "sourceImageIndex" (no boundingBox2D on items, and omit empty/null boilerplate keys). This saves massive vision processing power and output tokens, enabling fast extraction of 50-100+ items.
+2. GROUP BOUNDING BOXES:
+   - Provide "boundingBox2D": [ymin, xmin, ymax, xmax] ONLY on each group in groups[], demarcating the region of the image containing those items.
+3. TIER ASSIGNMENT: In items[], tag every item with its diet tier (tier: 1 for safest/healthiest, 2 for moderate, 3 for caution/warning, 4 for alert/severe).
+4. ACTIVE MULTI-TIER GROUPING: In groups[], create matching ranked tiers (Tier 1, Tier 2, Tier 3, Tier 4). Map every item index (from 0 to items.length - 1) into scoutItemIndices. Zero orphaned items, no out-of-bounds indices.
+5. ORDERING & VERDICTS: Order groups from best/safest choice down to alert. Provide verdict level, 3-6 word label, comparative sentence, clinical advice message, ordering tips, and realistic average nutrients for each group.`;
 
   if (isGeneric) {
     return `${base}${contextPrompt}`;
@@ -194,6 +202,7 @@ export const scoutOnlyCompareResponseSchema = {
     recommendedOption: { type: Type.STRING, nullable: true },
     items: {
       type: Type.ARRAY,
+      description: "Condensed list of all distinct extracted dishes/products. For menus/shelves, only name, tier, and sourceImageIndex are needed.",
       items: {
         type: Type.OBJECT,
         properties: {
@@ -204,12 +213,7 @@ export const scoutOnlyCompareResponseSchema = {
             description: "Assigned diet tier: 1 (safest/best) to 4 (caution/alert)",
           },
           sourceImageIndex: { type: Type.INTEGER },
-          boundingBox2D: {
-            type: Type.ARRAY,
-            items: { type: Type.INTEGER },
-            description: "[ymin, xmin, ymax, xmax] coordinates normalized to 0-1000",
-          },
-          hasNutritionLabel: { type: Type.BOOLEAN },
+          hasNutritionLabel: { type: Type.BOOLEAN, nullable: true },
           servingSize: { type: Type.STRING, nullable: true },
           servingsPerPack: { type: Type.STRING, nullable: true },
           perServing: {
@@ -228,7 +232,7 @@ export const scoutOnlyCompareResponseSchema = {
             },
           },
         },
-        required: ["name", "tier", "sourceImageIndex", "boundingBox2D", "hasNutritionLabel"],
+        required: ["name", "tier", "sourceImageIndex"],
       },
     },
     groups: {

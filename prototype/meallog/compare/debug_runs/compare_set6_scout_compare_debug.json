@@ -1,983 +1,188 @@
 {
-  "_internalReasoning": "Evaluated a shelf of ultra-processed snack chips and categorized them into tiers based on portion size, fat content, and sodium density.",
-  "comparisonTitle": "Supermarket Shelf Snack Comparison",
+  "_internalReasoning": "Extracted shelf items exhaustively across multiple rows, categorized by portion size, packaging, and processing level to evaluate metabolic impact.",
+  "comparisonTitle": "Supermarket Snack Shelf Product Evaluation",
   "comparisonType": "shelf_selection",
-  "summary": "This shelf consists entirely of ultra-processed, fried snack chips and crisps, which carry high caloric, sodium, and saturated fat densities. Portion control through smaller packs or lighter formulations is the key strategy for harm reduction.",
+  "summary": "Comparing snack and chip options on this shelf reveals that all items are ultra-processed (NOVA 4) with high sodium, saturated fat, and refined carbohydrates. However, choosing smaller single-portion bags or lighter baked options significantly helps limit overall calorie and sodium intake compared to large family-size packs.",
   "items": [
     {
-      "name": "Happy Tos Tortilla Chips Corn Chips",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        108,
-        44,
-        388,
-        303
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Happy Tos",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "name": "Chitato Lite",
+      "tier": 2,
+      "sourceImageIndex": 0
     },
     {
-      "name": "Happy Tos Tortilla Chips",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        131,
-        237,
-        369,
-        442
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Happy Tos",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "name": "Lay's",
+      "tier": 2,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Happy Tos Tortilla Chips Small",
+      "tier": 2,
+      "sourceImageIndex": 0
     },
     {
       "name": "Oishi Popcorn",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        189,
-        411,
-        353,
-        537
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Oishi",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Chitato Lite",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        107,
-        517,
-        342,
-        742
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Chitato",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Lays",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        129,
-        706,
-        327,
-        895
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Lays",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Japota",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        57,
-        835,
-        313,
-        999
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Japota",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "tier": 2,
+      "sourceImageIndex": 0
     },
     {
       "name": "Jetz Tortilla",
       "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        410,
-        36,
-        580,
-        255
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Jetz",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
     },
     {
-      "name": "Happy Tos Snack",
+      "name": "Happy Tos Tortilla Chips Medium",
       "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        399,
-        211,
-        554,
-        381
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Happy Tos",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Happy Tos Blue",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        389,
-        345,
-        534,
-        489
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Happy Tos",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Happy Tos Yellow",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        369,
-        449,
-        521,
-        606
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Happy Tos",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
     },
     {
       "name": "Qtela Singkong",
       "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        358,
-        574,
-        506,
-        747
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Qtela",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
     },
     {
-      "name": "Lays Way",
+      "name": "Lay's Way",
       "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        355,
-        731,
-        486,
-        872
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Lays",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Japota Family Pack",
-      "tier": 4,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        326,
-        848,
-        471,
-        990
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Japota",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
     },
     {
       "name": "Doritos Jagung Bakar",
       "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        595,
-        12,
-        706,
-        192
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Doritos",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
     },
     {
-      "name": "Doritos Nacho Cheese",
+      "name": "Oishi Panchos",
       "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        582,
-        163,
-        678,
-        316
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Doritos",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
     },
     {
-      "name": "Oishi Panchos Barbeque",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        566,
-        276,
-        663,
-        417
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Oishi",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Oishi Panchos Cheese",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        549,
-        396,
-        650,
-        507
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Oishi",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Oishi Panchos Sweet Chili",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        538,
-        483,
-        634,
-        608
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Oishi",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Qtela Family Pack Barbeque",
+      "name": "Qtela Family Pack",
       "tier": 4,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        516,
-        597,
-        630,
-        742
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Qtela",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
     },
     {
-      "name": "Qtela Family Pack Balado",
+      "name": "Chuba Cassava Chips",
       "tier": 4,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        499,
-        725,
-        604,
-        847
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Qtela",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
     },
     {
-      "name": "Qtela Rumput Laut",
+      "name": "Taro Net",
       "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        484,
-        834,
-        584,
-        963
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Qtela",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
     },
     {
-      "name": "GunBee Layers",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        706,
-        1,
-        804,
-        149
-      ],
-      "hasNutritionLabel": false,
-      "brand": "GunBee",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "GunsBee Layers Flavors",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        696,
-        125,
-        785,
-        258
-      ],
-      "hasNutritionLabel": false,
-      "brand": "GunsBee",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "GunBee Flavors",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        684,
-        230,
-        764,
-        363
-      ],
-      "hasNutritionLabel": false,
-      "brand": "GunBee",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Chiki Popcorn",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        671,
-        335,
-        747,
-        449
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Chiki",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Tostos Tortilla Chips",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        650,
-        427,
-        730,
-        524
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Tostos",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Tostos Green",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        642,
-        513,
-        719,
-        600
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Tostos",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Chuba Cassava",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        629,
-        608,
-        706,
-        718
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Chuba",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Chuba Cassava Balado",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        615,
-        701,
-        693,
-        804
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Chuba",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Chuba Singkong",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        601,
-        792,
-        679,
-        896
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Chuba",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "name": "Chiki Twist",
+      "tier": 4,
+      "sourceImageIndex": 0
     },
     {
       "name": "Kusuka Singkong",
       "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        592,
-        887,
-        661,
-        994
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Kusuka",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
     },
     {
-      "name": "Chiki Twist",
+      "name": "GunjBee Layers",
       "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        887,
-        14,
-        994,
-        142
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Chiki",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Taro Net BBQ",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        875,
-        114,
-        959,
-        256
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Taro",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Taro Net Seaweed",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        834,
-        230,
-        934,
-        355
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Taro",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Krunchy Corn Tornado",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        776,
-        161,
-        863,
-        301
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Krunchy",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Wonhae Snack",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        776,
-        283,
-        834,
-        381
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Wonhae",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Wonhae Snack Variant",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        748,
-        362,
-        822,
-        451
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Wonhae",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Wonhae Snack Spicy",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        738,
-        432,
-        807,
-        526
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Wonhae",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Wonhae Black",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        727,
-        517,
-        796,
-        601
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Wonhae",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Chimi Snack",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        715,
-        590,
-        783,
-        672
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Chimi",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Chimi Cassava",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        706,
-        663,
-        770,
-        747
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Chimi",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Chimi Chips",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        696,
-        735,
-        760,
-        822
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Chimi",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Chimi Balado",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        689,
-        804,
-        748,
-        878
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Chimi",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Qtela Snack",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        676,
-        867,
-        730,
-        942
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Qtela",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Taro Net Original",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        738,
-        884,
-        804,
-        961
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Taro",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Kusuka Family Pack",
-      "tier": 4,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        763,
-        818,
-        830,
-        887
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Kusuka",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Kusuka Chips",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        769,
-        755,
-        839,
-        822
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Kusuka",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Kusuka Classic",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        781,
-        688,
-        852,
-        764
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Kusuka",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Kusuka Seaweed",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        789,
-        621,
-        867,
-        695
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Kusuka",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Taro Net Family",
-      "tier": 4,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        735,
-        949,
-        796,
-        999
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Taro",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Taro Net Mini",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        824,
-        52,
-        874,
-        192
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Taro",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Taro Net Pack",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        834,
-        347,
-        915,
-        461
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Taro Net",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Taro Net Snack",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        828,
-        449,
-        894,
-        540
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Taro",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Taro Net Special",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        818,
-        517,
-        882,
-        601
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Taro",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 3 - Standard Snack Packs",
+      "groupName": "Tier 2 - Moderate Choice: Portion-Controlled & Lighter Snacks",
       "scoutItemIndices": [
         0,
         1,
         2,
-        3,
+        3
+      ],
+      "boundingBox2D": [
+        90,
+        390,
+        350,
+        890
+      ],
+      "verdict": {
+        "label": "Moderate Choice Portion Control",
+        "level": "neutral"
+      },
+      "comparisonSentence": "Compared to large family-size packs, these moderately sized or lighter snack options limit immediate caloric overload and sodium spikes.",
+      "message": "While still ultra-processed snack items, selecting smaller package formats or lighter variants helps enforce portion discipline, keeping sodium and saturated fat exposure relatively contained for occasional indulgence.",
+      "averageNutrients": {
+        "calories": 160,
+        "protein": 2,
+        "totalFat": 9,
+        "saturatedFat": 3,
+        "carbohydrates": 18,
+        "sugar": 1,
+        "sodium": 180
+      },
+      "orderingTip": "Opt for single-serving pouches to avoid mindless overeating straight from a large bag."
+    },
+    {
+      "groupName": "Tier 3 - Warning Choice: Standard Corn & Cassava Chips",
+      "scoutItemIndices": [
         4,
         5,
         6,
         7,
         8,
         9,
-        10,
-        11,
-        14,
-        15,
-        16,
-        17,
-        21,
-        22,
-        23,
-        24,
-        25,
-        26,
-        27,
-        28,
-        29,
-        30,
-        31,
-        32,
-        33,
-        34,
-        35,
-        36,
-        37,
-        38,
-        39,
-        40,
-        41,
-        42,
-        43,
-        44,
-        46,
-        47,
-        48,
-        49,
-        50,
-        51,
-        52,
-        53
-      ],
-      "boundingBox2D": [
-        50,
-        0,
-        950,
-        1000
-      ],
-      "verdict": {
-        "label": "Moderate Portion Caution",
-        "level": "warning"
-      },
-      "comparisonSentence": "Unlike family-size bags, these standard-size snack packs provide moderate portions but still deliver high sodium and saturated fat.",
-      "message": "These standard bags of fried chips and extruded snacks are high in refined carbohydrates, sodium, and pro-inflammatory fats. While they represent a standard single-serving size compared to family packs, frequent consumption promotes blood pressure elevation and lipid dysregulation. Restrict intake to occasional treats and pair with hydrating water.",
-      "averageNutrients": {
-        "calories": 160,
-        "protein": 2,
-        "totalFat": 10,
-        "saturatedFat": 3.5,
-        "carbohydrates": 16,
-        "sugar": 1,
-        "sodium": 220
-      },
-      "orderingTip": "Opt for smaller individual pouches rather than multi-serving bags to enforce strict portion discipline."
-    },
-    {
-      "groupName": "Tier 4 - Family Size Snack Packs",
-      "scoutItemIndices": [
         12,
-        13,
-        18,
-        19,
-        20,
-        45
+        14,
+        15
       ],
       "boundingBox2D": [
-        326,
-        597,
-        830,
+        350,
+        0,
+        850,
         990
       ],
       "verdict": {
-        "label": "High Calorie & Sodium Alert",
+        "label": "High Sodium & Fat Warning",
+        "level": "warning"
+      },
+      "comparisonSentence": "Unlike portion-controlled bags, these standard packages deliver higher levels of refined oils and sodium that can strain cardiovascular health.",
+      "message": "Regular consumption of fried corn and cassava chips contributes significant amounts of inflammatory omega-6 vegetable oils, refined starches, and sodium, elevating blood pressure risks and promoting metabolic inflammation.",
+      "averageNutrients": {
+        "calories": 320,
+        "protein": 3,
+        "totalFat": 18,
+        "saturatedFat": 6,
+        "carbohydrates": 36,
+        "sugar": 2,
+        "sodium": 420
+      },
+      "orderingTip": "Limit frequency to occasional treats and pair with water to help manage sodium load."
+    },
+    {
+      "groupName": "Tier 4 - Alert Choice: Family Packs & Dense Fried Snacks",
+      "scoutItemIndices": [
+        10,
+        11,
+        13
+      ],
+      "boundingBox2D": [
+        500,
+        600,
+        850,
+        1000
+      ],
+      "verdict": {
+        "label": "High Calorie Family Pack Alert",
         "level": "alert"
       },
-      "comparisonSentence": "Compared to individual snack pouches, these large family packs present a severe metabolic load due to uncontrolled overconsumption risks.",
-      "message": "Family-sized snack bags encourage mindless overeating, easily pushing caloric intake past 800-1000 kcal per session alongside excessive sodium and trans/saturated fats. This triggers acute glycemic variability and vascular strain. Avoid purchasing these large formats if managing weight, blood pressure, or cardiovascular risk factors.",
+      "comparisonSentence": "Compared to moderate individual snacks, these family-size packs present an extreme metabolic load of sodium and saturated fat when consumed unmonitored.",
+      "message": "Large family packs and dense extruded snacks encourage overconsumption, easily delivering over 800 calories and excessive sodium in a single sitting, which directly undermines metabolic health and weight management goals.",
       "averageNutrients": {
-        "calories": 850,
-        "protein": 8,
-        "totalFat": 50,
-        "saturatedFat": 18,
-        "carbohydrates": 90,
+        "calories": 650,
+        "protein": 5,
+        "totalFat": 35,
+        "saturatedFat": 12,
+        "carbohydrates": 75,
         "sugar": 4,
-        "sodium": 1100
+        "sodium": 850
       },
-      "orderingTip": "Avoid buying family-size formats; if purchased, decant a tiny single portion into a small bowl and seal the rest away."
+      "orderingTip": "Avoid buying family-size bags; if purchased, decant a small portion into a bowl and seal the rest away."
     }
   ],
-  "recommendedOption": "Standard Snack Packs"
+  "recommendedOption": "Chitato Lite"
 }

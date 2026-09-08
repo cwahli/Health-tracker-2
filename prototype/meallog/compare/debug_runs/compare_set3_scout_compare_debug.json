@@ -1,459 +1,543 @@
 {
-  "_internalReasoning": "Extracted all items from both menu images, grouped by culinary health tier, ranked from vegetable/clear broth dishes down to fried selections.",
+  "_internalReasoning": "Extracted all items from both menu images, categorizing and ranking them by healthfulness, cooking method, and metabolic load.",
   "comparisonTitle": "Sambal Bakar Pencok 89 Menu Health Comparison",
   "comparisonType": "menu_items",
-  "summary": "Comparing menu options from Sambal Bakar Pencok 89 reveals a wide nutritional span. Fresh vegetable dishes, clear soups, and steamed items offer optimal metabolic safety, while deep-fried packages, fried rice, and offal carry significantly higher sodium, total fat, and saturated fat loads.",
+  "summary": "This menu features a wide variety of Indonesian traditional dishes ranging from fresh and boiled selections to heavy deep-fried options and rich coconut-rice meal sets. Steamed and clear vegetable dishes rank best, while deep-fried meals and sweet desserts present higher sodium and metabolic loads.",
   "items": [
-    {
-      "name": "Sayur Asem",
-      "tier": 1,
-      "sourceImageIndex": 1,
-      "boundingBox2D": [
-        435,
-        120,
-        449,
-        392
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
     {
       "name": "Kangkung Rebus",
       "tier": 1,
-      "sourceImageIndex": 1,
-      "boundingBox2D": [
-        463,
-        118,
-        477,
-        393
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 1
     },
     {
-      "name": "Lalapan Rebus (Labu+Kangkung+Kcg Pjg)",
+      "name": "Lalapan Rebus (Labu + Kangkung + KCG PJG)",
       "tier": 1,
-      "sourceImageIndex": 1,
-      "boundingBox2D": [
-        478,
-        117,
-        492,
-        392
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 1
     },
     {
-      "name": "Tumis Sawi Putih",
-      "tier": 2,
-      "sourceImageIndex": 1,
-      "boundingBox2D": [
-        295,
-        129,
-        307,
-        395
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "name": "Asinan Buah Bogor",
+      "tier": 1,
+      "sourceImageIndex": 0
     },
     {
-      "name": "Tumis Toge",
-      "tier": 2,
-      "sourceImageIndex": 1,
-      "boundingBox2D": [
-        321,
-        131,
-        334,
-        394
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "name": "Asinan Sayur Rujak Pengantin",
+      "tier": 1,
+      "sourceImageIndex": 0
     },
     {
-      "name": "Tumis Kangkung/Cah Terasi",
-      "tier": 2,
-      "sourceImageIndex": 1,
-      "boundingBox2D": [
-        253,
-        132,
-        266,
-        393
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "name": "Sayur Asem",
+      "tier": 1,
+      "sourceImageIndex": 1
     },
     {
       "name": "Nasi Putih",
       "tier": 2,
-      "sourceImageIndex": 1,
-      "boundingBox2D": [
-        604,
-        105,
-        616,
-        386
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 1
     },
     {
-      "name": "Paket Ayam (Nasi + Ayam Goreng/Bakar + Sayur Asem + Tahu + Tempe)",
+      "name": "Tumis Kangkung/Cah Terasi",
+      "tier": 2,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Tumis Caisim",
+      "tier": 2,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Tumis Genjer Ala Pencok '89",
+      "tier": 2,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Tumis Sawi Putih",
+      "tier": 2,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Tumis Sawi Putih + Telor",
+      "tier": 2,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Tumis Toge",
+      "tier": 2,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Tumis Toge + Ikan Asin",
+      "tier": 2,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Tumis Oncom",
+      "tier": 2,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Sate Taichan Juara (Selera Pedas)/Porsi",
+      "tier": 2,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Sop Ayam Kampung / Daging Sapi",
+      "tier": 2,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Soto Betawi Daging Sapi / Ayam Kampung",
+      "tier": 2,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Sayur Sop Ceker",
+      "tier": 2,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Rujak Kangkung/Plecing Kangkung",
+      "tier": 2,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Terong Balado",
+      "tier": 2,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Kol Goreng",
+      "tier": 2,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Tahu Acak (Selera Pedas By Request)",
+      "tier": 2,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Pepes Tahu",
+      "tier": 2,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Pepes Peda Mix Pete",
+      "tier": 2,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Telur Dadar",
+      "tier": 2,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Cumi Asin Goreng",
+      "tier": 2,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Ikan Asin Sepat",
+      "tier": 2,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Ikan Asin Peda Cabe Pencok",
+      "tier": 2,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Ikan Asin Jambal",
+      "tier": 2,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Ikan Teri Jengki Sambal Pencok",
+      "tier": 2,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Ikan Asin Gabus",
+      "tier": 2,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Kerupuk Mie + Bumbu Kacang",
       "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        336,
-        126,
-        349,
-        915
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Paket Uduk Ayam (Nasi Uduk + Ayam Goreng/Bakar + Sayur Asem Tahu + Tempe)",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        347,
-        126,
-        360,
-        915
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Paket Empal (Nasi + Daging Empal + Sayur Asem + Tahu + Tempe)",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        360,
-        126,
-        373,
-        915
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Paket Uduk Empal (Nasi Uduk + Daging Empal+Sayur Asem+Tahu)",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        374,
-        126,
-        388,
-        915
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Paket Bebek (Nasi + Bebek Goreng + Sayur Asem + Tahu + Tempe)",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        388,
-        126,
-        403,
-        915
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Paket Uduk Bebek (Nasi Uduk + Bebek Goreng + Sayur Asem + Tahu + Tempe)",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        403,
-        126,
-        417,
-        915
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Paket Lele (Nasi + Lele Goreng 2 PCS + Sayur Asem+Tahu + Tempe)",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        453,
-        122,
-        467,
-        915
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Paket Uduk Lele (Nasi Uduk + Lele Goreng 2 PCS + Sayur Asem + Tahu + Tempe)",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        468,
-        122,
-        481,
-        915
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Nasi Goreng Ayam (Pedas By Request)",
-      "tier": 4,
-      "sourceImageIndex": 1,
-      "boundingBox2D": [
-        683,
-        102,
-        699,
-        442
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Nasi Goreng Ikan Asin (By Request)",
-      "tier": 4,
-      "sourceImageIndex": 1,
-      "boundingBox2D": [
-        698,
-        101,
-        715,
-        442
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Nasi Goreng Pete (By Request)",
-      "tier": 4,
-      "sourceImageIndex": 1,
-      "boundingBox2D": [
-        712,
-        101,
-        729,
-        442
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Nasi Goreng Ati/Ampla (By Request)",
-      "tier": 4,
-      "sourceImageIndex": 1,
-      "boundingBox2D": [
-        727,
-        102,
-        745,
-        442
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Nasi Goreng Ala Pencok 89 (By Request)",
-      "tier": 4,
-      "sourceImageIndex": 1,
-      "boundingBox2D": [
-        744,
-        102,
-        762,
-        442
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Pencok Ampla/Usus/Ati",
-      "tier": 4,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        743,
-        91,
-        755,
-        305
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
     },
     {
       "name": "Sate Usus",
-      "tier": 4,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        174,
-        537,
-        185,
-        626
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "tier": 3,
+      "sourceImageIndex": 0
     },
     {
       "name": "Sate Ati-Ampla",
-      "tier": 4,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        189,
-        537,
-        201,
-        672
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "tier": 3,
+      "sourceImageIndex": 0
     },
     {
       "name": "Sate Kulit",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Paket Burung Puyuh",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Paket Uduk Burung Puyuh",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Paket Ayam",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Paket Uduk Ayam",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Paket Empal",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Paket Uduk Empal",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Paket Bebek",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Paket Uduk Bebek",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Paket Lele",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Paket Uduk Lele",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Paket Kembung",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Paket Uduk Kembung",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Paket Mujair",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Paket Uduk Mujair",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Paket Nila",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Paket Uduk Nila",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Pencok Kacang",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Pencok Kacang+Ketimun",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Ayam Goreng Cabe Kering",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Pencok Ceker",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Pencok Tahu/Tempe/Porsi (Isi 3)",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Ayam Geprek Selera Pedas",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Pencok Kepala/Porsi (Isi 3)",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Pencok Kulit/Porsi",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Pencok Ampla/Usus/Ati",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Karedok Ala Pencok 89",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Pencok Ayam Goreng/Bakar",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Pencok Daging Empal",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Pencok Ikan Nila Goreng",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Pencok Ikan Mujair Goreng",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Pencok Lele Goreng (2 Pcs)",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Pencok Ikan Kembung",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Pencok Bebek Goreng Presto",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Pencok Burung Puyuh",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Jengkol Pencok/Porsi",
+      "tier": 3,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Jengkol Balado/Porsi",
+      "tier": 3,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Jengkol Semur/Porsi",
+      "tier": 3,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Jengkol Goreng/Porsi",
+      "tier": 3,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Tumis Udang Balado",
+      "tier": 3,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Tumis Udang + Pete Bumbu Balado",
+      "tier": 3,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Tumis Cumi Balado",
+      "tier": 3,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Tumis Cumi + Pete Bumbu Balado",
+      "tier": 3,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Tumis Peda",
+      "tier": 3,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Tumis Peda + Pete",
+      "tier": 3,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Tumis Cue",
+      "tier": 3,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Tumis Cue + Pete",
+      "tier": 3,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Pete Goreng/Bakar/Mentah",
+      "tier": 3,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Nasi Uduk",
+      "tier": 3,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Nasi Bakar Cakalang",
+      "tier": 3,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Nasi Bakar Ayam + Teri Medan",
+      "tier": 3,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Nasi Bakar Ayam Cumi Cabe Ijo",
+      "tier": 3,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Nasi Goreng Ayam (Pedas By Request)",
+      "tier": 3,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Nasi Goreng Ikan Asin (By Request)",
+      "tier": 3,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Nasi Goreng Pete (By Request)",
+      "tier": 3,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Nasi Goreng Ati/Ampla (By Request)",
+      "tier": 3,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Nasi Goreng Ala Pencok 89 (By Request)",
+      "tier": 3,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Seblak Complete",
       "tier": 4,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        203,
-        538,
-        215,
-        608
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Seblak Ceker",
+      "tier": 4,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Seblak Sea Food",
+      "tier": 4,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Seblak Oret Viral",
+      "tier": 4,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Bubur Ayam",
+      "tier": 4,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Mie Ayam Original",
+      "tier": 4,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Mie Ayam/Ceker/Bakso/Pangsit",
+      "tier": 4,
+      "sourceImageIndex": 1
+    },
+    {
+      "name": "Bubur Sumsum/Ketan Hitam/Kacang Hijau/Singkong Thai/Kolang Kaling",
+      "tier": 4,
+      "sourceImageIndex": 1
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 1 - Safest Choice: Soups & Boiled Vegetables",
+      "groupName": "Tier 1 - Safest Choice: Boiled Vegetables & Soups",
       "scoutItemIndices": [
         0,
         1,
-        2
+        2,
+        3,
+        4
       ],
       "boundingBox2D": [
-        430,
-        110,
-        500,
-        410
+        180,
+        120,
+        230,
+        360
       ],
       "verdict": {
-        "label": "Lowest Calorie & Sodium Options",
+        "label": "Lowest Calorie & High Fiber",
         "level": "good"
       },
-      "comparisonSentence": "These boiled vegetable and clear soup dishes provide superior fiber and micronutrient density with vastly lower calorie and sodium loads compared to the heavy fried meal sets.",
-      "message": "These clear vegetable soups and boiled greens deliver essential dietary fiber, vitamins, and minerals with minimal lipids. They support glycemic stability, digestive regularity, and cardiovascular health without the heavy saturated fats found in fried dishes.",
+      "comparisonSentence": "Unlike the deep-fried meat sets and oily stir-fries, these boiled vegetable soups and fresh dishes deliver high fiber and minimal fat.",
+      "message": "These clear vegetable broths and boiled greens provide essential vitamins, minerals, and dietary fiber with virtually zero saturated fat or excess sodium, making them the healthiest option on the menu for metabolic health.",
       "averageNutrients": {
         "calories": 90,
-        "protein": 4,
-        "totalFat": 1.5,
-        "saturatedFat": 0.3,
+        "protein": 3,
+        "totalFat": 1,
+        "saturatedFat": 0.2,
         "carbohydrates": 16,
-        "sugar": 3,
-        "sodium": 280
+        "sugar": 5,
+        "sodium": 250
       },
-      "orderingTip": "Request soups and boiled vegetables without added MSG or excess salt when ordering."
+      "orderingTip": "Enjoy these freely as a nutrient-dense starter before any heavier protein main."
     },
     {
-      "groupName": "Tier 2 - Moderate Choice: Lightly Sautéed Greens & Staples",
+      "groupName": "Tier 2 - Neutral Choice: Light Tumis & Clear Soups",
       "scoutItemIndices": [
-        3,
-        4,
         5,
-        6
-      ],
-      "boundingBox2D": [
-        250,
-        100,
-        340,
-        420
-      ],
-      "verdict": {
-        "label": "Moderate Vegetable & Starch Options",
-        "level": "neutral"
-      },
-      "comparisonSentence": "While higher in cooking oil and sodium than raw or boiled vegetables, these light stir-fries and plain rice remain much healthier than the deep-fried animal meal sets.",
-      "message": "Sautéed vegetables and plain white rice provide steady energy and fiber, though cooking oils introduce moderate caloric density. Monitor portion sizes to avoid excessive fat intake.",
-      "averageNutrients": {
-        "calories": 220,
-        "protein": 5,
-        "totalFat": 8,
-        "saturatedFat": 1.5,
-        "carbohydrates": 32,
-        "sugar": 3,
-        "sodium": 450
-      },
-      "orderingTip": "Ask for light oil usage during preparation."
-    },
-    {
-      "groupName": "Tier 3 - Caution Choice: Deep-Fried Protein Meal Packages",
-      "scoutItemIndices": [
+        6,
         7,
         8,
         9,
@@ -461,34 +545,7 @@
         11,
         12,
         13,
-        14
-      ],
-      "boundingBox2D": [
-        330,
-        120,
-        490,
-        930
-      ],
-      "verdict": {
-        "label": "High Saturated Fat & Calorie Load",
-        "level": "warning"
-      },
-      "comparisonSentence": "These complete meal packages combine deep-fried proteins and coconut-infused uduk rice, resulting in significantly higher caloric and saturated fat burdens than vegetable side dishes.",
-      "message": "These fried poultry and fish meal sets pack substantial protein alongside heavy cooking oils, increasing cardiovascular and metabolic strain. Consuming them regularly requires careful portion control and balance with fiber-rich sides.",
-      "averageNutrients": {
-        "calories": 750,
-        "protein": 35,
-        "totalFat": 38,
-        "saturatedFat": 12,
-        "carbohydrates": 65,
-        "sugar": 4,
-        "sodium": 950
-      },
-      "orderingTip": "Opt for grilled (bakar) versions instead of fried (goreng) to reduce lipid absorption."
-    },
-    {
-      "groupName": "Tier 4 - Alert Choice: Fried Rice, Offal & Skewers",
-      "scoutItemIndices": [
+        14,
         15,
         16,
         17,
@@ -497,31 +554,160 @@
         20,
         21,
         22,
-        23
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30
       ],
       "boundingBox2D": [
-        170,
-        90,
-        770,
-        930
+        390,
+        110,
+        510,
+        880
       ],
       "verdict": {
-        "label": "Severe Metabolic & Sodium Load",
+        "label": "Moderate Sodium & Balanced Proteins",
+        "level": "neutral"
+      },
+      "comparisonSentence": "These sautéed vegetables and clear soups offer better portion control and lower fat compared to deep-fried meal packages.",
+      "message": "Lightly sautéed greens and clear meat soups provide adequate protein and micronutrients, though cooking oils and added sodium require moderate caution for individuals managing hypertension.",
+      "averageNutrients": {
+        "calories": 280,
+        "protein": 14,
+        "totalFat": 12,
+        "saturatedFat": 3.5,
+        "carbohydrates": 25,
+        "sugar": 3,
+        "sodium": 650
+      },
+      "orderingTip": "Request less oil in your vegetable stir-fries and limit added sodium from heavy condiments."
+    },
+    {
+      "groupName": "Tier 3 - Warning Choice: Fried Proteins & Rich Dishes",
+      "scoutItemIndices": [
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        76,
+        77,
+        78,
+        79,
+        80,
+        81,
+        82,
+        83,
+        84,
+        85,
+        86,
+        87,
+        88,
+        89,
+        90
+      ],
+      "boundingBox2D": [
+        230,
+        120,
+        780,
+        920
+      ],
+      "verdict": {
+        "label": "High Saturated Fat & Calories",
+        "level": "warning"
+      },
+      "comparisonSentence": "Compared to fresh boiled options, these fried meat sets and spicy balado dishes pack substantially higher calories and saturated fats.",
+      "message": "Deep-fried poultry, fish, and offal combined with rich sambal oils significantly increase total fat, saturated fat, and sodium intake, raising cardiovascular and metabolic strain when consumed frequently.",
+      "averageNutrients": {
+        "calories": 650,
+        "protein": 30,
+        "totalFat": 35,
+        "saturatedFat": 10,
+        "carbohydrates": 50,
+        "sugar": 6,
+        "sodium": 1100
+      },
+      "orderingTip": "Opt for grilled or pressure-cooked variants where available, and remove crispy skin to cut down saturated fat."
+    },
+    {
+      "groupName": "Tier 4 - Alert Choice: Seblak, Noodles & Sugary Desserts",
+      "scoutItemIndices": [
+        91,
+        92,
+        93,
+        94,
+        95,
+        96,
+        97,
+        98
+      ],
+      "boundingBox2D": [
+        795,
+        220,
+        920,
+        910
+      ],
+      "verdict": {
+        "label": "High Sodium & Refined Sugar Load",
         "level": "alert"
       },
-      "comparisonSentence": "Packed with fried offal, animal skin, and oil-drenched fried rice, this group carries the highest saturated fat, cholesterol, and sodium risk across the entire menu.",
-      "message": "Organ meats, skin skewers, and wok-fried rice absorb high amounts of cooking oil and sodium, elevating cardiovascular and lipid biomarkers. Limit consumption strictly to occasional treats.",
+      "comparisonSentence": "Unlike nutrient-dense vegetable dishes, these spicy cracker stews and sweetened coconut desserts deliver extreme carbohydrate and sodium loads.",
+      "message": "Processed noodle dishes, spicy seblak with crackers, and heavy sweetened dessert bowls create sharp glycemic spikes and excessive sodium retention, posing severe risks for metabolic syndrome.",
       "averageNutrients": {
-        "calories": 620,
-        "protein": 18,
-        "totalFat": 35,
-        "saturatedFat": 14,
-        "carbohydrates": 55,
-        "sugar": 3,
+        "calories": 480,
+        "protein": 10,
+        "totalFat": 18,
+        "saturatedFat": 9,
+        "carbohydrates": 70,
+        "sugar": 45,
         "sodium": 1400
       },
-      "orderingTip": "Avoid entirely if managing hypertension, dyslipidemia, or cardiovascular disease."
+      "orderingTip": "Share these dessert and noodle dishes in small portions rather than consuming an entire individual serving."
     }
   ],
-  "recommendedOption": "Sayur Asem"
+  "recommendedOption": "Kangkung Rebus"
 }

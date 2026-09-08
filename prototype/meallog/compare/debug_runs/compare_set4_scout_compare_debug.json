@@ -1,544 +1,219 @@
 {
-  "_internalReasoning": "Extracted all beverages from Cafe Crisna menu, categorized them by sugar and processing level, and ranked from pure tea/water to heavy condensed milk dessert drinks.",
-  "comparisonTitle": "Cafe Crisna Beverage Menu Comparison",
+  "_internalReasoning": "Extracted all beverage menu items, categorized by sugar and dairy load into ranked tiers, and calculated average nutrients.",
+  "comparisonTitle": "Cafe Crisda Beverage Menu Evaluation",
   "comparisonType": "menu_items",
-  "summary": "Comparing the beverage options at Cafe Crisna reveals a wide spectrum from unsweetened hot tea and plain coconut water to heavily sweetened fruit cocktails and condensed milk dessert bowls. Unsweetened choices provide hydration with minimal metabolic impact, while blended juices and mixed dessert drinks carry excessive free sugars.",
+  "summary": "Beverages on the menu range from plain tea and fresh coconut water to heavily sweetened dessert drinks and shakes packed with condensed milk and syrups. Opt for unsweetened or lightly prepared choices to minimize metabolic strain.",
   "items": [
     {
       "name": "Es Teh Manis",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        136,
-        411,
-        292,
-        530
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Wedang Jahe",
-      "tier": 2,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        141,
-        529,
-        292,
-        647
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "tier": 1,
+      "sourceImageIndex": 0
     },
     {
       "name": "Kopi",
-      "tier": 2,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        147,
-        643,
-        294,
-        752
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "tier": 1,
+      "sourceImageIndex": 0
     },
     {
       "name": "Es Kelapa Muda",
       "tier": 1,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        604,
-        172,
-        770,
-        311
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
     },
     {
-      "name": "Jus Jeruk",
+      "name": "Es Jeruk",
       "tier": 2,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        611,
-        31,
-        787,
-        180
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Jus Mangga",
-      "tier": 2,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        816,
-        332,
-        984,
-        463
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
     },
     {
       "name": "Jus Alpukat",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        150,
-        747,
-        295,
-        849
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "tier": 2,
+      "sourceImageIndex": 0
     },
     {
       "name": "Jus Melon",
       "tier": 2,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        158,
-        844,
-        296,
-        940
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Jus Kedondong",
+      "tier": 2,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Jus Sirsak",
+      "tier": 2,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Jus Mangga",
+      "tier": 2,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Jus Durian",
+      "tier": 2,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Jus Pisang",
+      "tier": 2,
+      "sourceImageIndex": 0
     },
     {
       "name": "Es Leci Jelly",
       "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        112,
-        0,
-        287,
-        131
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
     },
     {
       "name": "Es Bango Ager Item",
       "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        116,
-        128,
-        286,
-        264
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
     },
     {
       "name": "Es Moctail Renbow",
       "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        128,
-        269,
-        285,
-        401
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Wedang Jahe",
+      "tier": 3,
+      "sourceImageIndex": 0
     },
     {
       "name": "Es Leci Yakult",
       "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        363,
-        10,
-        529,
-        185
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
     },
     {
       "name": "Es Leci Kelapa",
       "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        357,
-        178,
-        523,
-        337
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
     },
     {
       "name": "Es Nipis Jely Selasih",
       "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        356,
-        335,
-        513,
-        480
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
     },
     {
       "name": "Es Lemon Jely Selasih",
       "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        354,
-        469,
-        502,
-        606
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
     },
     {
       "name": "Es Kuwut Bali",
       "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        352,
-        608,
-        497,
-        725
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
     },
     {
       "name": "Es Kuwut Nanas",
       "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        347,
-        730,
-        489,
-        843
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
     },
     {
       "name": "Es Virgin Mojito",
       "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        346,
-        845,
-        483,
-        949
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Jus Jeruk",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        737,
-        878,
-        882,
-        971
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Jus Pisang",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        748,
-        778,
-        897,
-        882
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Jus Sirsak",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        784,
-        683,
-        915,
-        788
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Jus Kedondong",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        793,
-        574,
-        930,
-        686
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Jus Durian",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        797,
-        461,
-        953,
-        576
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
     },
     {
       "name": "Es Jeruk Kelapa",
       "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        607,
-        310,
-        755,
-        437
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Es Campur",
-      "tier": 4,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        576,
-        429,
-        743,
-        555
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Es Alpukat Kocok",
-      "tier": 4,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        567,
-        549,
-        725,
-        666
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Es Teler Alpukat",
-      "tier": 4,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        558,
-        658,
-        712,
-        767
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Es Teler Durian",
-      "tier": 4,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        549,
-        764,
-        696,
-        867
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
     },
     {
       "name": "Sop Buah",
       "tier": 4,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        543,
-        856,
-        689,
-        955
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 0
     },
     {
-      "name": "Jus Merah",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        866,
-        52,
-        999,
-        194
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "name": "Es Campur",
+      "tier": 4,
+      "sourceImageIndex": 0
     },
     {
-      "name": "Es Pear/Jus Pear",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        840,
-        198,
-        999,
-        335
-      ],
-      "hasNutritionLabel": false,
-      "brand": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "name": "Es Alpukat Kocok",
+      "tier": 4,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Es Teler Alpukat",
+      "tier": 4,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Es Teler Durian",
+      "tier": 4,
+      "sourceImageIndex": 0
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 1 - Safest Choice: Pure Coconut Water",
-      "scoutItemIndices": [
-        3
-      ],
-      "boundingBox2D": [
-        604,
-        172,
-        770,
-        311
-      ],
-      "verdict": {
-        "label": "Safest Natural Hydration",
-        "level": "good"
-      },
-      "comparisonSentence": "Unlike the heavy dessert drinks and sweetened juices, pure young coconut water offers natural hydration with virtually zero added sugar.",
-      "message": "Es Kelapa Muda provides natural electrolytes with minimal processing and no added cane sugar. It is the optimal choice for hydration and blood sugar stability compared to heavy dessert bowls or sweetened juices.",
-      "averageNutrients": {
-        "calories": 45,
-        "protein": 1,
-        "totalFat": 0.2,
-        "saturatedFat": 0.1,
-        "carbohydrates": 10,
-        "sugar": 6,
-        "sodium": 50
-      },
-      "orderingTip": "Order pure without any added simple syrup or condensed milk."
-    },
-    {
-      "groupName": "Tier 2 - Moderate Choice: Warm Teas, Black Coffee & Plain Fresh Fruit Juices",
-      "scoutItemIndices": [
-        1,
-        2,
-        4,
-        5,
-        7
-      ],
-      "boundingBox2D": [
-        141,
-        529,
-        296,
-        940
-      ],
-      "verdict": {
-        "label": "Moderate Whole Fruit Options",
-        "level": "neutral"
-      },
-      "comparisonSentence": "These options contain more natural fruit sugars than coconut water but lack the heavy condensed milk found in Tier 4.",
-      "message": "Freshly pressed melon, orange, black coffee, and warm ginger water offer beneficial micronutrients. While fruit juices contain natural fructose that can raise blood glucose, they are far superior to syrup-laden mocktails and dessert soups.",
-      "averageNutrients": {
-        "calories": 110,
-        "protein": 1.5,
-        "totalFat": 0.5,
-        "saturatedFat": 0.1,
-        "carbohydrates": 26,
-        "sugar": 20,
-        "sodium": 15
-      },
-      "orderingTip": "Request zero added liquid sugar or simple syrup in your fresh juices."
-    },
-    {
-      "groupName": "Tier 3 - Caution Choice: Sweetened Teas, Mojitos, Jelly Drinks & Blended Fruit Juices",
+      "groupName": "Tier 1 - Safest Choice: Plain Teas & Fresh Coconut Water",
       "scoutItemIndices": [
         0,
+        1,
+        2
+      ],
+      "boundingBox2D": [
+        133,
+        179,
+        307,
+        526
+      ],
+      "verdict": {
+        "label": "Safest Hydration Option",
+        "level": "good"
+      },
+      "comparisonSentence": "Unlike the heavy dessert beverages, these simple options deliver minimal added sugars and offer clean hydration.",
+      "message": "These beverages are the best choices on the menu because they avoid dense syrups and condensed milk, minimizing sharp blood glucose spikes. Ideal for maintaining metabolic stability while providing basic hydration or natural electrolytes from coconut water.",
+      "averageNutrients": {
+        "calories": 60,
+        "protein": 1,
+        "totalFat": 0.5,
+        "saturatedFat": 0.1,
+        "carbohydrates": 14,
+        "sugar": 12,
+        "sodium": 15
+      },
+      "orderingTip": "Request less sugar or unsweetened preparation when possible."
+    },
+    {
+      "groupName": "Tier 2 - Moderate Choice: Fresh Fruit Juices & Purees",
+      "scoutItemIndices": [
+        3,
+        4,
+        5,
         6,
+        7,
         8,
         9,
-        10,
+        10
+      ],
+      "boundingBox2D": [
+        140,
+        525,
+        990,
+        966
+      ],
+      "verdict": {
+        "label": "Moderate Fruit Sugar Load",
+        "level": "neutral"
+      },
+      "comparisonSentence": "Compared to the extreme dessert drinks, pure fruit juices contain natural vitamins and fiber despite their higher fructose content.",
+      "message": "Fresh fruit juices provide valuable micronutrients, antioxidants, and vitamin C. However, juicing breaks down dietary fiber, leading to faster fructose absorption into the bloodstream. Consume in moderation if monitoring blood glucose or insulin resistance.",
+      "averageNutrients": {
+        "calories": 140,
+        "protein": 2,
+        "totalFat": 2.5,
+        "saturatedFat": 0.5,
+        "carbohydrates": 30,
+        "sugar": 24,
+        "sodium": 20
+      },
+      "orderingTip": "Ask for no added simple syrup or sugar in your fruit juice."
+    },
+    {
+      "groupName": "Tier 3 - Caution Choice: Mocktails, Jelly Drinks & Sweetened Teas",
+      "scoutItemIndices": [
         11,
         12,
         13,
@@ -550,65 +225,62 @@
         19,
         20,
         21,
-        22,
-        23,
-        29,
-        30
+        22
       ],
       "boundingBox2D": [
-        112,
-        0,
-        999,
-        971
+        116,
+        1,
+        764,
+        436
       ],
       "verdict": {
-        "label": "High Added Sugar Caution",
+        "label": "Added Syrup & Sugar Caution",
         "level": "warning"
       },
-      "comparisonSentence": "These beverages contain substantial added syrups and flavorings that elevate glycemic load compared to plain coconut water.",
-      "message": "Items in this group include sweetened iced tea, avocado juice with chocolate syrup, flavored jelly drinks, and various single-fruit juices that typically receive liquid sugar additions during preparation. Monitor intake if managing metabolic health.",
+      "comparisonSentence": "These flavored mocktails and jelly drinks carry significantly more refined sugars and syrups than plain teas or fresh coconut water.",
+      "message": "These drinks rely heavily on flavored syrups, gelatin jellies, and sweeteners, which contribute empty calories and promote rapid glycemic responses. Frequent consumption increases long-term cardiometabolic risk and visceral fat accumulation.",
       "averageNutrients": {
-        "calories": 220,
-        "protein": 2.5,
-        "totalFat": 4,
-        "saturatedFat": 1.5,
-        "carbohydrates": 45,
-        "sugar": 38,
+        "calories": 210,
+        "protein": 1.5,
+        "totalFat": 1,
+        "saturatedFat": 0.2,
+        "carbohydrates": 50,
+        "sugar": 42,
         "sodium": 35
       },
-      "orderingTip": "Ask for 'less sweet' (sedikit manis) or request syrup on the side."
+      "orderingTip": "Request half syrup or fewer jelly toppings to cut down sugar."
     },
     {
-      "groupName": "Tier 4 - Alert Choice: Mixed Fruit Soups & Condensed Milk Dessert Bowls",
+      "groupName": "Tier 4 - Alert Choice: Heavy Dessert Shakes & Condensed Milk Bowls",
       "scoutItemIndices": [
+        23,
         24,
         25,
         26,
-        27,
-        28
+        27
       ],
       "boundingBox2D": [
-        543,
-        429,
-        743,
+        549,
+        431,
+        715,
         955
       ],
       "verdict": {
-        "label": "Extreme Sugar & Calorie Alert",
+        "label": "High Sugar & Calorie Alert",
         "level": "alert"
       },
-      "comparisonSentence": "Unlike fresh coconut water or simple juices, these heavy dessert bowls pack massive calories and saturated fat from condensed milk and coconut cream.",
-      "message": "Es Campur, Es Teler, and Sop Buah combine multiple tropical fruits with heavy layers of sweetened condensed milk, coco syrup, and sometimes ice cream. This creates a severe glycemic spike and high caloric density that poses risks for metabolic syndrome.",
+      "comparisonSentence": "Unlike simple fresh juices, these heavy dessert bowls pack massive amounts of condensed milk, rich syrups, and saturated fats.",
+      "message": "Representing a severe metabolic load, these traditional dessert concoctions combine dense fruit mixtures with heavy condensed milk and sugary syrups. They deliver high calories, saturated fats, and rapid sugar spikes, making them unsuitable for frequent or casual consumption.",
       "averageNutrients": {
         "calories": 420,
-        "protein": 5,
+        "protein": 6,
         "totalFat": 14,
-        "saturatedFat": 9,
-        "carbohydrates": 70,
+        "saturatedFat": 8,
+        "carbohydrates": 72,
         "sugar": 58,
-        "sodium": 85
+        "sodium": 110
       },
-      "orderingTip": "Avoid entirely or share a single portion among multiple people as an occasional dessert."
+      "orderingTip": "Share this dessert item with others or avoid adding extra condensed milk."
     }
   ],
   "recommendedOption": "Es Kelapa Muda"

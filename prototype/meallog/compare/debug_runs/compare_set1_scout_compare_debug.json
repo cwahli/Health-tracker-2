@@ -1,165 +1,128 @@
 {
-  "_internalReasoning": "Analyzed SilverQueen milk chocolate and various Say Bread bakery items across the images. Grouped into appropriate health and nutrient tiers, prioritizing lower sugar and whole-grain options over ultra-processed sweets.",
-  "comparisonTitle": "Bakery Items vs. Milk Chocolate Bar Comparison",
-  "comparisonType": "food_items",
-  "summary": "Comparing chocolate bars to bakery items shows that while chocolate is calorie- and sugar-dense per serving, certain simpler bakery breads offer a more balanced macronutrient profile, though both categories require mindful portion control.",
+  "_internalReasoning": "Extracted SilverQueen chocolate bar and Say Bread items from the three images, categorized them by metabolic load, sugar density, and fiber profile into strict tiers.",
+  "comparisonTitle": "Bakery and Confectionery Product Health Evaluation",
+  "comparisonType": "shelf_selection",
+  "summary": "Comparing Say Bread bakery items and SilverQueen chocolate shows that both fall into heavier metabolic load categories due to refined grains, added sugars, and fats. Say Bread options offer higher protein content, whereas the chocolate bar is extremely dense in saturated fats and refined sugars with minimal protein and fiber.",
   "items": [
     {
-      "name": "SilverQueen Milk Chocolate with Cashews",
-      "tier": 3,
-      "sourceImageIndex": 0,
-      "boundingBox2D": [
-        0,
-        203,
-        999,
-        529
-      ],
-      "hasNutritionLabel": true,
-      "servingSize": "20 g",
-      "servingsPerPack": "2.6 (52g net weight total approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approx.)\n2.5 Sajian per kemasan (per label approvals... truncated for conciseness as per schema max fields or single string requirements): 2.5 Sajian per kemasan"
+      "name": "SilverQueen Milk Chocolate with Cashews 52g",
+      "tier": 4,
+      "sourceImageIndex": 0
     },
     {
-      "name": "Polo Cokelat Bakery Bread",
+      "name": "Polo Cokelat Say Bread",
+      "tier": 3,
+      "sourceImageIndex": 2
+    },
+    {
+      "name": "Polo Keju Say Bread",
+      "tier": 3,
+      "sourceImageIndex": 2
+    },
+    {
+      "name": "Choco Topping Pie Say Bread",
+      "tier": 3,
+      "sourceImageIndex": 2
+    },
+    {
+      "name": "Cheese Topping Pie Say Bread",
+      "tier": 3,
+      "sourceImageIndex": 2
+    },
+    {
+      "name": "Double Cheese Bread Say Bread",
       "tier": 2,
-      "sourceImageIndex": 2,
-      "boundingBox2D": [
-        308,
-        0,
-        528,
-        252
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Say Bread",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Polo Keju Bakery Bread",
-      "tier": 2,
-      "sourceImageIndex": 2,
-      "boundingBox2D": [
-        151,
-        513,
-        355,
-        719
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Say Bread",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Choco Topping Pie Bakery Item",
-      "tier": 3,
-      "sourceImageIndex": 2,
-      "boundingBox2D": [
-        693,
-        31,
-        963,
-        258
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Say Bread",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Cheese Topping Pie Bakery Item",
-      "tier": 3,
-      "sourceImageIndex": 2,
-      "boundingBox2D": [
-        695,
-        237,
-        953,
-        464
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Say Bread",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
-    },
-    {
-      "name": "Double Cheese Bread",
-      "tier": 3,
-      "sourceImageIndex": 2,
-      "boundingBox2D": [
-        655,
-        736,
-        888,
-        963
-      ],
-      "hasNutritionLabel": false,
-      "brand": "Say Bread",
-      "perServing": null,
-      "servingSize": null,
-      "servingsPerPack": null
+      "sourceImageIndex": 2
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 2 - Moderate Choice: Standard Bakery Breads",
+      "groupName": "Tier 2 - Moderate Choice: Cheese Breads",
       "scoutItemIndices": [
-        1,
-        2
-      ],
-      "boundingBox2D": [
-        151,
-        0,
-        528,
-        719
-      ],
-      "verdict": {
-        "label": "Moderate Choice Bakery Breads",
-        "level": "neutral"
-      },
-      "comparisonSentence": "Unlike the dense chocolate bar, these standard bakery breads offer slightly more complex carbohydrates and lower immediate concentrated sugar loads per serving.",
-      "message": "These bakery items provide moderate energy from carbohydrates and fats without the extreme concentrated sugar spike found in confectionery bars. However, they remain refined grain products and should be consumed as occasional treats within a balanced daily caloric allowance.",
-      "averageNutrients": {
-        "calories": 280,
-        "protein": 6,
-        "totalFat": 10,
-        "saturatedFat": 4,
-        "carbohydrates": 40,
-        "sugar": 12,
-        "sodium": 350
-      },
-      "orderingTip": "Pair with a protein source or fiber-rich beverage to help stabilize postprandial blood glucose responses."
-    },
-    {
-      "groupName": "Tier 3 - Caution Choice: Confectionery Chocolate & Rich Pastries",
-      "scoutItemIndices": [
-        0,
-        3,
-        4,
         5
       ],
       "boundingBox2D": [
-        0,
-        0,
-        999,
-        999
+        580,
+        715,
+        908,
+        990
       ],
       "verdict": {
-        "label": "High Sugar & Saturated Fat",
+        "label": "Moderate Protein & Calcium Option",
+        "level": "neutral"
+      },
+      "comparisonSentence": "Compared to the chocolate bar and sweet confectionery pastries, the double cheese bread delivers significantly higher protein content relative to its total carbohydrate load.",
+      "message": "This cheese-infused bread provides a more balanced macronutrient profile with decent protein from dairy cheese, though total sodium and saturated fats remain moderately elevated. It is a more sustaining choice for metabolic stability than pure sugar snacks, but should still be consumed in moderation.",
+      "averageNutrients": {
+        "calories": 280,
+        "protein": 9,
+        "totalFat": 12,
+        "saturatedFat": 5,
+        "carbohydrates": 34,
+        "sugar": 6,
+        "sodium": 420
+      },
+      "orderingTip": "Pair with a hot unsweetened tea or coffee to avoid adding extra liquid sugars."
+    },
+    {
+      "groupName": "Tier 3 - Caution Choice: Sweet Breads & Pastries",
+      "scoutItemIndices": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "boundingBox2D": [
+        80,
+        0,
+        560,
+        500
+      ],
+      "verdict": {
+        "label": "High Carbohydrate & Sugar Pastries",
         "level": "warning"
       },
-      "comparisonSentence": "Compared to simple breads, this group features much higher concentrations of refined sugars, added fats, and calorie density per gram.",
-      "message": "The SilverQueen chocolate bar and rich cheese/chocolate pies deliver high amounts of saturated fat and added sugars per serving. Regular consumption contributes significantly to caloric surplus, making strict portion discipline essential for metabolic health.",
+      "comparisonSentence": "Unlike pure chocolate bars, these sweet bakery items deliver substantial carbohydrate volume that can spike postprandial blood glucose levels rapidly.",
+      "message": "These sweet buns and topping pies combine refined wheat flour with substantial sugar fillings and toppings, driving up glycemic load and caloric density. While they contain slightly more structural mass and trace protein than candy bars, frequent consumption poses challenges for glycemic and weight management.",
       "averageNutrients": {
-        "calories": 380,
-        "protein": 5,
-        "totalFat": 22,
-        "saturatedFat": 9,
-        "carbohydrates": 38,
-        "sugar": 25,
-        "sodium": 220
+        "calories": 320,
+        "protein": 6,
+        "totalFat": 14,
+        "saturatedFat": 6,
+        "carbohydrates": 44,
+        "sugar": 16,
+        "sodium": 350
       },
-      "orderingTip": "Limit intake to a small portion size and avoid consuming the entire package in one sitting to protect cardiovascular and metabolic health."
+      "orderingTip": "Share one pastry with a companion or split into smaller portions to limit rapid carbohydrate intake."
+    },
+    {
+      "groupName": "Tier 4 - Alert Choice: High Sugar & Saturated Fat Chocolate",
+      "scoutItemIndices": [
+        0
+      ],
+      "boundingBox2D": [
+        0,
+        200,
+        1000,
+        540
+      ],
+      "verdict": {
+        "label": "Extreme Sugar & Saturated Fat Density",
+        "level": "alert"
+      },
+      "comparisonSentence": "Unlike bakery bread options that offer some structural substance, this chocolate bar packs an extremely high concentration of refined sugars and tropical saturated fats into a tiny physical volume.",
+      "message": "The SilverQueen milk chocolate bar delivers 110 kcal per 20g serving (approx. 286 kcal for the entire 52g bar) with high sugar and saturated fat concentrations. It triggers sharp insulin spikes with minimal satiety or micronutrient benefits, making it an adverse choice for cardiovascular and metabolic health.",
+      "averageNutrients": {
+        "calories": 286,
+        "protein": 5.2,
+        "totalFat": 18.2,
+        "saturatedFat": 9.2,
+        "carbohydrates": 26,
+        "sugar": 23.4,
+        "sodium": 52
+      },
+      "orderingTip": "If consumed, limit yourself strictly to a single 20g portion rather than finishing the entire package."
     }
   ],
-  "recommendedOption": "Polo Keju Bakery Bread"
+  "recommendedOption": "Double Cheese Bread Say Bread"
 }
