@@ -21,7 +21,7 @@ STRICT INVARIANTS:
    - For photos showing printed nutrition facts panels: transcribe exact per-serving values (calories, totalFat, saturatedFat, protein, totalCarbohydrate, sugar, sodium/salt). Record the printed serving size and servings per pack.
    - Front-only packages without a nutrition panel (e.g. banana chips front cover): set hasNutritionLabel to false, transcribe product name from OCR, and do NOT fabricate or hallucinate macros or calories. Set perServing to null.
    - Salt vs Sodium: If labelled "Garam" or "Salt", record as saltMg. If labelled "Natrium", record as sodiumMg. Do not confuse sugar with added sugar.
-   - Menu items: Extract 6 to 10 distinct representative menu items/dishes across all visible pages and sections (e.g. Paket, Ayam, Seafood, Sayuran/Tumisan, Sate). Do not treat the paper menu as food.
+   - Menu items: Extract at least 5 to 8 distinct representative menu items/dishes across all visible pages and sections (e.g. Paket, Ayam, Seafood, Sayuran/Tumisan, Sate). Do not treat the paper menu as food.
    - Shelf/Aisle: Group products compactly by brand or category (e.g. Happy Tos, Chitato Lite, Lay's, Qtela, Doritos, Taro). "Taro" is a commercial Indonesian snack brand, NOT taro vegetable leaves.
 
 3. DIET TASK: GROUPING (groups[]):
@@ -35,11 +35,12 @@ STRICT INVARIANTS:
    - Ranking order: 'good' -> 'neutral' -> 'warning' -> 'alert'.
    - The top group (index 0) must always represent the recommended or best choice among the alternatives (e.g., lower saturated fat, lower sodium, lower added sugar, higher protein/fiber, least processed).
 
-5. DIET TASK: VERDICT FOR EACH GROUP:
+5. DIET TASK: VERDICT & COMPARATIVE SENTENCE FOR EACH GROUP:
    - For EVERY group in groups[], provide:
      a) "verdict.level": Exactly one of "good" | "neutral" | "warning" | "alert".
      b) "verdict.label": Concise 3-6 words (e.g. "Lowest Sodium & Saturated Fat", "High Sugar & Calorie Alert", "Balanced High-Protein Choice", "Moderate Sodium Caution").
-     c) "message": 35-70 words clinical rationale explaining WHY this group received this verdict, highlighting trade-offs (saturated fat, sodium, sugar, additives) and guidance relative to cardiovascular, metabolic, and overall health targets.
+     c) "comparisonSentence": Exactly ONE clear, punchy sentence directly comparing this group to the other candidate groups/options (e.g., "Compared to the sweet breads and chiffon cake, this wafer bar cuts calories by more than half and contains minimal sodium.", or "Unlike the heavy deep-fried chicken and duck, these grilled and vegetable options minimize saturated fat and avoid reused frying oils.").
+     d) "message": 35-70 words clinical rationale explaining WHY this group received this verdict, highlighting trade-offs (saturated fat, sodium, sugar, additives) and guidance relative to cardiovascular, metabolic, and overall health targets.
 
 === REQUIRED OUTPUT JSON SCHEMA ===
 Output exactly ONE JSON object matching this schema:
@@ -77,6 +78,7 @@ Output exactly ONE JSON object matching this schema:
         "label": "string (3-6 words max)",
         "level": "good | neutral | warning | alert"
       },
+      "comparisonSentence": "string (Exactly 1 sentence comparing this group to the other options)",
       "message": "string (35-70 words clinical rationale on why this ranks here and biomarker trade-offs)",
       "averageNutrients": {
         "calories": 90,
@@ -183,6 +185,10 @@ export const scoutOnlyCompareResponseSchema = {
             },
             required: ["label", "level"],
           },
+          comparisonSentence: {
+            type: Type.STRING,
+            description: "Exactly one direct comparative sentence contrasting this group to the other options",
+          },
           message: { type: Type.STRING },
           averageNutrients: {
             type: Type.OBJECT,
@@ -199,7 +205,7 @@ export const scoutOnlyCompareResponseSchema = {
             },
           },
         },
-        required: ["groupName", "scoutItemIndices", "verdict", "message"],
+        required: ["groupName", "scoutItemIndices", "verdict", "comparisonSentence", "message"],
       },
     },
   },

@@ -64,6 +64,12 @@ const testCases: CompareTestCase[] = [
           details.push(`FAIL: Group ${gIdx + 1} missing verdict!`);
           passed = false;
         }
+        if (!g.comparisonSentence || g.comparisonSentence.length < 15) {
+          details.push(`FAIL: Group ${gIdx + 1} missing comparative sentence!`);
+          passed = false;
+        } else {
+          details.push(`  + Compare Sentence: "${g.comparisonSentence}"`);
+        }
         if (!g.message || g.message.length < 20) {
           details.push(`WARN: Group ${gIdx + 1} clinical message is too short or missing.`);
         }
@@ -278,7 +284,8 @@ async function runScoutOnlyComparePrototype() {
         const cal = g.averageNutrients?.calories != null ? `${g.averageNutrients.calories} kcal` : "";
         const na = g.averageNutrients?.sodium != null ? `${g.averageNutrients.sodium}mg Na` : "";
         console.log(`  Rank ${idx + 1}: "${g.groupName}" [${g.verdict?.level?.toUpperCase()}] - "${g.verdict?.label}" (Items: [${indices}]) ${cal} ${na}`);
-        console.log(`    Message: ${g.message}`);
+        console.log(`    Comparative Sentence: "${g.comparisonSentence}"`);
+        console.log(`    Clinical Message: ${g.message}`);
       });
 
       let checkRes = { passed: true, details: [] as string[] };
