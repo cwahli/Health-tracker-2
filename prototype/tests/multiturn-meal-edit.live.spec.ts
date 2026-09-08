@@ -106,7 +106,7 @@ test.describe('Live multiturn meal edit (demo)', () => {
         quotaAdmin: 500,
       }));
     }).catch(() => {});
-    const photo = process.env.LIVE_MEAL_PHOTO || '/workspace/meal-tawar-nilai-web.jpg';
+    const photo = process.env.LIVE_MEAL_PHOTO || 'prototype/tests/captures/meal-tawar-nilai-web.jpg';
     const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL || 'http://127.0.0.1:3000';
     // Prefer strict food-chat ids: broad input[placeholder] matches Food History search first in DOM.
     const send = () => page.locator('#food-chat-send-btn');
