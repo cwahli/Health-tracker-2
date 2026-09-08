@@ -48,4 +48,4 @@ Lesson: dump oracles must include **DISPLAY_LAG**, **COMPLETE_ONCE**, and **STAL
 ## Shipped (do not redo)
 
 F-8.1–8.9 · F-9.1–9.4 · F-10.1 · M30 curator · Q-1/2/3 · M23–M28 free-tier core.
-F-10.2
+F-10.2 COMPLETED (calculateDerivedNutrients ignoring agent calories)

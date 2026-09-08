@@ -72,8 +72,8 @@ STRICT INVARIANTS:
      a) "verdict.level": Exactly one of "good" | "neutral" | "warning" | "alert".
      b) "verdict.label": Concise 3-6 words (e.g. "Lowest Sodium & Saturated Fat", "High Sugar & Calorie Alert", "Balanced High-Protein Choice", "Moderate Sodium Caution").
      c) "comparisonSentence": Exactly ONE clear, punchy sentence directly comparing this group to the other candidate groups/options.
-     d) "message": 35-70 words clinical rationale explaining WHY this group received this verdict, highlighting trade-offs (saturated fat, sodium, sugar, additives) and guidance relative to cardiovascular, metabolic, and overall health targets.
-     e) "orderingTip": (Optional but strongly recommended for restaurant menus and beverages) Practical instruction for the user at ordering time to reduce metabolic harm (e.g. "Ask for without added sugar/syrup", "Request sauce on the side and substitute fried sides with fresh raw vegetables", "Opt for the small single-portion bag instead of the family size to enforce portion discipline").
+     d) "message": 35-70 words clinical rationale explaining WHY this group received this verdict. You MUST be two-sided: highlight BOTH positive benefits (e.g., closing protein/fiber deficits, healthy energy) AND negative trade-offs (e.g., saturated fat, sodium, sugar excesses). Actively praise and encourage nutrient-dense choices that help meet the user's targets, while penalizing those that exacerbate risks.
+     e) "orderingTip": (Optional but strongly recommended for restaurant menus and beverages) Practical instruction for the user at ordering time to maximize nutritional value or reduce metabolic harm (e.g. "Ask for without added sugar/syrup", "Add an extra side of grilled chicken to boost protein", "Opt for the small single-portion bag").
 6. AVERAGE NUTRIENTS ESTIMATION FOR EVERY GROUP (MANDATORY & REALISTIC):
    - For EVERY group in groups[], you MUST provide realistic "averageNutrients" representing the typical nutritional profile for items in that group:
      * calories: Estimated typical calories (kcal)
@@ -135,7 +135,7 @@ Output exactly ONE JSON object matching this schema:
         "level": "good | neutral | warning | alert"
       },
       "comparisonSentence": "string (Exactly 1 sentence comparing this group to the other options)",
-      "message": "string (35-70 words clinical rationale on why this ranks here and biomarker trade-offs)",
+      "message": "string (35-70 words clinical rationale highlighting both positive nutrient benefits and negative trade-offs)",
       "orderingTip": "string (practical instruction for the user at order or purchase time)",
       "averageNutrients": {
         "calories": 90,
@@ -173,6 +173,33 @@ export function buildScoutComparePrompt(
       .join("\n");
     contextPrompt += `\n\nPATIENT BIOMARKER PRIORITIES:\n${list}\nPrioritize these biomarkers when ordering groups and assigning verdicts.`;
   }
+  
+  let targetNutrientNames: string[] = [];
+  if (patientContext?.remainingAllowance) {
+    const ra = patientContext.remainingAllowance;
+    const targetsList = [];
+    if (ra.saturatedFat !== undefined) { targetsList.push(`Sat fat (${ra.saturatedFat})`); targetNutrientNames.push("Saturated Fat"); }
+    if (ra.calories !== undefined) { targetsList.push(`Calorie (${ra.calories})`); targetNutrientNames.push("Calories"); }
+    if (ra.sodium !== undefined) { targetsList.push(`Sodium (${ra.sodium})`); targetNutrientNames.push("Sodium"); }
+    if (ra.protein !== undefined) { targetsList.push(`Protein (${ra.protein})`); targetNutrientNames.push("Protein"); }
+    if (ra.carbohydrates !== undefined) { targetsList.push(`Carbohydrates (${ra.carbohydrates})`); targetNutrientNames.push("Carbohydrates"); }
+    if (ra.totalFibre !== undefined) { targetsList.push(`Total Fibre (${ra.totalFibre})`); targetNutrientNames.push("Total Fibre"); }
+    if (ra.potassium !== undefined) { targetsList.push(`Potassium (${ra.potassium})`); targetNutrientNames.push("Potassium"); }
+    if (ra.solubleFibre !== undefined) { targetsList.push(`Soluble Fibre (${ra.solubleFibre})`); targetNutrientNames.push("Soluble Fibre"); }
+    if (ra.addedSugar !== undefined) { targetsList.push(`Added Sugar (${ra.addedSugar})`); targetNutrientNames.push("Added Sugar"); }
+    if (ra.transFat !== undefined) { targetsList.push(`Trans Fat (${ra.transFat})`); targetNutrientNames.push("Trans Fat"); }
+
+    if (targetsList.length > 0) {
+      contextPrompt += `\n\n=== NUTRITIONAL TARGET STATUS ===\n3 days avg: ${targetsList.join(", ")}\n\nYou MUST take this dynamic user profile data into consideration for your grouping, evaluation, ranking, and clinical messaging. Adjust the ORDERING (Ranking), verdicts, and clinical guidance strictly based on how these items impact the user's specific nutritional deviations. For instance, if a user is severely over their Added Sugar or Saturated Fat limit, items high in those nutrients must be severely penalized in ranking and grouped as an 'alert', even if they might otherwise be considered moderate.`;
+    }
+  }
+
+  let varianceRuleText = "their macro-nutrients (Calories, Fat, Carbs) differ by more than 10%";
+  let averageNutrientsInstruction = "realistic average nutrients for each group.";
+  if (targetNutrientNames.length > 0) {
+    varianceRuleText = `their values for ANY of your targeted metrics (${targetNutrientNames.join(", ")}) differ by more than 10%`;
+    averageNutrientsInstruction = `the ENTIRE SET of nutrient values present in the NUTRITIONAL TARGET STATUS (${targetNutrientNames.join(", ")}) for each group in the averageNutrients object. Do not leave these targets empty.`;
+  }
 
   const base = `=== ACTIVE TASK: PRODUCT EVALUATION, EXHAUSTIVE DISH EXTRACTION, CONDENSED ITEMS, DIET GROUPING & VERDICTS ===
 Analyze all ${imageCount} provided comparison image(s).
@@ -182,8 +209,8 @@ Analyze all ${imageCount} provided comparison image(s).
 2. GROUP BOUNDING BOXES:
    - Provide "boundingBox2D": [ymin, xmin, ymax, xmax] ONLY on each group in groups[], demarcating the region of the image containing those items.
 3. TIER ASSIGNMENT: In items[], tag every item with its diet tier (tier: 1 for safest/healthiest, 2 for moderate, 3 for caution/warning, 4 for alert/severe).
-4. ACTIVE NUTRITIONAL CLUSTERING (MAX 10% VARIANCE & HIDDEN HARMS): In groups[], create ranked clusters. You MUST NOT group dishes if their macro-nutrients (Calories, Fat, Carbs) differ by more than 10%. BEYOND MACROS: Isolate items with critical hidden harms (e.g., Trans Fats, heavy synthetic additives, extreme oxidized oil) into their own 'alert' group, even if base macros match cleaner foods. Split broad categories (e.g., split "Fried Foods" into "Fried Lean Proteins", "Fried Carbs", "Fried Sides"). You may create 5-10 groups to maintain tight variance. Map every item index into scoutItemIndices. Zero orphaned items.
-5. ORDERING & VERDICTS: Order groups from best/safest choice down to alert. Provide verdict level, 3-6 word label, comparative sentence, clinical advice message, ordering tips, and realistic average nutrients for each group.`;
+4. ACTIVE NUTRITIONAL CLUSTERING (MAX 10% VARIANCE & HIDDEN HARMS): In groups[], create ranked clusters. You MUST NOT group dishes if ${varianceRuleText}. BEYOND MACROS: Isolate items with critical hidden harms (e.g., Trans Fats, heavy synthetic additives, extreme oxidized oil) into their own 'alert' group, even if base macros match cleaner foods. Split broad categories (e.g., split "Fried Foods" into "Fried Lean Proteins", "Fried Carbs", "Fried Sides"). You may create 5-10 groups to maintain tight variance. Map every item index into scoutItemIndices. Zero orphaned items.
+5. ORDERING & VERDICTS: Order groups from best/safest choice down to alert. Provide verdict level, 3-6 word label, comparative sentence, clinical advice message, ordering tips, and ${averageNutrientsInstruction}`;
 
   if (isGeneric) {
     return `${base}${contextPrompt}`;
@@ -274,7 +301,7 @@ export const scoutOnlyCompareResponseSchema = {
             nullable: true,
             description: "Optional practical instruction for the user at order or purchase time",
           },
-          averageNutrients: {
+            averageNutrients: {
             type: Type.OBJECT,
             properties: {
               calories: { type: Type.NUMBER, description: "Typical average calories in kcal" },
@@ -285,6 +312,10 @@ export const scoutOnlyCompareResponseSchema = {
               sugar: { type: Type.NUMBER, description: "Typical average sugar in grams" },
               totalFibre: { type: Type.NUMBER, description: "Typical average total fibre in grams" },
               sodium: { type: Type.NUMBER, description: "Typical average sodium in mg" },
+              potassium: { type: Type.NUMBER, nullable: true, description: "Typical average potassium in mg" },
+              solubleFibre: { type: Type.NUMBER, nullable: true, description: "Typical average soluble fibre in grams" },
+              addedSugar: { type: Type.NUMBER, nullable: true, description: "Typical average added sugar in grams" },
+              transFat: { type: Type.NUMBER, nullable: true, description: "Typical average trans fat in grams" },
             },
             required: ["calories", "protein", "totalFat", "saturatedFat", "carbohydrates", "sugar", "totalFibre", "sodium"],
           },

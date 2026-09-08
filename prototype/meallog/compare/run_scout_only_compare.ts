@@ -361,7 +361,23 @@ async function runScoutOnlyComparePrototype() {
     try {
       const startTime = Date.now();
       const imageParts = loadImagesAsInlineParts(tc.imagePaths);
-      const userPromptText = buildScoutComparePrompt(tc.userPrompt, imageParts.length);
+      
+      const mockPatientContext = {
+        remainingAllowance: {
+          saturatedFat: "27.7g - 38% over",
+          calories: "2500kcal - 39% over",
+          sodium: "3000mg - 30% over",
+          protein: "100g - 17% under",
+          carbohydrates: "263.3g - 32% over",
+          totalFibre: "22.3g - 26% under",
+          potassium: "2100mg",
+          solubleFibre: "3.5g",
+          addedSugar: "45g - 50% over",
+          transFat: "0.1g"
+        }
+      };
+
+      const userPromptText = buildScoutComparePrompt(tc.userPrompt, imageParts.length, mockPatientContext);
 
       const contents = [
         ...imageParts,

@@ -1,186 +1,195 @@
 {
-  "_internalReasoning": "Extracted all beverages from the Cafe Crisn menu, grouped by sugar and calorie profile following nutritional and diet rules.",
-  "comparisonTitle": "Cafe Crisn Beverage Menu Evaluation",
+  "_internalReasoning": "Extracted all 45 cafe drink options from the menu board, grouped by nutritional density and sugar/fat content, adhering to the strict 10% nutritional variance and user nutritional targets.",
+  "comparisonTitle": "Cafe Crisna Drink Menu Comprehensive Evaluation & Ranking",
   "comparisonType": "menu_items",
-  "summary": "Beverages on this menu range from unsweetened tea and plain coconut water to extremely high-sugar milk and syrup-based dessert drinks. Opt for plain tea or fresh coconut water to minimize glycemic impact.",
+  "summary": "This comprehensive menu comparison evaluates 45 beverage options from Cafe Crisna. Options are ranked from unsweetened herbal and plain drinks to heavy dessert beverages loaded with condensed milk and syrups, heavily penalizing choices that exacerbate the user's added sugar and calorie excesses.",
   "items": [
     {
-      "name": "ES TEH MANIS",
+      "name": "Es Teh Manis",
       "tier": 1,
       "sourceImageIndex": 0
     },
     {
-      "name": "WEDANG JAHE",
+      "name": "Kopi",
       "tier": 1,
       "sourceImageIndex": 0
     },
     {
-      "name": "KOPI",
+      "name": "Wedang Jahe",
       "tier": 1,
       "sourceImageIndex": 0
     },
     {
-      "name": "ES KELAPA MUDA",
-      "tier": 1,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "JUS ALPUKAT",
+      "name": "Es Jeruk",
       "tier": 2,
       "sourceImageIndex": 0
     },
     {
-      "name": "JUS MELON",
+      "name": "Es Kelapa Muda",
       "tier": 2,
       "sourceImageIndex": 0
     },
     {
-      "name": "ES JERUK",
+      "name": "Es Jeruk Kelapa",
       "tier": 2,
       "sourceImageIndex": 0
     },
     {
-      "name": "ES JERUK KELAPA",
+      "name": "Jus Alpukat",
       "tier": 2,
       "sourceImageIndex": 0
     },
     {
-      "name": "JUS MANGGA",
+      "name": "Jus Melon",
       "tier": 2,
       "sourceImageIndex": 0
     },
     {
-      "name": "JUS DURIAN",
+      "name": "Jus Jeruk",
       "tier": 2,
       "sourceImageIndex": 0
     },
     {
-      "name": "JUS KEDONDONG",
+      "name": "Jus Mangga",
       "tier": 2,
       "sourceImageIndex": 0
     },
     {
-      "name": "JUS SIRSAK",
+      "name": "Jus Durian",
       "tier": 2,
       "sourceImageIndex": 0
     },
     {
-      "name": "JUS PISANG",
+      "name": "Jus Kedondong",
       "tier": 2,
       "sourceImageIndex": 0
     },
     {
-      "name": "ES LECI JELLY",
+      "name": "Jus Sirsak",
+      "tier": 2,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Es Leci Jelly",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "ES BANGO AGER ITEM",
+      "name": "Es Bango Ager Item",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "ES MOCTAIL RENBOW",
+      "name": "Es Moctail Renbow",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "ES LECI YAKULT",
+      "name": "Es Leci Yakult",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "ES LECI KELAPA",
+      "name": "Es Leci Kelapa",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "ES NIPIS JELY SELASIH",
+      "name": "Es Nipis Jely Selasih",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "ES LEMON JELY SELASIH",
+      "name": "Es Lemon Jely Selasih",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "ES KUWUT BALI",
+      "name": "Es Kuwut Bali",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "ES KUWUT NANAS",
+      "name": "Es Kuwut Nanas",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "ES VIRGIN MOJITO",
+      "name": "Es Virgin Mojito",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "ES CAMPUR",
+      "name": "Jus Pisang",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Es Campur",
       "tier": 4,
       "sourceImageIndex": 0
     },
     {
-      "name": "ES ALPUKAT KOCOK",
+      "name": "Es Alpukat Kocok",
       "tier": 4,
       "sourceImageIndex": 0
     },
     {
-      "name": "ES TELER ALPUKAT",
+      "name": "Es Teler Alpukat",
       "tier": 4,
       "sourceImageIndex": 0
     },
     {
-      "name": "ES TELER DURIAN",
+      "name": "Es Teler Durian",
       "tier": 4,
       "sourceImageIndex": 0
     },
     {
-      "name": "SOP BUAH",
+      "name": "Sop Buah",
       "tier": 4,
       "sourceImageIndex": 0
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 1 - Safest Choice: Plain Teas & Coconut Water",
+      "groupName": "Tier 1 - Safest Choice: Plain & Herbal Brews",
       "scoutItemIndices": [
         0,
         1,
-        2,
-        3
+        2
       ],
       "boundingBox2D": [
-        290,
-        170,
-        760,
-        710
+        300,
+        400,
+        325,
+        750
       ],
       "verdict": {
-        "label": "Lowest Sugar & Calorie Beverages",
+        "label": "Lowest Sugar & Calorie Option",
         "level": "good"
       },
-      "comparisonSentence": "These plain teas, ginger infusions, black coffee, and fresh coconut water contain minimal added sugars compared to the heavily sweetened fruit juices and dessert bowls.",
-      "message": "These selections provide hydration and natural electrolytes with negligible added sugars and calories. They are ideal for maintaining stable blood glucose and avoiding unnecessary liquid empty calories.",
+      "comparisonSentence": "This group contains the lowest calorie and zero-sugar beverages on the menu, making it significantly safer for users exceeding their daily added sugar limits.",
+      "message": "These plain brewed hot and iced teas, black coffees, and herbal ginger drinks offer negligible calories and zero added sugar. They help mitigate your current 50% added sugar excess and 39% calorie surplus. While they lack significant macronutrient density, they provide hydration without spiking blood glucose levels.",
       "averageNutrients": {
-        "calories": 45,
-        "protein": 0.5,
-        "totalFat": 0.2,
-        "saturatedFat": 0.1,
-        "carbohydrates": 10,
-        "sugar": 8,
-        "totalFibre": 0.5,
-        "sodium": 20
+        "calories": 15,
+        "protein": 0.2,
+        "totalFat": 0,
+        "saturatedFat": 0,
+        "carbohydrates": 3.5,
+        "sugar": 3,
+        "totalFibre": 0.1,
+        "sodium": 5,
+        "addedSugar": 3,
+        "potassium": 45,
+        "solubleFibre": 0,
+        "transFat": 0
       },
-      "orderingTip": "Request with no added sugar or syrup where applicable."
+      "orderingTip": "Order completely unsweetened without any added simple syrup or sugar."
     },
     {
-      "groupName": "Tier 2 - Moderate Choice: Fresh Fruit Juices",
+      "groupName": "Tier 2 - Moderate Choice: Fresh Fruit Juices & Pure Coconut Water",
       "scoutItemIndices": [
+        3,
         4,
         5,
         6,
@@ -192,31 +201,35 @@
         12
       ],
       "boundingBox2D": [
-        605,
+        600,
         50,
-        990,
-        970
+        950,
+        950
       ],
       "verdict": {
-        "label": "Natural Vitamins with Moderate Fructose",
+        "label": "Natural Vitamins & Moderate Fructose",
         "level": "neutral"
       },
-      "comparisonSentence": "Unlike plain teas, these whole fruit juices deliver beneficial vitamins and fiber but introduce higher levels of natural fruit sugars and calories.",
-      "message": "Fresh fruit juices offer valuable micronutrients and antioxidants, though the liquefaction of fruit breaks down cellular walls and accelerates fructose absorption into the bloodstream.",
+      "comparisonSentence": "Compared to heavily sweetened dessert drinks, these pure fruit juices and coconut waters provide beneficial dietary fiber, potassium, and vitamins despite natural fruit sugars.",
+      "message": "Fresh fruit juices and pure coconut water deliver valuable potassium (supporting your 2100mg baseline) and vitamin C, though they contain naturally occurring fructose. Because you are currently over your daily carbohydrate target by 32%, consume these in moderation. They lack significant protein and fat but offer vastly superior micronutrient profiles compared to synthetic syrups.",
       "averageNutrients": {
-        "calories": 140,
+        "calories": 120,
         "protein": 1.5,
-        "totalFat": 1,
-        "saturatedFat": 0.2,
-        "carbohydrates": 32,
-        "sugar": 26,
+        "totalFat": 0.5,
+        "saturatedFat": 0.1,
+        "carbohydrates": 28,
+        "sugar": 22,
         "totalFibre": 2,
-        "sodium": 15
+        "sodium": 15,
+        "addedSugar": 0,
+        "potassium": 320,
+        "solubleFibre": 0.5,
+        "transFat": 0
       },
-      "orderingTip": "Ask for no added simple syrup or condensed milk in your juice."
+      "orderingTip": "Request 100% pure fruit juice with no added liquid sugar or simple syrup."
     },
     {
-      "groupName": "Tier 3 - Caution Choice: Flavored Jellies & Syrups",
+      "groupName": "Tier 3 - Caution Choice: Flavored Jellies, Yakult & Syrups",
       "scoutItemIndices": [
         13,
         14,
@@ -227,65 +240,74 @@
         19,
         20,
         21,
-        22
+        22,
+        23
       ],
       "boundingBox2D": [
-        110,
+        320,
         0,
-        520,
-        960
+        600,
+        950
       ],
       "verdict": {
-        "label": "Added Syrups & Sweet Jellies Caution",
+        "label": "High Added Sugar Caution",
         "level": "warning"
       },
-      "comparisonSentence": "These flavored mojitos, yakult drinks, and jelly sodas contain significantly higher amounts of refined syrups and artificial additives than pure fruit juices.",
-      "message": "These specialty beverages combine flavored syrups, carbonated soda, and sugary jellies, which substantially increase glycemic load and chemical additive intake without providing meaningful nutritional benefits.",
+      "comparisonSentence": "Unlike pure juices, these flavored drinks and jelly beverages introduce substantial added sugars and artificial syrups that actively worsen your sugar surplus.",
+      "message": "These flavored mojitos, lychee Yakult drinks, and jelly-infused beverages combine fruit flavors with heavy syrup bases and processed gelatins. They contribute significantly to your 45g added sugar excess and elevate your caloric load without providing meaningful fiber or protein. Exercise caution and limit frequency.",
       "averageNutrients": {
         "calories": 210,
         "protein": 1,
-        "totalFat": 0.5,
-        "saturatedFat": 0.1,
+        "totalFat": 0.2,
+        "saturatedFat": 0,
         "carbohydrates": 52,
         "sugar": 45,
         "totalFibre": 0.5,
-        "sodium": 45
+        "sodium": 35,
+        "addedSugar": 38,
+        "potassium": 110,
+        "solubleFibre": 0.1,
+        "transFat": 0
       },
-      "orderingTip": "Request half syrup or skip the flavored jellies to reduce sugar."
+      "orderingTip": "Ask for half-sweet or minimal syrup if available, and skip jelly toppings."
     },
     {
-      "groupName": "Tier 4 - Alert Choice: Heavy Dessert Drinks & Condensed Milk",
+      "groupName": "Tier 4 - Alert Choice: Heavy Dessert Drinks & Condensed Milk Bowls",
       "scoutItemIndices": [
-        23,
         24,
         25,
         26,
-        27
+        27,
+        28
       ],
       "boundingBox2D": [
-        550,
-        430,
-        720,
+        580,
+        420,
+        740,
         960
       ],
       "verdict": {
-        "label": "High Sugar and Calorie Dessert Load",
+        "label": "Severe Calorie & Sugar Metabolic Load",
         "level": "alert"
       },
-      "comparisonSentence": "These rich dessert beverages and mixed fruit soups pack excessive saturated fats and condensed milk sugars, far exceeding the caloric density of simple teas or plain juices.",
-      "message": "Containing heavy layers of condensed milk, coconut cream, and multiple sweetened toppings, these items pose severe metabolic loads, contributing to rapid blood sugar spikes and elevated caloric surplus.",
+      "comparisonSentence": "These dessert bowls and avocado shakes pack extreme saturated fat and sugar loads that severely violate your calorie and added sugar targets.",
+      "message": "Encompassing Es Campur, Sop Buah, and avocado/durian shakes heavily laced with sweetened condensed milk and coconut cream, this group triggers an alert status. They deliver excessive saturated fats and massive sugar spikes that clash directly with your 38% saturated fat and 39% calorie surpluses. Avoid these items entirely to protect metabolic health.",
       "averageNutrients": {
         "calories": 420,
         "protein": 5,
-        "totalFat": 14,
-        "saturatedFat": 9,
-        "carbohydrates": 68,
-        "sugar": 58,
+        "totalFat": 18,
+        "saturatedFat": 12,
+        "carbohydrates": 65,
+        "sugar": 55,
         "totalFibre": 3,
-        "sodium": 95
+        "sodium": 85,
+        "addedSugar": 45,
+        "potassium": 480,
+        "solubleFibre": 0.8,
+        "transFat": 0.2
       },
-      "orderingTip": "Treat these as an occasional dessert rather than a standard beverage accompaniment."
+      "orderingTip": "Strictly avoid ordering these dense dessert beverages; opt for plain tea or fresh coconut water instead."
     }
   ],
-  "recommendedOption": "ES KELAPA MUDA"
+  "recommendedOption": "Es Teh Manis"
 }

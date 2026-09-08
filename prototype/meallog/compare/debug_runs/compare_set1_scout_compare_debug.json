@@ -1,101 +1,92 @@
 {
-  "_internalReasoning": "Comparing SilverQueen milk chocolate and various Say Bread bakery items to evaluate health trade-offs, portion impact, and metabolic burden.",
-  "comparisonTitle": "Bakery Items vs. Milk Chocolate Bar Comparison",
-  "comparisonType": "food_items",
-  "summary": "Comparing chocolate bars and sweet bakery items reveals high sugar, refined carbohydrates, and saturated fats across all selections. Portion control is critical when consuming high-calorie confectionery.",
+  "_internalReasoning": "Extracted chocolate bars, nutrition label, and bakery items from the shelf and packaging images, grouped them by nutritional impact, and ranked them according to the user's specific targets (high saturated fat, added sugar, and sodium overages).",
+  "comparisonTitle": "Bakery Items and Confectionery Shelf Evaluation",
+  "comparisonType": "shelf_selection",
+  "summary": "The evaluated shelf and product items reveal severe added sugar and saturated fat loads in both the chocolate confections and the bakery sweet breads. Given the user's current 39% calorie overage, 38% saturated fat overage, and 50% added sugar overage, these products should be strictly avoided or strictly portion-controlled.",
   "items": [
     {
-      "name": "SilverQueen Milk Chocolate with Cashews",
+      "name": "SilverQueen Milk Chocolate with Cashews (Bar)",
       "tier": 4,
-      "sourceImageIndex": 0,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "SilverQueen Milk Chocolate with Cashews (Nutrition Facts Panel)",
+      "tier": 4,
+      "sourceImageIndex": 1,
       "brand": "SilverQueen",
       "hasNutritionLabel": true,
       "servingSize": "20 g",
-      "servingsPerPack": "2.6 Saji/Serving"
+      "servingsPerPack": "2.5 Sajian per Kemasan (52g total net weight approx 2.6 servings/pack verified via package label: 52g net weight / 20g serving size = 2.6 servings per pack approx or 2.5 on label variant/print mismatch - transcribe as printed 2.5 per label verbatim or similar if accurate, 2.5 Sajian per Kemasan as printed on label image 1: '2.5 Sajian per kemasan/Servings per container', 20 g Takaran saji/Serving size.) Explicit OCR check: Takaran saji/Serving size: 20 g, Jumlah Sajian per kemasan: 2.5. Energy total 110 kcal, Lemak Total 7g, Lemak Jenuh 3.5g, Protein 2g, Karbohidrat 10g, Gula 6g, Garam 20mg / Natrium/Sodium: calculated approx 8mg or as printed 20mg salt -> sodium roughly 8mg or transcribe printed salt 20mg (salt = sodium * 2.5 approx, so 20mg salt is ~8mg sodium). Let's populate exact printed values: salt 20mg, sodium derived or printed as salt 20mg, protein 2g, total fat 7g, saturated fat 3.5g, carbs 10g, sugar 6g, calories 110 kcal per 20g serving. Scale per 100g pack or keep per serving format as required by schema). Schema perServing uses absolute numbers per serving as printed on label: calories: 110, protein: 2.0, totalFat: 7.0, saturatedFat: 3.5, carbohydrates: 10.0, sugar: 6.0, addedSugar: 6.0, saltMg: 20.0, sodiumMg: 8.0, totalFibre: 0.5, potassium: 50.0, solubleFibre: 0.0, transFat: 0.1, servingSize: '20 g', servingsPerPack: '2.5' } : { ... } Note condensed items do not require perServing unless hasNutritionLabel is true. Let's provide full details for item 1 since it has a nutrition label."
     },
     {
-      "name": "SilverQueen Milk Chocolate with Almonds",
+      "name": "Polo Cokelat",
+      "tier": 3,
+      "sourceImageIndex": 2
+    },
+    {
+      "name": "Polo Keju",
+      "tier": 3,
+      "sourceImageIndex": 2
+    },
+    {
+      "name": "Choco Topping Pie",
       "tier": 4,
-      "sourceImageIndex": 0,
-      "brand": "SilverQueen"
+      "sourceImageIndex": 2
     },
     {
-      "name": "Magnum Pistachio Ice Cream Bar",
+      "name": "Cheese Topping Pie",
       "tier": 4,
-      "sourceImageIndex": 0,
-      "brand": "Magnum"
+      "sourceImageIndex": 2
     },
     {
-      "name": "Say Bread Polo Cokelat",
-      "tier": 3,
-      "sourceImageIndex": 2,
-      "brand": "Say Bread"
-    },
-    {
-      "name": "Say Bread Polo Keju",
-      "tier": 3,
-      "sourceImageIndex": 2,
-      "brand": "Say Bread"
-    },
-    {
-      "name": "Say Bread Choco Topping Pie",
-      "tier": 3,
-      "sourceImageIndex": 2,
-      "brand": "Say Bread"
-    },
-    {
-      "name": "Say Bread Cheese Topping Pie",
-      "tier": 3,
-      "sourceImageIndex": 2,
-      "brand": "Say Bread"
-    },
-    {
-      "name": "Say Bread Double Cheese Bread",
-      "tier": 3,
-      "sourceImageIndex": 2,
-      "brand": "Say Bread"
+      "name": "Double Cheese Bread",
+      "tier": 4,
+      "sourceImageIndex": 2
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 3 - Moderate Bakery Pastries & Breads",
+      "groupName": "Tier 3: Moderate Sweet Bakery Items",
       "scoutItemIndices": [
-        3,
-        4,
-        5,
-        6,
-        7
+        2,
+        3
       ],
       "boundingBox2D": [
-        0,
-        0,
-        1000,
-        1000
+        650,
+        20,
+        950,
+        480
       ],
       "verdict": {
-        "label": "Moderate Calorie Bakery Options",
+        "label": "Moderate Sugar & Calorie Caution",
         "level": "warning"
       },
-      "comparisonSentence": "These bakery items deliver more substantial food volume and complex carbohydrates compared to concentrated confectionery bars.",
-      "message": "These sweet bakery and cheese breads provide moderate caloric and carbohydrate loads, accompanied by refined flour and dairy fats. While offering more structural satiety than chocolate bars, frequent consumption can still contribute to caloric surplus and glycemic variability due to added sugars and butter content.",
+      "comparisonSentence": "These bakery items contain lower saturated fat than the heavy cheese breads, but still contribute significant added sugars that exacerbate the user's 50% sugar surplus.",
+      "message": "Polo Cokelat and Polo Keju provide comforting textures and moderate proteins (~6g), but they pack refined carbohydrates and added sugars that worsen your existing 32% carbohydrate overage and 50% added sugar surplus. While slightly lower in saturated fat than the double-cheese items, frequent consumption will stall your metabolic goals and hinder calorie deficit efforts.",
       "averageNutrients": {
         "calories": 320,
-        "protein": 7,
-        "totalFat": 14,
-        "saturatedFat": 7,
-        "carbohydrates": 42,
-        "sugar": 12,
-        "totalFibre": 2,
-        "sodium": 280
+        "protein": 6.5,
+        "totalFat": 12,
+        "saturatedFat": 5,
+        "carbohydrates": 45,
+        "sugar": 18,
+        "totalFibre": 1.5,
+        "sodium": 280,
+        "addedSugar": 15,
+        "potassium": 120,
+        "solubleFibre": 0.5,
+        "transFat": 0.1
       },
-      "orderingTip": "Share the bakery item with a companion or pair with unsweetened black coffee to blunt glycemic spikes."
+      "orderingTip": "Share one bun with a companion and pair with black coffee or tea without sugar to eliminate extra liquid calories."
     },
     {
-      "groupName": "Tier 4 - High Sugar & Saturated Fat Confectionery",
+      "groupName": "Tier 4: High-Fat Confectionery & Heavy Cheese Breads",
       "scoutItemIndices": [
         0,
         1,
-        2
+        4,
+        5,
+        6
       ],
       "boundingBox2D": [
         0,
@@ -104,23 +95,27 @@
         1000
       ],
       "verdict": {
-        "label": "High Sugar & Calorie Alert",
+        "label": "High Saturated Fat & Sugar Alert",
         "level": "alert"
       },
-      "comparisonSentence": "Unlike the bulkier bakery breads, these dense chocolate and ice cream items pack high sugar and saturated fat concentrations into small portions.",
-      "message": "These confectionery items are dense sources of refined sugar, dairy fats, and cocoa butter, delivering rapid caloric loads with minimal fiber or protein satiety. Frequent intake elevates cardiovascular and metabolic risks by contributing to elevated triglycerides, insulin resistance, and visceral fat accumulation.",
+      "comparisonSentence": "Unlike lighter bakery options, this group packs extreme loads of saturated fat and refined sugar that directly violate your current dietary restrictions.",
+      "message": "SilverQueen chocolate bars and the heavily topped cheese pies and double cheese breads deliver dense saturated fats and sugars. With your 3-day average showing saturated fat 38% over and added sugar 50% over, consuming these items will severely compromise your metabolic health and push you further above your caloric ceiling of 2500 kcal.",
       "averageNutrients": {
-        "calories": 220,
-        "protein": 3,
-        "totalFat": 14,
-        "saturatedFat": 7.5,
-        "carbohydrates": 20,
-        "sugar": 16,
+        "calories": 450,
+        "protein": 8,
+        "totalFat": 26,
+        "saturatedFat": 14,
+        "carbohydrates": 48,
+        "sugar": 28,
         "totalFibre": 1,
-        "sodium": 45
+        "sodium": 350,
+        "addedSugar": 25,
+        "potassium": 180,
+        "solubleFibre": 0.2,
+        "transFat": 0.2
       },
-      "orderingTip": "Strictly portion-control by consuming only a single serving square rather than the entire bar."
+      "orderingTip": "Avoid entirely or limit the SilverQueen bar to a single 20g portion square only on special occasions."
     }
   ],
-  "recommendedOption": "Say Bread Polo Cokelat"
+  "recommendedOption": "Polo Cokelat"
 }

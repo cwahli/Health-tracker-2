@@ -1,16 +1,16 @@
 # Health Tracker — End-to-End Diagnostic Report
 
-- **Exported:** 2026-09-08T20:13:11.737Z
-- **Job ID:** `job_compare_set2_1788898387258`
+- **Exported:** 2026-09-08T20:23:28.988Z
+- **Job ID:** `job_compare_set2_1788899004501`
 - **Status:** succeeded
 - **Pack:** food
 - **Mode:** compare
 - **Version:** 3
 - **Savable:** false
-- **Photo 1:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set2_1788898387258_0.jpg
-- **Photo 2:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set2_1788898387258_1.jpg
-- **Photo 3:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set2_1788898387258_2.jpg
-- **Photo 4:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set2_1788898387258_3.jpg
+- **Photo 1:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set2_1788899004501_0.jpg
+- **Photo 2:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set2_1788899004501_1.jpg
+- **Photo 3:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set2_1788899004501_2.jpg
+- **Photo 4:** https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/photos/job_compare_set2_1788899004501_3.jpg
 
 ## ⚖️ Contract Evaluation
 
@@ -44,7 +44,7 @@
 
 - **open:** true
 - **title:** "Food Item & Shelf Comparison"
-- **on_card:** {"totalOptions":4,"groups":3,"recommended":"Roti Multiseed (Yellow)"}
+- **on_card:** {"totalOptions":4,"groups":3,"recommended":"Yellow Multiseed Bread"}
 - **visible:** [View Comparison Details, Download Debug Report, Close Modal]
 - **hidden:** [Retry, Attempt 1 of 3, Save Meal to History]
 - **composer:** {"photo":1,"add_image":1,"paste":1,"send":1}
@@ -203,29 +203,29 @@ Output exactly ONE JSON object matching this schema:
 - **Raw Emission (Verbatim Output):**
 ```json
 {
-  "_internalReasoning": "Evaluated 4 packaged snack items and categorized them by nutritional density, protein, and sugar content.",
-  "comparisonTitle": "Packaged Snack Health Comparison",
+  "_internalReasoning": "Evaluated 4 packaged snack items comparing macronutrients against user profile showing excesses in sat fat, calories, sodium, and added sugar.",
+  "comparisonTitle": "Bakery Snack Product Comparison",
   "comparisonType": "shelf_selection",
-  "summary": "Comparing these 4 baked and snack options reveals significant nutritional differences in protein retention and sugar levels. The multigrain bread option is the most balanced choice for steady energy, whereas the high-sugar snack pack and sweet pastries present considerable metabolic trade-offs.",
+  "summary": "Comparing four packaged baked goods reveals significant differences in fiber content, sodium, and sugar density. The Multiseed bread offers superior fiber and protein compared to refined sugar-laden options.",
   "items": [
     {
-      "name": "Green Snack Bar / Wafer",
+      "name": "Greens Snack Product (1)",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Roti Multiseed (Yellow)",
+      "name": "Yellow Multiseed Bread",
       "tier": 1,
       "sourceImageIndex": 1
     },
     {
-      "name": "Sweet Croissant / Pastry",
-      "tier": 3,
+      "name": "Yellow Cream Bread",
+      "tier": 2,
       "sourceImageIndex": 2
     },
     {
-      "name": "Soft Bread (Blue)",
-      "tier": 2,
+      "name": "Blue Sweet Bun",
+      "tier": 3,
       "sourceImageIndex": 3
     }
   ],
@@ -242,56 +242,26 @@ Output exactly ONE JSON object matching this schema:
         1000
       ],
       "verdict": {
-        "label": "Highest Protein & Fiber",
+        "label": "Highest Fiber & Balanced Protein",
         "level": "good"
       },
-      "comparisonSentence": "This multigrain option provides superior fiber and protein compared to the refined white breads and sugary snack wafers.",
-      "message": "This multiseed bread option stands out as the healthiest choice among the evaluated items due to its higher protein content (3g per serving) and substantial pumpkin seed and multiseed inclusions. It supports sustained energy release and better glycemic control.",
+      "comparisonSentence": "This multiseed option provides substantially more fiber and protein than the refined snack alternatives.",
+      "message": "With 8g of protein and 330mg of sodium per 80g serving, this multiseed bread supports your daily fiber goals while offering stable energy release compared to refined flour alternatives.",
       "averageNutrients": {
         "calories": 250,
-        "protein": 3,
+        "protein": 8,
         "totalFat": 7,
         "saturatedFat": 3,
         "carbohydrates": 38,
         "sugar": 8,
-        "totalFibre": 4,
+        "totalFibre": 6,
         "sodium": 330
       },
-      "orderingTip": "Opt for this multiseed loaf when seeking a filling, nutrient-dense breakfast or snack option that keeps blood sugar stable."
+      "orderingTip": "Choose multiseed or whole-grain varieties over white refined flour options to increase dietary fiber intake."
     },
     {
-      "groupName": "Tier 2 - Moderate Choice: Soft Bread",
+      "groupName": "Tier 2 - Moderate Choice: Standard Cream Bread",
       "scoutItemIndices": [
-        3
-      ],
-      "boundingBox2D": [
-        0,
-        0,
-        1000,
-        1000
-      ],
-      "verdict": {
-        "label": "Moderate Refined Grain",
-        "level": "neutral"
-      },
-      "comparisonSentence": "While lower in fiber than the multiseed bread, this soft bread offers a controlled calorie count per serving.",
-      "message": "This soft bread provides a moderate caloric and sugar profile per 44g serving. Although it relies on refined flour rather than whole grains, its portion-controlled packaging helps limit overall carbohydrate and sodium intake when consumed mindfully.",
-      "averageNutrients": {
-        "calories": 120,
-        "protein": 4,
-        "totalFat": 2.5,
-        "saturatedFat": 1.5,
-        "carbohydrates": 21,
-        "sugar": 2,
-        "totalFibre": 1,
-        "sodium": 150
-      },
-      "orderingTip": "Pair with a protein source like eggs or lean meat to balance the glycemic impact of the refined flour."
-    },
-    {
-      "groupName": "Tier 3 - Caution: Sweet Pastries & Snack Wafers",
-      "scoutItemIndices": [
-        0,
         2
       ],
       "boundingBox2D": [
@@ -301,53 +271,83 @@ Output exactly ONE JSON object matching this schema:
         1000
       ],
       "verdict": {
-        "label": "Elevated Refined Sugar & Saturated Fat",
+        "label": "Moderate Saturated Fat & Sodium",
+        "level": "neutral"
+      },
+      "comparisonSentence": "This cream bread provides moderate calories but lacks the robust fiber found in the multiseed option.",
+      "message": "While providing a moderate calorie load, this cream bread contains higher saturated fat and lower fiber content, making it less ideal given your current dietary excesses in saturated fat.",
+      "averageNutrients": {
+        "calories": 250,
+        "protein": 6,
+        "totalFat": 6,
+        "saturatedFat": 4.5,
+        "carbohydrates": 42,
+        "sugar": 19,
+        "totalFibre": 2,
+        "sodium": 125
+      },
+      "orderingTip": "Enjoy in moderation and pair with a protein source to stabilize blood glucose response."
+    },
+    {
+      "groupName": "Tier 3 - Caution: Refined Snacks and Sweet Buns",
+      "scoutItemIndices": [
+        0,
+        3
+      ],
+      "boundingBox2D": [
+        0,
+        0,
+        1000,
+        1000
+      ],
+      "verdict": {
+        "label": "Low Fiber & High Sugar Density",
         "level": "warning"
       },
-      "comparisonSentence": "These sweet snack products deliver much higher sugar loads and lower nutrient density than the whole-grain bread options.",
-      "message": "These items present a warning due to higher concentrations of simple sugars, refined starches, and saturated fats relative to their small serving sizes. Frequent consumption can contribute to energy crashes and adverse metabolic markers.",
+      "comparisonSentence": "These items deliver lower fiber and elevated sugar densities that exacerbate your carbohydrate and calorie targets.",
+      "message": "These snacks feature refined carbohydrates and added sugars with minimal fiber, contributing directly to your elevated calorie and carbohydrate intake trends.",
       "averageNutrients": {
-        "calories": 170,
+        "calories": 105,
         "protein": 2.5,
-        "totalFat": 5,
-        "saturatedFat": 2.7,
-        "carbohydrates": 28,
-        "sugar": 7.5,
+        "totalFat": 2.8,
+        "saturatedFat": 1.2,
+        "carbohydrates": 18,
+        "sugar": 4.5,
         "totalFibre": 1,
-        "sodium": 100
+        "sodium": 85
       },
-      "orderingTip": "Treat these as occasional treats rather than daily staples, and monitor portion sizes closely."
+      "orderingTip": "Limit consumption of refined sweet snacks to avoid exceeding your daily added sugar and calorie limits."
     }
   ],
-  "recommendedOption": "Roti Multiseed (Yellow)"
+  "recommendedOption": "Yellow Multiseed Bread"
 }
 ```
 - **Output:**
 ```json
 {
-  "_internalReasoning": "Evaluated 4 packaged snack items and categorized them by nutritional density, protein, and sugar content.",
-  "comparisonTitle": "Packaged Snack Health Comparison",
+  "_internalReasoning": "Evaluated 4 packaged snack items comparing macronutrients against user profile showing excesses in sat fat, calories, sodium, and added sugar.",
+  "comparisonTitle": "Bakery Snack Product Comparison",
   "comparisonType": "shelf_selection",
-  "summary": "Comparing these 4 baked and snack options reveals significant nutritional differences in protein retention and sugar levels. The multigrain bread option is the most balanced choice for steady energy, whereas the high-sugar snack pack and sweet pastries present considerable metabolic trade-offs.",
+  "summary": "Comparing four packaged baked goods reveals significant differences in fiber content, sodium, and sugar density. The Multiseed bread offers superior fiber and protein compared to refined sugar-laden options.",
   "items": [
     {
-      "name": "Green Snack Bar / Wafer",
+      "name": "Greens Snack Product (1)",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Roti Multiseed (Yellow)",
+      "name": "Yellow Multiseed Bread",
       "tier": 1,
       "sourceImageIndex": 1
     },
     {
-      "name": "Sweet Croissant / Pastry",
-      "tier": 3,
+      "name": "Yellow Cream Bread",
+      "tier": 2,
       "sourceImageIndex": 2
     },
     {
-      "name": "Soft Bread (Blue)",
-      "tier": 2,
+      "name": "Blue Sweet Bun",
+      "tier": 3,
       "sourceImageIndex": 3
     }
   ],
@@ -364,56 +364,26 @@ Output exactly ONE JSON object matching this schema:
         1000
       ],
       "verdict": {
-        "label": "Highest Protein & Fiber",
+        "label": "Highest Fiber & Balanced Protein",
         "level": "good"
       },
-      "comparisonSentence": "This multigrain option provides superior fiber and protein compared to the refined white breads and sugary snack wafers.",
-      "message": "This multiseed bread option stands out as the healthiest choice among the evaluated items due to its higher protein content (3g per serving) and substantial pumpkin seed and multiseed inclusions. It supports sustained energy release and better glycemic control.",
+      "comparisonSentence": "This multiseed option provides substantially more fiber and protein than the refined snack alternatives.",
+      "message": "With 8g of protein and 330mg of sodium per 80g serving, this multiseed bread supports your daily fiber goals while offering stable energy release compared to refined flour alternatives.",
       "averageNutrients": {
         "calories": 250,
-        "protein": 3,
+        "protein": 8,
         "totalFat": 7,
         "saturatedFat": 3,
         "carbohydrates": 38,
         "sugar": 8,
-        "totalFibre": 4,
+        "totalFibre": 6,
         "sodium": 330
       },
-      "orderingTip": "Opt for this multiseed loaf when seeking a filling, nutrient-dense breakfast or snack option that keeps blood sugar stable."
+      "orderingTip": "Choose multiseed or whole-grain varieties over white refined flour options to increase dietary fiber intake."
     },
     {
-      "groupName": "Tier 2 - Moderate Choice: Soft Bread",
+      "groupName": "Tier 2 - Moderate Choice: Standard Cream Bread",
       "scoutItemIndices": [
-        3
-      ],
-      "boundingBox2D": [
-        0,
-        0,
-        1000,
-        1000
-      ],
-      "verdict": {
-        "label": "Moderate Refined Grain",
-        "level": "neutral"
-      },
-      "comparisonSentence": "While lower in fiber than the multiseed bread, this soft bread offers a controlled calorie count per serving.",
-      "message": "This soft bread provides a moderate caloric and sugar profile per 44g serving. Although it relies on refined flour rather than whole grains, its portion-controlled packaging helps limit overall carbohydrate and sodium intake when consumed mindfully.",
-      "averageNutrients": {
-        "calories": 120,
-        "protein": 4,
-        "totalFat": 2.5,
-        "saturatedFat": 1.5,
-        "carbohydrates": 21,
-        "sugar": 2,
-        "totalFibre": 1,
-        "sodium": 150
-      },
-      "orderingTip": "Pair with a protein source like eggs or lean meat to balance the glycemic impact of the refined flour."
-    },
-    {
-      "groupName": "Tier 3 - Caution: Sweet Pastries & Snack Wafers",
-      "scoutItemIndices": [
-        0,
         2
       ],
       "boundingBox2D": [
@@ -423,29 +393,59 @@ Output exactly ONE JSON object matching this schema:
         1000
       ],
       "verdict": {
-        "label": "Elevated Refined Sugar & Saturated Fat",
+        "label": "Moderate Saturated Fat & Sodium",
+        "level": "neutral"
+      },
+      "comparisonSentence": "This cream bread provides moderate calories but lacks the robust fiber found in the multiseed option.",
+      "message": "While providing a moderate calorie load, this cream bread contains higher saturated fat and lower fiber content, making it less ideal given your current dietary excesses in saturated fat.",
+      "averageNutrients": {
+        "calories": 250,
+        "protein": 6,
+        "totalFat": 6,
+        "saturatedFat": 4.5,
+        "carbohydrates": 42,
+        "sugar": 19,
+        "totalFibre": 2,
+        "sodium": 125
+      },
+      "orderingTip": "Enjoy in moderation and pair with a protein source to stabilize blood glucose response."
+    },
+    {
+      "groupName": "Tier 3 - Caution: Refined Snacks and Sweet Buns",
+      "scoutItemIndices": [
+        0,
+        3
+      ],
+      "boundingBox2D": [
+        0,
+        0,
+        1000,
+        1000
+      ],
+      "verdict": {
+        "label": "Low Fiber & High Sugar Density",
         "level": "warning"
       },
-      "comparisonSentence": "These sweet snack products deliver much higher sugar loads and lower nutrient density than the whole-grain bread options.",
-      "message": "These items present a warning due to higher concentrations of simple sugars, refined starches, and saturated fats relative to their small serving sizes. Frequent consumption can contribute to energy crashes and adverse metabolic markers.",
+      "comparisonSentence": "These items deliver lower fiber and elevated sugar densities that exacerbate your carbohydrate and calorie targets.",
+      "message": "These snacks feature refined carbohydrates and added sugars with minimal fiber, contributing directly to your elevated calorie and carbohydrate intake trends.",
       "averageNutrients": {
-        "calories": 170,
+        "calories": 105,
         "protein": 2.5,
-        "totalFat": 5,
-        "saturatedFat": 2.7,
-        "carbohydrates": 28,
-        "sugar": 7.5,
+        "totalFat": 2.8,
+        "saturatedFat": 1.2,
+        "carbohydrates": 18,
+        "sugar": 4.5,
         "totalFibre": 1,
-        "sodium": 100
+        "sodium": 85
       },
-      "orderingTip": "Treat these as occasional treats rather than daily staples, and monitor portion sizes closely."
+      "orderingTip": "Limit consumption of refined sweet snacks to avoid exceeding your daily added sugar and calorie limits."
     }
   ],
-  "recommendedOption": "Roti Multiseed (Yellow)"
+  "recommendedOption": "Yellow Multiseed Bread"
 }
 ```
-- **Signals:** model=gemini-3.5-flash-lite, latency_ms=4478, tokens=[object Object]
-- **Parent:** job_compare_set2_1788898387258
+- **Signals:** model=gemini-3.5-flash-lite, latency_ms=4486, tokens=[object Object]
+- **Parent:** job_compare_set2_1788899004501
 
 ## 🔗 Data Pipelines & Infrastructure Connectivity Matrix
 
@@ -458,13 +458,13 @@ Output exactly ONE JSON object matching this schema:
 | **5. Mathematical Calculation Engine** | ⚪ Standby / N/A | No meal calculation required |
 | **6. Trial-Balance & Quality Gate** | ⚪ Standby / N/A | N/A |
 | **7. Health Coach / Clinical Engine** | ⚪ Standby / N/A | No clinical analysis requested |
-| **8. State Storage & Job Sync** | ✅ Connected (Local / Active) | Job ID: `job_compare_set2_1788898387258` |
+| **8. State Storage & Job Sync** | ✅ Connected (Local / Active) | Job ID: `job_compare_set2_1788899004501` |
 
 ## 👤 Last User Action
 
 - **Action:** submit_meal_job
 - **Prompt/Text:** "Compare these 4 snacks and help me choose the healthiest one."
-- **Timestamp:** 2026-09-08T20:13:11.737Z
+- **Timestamp:** 2026-09-08T20:23:28.988Z
 
 ## 🐾 User Action Breadcrumbs
 
@@ -474,7 +474,7 @@ Output exactly ONE JSON object matching this schema:
 |  | select_photos | camera_roll | {"imageCount":4,"files":["set2_snack_green_bar_label.jpg","set2_snack_pack_front.jpg","set2_snack_yellow_cake_label.jpg","set2_snack_blue_bread_label.jpg"]} |
 |  | input_change | input | {"name":"compare-query-input","valueLength":61} |
 |  | submit_initiated | chat_composer | {"prompt":"Compare these 4 snacks and help me choose the healthiest one.","imageCount":4,"submissionMode":"compare"} |
-|  | submit_meal_job | chat_compose_dock | {"jobId":"job_compare_set2_1788898387258","promptLength":61,"imageCount":4,"submissionMode":"compare"} |
+|  | submit_meal_job | chat_compose_dock | {"jobId":"job_compare_set2_1788899004501","promptLength":61,"imageCount":4,"submissionMode":"compare"} |
 
 ## ⚙️ Job Session Event Trail
 
@@ -486,22 +486,22 @@ _No client network errors or latency warnings recorded._
 
 ### Client Console Logs (2)
 ```
-[INFO] Compare mode triggered with 4 images for job job_compare_set2_1788898387258
+[INFO] Compare mode triggered with 4 images for job job_compare_set2_1788899004501
 [INFO] Scout-Only Compare single-pass pipeline invoked for Set 2: 4 Snack & Pack Nutrition Labels.
 ```
 
 ## 🔍 Vision Scout Results (4 item(s) detected)
 
-> **Scout Internal Reasoning:** Evaluated 4 packaged snack items and categorized them by nutritional density, protein, and sugar content.
+> **Scout Internal Reasoning:** Evaluated 4 packaged snack items comparing macronutrients against user profile showing excesses in sat fat, calories, sodium, and added sugar.
 
 **Dining Environment:** `supermarket_or_store` | **Content Type:** `nutrition_labels`
 
 | # | Dish / Item | Weight | Bounding Box | Img | Method | Label / Sticker OCR | Constituent Ingredients |
 |---|-------------|--------|--------------|-----|--------|---------------------|-------------------------|
-| [1] | Green Snack Bar / Wafer | 50g | — | #0 | packaged | — | — |
-| [2] | Roti Multiseed (Yellow) | 50g | — | #1 | packaged | — | — |
-| [3] | Sweet Croissant / Pastry | 50g | — | #2 | packaged | — | — |
-| [4] | Soft Bread (Blue) | 50g | — | #3 | packaged | — | — |
+| [1] | Greens Snack Product (1) | 50g | — | #0 | packaged | — | — |
+| [2] | Yellow Multiseed Bread | 50g | — | #1 | packaged | — | — |
+| [3] | Yellow Cream Bread | 50g | — | #2 | packaged | — | — |
+| [4] | Blue Sweet Bun | 50g | — | #3 | packaged | — | — |
 
 ## 📚 Database Search & Entity Resolution
 
@@ -510,34 +510,34 @@ _No client network errors or latency warnings recorded._
 
 ## 💬 Agent Message & Narrative
 
-### Packaged Snack Health Comparison
+### Bakery Snack Product Comparison
 
-**Summary:** Comparing these 4 baked and snack options reveals significant nutritional differences in protein retention and sugar levels. The multigrain bread option is the most balanced choice for steady energy, whereas the high-sugar snack pack and sweet pastries present considerable metabolic trade-offs.
+**Summary:** Comparing four packaged baked goods reveals significant differences in fiber content, sodium, and sugar density. The Multiseed bread offers superior fiber and protein compared to refined sugar-laden options.
 
-**Recommended Option:** Roti Multiseed (Yellow)
+**Recommended Option:** Yellow Multiseed Bread
 
 #### Comparison Groups & Verdicts
 
-**Rank 1: Tier 1 - Safest Choice: High-Fiber Multiseed Bread** [GOOD] — *Highest Protein & Fiber*
-- **Items Included (1):** Roti Multiseed (Yellow)
-- **Comparative Sentence:** "This multigrain option provides superior fiber and protein compared to the refined white breads and sugary snack wafers."
-- **Clinical Guidance:** This multiseed bread option stands out as the healthiest choice among the evaluated items due to its higher protein content (3g per serving) and substantial pumpkin seed and multiseed inclusions. It supports sustained energy release and better glycemic control.
-- **Ordering Tip:** Opt for this multiseed loaf when seeking a filling, nutrient-dense breakfast or snack option that keeps blood sugar stable.
-- **Nutrient Profile:** 250 kcal | P: 3g | C: 38g | F: 7g | Saturated Fat: 3g | Sodium: 330mg | Sugar: 8g
+**Rank 1: Tier 1 - Safest Choice: High-Fiber Multiseed Bread** [GOOD] — *Highest Fiber & Balanced Protein*
+- **Items Included (1):** Yellow Multiseed Bread
+- **Comparative Sentence:** "This multiseed option provides substantially more fiber and protein than the refined snack alternatives."
+- **Clinical Guidance:** With 8g of protein and 330mg of sodium per 80g serving, this multiseed bread supports your daily fiber goals while offering stable energy release compared to refined flour alternatives.
+- **Ordering Tip:** Choose multiseed or whole-grain varieties over white refined flour options to increase dietary fiber intake.
+- **Nutrient Profile:** 250 kcal | P: 8g | C: 38g | F: 7g | Saturated Fat: 3g | Sodium: 330mg | Sugar: 8g
 
-**Rank 2: Tier 2 - Moderate Choice: Soft Bread** [NEUTRAL] — *Moderate Refined Grain*
-- **Items Included (1):** Soft Bread (Blue)
-- **Comparative Sentence:** "While lower in fiber than the multiseed bread, this soft bread offers a controlled calorie count per serving."
-- **Clinical Guidance:** This soft bread provides a moderate caloric and sugar profile per 44g serving. Although it relies on refined flour rather than whole grains, its portion-controlled packaging helps limit overall carbohydrate and sodium intake when consumed mindfully.
-- **Ordering Tip:** Pair with a protein source like eggs or lean meat to balance the glycemic impact of the refined flour.
-- **Nutrient Profile:** 120 kcal | P: 4g | C: 21g | F: 2.5g | Saturated Fat: 1.5g | Sodium: 150mg | Sugar: 2g
+**Rank 2: Tier 2 - Moderate Choice: Standard Cream Bread** [NEUTRAL] — *Moderate Saturated Fat & Sodium*
+- **Items Included (1):** Yellow Cream Bread
+- **Comparative Sentence:** "This cream bread provides moderate calories but lacks the robust fiber found in the multiseed option."
+- **Clinical Guidance:** While providing a moderate calorie load, this cream bread contains higher saturated fat and lower fiber content, making it less ideal given your current dietary excesses in saturated fat.
+- **Ordering Tip:** Enjoy in moderation and pair with a protein source to stabilize blood glucose response.
+- **Nutrient Profile:** 250 kcal | P: 6g | C: 42g | F: 6g | Saturated Fat: 4.5g | Sodium: 125mg | Sugar: 19g
 
-**Rank 3: Tier 3 - Caution: Sweet Pastries & Snack Wafers** [WARNING] — *Elevated Refined Sugar & Saturated Fat*
-- **Items Included (2):** Green Snack Bar / Wafer, Sweet Croissant / Pastry
-- **Comparative Sentence:** "These sweet snack products deliver much higher sugar loads and lower nutrient density than the whole-grain bread options."
-- **Clinical Guidance:** These items present a warning due to higher concentrations of simple sugars, refined starches, and saturated fats relative to their small serving sizes. Frequent consumption can contribute to energy crashes and adverse metabolic markers.
-- **Ordering Tip:** Treat these as occasional treats rather than daily staples, and monitor portion sizes closely.
-- **Nutrient Profile:** 170 kcal | P: 2.5g | C: 28g | F: 5g | Saturated Fat: 2.7g | Sodium: 100mg | Sugar: 7.5g
+**Rank 3: Tier 3 - Caution: Refined Snacks and Sweet Buns** [WARNING] — *Low Fiber & High Sugar Density*
+- **Items Included (2):** Greens Snack Product (1), Blue Sweet Bun
+- **Comparative Sentence:** "These items deliver lower fiber and elevated sugar densities that exacerbate your carbohydrate and calorie targets."
+- **Clinical Guidance:** These snacks feature refined carbohydrates and added sugars with minimal fiber, contributing directly to your elevated calorie and carbohydrate intake trends.
+- **Ordering Tip:** Limit consumption of refined sweet snacks to avoid exceeding your daily added sugar and calorie limits.
+- **Nutrient Profile:** 105 kcal | P: 2.5g | C: 18g | F: 2.8g | Saturated Fat: 1.2g | Sodium: 85mg | Sugar: 4.5g
 
 
 ## ⚙️ Pipeline Stage Ledger
@@ -553,9 +553,9 @@ _No thrown exceptions or log errors/warnings captured._
 ## 🖥️ Backend Execution Logs
 
 ```
-[backend] [job_compare_set2_1788898387258] Compare request received with 4 images. Mode: compare.
+[backend] [job_compare_set2_1788899004501] Compare request received with 4 images. Mode: compare.
 [scout_only_compare] Dispatched to gemini-3.5-flash-lite with single-pass instruction.
-[scout_only_compare] Latency: 4478ms. Usage: 8490 in / 1179 out tokens.
+[scout_only_compare] Latency: 4486ms. Usage: 8659 in / 1082 out tokens.
 [scout_only_compare] Extracted 4 items into 3 ranked groups.
 [scout_only_compare] Status: SUCCESS. Finalized compare payload.
 ```
