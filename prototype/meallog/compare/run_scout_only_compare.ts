@@ -33,9 +33,9 @@ const testCases: CompareTestCase[] = [
     name: "Compare Set 1: User Job Bakery Shelf & SilverQueen Chocolate",
     kind: "mixed_selection",
     imagePaths: [
-      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "compare_set1_0.jpg"), // Photo 0: Say Bread bakery shelf
-      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "compare_set1_1.jpg"), // Photo 1: SilverQueen Nutrition Facts
-      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "compare_set1_2.jpg"), // Photo 2: SilverQueen Milk Chocolate
+      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "set1_saybread_bakery_shelf.jpg"),
+      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "set1_silverqueen_nutrition_label.jpg"),
+      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "set1_silverqueen_chocolate_front.jpg"),
     ],
     userPrompt: "Compare these items and advise on healthier choices.",
   },
@@ -44,10 +44,10 @@ const testCases: CompareTestCase[] = [
     name: "Compare Set 2: 4 Reference Snack & Pack Nutrition Labels",
     kind: "nutrition_labels",
     imagePaths: [
-      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "compare_set2_0.jpg"), // 0: Green bar
-      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "compare_set2_1.jpg"), // 1: Pack front
-      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "compare_set2_2.jpg"), // 2: Yellow cake
-      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "compare_set2_3.jpg"), // 3: Blue bread
+      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "set2_snack_green_bar_label.jpg"),
+      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "set2_snack_pack_front.jpg"),
+      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "set2_snack_yellow_cake_label.jpg"),
+      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "set2_snack_blue_bread_label.jpg"),
     ],
     userPrompt: "Compare these 4 snacks and help me choose the healthiest one.",
     expectedChecks: (result: any) => {
@@ -99,8 +99,8 @@ const testCases: CompareTestCase[] = [
     name: "Compare Set 3: Restaurant Menu Pages (Sambal Bakar Pencok)",
     kind: "menu_items",
     imagePaths: [
-      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "compare_set3_0.jpg"),
-      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "compare_set3_1.jpg"),
+      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "set3_restaurant_menu_page1.jpg"),
+      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "set3_restaurant_menu_page2.jpg"),
     ],
     userPrompt: "What are the healthier options on this menu?",
   },
@@ -109,7 +109,7 @@ const testCases: CompareTestCase[] = [
     name: "Compare Set 4: Juice List",
     kind: "menu_items",
     imagePaths: [
-      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "compare_set4_0.jpg"),
+      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "set4_juice_and_beverage_list.jpg"),
     ],
     userPrompt: "Compare the juices on this list and recommend the best option.",
   },
@@ -118,7 +118,7 @@ const testCases: CompareTestCase[] = [
     name: "Compare Set 5: Product Item",
     kind: "food_items",
     imagePaths: [
-      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "compare_set5_0.jpg"),
+      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "set5_packaged_product_photo.jpg"),
     ],
     userPrompt: "Evaluate and analyze this product.",
   },

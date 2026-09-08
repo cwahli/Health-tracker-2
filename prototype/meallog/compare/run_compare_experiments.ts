@@ -30,33 +30,38 @@ export interface CompareSetMetadata {
 
 // Set 1: Bakery Shelf & SilverQueen Chocolate
 export const imageFilesSet1 = [
-  "compare_set1_0.jpg", // Photo 0: Say Bread bakery display shelf (Polo Keju / Double Cheese Bread)
-  "compare_set1_1.jpg", // Photo 1: SilverQueen Nutrition Facts label (Back)
-  "compare_set1_2.jpg", // Photo 2: SilverQueen Milk Chocolate with Cashews (Front)
+  "set1_saybread_bakery_shelf.jpg",
+  "set1_silverqueen_nutrition_label.jpg",
+  "set1_silverqueen_chocolate_front.jpg",
 ];
 
 // Set 2: 4 Reference Snack & Pack Nutrition Labels
 export const imageFilesSet2 = [
-  "compare_set2_0.jpg", // Photo 0: Green bar
-  "compare_set2_1.jpg", // Photo 1: Pack front
-  "compare_set2_2.jpg", // Photo 2: Yellow cake
-  "compare_set2_3.jpg", // Photo 3: Blue bread
+  "set2_snack_green_bar_label.jpg",
+  "set2_snack_pack_front.jpg",
+  "set2_snack_yellow_cake_label.jpg",
+  "set2_snack_blue_bread_label.jpg",
 ];
 
 // Set 3: Indonesian Restaurant Menu Pages (Sambal Bakar Pencok)
 export const imageFilesSet3 = [
-  "compare_set3_0.jpg", // Menu Page 1
-  "compare_set3_1.jpg", // Menu Page 2
+  "set3_restaurant_menu_page1.jpg",
+  "set3_restaurant_menu_page2.jpg",
 ];
 
 // Set 4: Juice & Beverage List
 export const imageFilesSet4 = [
-  "compare_set4_0.jpg", // Juice list
+  "set4_juice_and_beverage_list.jpg",
 ];
 
 // Set 5: Packaged Product / Drink Item
 export const imageFilesSet5 = [
-  "compare_set5_0.jpg", // Product photo
+  "set5_packaged_product_photo.jpg",
+];
+
+// Set 6: Supermarket Chip Aisle Shelf (Large Set)
+export const imageFilesSet6 = [
+  "set6_supermarket_chip_aisle_shelf.jpg",
 ];
 
 export const compareSets: Record<string, CompareSetMetadata> = {
@@ -89,6 +94,12 @@ export const compareSets: Record<string, CompareSetMetadata> = {
     name: "Set 5: Packaged Product Item",
     description: "Standalone packaged beverage / snack product evaluation",
     files: imageFilesSet5,
+  },
+  "6": {
+    id: "set6",
+    name: "Set 6: Supermarket Chip Aisle Shelf",
+    description: "Compact comparison across 50+ snack choices on a supermarket shelf",
+    files: imageFilesSet6,
   },
 };
 
