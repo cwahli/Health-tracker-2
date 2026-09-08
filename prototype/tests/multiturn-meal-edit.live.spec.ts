@@ -183,7 +183,7 @@ test.describe('Live multiturn meal edit (demo)', () => {
 
     // Persist job id for downstream debug export (same id reused across multiturn edits).
     const fs = await import('node:fs');
-    fs.writeFileSync('/workspace/gemini38-meal-review-round2/pw_jobid.txt', jobIds[jobIds.length - 1] || jobIds[0] || '');
-    fs.writeFileSync('/workspace/gemini38-meal-review-round2/pw_jobids.json', JSON.stringify(jobIds, null, 2));
+    fs.writeFileSync('./tests/captures/pw_jobid.txt', jobIds[jobIds.length - 1] || jobIds[0] || '');
+    fs.writeFileSync('./tests/captures/pw_jobids.json', JSON.stringify(jobIds, null, 2));
   });
 });
