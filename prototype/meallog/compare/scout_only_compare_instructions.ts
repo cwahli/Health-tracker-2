@@ -32,10 +32,13 @@ STRICT INVARIANTS:
      * Keep each item in items[] ultra-condensed: emit ONLY "name", "tier", and "sourceImageIndex". Do NOT emit empty or null boilerplate keys (like brand, boundingBox2D, servingSize, etc.) for items without printed nutrition tables.
      * This condensed format drastically economizes tokens so you can extract ALL 50-100+ legible dishes across all columns and pages without truncation or sampling down.
      * When a printed Nutrition Facts panel is present (hasNutritionLabel: true), transcribe its servingSize and perServing nutrients.
-   - OCR ACCURACY FOR PRINTED NUTRITION PANELS (100% FAITHFUL TO IMAGE):
+   - OCR ACCURACY & NORMALIZED COMPARISON METRICS (PER 100g VS. PER SERVING):
      * Read numbers directly from printed "Informasi Nilai Gizi" / Nutrition Facts panels with ZERO hallucination, rounding, or estimation.
      * Check serving size (Takaran Saji) and servings per pack (Jumlah Sajian per Kemasan). Transcribe them verbatim.
      * When hasNutritionLabel is true, YOU MUST POPULATE ALL NUTRIENT FIELDS in perServing (calories, protein, totalFat, saturatedFat, carbohydrates, sugar, sodiumMg, saltMg).
+     * NORMALIZED COMPARISON (per100g): Packaged foods often manipulate serving sizes (e.g. 20g candy bar vs. 80g bread). Whenever serving size in grams is known or printed (or can be determined from the pack), calculate and populate per100g alongside perServing. This eliminates serving-size distortion across all sets.
+   - ESTIMATED NUTRIENTS FOR UNLABELLED PREPARED FOODS (NO NULL AVERAGE NUTRIENTS):
+     * When bakery, deli, buffet, or restaurant menu items lack a printed nutrition table, DO NOT return null or empty averageNutrients for the group. The agent MUST provide realistic clinical estimates for averageNutrients and averageNutrientsPer100g based on typical culinary preparation, standard bakery benchmarks, and typical single portion sizes (e.g. sweet bun ~70-80g, savory pastry ~85-100g).
    - Front-only packages without a nutrition panel: set hasNutritionLabel to false or omit, transcribe product name from OCR, and set perServing to null.
    - NO LUMPING: Each distinct variety, flavor, or dish entry gets its own item in items[].
    - STRICT OVERALL ITEM RANKING: Items in items[] MUST be ordered primarily from best/healthiest tier down to least favorable tier, and within each tier from best to least favorable.
@@ -57,10 +60,10 @@ STRICT INVARIANTS:
    - STRICT SUB-ITEM RANKING INSIDE GROUPS:
      * Inside every group, "scoutItemIndices" MUST be sorted strictly from best to least favorable (most healthful to least healthful candidate item).
      * The first item index listed in scoutItemIndices must be the healthiest, safest choice in that group; subsequent indices follow in descending order of nutritional quality.
-   - BEWARE THE "CALORIE ILLUSION TRAP":
-     * NEVER rank a confectionery or snack as "Tier 1 (good)" simply because its portion is tiny (e.g. 23g wafer bar at 90 kcal) if it is sugar-dense (>25% sugar by weight) with negligible protein (<2g) and fiber.
-     * Evaluate NUTRIENT DENSITY: Compare sugar-to-protein ratio, saturated fat percentage, and fiber retention. Wholesome staple breads with 2g sugar and 4g protein rank HIGHER in healthfulness than a 90 kcal candy bar that is 30% refined sugar.
-     * Factor in the mass: A 250 kcal multiseed bread serving is 80g delivering 8g protein and 4g sugar, whereas a 250 kcal sweet bun is 75g packing 19g sugar and 4.5g saturated fat.
+   - BEWARE THE "CALORIE ILLUSION TRAP" & NORMALIZED COMPARISONS:
+     * NEVER rank a confectionery or snack as "Tier 1 (good)" simply because its portion is tiny (e.g. 20g candy bar at 110 kcal) if it is sugar-dense (>25-50% sugar by weight) with negligible protein (<2g) and fiber.
+     * Evaluate NUTRIENT DENSITY & PER-100G METRICS: Standardize comparisons using the 100g reference. A 20g candy bar at 550 kcal/100g, 35g fat/100g, and 50g sugar/100g is far more metabolically damaging per 100g than an 80g bakery bread at 320 kcal/100g, 11g fat/100g, and 10g sugar/100g, even if the bread has higher absolute calories per single serving.
+     * Wholesome staple breads with higher fiber and protein rank HIGHER in healthfulness than low-weight candy bars that are pure refined sugar and saturated fat.
    - BEYOND MACROS (HIDDEN HARMS & BENEFITS): You MUST also split groups based on critical unlisted nutrients or physiological impacts. For example, if an item contains Trans Fats, oxidized palm oil, heavy synthetic additives, or causes extreme glycemic sugar spikes, it MUST be isolated into its own 'alert' group, even if its base calories or macros closely match a cleaner food. Trans fat merits its own grouping.
    - PURE SNACK / ULTRA-PROCESSED AISLE RULE:
      * When comparing exclusively ultra-processed snacks (chips, crisps, fried crackers), recognize that NONE are health foods (NOVA 4).
@@ -78,24 +81,19 @@ STRICT INVARIANTS:
      c) "comparisonSentence": Exactly ONE clear, punchy sentence directly comparing this group to the other candidate groups/options.
      d) "message": 35-70 words clinical rationale explaining WHY this group received this verdict. You MUST be two-sided: highlight BOTH positive benefits (e.g., closing protein/fiber deficits, healthy energy) AND negative trade-offs (e.g., saturated fat, sodium, sugar excesses). Actively praise and encourage nutrient-dense choices that help meet the user's targets, while penalizing those that exacerbate risks.
      e) "orderingTip": (Optional but strongly recommended for restaurant menus and beverages) Practical instruction for the user at ordering time to maximize nutritional value or reduce metabolic harm (e.g. "Ask for without added sugar/syrup", "Add an extra side of grilled chicken to boost protein", "Opt for the small single-portion bag").
-6. AVERAGE NUTRIENTS ESTIMATION FOR EVERY GROUP (MANDATORY & REALISTIC):
-   - For EVERY group in groups[], you MUST provide realistic "averageNutrients" representing the typical nutritional profile for items in that group:
-     * calories: Estimated typical calories (kcal)
-     * protein: Estimated protein (g)
-     * totalFat: Estimated total fat (g)
-     * saturatedFat: Estimated saturated fat (g)
-     * carbohydrates: Estimated total carbohydrates (g)
-     * sugar: Estimated sugar (g)
-     * totalFibre: Estimated total fibre (g)
-     * sodium: Estimated sodium (mg)
+6. MANDATORY AVERAGE NUTRIENTS & NORMALIZED PER-100G METRICS (NO NULLS):
+   - For EVERY group in groups[], you MUST provide realistic non-null "averageNutrients" (per typical serving) AND "averageNutrientsPer100g" (standardized 100g density reference):
+     * NEVER set averageNutrients or averageNutrientsPer100g to null, even if items lack printed nutrition tables (bakery shelves, street food, restaurant menus). The agent MUST supply realistic clinical estimates.
+     * averageNutrients fields (per serving): calories, protein, totalFat, saturatedFat, carbohydrates, sugar, totalFibre, sodium.
+     * averageNutrientsPer100g fields (per 100g standard reference): calories, protein, totalFat, saturatedFat, carbohydrates, sugar, totalFibre, sodium.
      * MACRONUTRIENT BALANCE: Ensure realistic balance: (4 * protein) + (9 * totalFat) + (4 * carbohydrates) should approximately equal calories (within 10-15%).
-     * REALISTIC CLINICAL BENCHMARKS:
-       - Steamed vegetables, clear soups, plain tea/water: 50-150 kcal, 2-6g protein, 1-3g fat, 0.5-1g sat fat, 8-15g carbs, 1-3g sugar, 200-450mg sodium.
-       - Grilled lean fish/proteins & sautéed vegetables: 350-500 kcal, 25-35g protein, 8-18g fat, 3-6g sat fat, 35-55g carbs, 2-6g sugar, 450-750mg sodium.
-       - Deep-fried protein meal sets & fried rice: 650-850 kcal, 25-38g protein, 28-45g fat, 8-15g sat fat, 65-85g carbs, 4-10g sugar, 800-1400mg sodium.
-       - Fried offal, fried vegetables (high oil), heavily spiced noodles: 350-550 kcal, 10-22g protein, 22-38g fat, 7-16g sat fat, 25-50g carbs, 3-8g sugar, 1000-2000mg sodium.
-       - Heavy sweet dessert drinks with condensed milk: 350-520 kcal, 4-8g protein, 10-20g fat, 6-12g sat fat, 60-80g carbs, 50-70g sugar, 100-250mg sodium.
-       - Supermarket snack shelf family packs: 800-1100 kcal, 8-16g protein, 45-65g fat, 15-25g sat fat, 85-130g carbs, 5-15g sugar, 800-1500mg sodium per whole pack.
+     * REALISTIC CLINICAL BENCHMARKS (Typical serving & per 100g):
+       - Fresh bakery breads & buns (per 75-85g bun): 260-320 kcal (320-380 kcal/100g), 6-9g protein, 8-14g fat, 4-7g sat fat, 35-48g carbs, 8-16g sugar, 250-400mg sodium.
+       - Sweet filled pastries/pies (per 80g item): 310-390 kcal (380-450 kcal/100g), 5-8g protein, 14-22g fat, 7-12g sat fat, 40-55g carbs, 16-24g sugar, 250-380mg sodium.
+       - Steamed vegetables, clear soups, plain tea/water: 50-150 kcal (30-60 kcal/100g), 2-6g protein, 1-3g fat, 0.5-1g sat fat, 8-15g carbs, 1-3g sugar, 200-450mg sodium.
+       - Grilled lean fish/proteins & sautéed vegetables: 350-500 kcal (140-180 kcal/100g), 25-35g protein, 8-18g fat, 3-6g sat fat, 35-55g carbs, 2-6g sugar, 450-750mg sodium.
+       - Deep-fried protein meal sets & fried rice: 650-850 kcal (220-290 kcal/100g), 25-38g protein, 28-45g fat, 8-15g sat fat, 65-85g carbs, 4-10g sugar, 800-1400mg sodium.
+       - Confectionery / chocolate bars: 500-580 kcal/100g, 6-9g protein, 30-38g fat, 15-22g sat fat, 50-60g carbs, 45-55g sugar, 80-150mg sodium per 100g.
 7. STRICT NUMBER FORMATTING: NEVER output scientific or exponential notation (NEVER write e+, e-, or 6.00e+00). Always write standard plain numbers (e.g. 6, 12, 0.5, 0) with at most 1 decimal place.
 
 === REQUIRED OUTPUT JSON SCHEMA ===
@@ -112,20 +110,31 @@ Output exactly ONE JSON object matching this schema:
       "brand": "Brand name if visible, else null",
       "tier": 1,
       "sourceImageIndex": 0,
-      "boundingBox2D": [300, 200, 450, 600],
       "hasNutritionLabel": true,
-      "servingSize": "e.g. 23g (1 bar)",
-      "servingsPerPack": 6,
+      "servingSize": "e.g. 20g (1 bar)",
+      "servingsPerPack": "2.5",
       "perServing": {
-        "calories": 90,
-        "protein": 1.0,
-        "totalFat": 3.0,
-        "saturatedFat": 1.0,
-        "carbohydrates": 15.0,
-        "sugar": 7.0,
-        "addedSugar": 6.0,
-        "saltMg": 20.0,
-        "sodiumMg": null
+        "calories": 110,
+        "protein": 2.0,
+        "totalFat": 7.0,
+        "saturatedFat": 3.5,
+        "carbohydrates": 10.0,
+        "sugar": 6.0,
+        "addedSugar": 5.0,
+        "totalFibre": 0.5,
+        "saltMg": null,
+        "sodiumMg": 20.0
+      },
+      "per100g": {
+        "calories": 550,
+        "protein": 10.0,
+        "totalFat": 35.0,
+        "saturatedFat": 17.5,
+        "carbohydrates": 50.0,
+        "sugar": 30.0,
+        "addedSugar": 25.0,
+        "totalFibre": 2.5,
+        "sodiumMg": 100.0
       }
     }
   ],
@@ -142,14 +151,24 @@ Output exactly ONE JSON object matching this schema:
       "message": "string (35-70 words clinical rationale highlighting both positive nutrient benefits and negative trade-offs)",
       "orderingTip": "string (practical instruction for the user at order or purchase time)",
       "averageNutrients": {
-        "calories": 90,
-        "protein": 1.0,
-        "totalFat": 3.0,
-        "saturatedFat": 1.0,
-        "sodium": 8,
-        "carbohydrates": 15.0,
-        "sugar": 7.0,
-        "addedSugar": 6.0
+        "calories": 280,
+        "protein": 8.0,
+        "totalFat": 10.0,
+        "saturatedFat": 4.5,
+        "carbohydrates": 38.0,
+        "sugar": 8.0,
+        "totalFibre": 2.0,
+        "sodium": 320
+      },
+      "averageNutrientsPer100g": {
+        "calories": 350,
+        "protein": 10.0,
+        "totalFat": 12.5,
+        "saturatedFat": 5.6,
+        "carbohydrates": 47.5,
+        "sugar": 10.0,
+        "totalFibre": 2.5,
+        "sodium": 400
       }
     }
   ]
@@ -217,10 +236,10 @@ Analyze all ${imageCount} provided comparison image(s).
    - Sort items in items[] from best/healthiest choice down to least favorable.
    - Inside each group in groups[], sort "scoutItemIndices" strictly from best/healthiest choice to least favorable sub-item.
 4. ACTIVE NUTRITIONAL CLUSTERING (MAX 10% VARIANCE & HIDDEN HARMS): In groups[], create ranked clusters. You MUST NOT group dishes if ${varianceRuleText}. BEYOND MACROS: Isolate items with critical hidden harms (e.g., Trans Fats, heavy synthetic additives, extreme oxidized oil) into their own 'alert' group, even if base macros match cleaner foods. Split broad categories (e.g., split "Fried Foods" into "Fried Lean Proteins", "Fried Carbs", "Fried Sides"). You may create 5-10 groups to maintain tight variance. Map every item index into scoutItemIndices. Zero orphaned items.
-5. ORDERING & VERDICTS: Order groups from best/safest choice down to alert. Provide verdict level, 3-6 word label, comparative sentence, clinical advice message, ordering tips, and ${averageNutrientsInstruction}`;
+5. ORDERING, VERDICTS & NORMALIZED METRICS: Order groups from best/safest choice down to alert. Provide verdict level, 3-6 word label, comparative sentence, clinical advice message, ordering tips, ${averageNutrientsInstruction}, and standardized averageNutrientsPer100g for every group to ensure fair comparisons across disparate portion sizes.`;
 
   if (isGeneric) {
-    const genericDirective = `\nDEFAULT COMPARISON MANDATE (No specific user filter provided): Extract, evaluate, and compare ALL legible dishes, beverages, products, and items visible across the entire image/menu/shelf without omission. Group and rank all candidate items strictly from best/healthiest to least favorable.`;
+    const genericDirective = `\nDEFAULT COMPARISON MANDATE (No specific user filter provided): Extract, evaluate, and compare ALL legible dishes, beverages, products, and items visible across the entire image/menu/shelf without omission. Group and rank all candidate items strictly from best/healthiest to least favorable. Always populate estimated non-null averageNutrients and averageNutrientsPer100g for every group.`;
     return `${base}${genericDirective}${contextPrompt}`;
   }
   return `${base}\nUser note: "${cleanMsg}".${contextPrompt}`;
@@ -256,6 +275,23 @@ export const scoutOnlyCompareResponseSchema = {
           perServing: {
             type: Type.OBJECT,
             nullable: true,
+            properties: {
+              calories: { type: Type.NUMBER, nullable: true },
+              protein: { type: Type.NUMBER, nullable: true },
+              totalFat: { type: Type.NUMBER, nullable: true },
+              saturatedFat: { type: Type.NUMBER, nullable: true },
+              carbohydrates: { type: Type.NUMBER, nullable: true },
+              sugar: { type: Type.NUMBER, nullable: true },
+              addedSugar: { type: Type.NUMBER, nullable: true },
+              totalFibre: { type: Type.NUMBER, nullable: true },
+              saltMg: { type: Type.NUMBER, nullable: true },
+              sodiumMg: { type: Type.NUMBER, nullable: true },
+            },
+          },
+          per100g: {
+            type: Type.OBJECT,
+            nullable: true,
+            description: "Normalized nutrient metrics per 100g standard reference, eliminating serving size distortions.",
             properties: {
               calories: { type: Type.NUMBER, nullable: true },
               protein: { type: Type.NUMBER, nullable: true },
@@ -310,8 +346,9 @@ export const scoutOnlyCompareResponseSchema = {
             nullable: true,
             description: "Optional practical instruction for the user at order or purchase time",
           },
-            averageNutrients: {
+          averageNutrients: {
             type: Type.OBJECT,
+            description: "Typical average nutrients per single serving for this group. MANDATORY non-null for all groups including unlabelled bakery/prepared dishes.",
             properties: {
               calories: { type: Type.NUMBER, description: "Typical average calories in kcal" },
               protein: { type: Type.NUMBER, description: "Typical average protein in grams" },
@@ -325,6 +362,22 @@ export const scoutOnlyCompareResponseSchema = {
               solubleFibre: { type: Type.NUMBER, nullable: true, description: "Typical average soluble fibre in grams" },
               addedSugar: { type: Type.NUMBER, nullable: true, description: "Typical average added sugar in grams" },
               transFat: { type: Type.NUMBER, nullable: true, description: "Typical average trans fat in grams" },
+            },
+            required: ["calories", "protein", "totalFat", "saturatedFat", "carbohydrates", "sugar", "totalFibre", "sodium"],
+          },
+          averageNutrientsPer100g: {
+            type: Type.OBJECT,
+            nullable: true,
+            description: "Standardized normalized nutrients per 100g reference for this group to eliminate serving-size distortions.",
+            properties: {
+              calories: { type: Type.NUMBER, description: "Calories per 100g (kcal)" },
+              protein: { type: Type.NUMBER, description: "Protein per 100g (g)" },
+              totalFat: { type: Type.NUMBER, description: "Total fat per 100g (g)" },
+              saturatedFat: { type: Type.NUMBER, description: "Saturated fat per 100g (g)" },
+              carbohydrates: { type: Type.NUMBER, description: "Carbohydrates per 100g (g)" },
+              sugar: { type: Type.NUMBER, description: "Sugar per 100g (g)" },
+              totalFibre: { type: Type.NUMBER, description: "Total fibre per 100g (g)" },
+              sodium: { type: Type.NUMBER, description: "Sodium per 100g (mg)" },
             },
             required: ["calories", "protein", "totalFat", "saturatedFat", "carbohydrates", "sugar", "totalFibre", "sodium"],
           },

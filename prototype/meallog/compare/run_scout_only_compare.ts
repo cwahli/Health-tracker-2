@@ -38,6 +38,34 @@ const testCases: CompareTestCase[] = [
       path.join(process.cwd(), "prototype", "meallog", "compare", "images", "set1_silverqueen_chocolate_front.jpg"),
     ],
     userPrompt: "",
+    expectedChecks: (result: any) => {
+      const details: string[] = [];
+      let passed = true;
+      const items = result.items || [];
+      const groups = result.groups || [];
+      details.push(`Extracted ${items.length} items (bakery + chocolate).`);
+      details.push(`Formed ${groups.length} diet groups.`);
+
+      groups.forEach((g: any, idx: number) => {
+        if (!g.averageNutrients || typeof g.averageNutrients.calories !== "number") {
+          details.push(`FAIL: Group ${idx + 1} (${g.groupName}) has null or missing averageNutrients!`);
+          passed = false;
+        } else {
+          details.push(`PASS: Group ${idx + 1} has non-null averageNutrients (${g.averageNutrients.calories} kcal/serving).`);
+        }
+
+        if (!g.averageNutrientsPer100g || typeof g.averageNutrientsPer100g.calories !== "number") {
+          details.push(`WARN: Group ${idx + 1} (${g.groupName}) missing averageNutrientsPer100g.`);
+        } else {
+          details.push(`PASS: Group ${idx + 1} has normalized 100g metrics (${g.averageNutrientsPer100g.calories} kcal/100g).`);
+        }
+      });
+
+      const itemsWith100g = items.filter((it: any) => it.per100g && typeof it.per100g.calories === "number");
+      details.push(`Items with per100g: ${itemsWith100g.length}/${items.length}`);
+
+      return { passed, details };
+    },
   },
   {
     id: "compare_set2",
@@ -500,21 +528,26 @@ async function runScoutOnlyComparePrototype() {
 
       console.log(`\n--- Extracted Items (${json.items?.length || 0}) ---`);
       (json.items || []).forEach((item: any, idx: number) => {
-        const cal = item.perServing?.calories != null ? `${item.perServing.calories} kcal` : "N/A";
+        const cal = item.perServing?.calories != null ? `${item.perServing.calories} kcal/srv` : "N/A";
         const sugar = item.perServing?.sugar != null ? `${item.perServing.sugar}g sugar` : "";
         const salt = item.perServing?.saltMg != null ? `${item.perServing.saltMg}mg salt` : (item.perServing?.sodiumMg != null ? `${item.perServing.sodiumMg}mg sodium` : "");
+        const cal100 = item.per100g?.calories != null ? `[Per 100g: ${item.per100g.calories} kcal, ${item.per100g.sugar ?? "—"}g sugar, ${item.per100g.totalFat ?? "—"}g fat]` : "";
         const label = item.hasNutritionLabel ? "[Has Label OCR]" : "[No Label Panel]";
         const bbox = Array.isArray(item.boundingBox2D) ? `[${item.boundingBox2D.join(", ")}]` : "MISSING_BBOX";
-        console.log(`  [Item ${idx}] (Img ${item.sourceImageIndex}) ${item.name} | bbox: ${bbox} | ${cal} ${sugar} ${salt} ${label}`);
+        console.log(`  [Item ${idx}] (Img ${item.sourceImageIndex}) ${item.name} | bbox: ${bbox} | ${cal} ${sugar} ${salt} ${cal100} ${label}`);
       });
 
       console.log("\n--- Diet Groups (Ranked & Ordered with Verdicts) ---");
       (json.groups || []).forEach((g: any, idx: number) => {
         const indices = (g.scoutItemIndices || []).join(", ");
-        const cal = g.averageNutrients?.calories != null ? `${g.averageNutrients.calories} kcal` : "";
+        const cal = g.averageNutrients?.calories != null ? `${g.averageNutrients.calories} kcal/srv` : "NO_SERVING_NUTRIENTS";
         const na = g.averageNutrients?.sodium != null ? `${g.averageNutrients.sodium}mg Na` : "";
+        const norm100 = g.averageNutrientsPer100g?.calories != null
+          ? `[Per 100g: ${g.averageNutrientsPer100g.calories} kcal, ${g.averageNutrientsPer100g.sugar ?? "—"}g sugar, ${g.averageNutrientsPer100g.totalFat ?? "—"}g fat, ${g.averageNutrientsPer100g.sodium ?? "—"}mg Na]`
+          : "NO_100G_NUTRIENTS";
         const gBbox = Array.isArray(g.boundingBox2D) ? `[${g.boundingBox2D.join(", ")}]` : "MISSING_BBOX";
-        console.log(`  Rank ${idx + 1}: "${g.groupName}" [${g.verdict?.level?.toUpperCase()}] - "${g.verdict?.label}" (Items: [${indices}]) bbox: ${gBbox} ${cal} ${na}`);
+        console.log(`  Rank ${idx + 1}: "${g.groupName}" [${g.verdict?.level?.toUpperCase()}] - "${g.verdict?.label}" (Items: [${indices}]) bbox: ${gBbox}`);
+        console.log(`    Serving: ${cal}, ${na} | Normalized: ${norm100}`);
         console.log(`    Comparative Sentence: "${g.comparisonSentence}"`);
         if (g.orderingTip) console.log(`    Ordering Tip: "${g.orderingTip}"`);
         console.log(`    Clinical Message: ${g.message}`);

@@ -1,9 +1,14 @@
 {
-  "_internalReasoning": "Extracted all 41 beverage and dessert items from the cafe menu, categorized into 4 tiers ranging from unsweetened drinks to heavy condensed milk desserts, perfectly aligned with the user's high calorie, sodium, and added sugar metrics.",
-  "comparisonTitle": "Cafe Crisa Beverage Menu Nutritional Comparison",
+  "_internalReasoning": "Extracted all visible menu items from Cafe Crisan, clustered beverages by sugar content and preparation, aligned with user profile excesses.",
+  "comparisonTitle": "Cafe Crisan Beverage & Dessert Menu Evaluation",
   "comparisonType": "menu_items",
-  "summary": "This menu presents a wide range of beverages, from plain teas and fresh juices to heavily sweetened dessert drinks loaded with condensed milk and syrups. Given your high calorie, sodium, and added sugar intake, prioritising unsweetened or lightly prepared drinks is critical to avoid worsening metabolic strain.",
+  "summary": "The menu primarily features sweet iced beverages and fruit juices high in added sugars, which conflict with the user's current added sugar and calorie overages. Plain water, unsweetened tea, and black coffee serve as the safest choices, whereas heavy condensed milk and fruit-syrup bowls represent severe metabolic risks.",
   "items": [
+    {
+      "name": "Kopi",
+      "tier": 1,
+      "sourceImageIndex": 0
+    },
     {
       "name": "Es Teh Manis",
       "tier": 2,
@@ -15,33 +20,33 @@
       "sourceImageIndex": 0
     },
     {
-      "name": "Kopi",
+      "name": "Es Kelapa Muda",
       "tier": 2,
       "sourceImageIndex": 0
     },
     {
       "name": "Es Jeruk",
-      "tier": 2,
+      "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Kelapa Muda",
-      "tier": 1,
+      "name": "Es Jeruk",
+      "tier": 3,
       "sourceImageIndex": 0
     },
     {
-      "name": "Es Jeruk Kelapa",
-      "tier": 2,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Jus Alpukat",
+      "name": "Jus Jeruk",
       "tier": 3,
       "sourceImageIndex": 0
     },
     {
       "name": "Jus Melon",
-      "tier": 2,
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Jus Alpukat",
+      "tier": 3,
       "sourceImageIndex": 0
     },
     {
@@ -95,6 +100,36 @@
       "sourceImageIndex": 0
     },
     {
+      "name": "Es Jeruk Kelapa",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Jus Mangga",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Jus Durian",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Jus Kedondong",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Jus Sirsak",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
+      "name": "Jus Pisang",
+      "tier": 3,
+      "sourceImageIndex": 0
+    },
+    {
       "name": "Es Campur",
       "tier": 4,
       "sourceImageIndex": 0
@@ -118,185 +153,104 @@
       "name": "Sop Buah",
       "tier": 4,
       "sourceImageIndex": 0
-    },
-    {
-      "name": "Jus Mangga",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Juian Durian",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Jus Kedondong",
-      "tier": 2,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Jus Sirsak",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Jus Pisang",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Es Jeruk",
-      "tier": 2,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Jus Merah",
-      "tier": 2,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Jus Sawi",
-      "tier": 1,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Jus Tomat",
-      "tier": 1,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Jus Naga",
-      "tier": 1,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Jus Wortel",
-      "tier": 1,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Jus Belimbing",
-      "tier": 1,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Jus Sirsak Special",
-      "tier": 3,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Jus Alpukat Special",
-      "tier": 4,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Jus Jambu",
-      "tier": 2,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Jus Apel",
-      "tier": 2,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Jus Sirsak Biasa",
-      "tier": 2,
-      "sourceImageIndex": 0
-    },
-    {
-      "name": "Es Jagung",
-      "tier": 3,
-      "sourceImageIndex": 0
     }
   ],
   "groups": [
     {
-      "groupName": "Tier 1: Fresh Unsweetened Juices & Coconut Water",
+      "groupName": "Tier 1 - Safest Choice: Unsweetened Hot Beverages",
       "scoutItemIndices": [
-        4,
-        30,
-        31,
-        32,
-        33,
-        34
+        0
       ],
       "boundingBox2D": [
-        114,
-        178,
-        779,
-        310
+        130,
+        640,
+        300,
+        745
       ],
       "verdict": {
-        "label": "Safest Choice: High Fiber",
+        "label": "Lowest Calories and Sugar",
         "level": "good"
       },
-      "comparisonSentence": "Unlike the heavy dessert bowls and syrupy iced drinks, these fresh juices and coconut water provide essential potassium and fiber with zero added sugars.",
-      "message": "These pure fruit and vegetable options help address your dietary fiber deficit while supplying natural potassium. They contain no added sugars or saturated fats, making them the most metabolically sound choice on the menu, though you should still be mindful of natural fruit sugars.",
+      "comparisonSentence": "Unlike the sugary fruit juices and dessert bowls, black coffee contains zero added sugar and minimal calories.",
+      "message": "This unsweetened hot beverage option is ideal for managing caloric intake and avoiding added sugars. While it lacks macronutrients, it provides antioxidants without aggravating your current calorie and sugar excesses.",
       "averageNutrients": {
-        "calories": 95,
-        "protein": 1.5,
-        "totalFat": 0.4,
-        "saturatedFat": 0.1,
-        "carbohydrates": 22,
-        "sugar": 16,
-        "totalFibre": 3.5,
-        "sodium": 15,
+        "calories": 5,
+        "protein": 0.3,
+        "totalFat": 0,
+        "saturatedFat": 0,
+        "carbohydrates": 1,
+        "sugar": 0,
+        "totalFibre": 0,
+        "sodium": 5,
         "addedSugar": 0,
-        "potassium": 320,
-        "solubleFibre": 1,
+        "potassium": 116,
+        "solubleFibre": 0,
         "transFat": 0
       },
-      "orderingTip": "Request pure coconut water or vegetable juices with absolutely no added sugar, syrup, or condensed milk."
+      "averageNutrientsPer100g": {
+        "calories": 2,
+        "protein": 0.2,
+        "totalFat": 0,
+        "saturatedFat": 0,
+        "carbohydrates": 0.5,
+        "sugar": 0,
+        "totalFibre": 0,
+        "sodium": 2
+      },
+      "orderingTip": "Order plain black coffee or tea without any added sugar or condensed milk."
     },
     {
-      "groupName": "Tier 2: Light Fruit Juices & Plain Teas",
+      "groupName": "Tier 2 - Moderate Choice: Lightly Sweetened & Fresh Hydration",
       "scoutItemIndices": [
-        0,
         1,
         2,
-        3,
-        5,
-        7,
-        25,
-        28,
-        29,
-        37,
-        38,
-        39
+        3
       ],
       "boundingBox2D": [
-        118,
-        411,
-        995,
-        340
+        130,
+        175,
+        340,
+        700
       ],
       "verdict": {
-        "label": "Moderate Choice: Watch Sugar",
+        "label": "Moderate Carbohydrates and Sugar",
         "level": "neutral"
       },
-      "comparisonSentence": "Compared to the highly dense dessert soups, these standard juices and teas have fewer total calories but still require sugar adjustments.",
-      "message": "These beverages offer moderate hydration and vitamins. However, standard versions often include liquid cane sugar which will contribute to your existing added sugar overload. Opt for minimal or zero added sweetener to protect your glycemic control.",
+      "comparisonSentence": "These beverages offer moderate hydration benefits but contain added sweeteners that contribute to carbohydrate overloads.",
+      "message": "Options like sweet tea and young coconut water offer refreshing hydration and trace electrolytes like potassium. However, added sugars and simple carbohydrates contribute directly to your daily carbohydrate and added sugar overages.",
       "averageNutrients": {
-        "calories": 140,
-        "protein": 1,
-        "totalFat": 0.5,
+        "calories": 110,
+        "protein": 0.5,
+        "totalFat": 0.2,
         "saturatedFat": 0.1,
-        "carbohydrates": 34,
-        "sugar": 28,
-        "totalFibre": 1.5,
+        "carbohydrates": 26,
+        "sugar": 22,
+        "totalFibre": 0.5,
         "sodium": 20,
-        "addedSugar": 15,
-        "potassium": 190,
-        "solubleFibre": 0.5,
+        "addedSugar": 18,
+        "potassium": 210,
+        "solubleFibre": 0,
         "transFat": 0
       },
-      "orderingTip": "Order with half-sugar or ask for sugar to be served separately so you can control your intake."
+      "averageNutrientsPer100g": {
+        "calories": 40,
+        "protein": 0.2,
+        "totalFat": 0.1,
+        "saturatedFat": 0,
+        "carbohydrates": 10,
+        "sugar": 8.5,
+        "totalFibre": 0.2,
+        "sodium": 8
+      },
+      "orderingTip": "Request half-sugar or no added syrup to minimize carbohydrate impact."
     },
     {
-      "groupName": "Tier 3: Flavored Syrups, Yakult & Noodle Drinks",
+      "groupName": "Tier 3 - Caution Choice: Fruit Juices & Sweet Iced Drinks",
       "scoutItemIndices": [
+        4,
+        5,
         6,
+        7,
         8,
         9,
         10,
@@ -307,79 +261,99 @@
         15,
         16,
         17,
-        23,
-        24,
-        26,
-        27,
-        35,
-        40
-      ],
-      "boundingBox2D": [
-        117,
-        10,
-        992,
-        946
-      ],
-      "verdict": {
-        "label": "Caution: High Added Sugars",
-        "level": "warning"
-      },
-      "comparisonSentence": "These flavored and syrup-laden beverages exceed your daily sugar thresholds faster than fresh juices due to artificial additives and syrups.",
-      "message": "Packed with flavored syrups, jellies, and sweetened milks, these drinks significantly worsen your added sugar and carbohydrate surpluses. While lower in saturated fat than dessert bowls, their glycemic load remains a major metabolic concern.",
-      "averageNutrients": {
-        "calories": 240,
-        "protein": 2.5,
-        "totalFat": 2,
-        "saturatedFat": 0.8,
-        "carbohydrates": 55,
-        "sugar": 48,
-        "totalFibre": 1,
-        "sodium": 45,
-        "addedSugar": 35,
-        "potassium": 210,
-        "solubleFibre": 0.2,
-        "transFat": 0
-      },
-      "orderingTip": "Limit these options entirely. If consumed, request no added flavored syrups and remove jelly toppings."
-    },
-    {
-      "groupName": "Tier 4: Condensed Milk & Heavy Dessert Bowls",
-      "scoutItemIndices": [
         18,
         19,
         20,
         21,
         22,
-        36
+        23,
+        24
       ],
       "boundingBox2D": [
-        556,
-        435,
-        715,
-        953
+        110,
+        0,
+        990,
+        960
       ],
       "verdict": {
-        "label": "High Sugar & Calorie Alert",
+        "label": "High Sugar and Carbohydrate Load",
+        "level": "warning"
+      },
+      "comparisonSentence": "Compared to plain beverages, these fruit juices and jellies deliver a significant surge in fructose and liquid calories.",
+      "message": "Fruit juices and flavored iced beverages provide vitamins, potassium, and dietary fibre depending on the pulp content. Conversely, they pack concentrated liquid fructose and added sugars that worsen your existing added sugar and carbohydrate excesses.",
+      "averageNutrients": {
+        "calories": 180,
+        "protein": 1.2,
+        "totalFat": 1.5,
+        "saturatedFat": 0.3,
+        "carbohydrates": 42,
+        "sugar": 36,
+        "totalFibre": 1.5,
+        "sodium": 35,
+        "addedSugar": 25,
+        "potassium": 280,
+        "solubleFibre": 0.2,
+        "transFat": 0
+      },
+      "averageNutrientsPer100g": {
+        "calories": 65,
+        "protein": 0.4,
+        "totalFat": 0.5,
+        "saturatedFat": 0.1,
+        "carbohydrates": 15,
+        "sugar": 13,
+        "totalFibre": 0.5,
+        "sodium": 12
+      },
+      "orderingTip": "Choose fresh fruit juices without added simple syrup and limit portion sizes."
+    },
+    {
+      "groupName": "Tier 4 - Severe Metabolic Load: Mixed Dessert Bowls & Syrups",
+      "scoutItemIndices": [
+        25,
+        26,
+        27,
+        28,
+        29
+      ],
+      "boundingBox2D": [
+        560,
+        430,
+        720,
+        960
+      ],
+      "verdict": {
+        "label": "Extreme Sugar and Saturated Fat",
         "level": "alert"
       },
-      "comparisonSentence": "Unlike fresh juices, these heavy dessert bowls are calorie-dense bombs loaded with condensed milk, coconut cream, and excessive saturated fats.",
-      "message": "These mixed dessert soups and heavy avocado blends deliver massive surges of saturated fat and refined sugar, directly conflicting with your high calorie (39% over) and saturated fat (38% over) targets. They pose an acute metabolic risk and should be strictly avoided.",
+      "comparisonSentence": "Unlike simple fruit juices, these loaded dessert bowls combine heavy condensed milk, fruit syrups, and high-fat avocado or durian.",
+      "message": "These dessert beverages offer dietary fibre from mixed fruits and healthy monounsaturated fats from avocado. However, heavy condensed milk, palm syrups, and high sugar content severely exacerbate your added sugar, saturated fat, and calorie excesses.",
       "averageNutrients": {
-        "calories": 420,
-        "protein": 6,
-        "totalFat": 18,
-        "saturatedFat": 12.5,
-        "carbohydrates": 65,
-        "sugar": 58,
+        "calories": 380,
+        "protein": 4.5,
+        "totalFat": 14,
+        "saturatedFat": 7.5,
+        "carbohydrates": 62,
+        "sugar": 52,
         "totalFibre": 3,
-        "sodium": 80,
-        "addedSugar": 45,
+        "sodium": 85,
+        "addedSugar": 38,
         "potassium": 450,
-        "solubleFibre": 1,
+        "solubleFibre": 0.8,
         "transFat": 0.1
       },
-      "orderingTip": "Strictly avoid all Es Campur, Sop Buah, and avocado-durian dessert bowls due to high condensed milk and saturated fat content."
+      "averageNutrientsPer100g": {
+        "calories": 125,
+        "protein": 1.5,
+        "totalFat": 4.5,
+        "saturatedFat": 2.4,
+        "carbohydrates": 20,
+        "sugar": 17,
+        "totalFibre": 1,
+        "sodium": 28
+      },
+      "orderingTip": "Avoid entirely or share with multiple people, requesting no condensed milk or heavy syrups."
     }
   ],
-  "recommendedOption": "Tier 1: Fresh Unsweetened Juices & Coconut Water"
+  "recommendedOption": "Kopi"
 }
