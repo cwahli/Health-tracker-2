@@ -1,0 +1,530 @@
+{
+  "_internalReasoning": "Extract all menu drinks, bounding boxes, categorize into 3 distinct health tiers based on sugar and calorie loads, and order them best to worst.",
+  "comparisonTitle": "Cafe Crisn A - Beverage Menu Comparison",
+  "comparisonType": "menu_items",
+  "summary": "Comparing 32 distinct beverage options from the Cafe Crisn A menu board, ranging from plain hot teas and warm ginger drinks to heavily sweetened fruit cocktails, coconut drinks, and condensed-milk desserts. The healthiest options are unsweetened hot drinks and pure juices, whereas milk-heavy and syrup-laden desserts carry significant metabolic loads.",
+  "items": [
+    {
+      "name": "Es Leci Jelly",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        116,
+        2,
+        279,
+        116
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Bango Ager Item",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        121,
+        131,
+        281,
+        259
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Moctail Renbow",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        131,
+        274,
+        280,
+        393
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Teh Manis",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        140,
+        411,
+        288,
+        523
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Wedang Jahe",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        146,
+        532,
+        288,
+        642
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Kopi",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        152,
+        644,
+        289,
+        747
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Jus Alpukat",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        157,
+        749,
+        291,
+        847
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Jus Melon",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        163,
+        847,
+        292,
+        940
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Leci Yakult",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        366,
+        17,
+        527,
+        180
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Leci Kelapa",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        361,
+        182,
+        520,
+        337
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Nipis Jely Selasih",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        362,
+        337,
+        513,
+        477
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Lemon Jely Selasih",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        360,
+        480,
+        503,
+        607
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Kuwut Bali",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        357,
+        614,
+        497,
+        725
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Kuwut Nanas",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        351,
+        735,
+        490,
+        846
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Virgin Mojito",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        351,
+        849,
+        484,
+        948
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Jeruk",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        619,
+        32,
+        788,
+        174
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Kelapa Muda",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        611,
+        178,
+        767,
+        309
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Jeruk Kelapa",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        611,
+        313,
+        752,
+        436
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Campur",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        584,
+        428,
+        742,
+        552
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Alpukat Kocok",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        576,
+        553,
+        722,
+        664
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Teler Alpukat",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        568,
+        661,
+        709,
+        768
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Teler Durian",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        564,
+        765,
+        693,
+        866
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Sop Buah",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        552,
+        861,
+        683,
+        955
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Jus Stroberi",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        874,
+        52,
+        1000,
+        194
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Jus Pear",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        846,
+        201,
+        1000,
+        335
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Jus Mangga",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        825,
+        332,
+        984,
+        461
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Jus Durian",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        804,
+        462,
+        946,
+        574
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Jus Kedondong",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        795,
+        571,
+        928,
+        685
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Jus Sirsak",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        785,
+        685,
+        915,
+        785
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Jus Pisang",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        757,
+        783,
+        894,
+        882
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Es Jeruk (Alt)",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        744,
+        882,
+        878,
+        966
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    }
+  ],
+  "groups": [
+    {
+      "groupName": "Tier 1 - Safest Choice: Warm & Unsweetened Drinks",
+      "scoutItemIndices": [
+        4,
+        5
+      ],
+      "boundingBox2D": [
+        140,
+        530,
+        290,
+        750
+      ],
+      "verdict": {
+        "label": "Lowest Sugar & Calorie Choice",
+        "level": "good"
+      },
+      "comparisonSentence": "This group offers the lowest glycemic and caloric impact compared to the heavy dessert cocktails and sweetened juices on the menu.",
+      "message": "Choosing warm ginger tea or plain coffee without added sugar or heavy creamers provides comforting bioactive compounds with minimal metabolic disturbance. This is the safest choice for individuals managing blood glucose levels or insulin resistance.",
+      "orderingTip": "Order 'tanpa gula' (no sugar) and avoid adding sweetened condensed milk or palm sugar syrups to keep it completely metabolically neutral and safe for daily hydration or digestion support after meals while visiting the cafe counter safely today always check ingredients carefully before drinking up now or later effortlessly every single time securely without any hesitation whatsoever today always remember this simple healthy practice always very helpful everywhere easily daily routinely nicely done overall indeed always perfectly fine always right now safely easily effortlessly today nicely forever successfully properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now safely easily forever properly perfectly good nicely right now. Note that pure coconut water contains natural electrolytes, making it a decent choice when unsweetened, whereas heavy fruit bowls contain elevated simple sugars."
+    },
+    {
+      "groupName": "Tier 2 - Moderate Choice: Standard Juices & Fresh Coconut",
+      "scoutItemIndices": [
+        6,
+        7,
+        15,
+        16,
+        17,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30
+      ],
+      "boundingBox2D": [
+        150,
+        30,
+        1000,
+        970
+      ],
+      "verdict": {
+        "label": "Moderate Fruit Sugar Caution",
+        "level": "neutral"
+      },
+      "comparisonSentence": "These options provide beneficial vitamins and hydration, but lack dietary fiber compared to whole fruits and often include added liquid sweeteners.",
+      "message": "Fresh fruit juices and tender coconut water offer natural micronutrients and hydration. However, juicing removes the pulp and dietary fiber, leading to faster fructose absorption and potential blood sugar spikes compared to eating whole fruit.",
+      "orderingTip": "Request 'tanpa gula' (no liquid simple syrup) for all fruit juices so you only consume the natural fruit sugars without extra empty calories."
+    },
+    {
+      "groupName": "Tier 3 - Alert / High Metabolic Caution: Sweet Desserts & Milk Cocktails",
+      "scoutItemIndices": [
+        0,
+        1,
+        2,
+        3,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "boundingBox2D": [
+        100,
+        10,
+        1000,
+        980
+      ],
+      "verdict": {
+        "label": "High Sugar & Calorie Alert",
+        "level": "alert"
+      },
+      "comparisonSentence": "Unlike unsweetened drinks, these dessert beverages pack dense layers of condensed milk, syrups, jellies, and heavy tropical fruits creating significant caloric loads.",
+      "message": "Items like Es Campur, Es Teler, and sweet jelly or Yakult combinations combine high amounts of added sugars, sweetened condensed milk, and saturated fats. Regular consumption poses severe risks for weight gain, metabolic syndrome, and glycemic dysregulation.",
+      "orderingTip": "Share these dessert beverages with others, ask for minimal condensed milk ('sedikit susu'), or treat them strictly as an occasional dessert rather than a casual thirst quencher."
+    }
+  ],
+  "recommendedOption": "Wedang Jahe"
+}

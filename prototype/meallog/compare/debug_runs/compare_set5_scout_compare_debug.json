@@ -1,0 +1,907 @@
+{
+  "_internalReasoning": "Extracted all visible menu items across fish, chicken, fried rice, seblak, noodles, and seafood categories, categorizing them into clinical health tiers based on cooking method and metabolic risk.",
+  "comparisonTitle": "Restaurant Menu Health & Nutrition Evaluation",
+  "comparisonType": "menu_items",
+  "summary": "This menu evaluation ranks dishes from grilled and clear-broth options (safest choices) to deep-fried items, heavy coconut/sweet sauces, and high-sodium street foods (high caution). Choosing grilled fish and clear soups limits saturated fat and sodium overload.",
+  "items": [
+    {
+      "name": "Nila Bakar / Gr + Nasi",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        223,
+        79,
+        241,
+        344
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Bawal Bakar / Gr + Nasi",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        250,
+        77,
+        267,
+        365
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Bandeng Bakar / Gr + Nasi",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        273,
+        81,
+        292,
+        401
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Tongkol Bakar / Gr + Nasi",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        297,
+        81,
+        316,
+        403
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Cue Bakar / Gr + Nasi",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        321,
+        88,
+        340,
+        338
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Gurame Bakar / Goreng + Nasi",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        347,
+        89,
+        368,
+        455
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Ikan Que Bakar / Gr + Nasi",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        421,
+        95,
+        440,
+        407
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Baronang Bakar / Gr + Nasi",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        442,
+        98,
+        463,
+        427
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Ayam Garang Asem + Nasi",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        512,
+        108,
+        529,
+        403
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Tongkol Garang Asem + Nasi",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        533,
+        114,
+        550,
+        447
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Gurame Garang Asem + Nasi",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        556,
+        116,
+        574,
+        439
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Ayam Bakar + Nasi",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        719,
+        142,
+        735,
+        335
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Ayam Bakar Sambel",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        739,
+        141,
+        753,
+        355
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Lampung + Nasi",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        764,
+        147,
+        778,
+        319
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Gurame Asam Manis + Nasi",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        371,
+        95,
+        389,
+        407
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Gurame Vilet Asam Manis + Nasi",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        396,
+        96,
+        415,
+        477
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Ikan Bawal Asem Manis + Nasi",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        468,
+        103,
+        483,
+        449
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Ikan Nila Garang Asem + Nasi",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        489,
+        104,
+        508,
+        452
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Ayam Asam Manis + Nasi",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        817,
+        155,
+        832,
+        403
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Nasi Goreng Seafood",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        215,
+        655,
+        233,
+        908
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Nasi Goreng Spesial",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        243,
+        656,
+        258,
+        892
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Nasi Goreng Pete",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        267,
+        655,
+        284,
+        858
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Nasi Goreng Jengkol",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        292,
+        656,
+        308,
+        902
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Nasi Goreng Sosis",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        316,
+        656,
+        332,
+        866
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Nasi Goreng Bakso",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        340,
+        656,
+        356,
+        878
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Nasi Goreng Kornet",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        365,
+        656,
+        381,
+        890
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Nasi Goreng Telor Dadar",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        386,
+        656,
+        401,
+        953
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Nasi Goreng Ayam",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        412,
+        656,
+        429,
+        872
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Seblak Cobek Viral",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        504,
+        653,
+        518,
+        868
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Seblak Seafood",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        530,
+        652,
+        543,
+        831
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Seblak Ceker",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        554,
+        653,
+        568,
+        792
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Ceker Mercon",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        576,
+        653,
+        592,
+        793
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Mie Tek - Tek Kuah",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        600,
+        653,
+        616,
+        853
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Mie Tek - Tek Sosis",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        624,
+        653,
+        638,
+        847
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Mie Tek - Tek Bakso",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        643,
+        653,
+        657,
+        858
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Mie Tek - Tek Kornet",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        663,
+        653,
+        677,
+        862
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Mie Tek - Tek Seafood",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        683,
+        653,
+        698,
+        883
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Kwetiau Goreng Bakso Sosis",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        706,
+        653,
+        722,
+        959
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Kwetiau Goreng Seafood",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        727,
+        653,
+        742,
+        929
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Kwetiau Kuah Sosis Bakso",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        747,
+        653,
+        762,
+        927
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Kwetiau Special",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        768,
+        653,
+        782,
+        827
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Kwetiau Ayam",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        788,
+        653,
+        802,
+        840
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Mie Tek - Tek Special",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        808,
+        653,
+        823,
+        864
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Mie Tek - Tek Ayam",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        828,
+        653,
+        843,
+        840
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Seafood Tumpah",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        909,
+        653,
+        923,
+        831
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Cumi Goreng Tepung + Nasi",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        929,
+        653,
+        944,
+        934
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Cumi Goreng Tepung",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        949,
+        653,
+        964,
+        873
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Asam Manis + Nasi",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        969,
+        653,
+        983,
+        868
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Cumi Saos Asam Manis",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        989,
+        653,
+        1000,
+        946
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Ayam Goreng Sambel",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        780,
+        151,
+        796,
+        376
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Ayam Goreng Geprek",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        840,
+        159,
+        856,
+        381
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Tepung + Nasi",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        863,
+        163,
+        878,
+        307
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Ayam Bakar Sambel Ijo + Nasi",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        886,
+        167,
+        903,
+        461
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Ayam Goreng Sambel Ijo + Nasi",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        909,
+        172,
+        924,
+        483
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Ayam Goreng Sambel Judes",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        932,
+        177,
+        945,
+        449
+      ],
+      "hasNutritionLabel": false,
+      "brand": null,
+      "servingSize": null,
+      "servingsPerPack": null
+    }
+  ],
+  "groups": [
+    {
+      "groupName": "Tier 1 - Safest Choice: Grilled Fish & Clear Soups",
+      "scoutItemIndices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "boundingBox2D": [
+        215,
+        75,
+        575,
+        485
+      ],
+      "verdict": {
+        "label": "Lowest Saturated Fat & Sodium",
+        "level": "good"
+      },
+      "comparisonSentence": "Grilled fish and clear broth (Garang Asem) options provide superior lean protein and omega-3 fatty acids with significantly lower trans and saturated fats than deep-fried alternatives.",
+      "message": "These grilled fish selections and sour clear soups represent the most cardiometabolic-friendly choices on the menu. They deliver high-quality lean protein, essential omega-3 fats, and minimal batter or oil absorption. Perfect for maintaining stable blood lipids and supporting lean body mass.",
+      "orderingTip": "Opt for 'Ikan Bakar' without sweet soy glaze (kecap manis) to keep added sugars minimal, and pair with fresh raw vegetables (lalapan). averageNutrients: calories 450, protein 35, totalFat 12, saturatedFat 2.5, sodium 550, carbohydrates 45, sugar 3, addedSugar 1"
+    },
+    {
+      "groupName": "Tier 2 - Moderate Choice: Grilled & Roasted Poultry",
+      "scoutItemIndices": [
+        11,
+        12,
+        13
+      ],
+      "boundingBox2D": [
+        715,
+        138,
+        781,
+        376
+      ],
+      "verdict": {
+        "label": "Moderate Protein, Watch Sauces",
+        "level": "neutral"
+      },
+      "comparisonSentence": "Grilled poultry offers good protein density compared to heavy fried dishes, though marinades and sambal oils require moderate caution.",
+      "message": "Poultry dishes like grilled chicken provide solid protein content without the massive trans-fat load of deep-fried options. However, watch out for added oils in sambal accompaniments and sugary marinades that can subtly elevate glycemic and caloric totals.",
+      "orderingTip": "Ask for sambal served separately and limit consumption of sugary dipping sauces. averageNutrients: calories 520, protein 32, totalFat 18, saturatedFat 4, sodium 650, carbohydrates 48, sugar 5, addedSugar 3"
+    },
+    {
+      "groupName": "Tier 3 - Warning: Deep-Fried Meats & Sweet Sauces",
+      "scoutItemIndices": [
+        14,
+        15,
+        16,
+        17,
+        18,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53
+      ],
+      "boundingBox2D": [
+        371,
+        95,
+        508,
+        477
+      ],
+      "verdict": {
+        "label": "High Saturated Fat & Sugar",
+        "level": "warning"
+      },
+      "comparisonSentence": "Sweet and sour or deep-fried dishes introduce significantly more calories, refined carbohydrates, and inflammatory fats than grilled options.",
+      "message": "Dishes featuring heavy batter, deep-frying (goreng tepung), or sugary sweet-and-acidic sauces (asam manis) drive up caloric density and glycemic load. Frequent consumption can negatively impact glycemic control and lipid profiles over time.",
+      "orderingTip": "Share these dishes across the table rather than eating a full portion alone, and avoid drinking leftover sweet sauce. averageNutrients: calories 680, protein 28, totalFat 32, saturatedFat 8, sodium 820, carbohydrates 65, sugar 14, addedSugar 10"
+    },
+    {
+      "groupName": "Tier 4 - Alert: High-Sodium Fried Rice, Noodles & Seblak",
+      "scoutItemIndices": [
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47
+      ],
+      "boundingBox2D": [
+        215,
+        650,
+        1000,
+        960
+      ],
+      "verdict": {
+        "label": "High Sodium & Refined Carbs",
+        "level": "alert"
+      },
+      "comparisonSentence": "Fried rices, stir-fried noodles, and spicy seblak deliver massive sodium and refined carbohydrate loads that pose severe metabolic and blood pressure risks compared to simple grilled fish.",
+      "message": "These carbohydrate-heavy street foods and spicy cracker stews (seblak) are exceptionally high in sodium, MSG, and refined starches. They trigger rapid blood glucose spikes and water retention, making them unsuitable for individuals managing hypertension, pre-diabetes, or metabolic syndrome.",
+      "orderingTip": "Avoid entirely if managing hypertension or metabolic conditions; if consuming, share with multiple people and request lower salt and oil. averageNutrients: calories 750, protein 16, totalFat 28, saturatedFat 7, sodium 1450, carbohydrates 95, sugar 6, addedSugar 3"
+    }
+  ],
+  "recommendedOption": "Nila Bakar / Gr + Nasi"
+}

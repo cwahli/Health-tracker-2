@@ -1,0 +1,158 @@
+{
+  "_internalReasoning": "Evaluated 5 product nutrition labels, extracting each snack, categorizing by macronutrient quality and ranking from most balanced to highest sugar/fat density.",
+  "comparisonTitle": "Packaged Snack & Bakery Nutrition Comparison",
+  "comparisonType": "nutrition_labels",
+  "summary": "Comparing these 5 packaged items shows significant variation in sugar, saturated fat, and protein density. The blue packaging bread offers the best protein-to-sugar ratio with moderate calories, while high-sugar buns and vacuum-fried snacks present higher metabolic loads.",
+  "items": [
+    {
+      "name": "Green Package Snack Bar",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        431,
+        2,
+        715,
+        963
+      ],
+      "hasNutritionLabel": true,
+      "brand": null,
+      "servingSize": "23g",
+      "servingsPerPack": "6 sajian per kemasan"
+    },
+    {
+      "name": "Keripik Pisang Kepok",
+      "sourceImageIndex": 1,
+      "boundingBox2D": [
+        174,
+        158,
+        411,
+        755
+      ],
+      "hasNutritionLabel": false,
+      "brand": "Rhema",
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Green Package Bread Variant A",
+      "sourceImageIndex": 2,
+      "boundingBox2D": [
+        304,
+        69,
+        758,
+        661
+      ],
+      "hasNutritionLabel": true,
+      "brand": "Mr Bread",
+      "servingSize": "55g",
+      "servingsPerPack": "4 sajian per kemasan"
+    },
+    {
+      "name": "Green Package Bread Variant B (Srikaya)",
+      "sourceImageIndex": 3,
+      "boundingBox2D": [
+        342,
+        6,
+        735,
+        1000
+      ],
+      "hasNutritionLabel": true,
+      "brand": "Mr Bread",
+      "servingSize": "75g",
+      "servingsPerPack": "2 sajian per kemasan"
+    },
+    {
+      "name": "Blue Package Bread",
+      "sourceImageIndex": 4,
+      "boundingBox2D": [
+        414,
+        88,
+        908,
+        910
+      ],
+      "hasNutritionLabel": true,
+      "brand": "Mr Bread",
+      "servingSize": "44g",
+      "servingsPerPack": "5 sajian per kemasan"
+    }
+  ],
+  "groups": [
+    {
+      "groupName": "Tier 1 - Balanced Bakery Choice",
+      "scoutItemIndices": [
+        4
+      ],
+      "boundingBox2D": [
+        414,
+        88,
+        908,
+        910
+      ],
+      "verdict": {
+        "label": "Lowest Sugar & Balanced Protein",
+        "level": "good"
+      },
+      "comparisonSentence": "This blue-packaged bread provides a superior protein-to-sugar ratio with lower calories per serving compared to the high-sugar buns.",
+      "message": "This option provides 120 kcal per 44g serving with only 2g of sugar and 4g of protein, making it the most metabolically balanced choice among the bakery items. Sodium is kept at a moderate 150mg, supporting better glycemic and cardiovascular control when consumed mindfully.",
+      "orderingTip": "Pair with a source of healthy fats or lean protein like eggs to increase satiety and blunt glycemic response further."
+    },
+    {
+      "groupName": "Tier 2 - Moderate Energy Bakery",
+      "scoutItemIndices": [
+        2,
+        0
+      ],
+      "boundingBox2D": [
+        304,
+        69,
+        758,
+        661
+      ],
+      "verdict": {
+        "label": "Moderate Calories & Sugar Caution",
+        "level": "neutral"
+      },
+      "comparisonSentence": "While moderately caloric, these items deliver slightly higher sugar and saturated fat densities than the blue package bread option.",
+      "message": "These products offer reasonable portion sizes with controlled total calories (90 to 142 kcal per serving), but carry higher refined carbohydrate and sugar burdens. They are acceptable for occasional intake but require monitoring in individuals managing insulin sensitivity.",
+      "orderingTip": "Watch portion sizes carefully and ensure total daily added sugar remains well below recommended thresholds."
+    },
+    {
+      "groupName": "Tier 3 - High Sugar & Calorie Alert",
+      "scoutItemIndices": [
+        3
+      ],
+      "boundingBox2D": [
+        342,
+        6,
+        735,
+        1000
+      ],
+      "verdict": {
+        "label": "High Sugar & Calorie Load",
+        "level": "warning"
+      },
+      "comparisonSentence": "This srikaya-filled bread packs significantly higher sugar and total energy per serving than standard white or wheat bread choices.",
+      "message": "Providing 250 kcal and 19g of sugar per serving, this sweet pastry creates a rapid glycemic spike. Frequent consumption contributes to excess caloric intake and places undue stress on metabolic pathways, making it unsuitable for daily inclusion.",
+      "orderingTip": "Limit consumption to rare treats and share the serving to halve the sugar load."
+    },
+    {
+      "groupName": "Tier 4 - Ultra-Processed Snack Alert",
+      "scoutItemIndices": [
+        1
+      ],
+      "boundingBox2D": [
+        174,
+        158,
+        411,
+        755
+      ],
+      "verdict": {
+        "label": "High Fat & Caloric Density Snack",
+        "level": "alert"
+      },
+      "comparisonSentence": "Unlike portion-controlled baked goods, this fried chip bag lacks protein and delivers concentrated fats with zero fiber protection.",
+      "message": "Vacuum-fried banana chips are energy-dense snacks fried in vegetable oils, offering high total fat and rapid carbohydrate absorption without significant protein or micronutrients. Regular intake promotes dyslipidemia and weight gain.",
+      "orderingTip": "Decant a tiny measured handful (e.g., 20g) into a bowl rather than eating directly from the bag to enforce strict portion discipline."
+    }
+  ],
+  "recommendedOption": "Blue Package Bread"
+}

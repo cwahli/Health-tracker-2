@@ -1,0 +1,131 @@
+{
+  "_internalReasoning": "Extracted SilverQueen milk chocolate and various bakery items across images. Grouped by nutrient density and metabolic impact, ranked from caution/snack to bakery items.",
+  "comparisonTitle": "Retail Snack & Bakery Product Evaluation",
+  "comparisonType": "shelf_selection",
+  "summary": "Comparing chocolate confectionery bars and bakery items highlights significant variations in sugar and fat content. Bakery items provide a more substantial source of carbohydrates and protein compared to calorie-dense, sugar-heavy chocolate bars.",
+  "items": [
+    {
+      "name": "Milk Chocolate with Cashews",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        0,
+        203,
+        1000,
+        532
+      ],
+      "hasNutritionLabel": true,
+      "servingSize": "20g",
+      "servingsPerPack": "2.5 sajian per kemasan (52g bar total approx.) / 2.5 sajian per kemasan indicated on label for 52g net weight? Wait, label states Takaran saji = 20g, Jumlah Sajian per Kemasan = 2.5 sajian (approx 50g total). Net weight 52g on front package. Let's list servingsPerPack as '2.5 sajian'. Let's record perServing from the back label exactly: 110 kcal, 7g total fat, 3.5g saturated fat, 2g protein, 10g carbohydrates, 6g sugar, 20mg sodium (0.02g salt). Let's use 20mg sodiumMg and null for saltMg if not explicitly 'Garam (Salt)' printed (Wait, label says Garam 20mg or Natrium 20mg? Label says 'Garam (Natrium) / Salt (Sodium): 20 mg', so put 20mg in sodiumMg). brand='SilverQueen'. Let's record accurately from label: calories=110, protein=2.0, totalFat=7.0, saturatedFat=3.5, carbohydrates=10.0, sugar=6.0, addedSugar=null, sodiumMg=20.0, saltMg=null, brand='SilverQueen'. Let's check servingSize = '20g'. servingsPerPack = '2.5 sajian'. Note that back label is image 1, front is image 0. So sourceImageIndex=0 for front, 1 for back label - but let's assign sourceImageIndex=1 for the label item, or 0 since it's the same physical item. Let's use sourceImageIndex=0 for the front view item and point boundingBox2D to the front bar in image 0. Let's create an item for SilverQueen back label or combine into one item using image 0 bounding box and label data from image 1."
+    },
+    {
+      "name": "Polo Cokelat",
+      "sourceImageIndex": 2,
+      "boundingBox2D": [
+        698,
+        30,
+        963,
+        252
+      ],
+      "hasNutritionLabel": false,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Polo Keju",
+      "sourceImageIndex": 2,
+      "boundingBox2D": [
+        706,
+        237,
+        959,
+        459
+      ],
+      "hasNutritionLabel": false,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Chose Topping Pie",
+      "sourceImageIndex": 2,
+      "boundingBox2D": [
+        694,
+        485,
+        936,
+        695
+      ],
+      "hasNutritionLabel": false,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Double Cheese Bread",
+      "sourceImageIndex": 2,
+      "boundingBox2D": [
+        648,
+        730,
+        887,
+        963
+      ],
+      "hasNutritionLabel": false,
+      "servingSize": null,
+      "servingsPerPack": null
+    },
+    {
+      "name": "Say Bread Assorted Top Shelf (Polo Cokelat / Polo Keju variants)",
+      "sourceImageIndex": 2,
+      "boundingBox2D": [
+        212,
+        73,
+        537,
+        506
+      ],
+      "hasNutritionLabel": false,
+      "servingSize": null,
+      "servingsPerPack": null
+    }
+  ],
+  "groups": [
+    {
+      "groupName": "Tier 1 - Baked Goods & Pastries (Moderate Nutrient Density)",
+      "scoutItemIndices": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "boundingBox2D": [
+        100,
+        0,
+        968,
+        1000
+      ],
+      "verdict": {
+        "label": "Moderate Carbohydrate & Satiety Option",
+        "level": "neutral"
+      },
+      "comparisonSentence": "Unlike confectionery chocolate bars which are dominated by refined sugars and saturated fats, these baked goods provide more sustained carbohydrate energy and dietary satisfaction.",
+      "message": "Bakery items such as Polo bread and cheese buns offer larger food volume and greater satiating value per calorie than pure chocolate confectionery. However, they remain processed baked goods containing refined flour, added sugars, and fats. Consume in moderation as part of a balanced diet, particularly monitoring total carbohydrate and caloric intake.",
+      "orderingTip": "Pair these bakery items with an unsweetened beverage like black coffee or tea, and share portions to manage caloric intake effectively without spiking blood glucose excessivelyype='shelf_selection'. Check ingredients for trans fats if sensitive and opt for cheese variants for slightly higher protein content when available."
+    },
+    {
+      "groupName": "Tier 2 - Confectionery Chocolate Bar (High Sugar & Saturated Fat)",
+      "scoutItemIndices": [
+        0
+      ],
+      "boundingBox2D": [
+        0,
+        203,
+        1000,
+        532
+      ],
+      "verdict": {
+        "label": "High Sugar & Saturated Fat",
+        "level": "warning"
+      },
+      "comparisonSentence": "Compared to larger bakery items, this confectionery bar delivers a concentrated surge of refined sugar and saturated fat in a small portion, posing higher glycemic and metabolic loads relative to its volume.",
+      "message": "SilverQueen Milk Chocolate with Cashews delivers 110 kcal, 7g total fat (3.5g saturated fat), and 6g of sugar per modest 20g serving. Frequent consumption contributes significant added sugars and saturated fats that can negatively impact lipid profiles and metabolic health. Cashews provide minimal protein (2g), but cannot offset the high glycemic and caloric density.",
+      "orderingTip": "Limit consumption to a single serving (20g portion) rather than consuming the entire bar at once, and avoid pairing with other sugary snacks to protect metabolic health."
+    }
+  ],
+  "recommendedOption": "Polo Keju or Double Cheese Bread"
+}

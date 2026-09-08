@@ -102,7 +102,19 @@ const testCases: CompareTestCase[] = [
       path.join(process.cwd(), "prototype", "meallog", "compare", "images", "set3_restaurant_menu_page1.jpg"),
       path.join(process.cwd(), "prototype", "meallog", "compare", "images", "set3_restaurant_menu_page2.jpg"),
     ],
-    userPrompt: "What are the healthier options on this menu?",
+    userPrompt: "Extract and compare all dishes across both pages of this menu. Group and rank them from healthiest to least healthy.",
+    expectedChecks: (result: any) => {
+      const details: string[] = [];
+      let passed = true;
+      const items = result.items || [];
+      const groups = result.groups || [];
+      details.push(`Extracted ${items.length} menu items across 2 pages.`);
+      if (items.length < 25) {
+        details.push(`WARN: Extracted ${items.length} dishes, expected large menu extraction (at least 25-50+ items).`);
+      }
+      details.push(`Created ${groups.length} diet groups.`);
+      return { passed, details };
+    },
   },
   {
     id: "compare_set4",
@@ -111,16 +123,40 @@ const testCases: CompareTestCase[] = [
     imagePaths: [
       path.join(process.cwd(), "prototype", "meallog", "compare", "images", "set4_juice_and_beverage_list.jpg"),
     ],
-    userPrompt: "Compare the juices on this list and recommend the best option.",
+    userPrompt: "Extract and compare every juice and drink option on this menu board. Group and rank them from best to worst.",
+    expectedChecks: (result: any) => {
+      const details: string[] = [];
+      let passed = true;
+      const items = result.items || [];
+      const groups = result.groups || [];
+      details.push(`Extracted ${items.length} beverage options from board.`);
+      if (items.length < 15) {
+        details.push(`WARN: Extracted ${items.length} drinks, expected large board extraction (15-30 items).`);
+      }
+      details.push(`Created ${groups.length} beverage groups.`);
+      return { passed, details };
+    },
   },
   {
     id: "compare_set5",
     name: "Compare Set 5: Product Item",
-    kind: "food_items",
+    kind: "menu_items",
     imagePaths: [
       path.join(process.cwd(), "prototype", "meallog", "compare", "images", "set5_packaged_product_photo.jpg"),
     ],
-    userPrompt: "Evaluate and analyze this product.",
+    userPrompt: "Extract all visible dishes on this menu (Ikan Bakar, Ayam, Seblak, Mie Tek-Tek, Nasi Goreng) and evaluate them.",
+    expectedChecks: (result: any) => {
+      const details: string[] = [];
+      let passed = true;
+      const items = result.items || [];
+      const groups = result.groups || [];
+      details.push(`Extracted ${items.length} dishes from restaurant menu banner.`);
+      if (items.length < 20) {
+        details.push(`WARN: Extracted ${items.length} dishes, expected dense menu extraction (20-40+ items).`);
+      }
+      details.push(`Created ${groups.length} diet groups.`);
+      return { passed, details };
+    },
   },
   {
     id: "G5_snack_labels",
@@ -363,13 +399,14 @@ async function runScoutOnlyComparePrototype() {
       console.log(`Total Items Extracted: ${json.items?.length || 0}`);
       console.log(`Total Comparison Groups Formed: ${json.groups?.length || 0}`);
 
-      console.log("\n--- Extracted Items ---");
+      console.log(`\n--- Extracted Items (${json.items?.length || 0}) ---`);
       (json.items || []).forEach((item: any, idx: number) => {
         const cal = item.perServing?.calories != null ? `${item.perServing.calories} kcal` : "N/A";
         const sugar = item.perServing?.sugar != null ? `${item.perServing.sugar}g sugar` : "";
         const salt = item.perServing?.saltMg != null ? `${item.perServing.saltMg}mg salt` : (item.perServing?.sodiumMg != null ? `${item.perServing.sodiumMg}mg sodium` : "");
         const label = item.hasNutritionLabel ? "[Has Label OCR]" : "[No Label Panel]";
-        console.log(`  [Item ${idx}] (Img ${item.sourceImageIndex}) ${item.name} | ${cal} ${sugar} ${salt} ${label}`);
+        const bbox = Array.isArray(item.boundingBox2D) ? `[${item.boundingBox2D.join(", ")}]` : "MISSING_BBOX";
+        console.log(`  [Item ${idx}] (Img ${item.sourceImageIndex}) ${item.name} | bbox: ${bbox} | ${cal} ${sugar} ${salt} ${label}`);
       });
 
       console.log("\n--- Diet Groups (Ranked & Ordered with Verdicts) ---");
@@ -377,18 +414,51 @@ async function runScoutOnlyComparePrototype() {
         const indices = (g.scoutItemIndices || []).join(", ");
         const cal = g.averageNutrients?.calories != null ? `${g.averageNutrients.calories} kcal` : "";
         const na = g.averageNutrients?.sodium != null ? `${g.averageNutrients.sodium}mg Na` : "";
-        console.log(`  Rank ${idx + 1}: "${g.groupName}" [${g.verdict?.level?.toUpperCase()}] - "${g.verdict?.label}" (Items: [${indices}]) ${cal} ${na}`);
+        const gBbox = Array.isArray(g.boundingBox2D) ? `[${g.boundingBox2D.join(", ")}]` : "MISSING_BBOX";
+        console.log(`  Rank ${idx + 1}: "${g.groupName}" [${g.verdict?.level?.toUpperCase()}] - "${g.verdict?.label}" (Items: [${indices}]) bbox: ${gBbox} ${cal} ${na}`);
         console.log(`    Comparative Sentence: "${g.comparisonSentence}"`);
+        if (g.orderingTip) console.log(`    Ordering Tip: "${g.orderingTip}"`);
         console.log(`    Clinical Message: ${g.message}`);
       });
 
+      // Save ideal debug file
+      const debugDir = path.join(process.cwd(), "prototype", "meallog", "compare", "debug_runs");
+      if (!fs.existsSync(debugDir)) {
+        fs.mkdirSync(debugDir, { recursive: true });
+      }
+      const debugFilePath = path.join(debugDir, `${tc.id}_scout_compare_debug.json`);
+      fs.writeFileSync(debugFilePath, JSON.stringify(json, null, 2), "utf8");
+      console.log(`\n💾 Saved debug file to: ${debugFilePath}`);
+
+      // Bounding box & Lazy grouping checks
+      const itemsWithValidBbox = (json.items || []).filter((it: any) => Array.isArray(it.boundingBox2D) && it.boundingBox2D.length === 4);
+      const groupsWithValidBbox = (json.groups || []).filter((g: any) => Array.isArray(g.boundingBox2D) && g.boundingBox2D.length === 4);
+      const isLazyGrouping = (json.groups || []).length <= 1 && (json.items || []).length > 2;
+      
       let checkRes = { passed: true, details: [] as string[] };
       if (tc.expectedChecks) {
         checkRes = tc.expectedChecks(json);
-        console.log(`\nValidation Checks:`);
-        checkRes.details.forEach(d => console.log(`  - ${d}`));
-        console.log(`Outcome: ${checkRes.passed ? "✅ ALL INVARIANTS PASSED" : "⚠️ CHECK WARNINGS DETECTED"}`);
       }
+      checkRes.details.push(`Item Bounding Boxes: ${itemsWithValidBbox.length}/${json.items?.length || 0} valid.`);
+      checkRes.details.push(`Group Bounding Boxes: ${groupsWithValidBbox.length}/${json.groups?.length || 0} valid.`);
+      if (isLazyGrouping) {
+        checkRes.details.push(`⚠️ WARNING: Lazy grouping detected! Only ${json.groups?.length || 0} group created for ${json.items?.length || 0} items.`);
+        checkRes.passed = false;
+      } else {
+        checkRes.details.push(`✅ Active Grouping: ${json.groups?.length || 0} distinct non-lazy groups formed.`);
+      }
+      if (itemsWithValidBbox.length < (json.items?.length || 0)) {
+        checkRes.details.push(`⚠️ WARNING: Some items are missing valid boundingBox2D!`);
+        checkRes.passed = false;
+      }
+      if (groupsWithValidBbox.length < (json.groups?.length || 0)) {
+        checkRes.details.push(`⚠️ WARNING: Some groups are missing valid boundingBox2D!`);
+        checkRes.passed = false;
+      }
+
+      console.log(`\nValidation Checks:`);
+      checkRes.details.forEach(d => console.log(`  - ${d}`));
+      console.log(`Outcome: ${checkRes.passed ? "✅ ALL INVARIANTS PASSED" : "⚠️ CHECK WARNINGS DETECTED"}`);
 
       summaryReport.push({
         id: tc.id,

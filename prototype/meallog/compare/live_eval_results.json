@@ -1,0 +1,346 @@
+{
+  "res1": {
+    "_internalReasoning": "Evaluated the provided chocolate bar and multiple bakery items to compare nutritional value, highlighting portion sizes and sugar-fat trade-offs.",
+    "comparisonTitle": "Bakery and Chocolate Bar Product Comparison",
+    "comparisonType": "shelf_selection",
+    "summary": "The bakery items and milk chocolate represent dense sources of refined carbohydrates, sugars, and fats. Selecting simpler or portion-controlled options helps minimize metabolic burden.",
+    "items": [
+      {
+        "name": "SilverQueen Milk Chocolate with Cashews",
+        "sourceImageIndex": 0,
+        "hasNutritionLabel": true,
+        "perServing": {
+          "calories": 110,
+          "protein": 2,
+          "totalFat": 7,
+          "saturatedFat": 3.5,
+          "carbohydrates": 10,
+          "sugar": 6,
+          "addedSugar": null,
+          "saltMg": null,
+          "sodiumMg": 20
+        },
+        "brand": "SilverQueen",
+        "servingSize": "20 g",
+        "servingsPerPack": "2.5 sajian"
+      },
+      {
+        "name": "Say Bread Polo Cokelat",
+        "sourceImageIndex": 2,
+        "hasNutritionLabel": false,
+        "perServing": null,
+        "brand": "Say Bread",
+        "servingSize": null,
+        "servingsPerPack": null
+      },
+      {
+        "name": "Say Bread Polo Keju",
+        "sourceImageIndex": 2,
+        "hasNutritionLabel": false,
+        "perServing": null,
+        "brand": "Say Bread",
+        "servingSize": null,
+        "servingsPerPack": null
+      },
+      {
+        "name": "Say Bread Cheese Topping Pie",
+        "sourceImageIndex": 2,
+        "hasNutritionLabel": false,
+        "perServing": null,
+        "brand": "Say Bread",
+        "servingSize": null,
+        "servingsPerPack": null
+      },
+      {
+        "name": "Say Bread Double Cheese Bread",
+        "sourceImageIndex": 2,
+        "hasNutritionLabel": false,
+        "perServing": null,
+        "brand": "Say Bread",
+        "servingSize": null,
+        "servingsPerPack": null
+      }
+    ],
+    "groups": [
+      {
+        "groupName": "Tier 1 - Portion-Controlled Chocolate",
+        "scoutItemIndices": [
+          0
+        ],
+        "verdict": {
+          "label": "Controlled Portion Sugar Option",
+          "level": "neutral"
+        },
+        "comparisonSentence": "This chocolate bar offers built-in portion limits per serving compared to the large bakery items.",
+        "message": "Consuming a single 20g serving limits the intake of sugar and saturated fat, though it remains an ultra-processed confection. Monitor overall daily sugar intake to support metabolic health.",
+        "averageNutrients": {
+          "addedSugar": null,
+          "calories": 110,
+          "carbohydrates": 10,
+          "protein": 2,
+          "saturatedFat": 3.5,
+          "sodium": 20,
+          "sugar": 6,
+          "totalFat": 7,
+          "totalFibre": null
+        },
+        "orderingTip": "Limit consumption to one small portion and avoid eating the entire bar in one sitting."
+      },
+      {
+        "groupName": "Tier 2 - Bakery Pastries and Breads",
+        "scoutItemIndices": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "verdict": {
+          "label": "High Calorie Bakery Caution",
+          "level": "warning"
+        },
+        "comparisonSentence": "Unlike the small-portioned chocolate bar, these bakery items deliver substantial refined carbohydrates and hidden fats per piece.",
+        "message": "These sweet breads and pastry items are dense in refined grains, sugars, and fats, which can trigger rapid glycemic responses. Regular consumption may negatively impact metabolic profiles and weight management goals.",
+        "averageNutrients": null,
+        "orderingTip": "Share these bakery items with others or pair them with a protein source to buffer blood glucose spikes."
+      }
+    ],
+    "recommendedOption": "SilverQueen Milk Chocolate with Cashews"
+  },
+  "res2": {
+    "_internalReasoning": "Evaluated 4 packaged bakery and snack items comparing calorie, sugar, protein, and saturated fat densities.",
+    "comparisonTitle": "Bakery and Snack Product Health Comparison",
+    "comparisonType": "nutrition_labels",
+    "summary": "Comparing these 4 packaged bakery and snack options reveals significant variations in protein, sugar, and saturated fat density. The multiseed bread offers superior fiber and protein with moderate sugar, whereas the sweet pastry options contain elevated sugar and saturated fats relative to their serving sizes.",
+    "items": [
+      {
+        "name": "Green Snack Bar / Pouch Snack",
+        "sourceImageIndex": 0,
+        "hasNutritionLabel": true,
+        "perServing": {
+          "calories": 90,
+          "protein": 1,
+          "totalFat": 3,
+          "saturatedFat": 1,
+          "carbohydrates": 15,
+          "sugar": 7,
+          "addedSugar": null,
+          "saltMg": null,
+          "sodiumMg": 20
+        },
+        "brand": null,
+        "servingSize": "23g",
+        "servingsPerPack": "6 sajian"
+      },
+      {
+        "name": "Multiseed Bread",
+        "sourceImageIndex": 1,
+        "hasNutritionLabel": true,
+        "perServing": {
+          "calories": 250,
+          "protein": 8,
+          "totalFat": 7,
+          "saturatedFat": 3,
+          "carbohydrates": 38,
+          "sugar": 4,
+          "addedSugar": null,
+          "saltMg": null,
+          "sodiumMg": 330
+        },
+        "brand": "Mr. Bread",
+        "servingSize": "80g",
+        "servingsPerPack": "3 sajian"
+      },
+      {
+        "name": "Sweet Bread / Pastry (Yellow Pack)",
+        "sourceImageIndex": 2,
+        "hasNutritionLabel": true,
+        "perServing": {
+          "calories": 250,
+          "protein": 6,
+          "totalFat": 6,
+          "saturatedFat": 4.5,
+          "carbohydrates": 42,
+          "sugar": 19,
+          "addedSugar": null,
+          "saltMg": null,
+          "sodiumMg": 125
+        },
+        "brand": "Mr. Bread",
+        "servingSize": "75g",
+        "servingsPerPack": "2 sajian"
+      },
+      {
+        "name": "Soft Bread / Bun (Blue Pack)",
+        "sourceImageIndex": 3,
+        "hasNutritionLabel": true,
+        "perServing": {
+          "calories": 120,
+          "protein": 4,
+          "totalFat": 2.5,
+          "saturatedFat": 1.5,
+          "carbohydrates": 21,
+          "sugar": 2,
+          "addedSugar": null,
+          "saltMg": null,
+          "sodiumMg": 150
+        },
+        "brand": "Mr. Bread",
+        "servingSize": "44g",
+        "servingsPerPack": "5 sajian"
+      }
+    ],
+    "groups": [
+      {
+        "groupName": "Tier 1 - Best Choice: Balanced Nutrient Density",
+        "scoutItemIndices": [
+          1
+        ],
+        "verdict": {
+          "label": "Highest Protein & Fiber",
+          "level": "good"
+        },
+        "comparisonSentence": "This multiseed bread provides significantly more protein and lower sugar per serving than the sweet pastry options.",
+        "message": "This multiseed bread stands out as the healthiest choice among the evaluated items due to its robust protein content (8g) and moderate sugar level (4g). While sodium is higher at 330mg, the inclusion of seeds and grains provides valuable dietary fiber and sustained energy, supporting better glycemic control than refined flour products.",
+        "averageNutrients": {
+          "addedSugar": null,
+          "calories": 250,
+          "carbohydrates": 38,
+          "protein": 8,
+          "saturatedFat": 3,
+          "sodium": 330,
+          "sugar": 4,
+          "totalFat": 7,
+          "totalFibre": null
+        },
+        "orderingTip": "Toast two slices for breakfast paired with eggs or avocado for a balanced, protein-rich meal."
+      },
+      {
+        "groupName": "Tier 2 - Moderate Choice: Controlled Portion",
+        "scoutItemIndices": [
+          3
+        ],
+        "verdict": {
+          "label": "Low Sugar & Moderate Calories",
+          "level": "neutral"
+        },
+        "comparisonSentence": "Compared to the larger sweet pastries, this smaller bun offers reduced caloric and sugar loads per serving.",
+        "message": "This soft bun presents a reasonable caloric footprint (120 kcal) and very low sugar (2g) per serving. Although lower in protein than the multiseed option, its modest portion size helps with calorie control, making it an acceptable occasional carbohydrate source when paired with lean protein.",
+        "averageNutrients": {
+          "addedSugar": null,
+          "calories": 120,
+          "carbohydrates": 21,
+          "protein": 4,
+          "saturatedFat": 1.5,
+          "sodium": 150,
+          "sugar": 2,
+          "totalFat": 2.5,
+          "totalFibre": null
+        },
+        "orderingTip": "Stick strictly to one serving size to prevent unintended carbohydrate overconsumption."
+      },
+      {
+        "groupName": "Tier 3 - Caution: High Sugar & Saturated Fat",
+        "scoutItemIndices": [
+          0,
+          2
+        ],
+        "verdict": {
+          "label": "High Sugar or Empty Calories",
+          "level": "warning"
+        },
+        "comparisonSentence": "Unlike the wholesome multiseed bread, these options either deliver excessive sugar or rely on low-protein confectionery profiles.",
+        "message": "This group includes items with notable nutritional drawbacks: the sweet pastry contains a concerning 19g of sugar and 4.5g of saturated fat per serving, while the snack bar offers minimal protein (1g) despite lower absolute calories. Frequent consumption can contribute to glycemic spikes and adverse metabolic outcomes.",
+        "averageNutrients": {
+          "addedSugar": null,
+          "calories": 170,
+          "carbohydrates": 28.5,
+          "protein": 3.5,
+          "saturatedFat": 2.75,
+          "sodium": 72.5,
+          "sugar": 13,
+          "totalFat": 4.5,
+          "totalFibre": null
+        },
+        "orderingTip": "Limit consumption of high-sugar bakery items to occasional treats rather than daily staples."
+      }
+    ],
+    "recommendedOption": "Multiseed Bread"
+  },
+  "res6": {
+    "_internalReasoning": "Comparing supermarket snack aisle chips by evaluating portion sizes and built-in harm reduction, as all items are ultra-processed Nova 4 products.",
+    "comparisonTitle": "Supermarket Chip Aisle Harm Reduction & Portion Comparison",
+    "comparisonType": "shelf_selection",
+    "summary": "Ultra-processed chips on supermarket shelves provide high empty calories, sodium, and trans fats. Selecting smaller miniature packs or single-serve pouches acts as built-in portion control to prevent massive caloric and sodium overconsumption compared to large family-size bags.",
+    "items": [
+      {
+        "name": "Chiki Twist Mini Pouch",
+        "sourceImageIndex": 0,
+        "hasNutritionLabel": false,
+        "perServing": null,
+        "brand": "Chiki",
+        "servingSize": "25g",
+        "servingsPerPack": "1"
+      },
+      {
+        "name": "Taro Net Seaweed Mini",
+        "sourceImageIndex": 0,
+        "hasNutritionLabel": false,
+        "perServing": null,
+        "brand": "Taro",
+        "servingSize": "30g",
+        "servingsPerPack": "1"
+      },
+      {
+        "name": "Qtela Singkong Original Family Pack",
+        "sourceImageIndex": 0,
+        "hasNutritionLabel": false,
+        "perServing": null,
+        "brand": "Qtela",
+        "servingSize": "180g",
+        "servingsPerPack": "6"
+      }
+    ],
+    "groups": [
+      {
+        "groupName": "Tier 1 - Portion-Controlled Mini Pouches",
+        "scoutItemIndices": [
+          0,
+          1
+        ],
+        "verdict": {
+          "label": "Built-In Portion Control",
+          "level": "neutral"
+        },
+        "comparisonSentence": "Unlike massive family-size bags, mini snack pouches strictly cap caloric and sodium exposure in a single sitting.",
+        "message": "Mini snack pouches such as Chiki Twist and Taro Net do not qualify as health foods due to high processing and refined starches. However, purchasing miniature 25g to 30g pouches enforces hard biological boundaries against mindless overeating, shielding metabolic health from excessive sodium and total fat surges compared to sharing-size bags.",
+        "averageNutrients": {
+          "calories": 140,
+          "protein": 1.5,
+          "totalFat": 7,
+          "totalFibre": 0.5
+        },
+        "orderingTip": "Opt for individual miniature snack bags rather than family packs to eliminate the temptation of finishing an entire large bag."
+      },
+      {
+        "groupName": "Tier 2 - Large Family-Size Chip Packs",
+        "scoutItemIndices": [
+          2
+        ],
+        "verdict": {
+          "label": "High Calorie & Sodium Alert",
+          "level": "alert"
+        },
+        "comparisonSentence": "Family-size chip packs deliver over 900 total calories and massive sodium loads, making them far more hazardous than single mini pouches.",
+        "message": "Large family packs like Qtela Singkong 180g pose severe metabolic risks due to lack of visual portion cues, easily driving users to consume hundreds of empty calories, excessive vegetable oils, and high sodium in one sitting. Regular consumption significantly elevates cardiovascular strain and visceral fat accumulation.",
+        "averageNutrients": {
+          "calories": 920,
+          "protein": 6,
+          "totalFat": 45,
+          "totalFibre": 4
+        },
+        "orderingTip": "Avoid open family-size bags; if purchasing, immediately portion chips into a small bowl and seal the main package away."
+      }
+    ],
+    "recommendedOption": "Chiki Twist Mini Pouch"
+  }
+}
