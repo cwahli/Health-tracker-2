@@ -37,7 +37,7 @@ const testCases: CompareTestCase[] = [
       path.join(process.cwd(), "prototype", "meallog", "compare", "images", "set1_silverqueen_nutrition_label.jpg"),
       path.join(process.cwd(), "prototype", "meallog", "compare", "images", "set1_silverqueen_chocolate_front.jpg"),
     ],
-    userPrompt: "Compare these items and advise on healthier choices.",
+    userPrompt: "",
   },
   {
     id: "compare_set2",
@@ -49,7 +49,7 @@ const testCases: CompareTestCase[] = [
       path.join(process.cwd(), "prototype", "meallog", "compare", "images", "set2_snack_yellow_cake_label.jpg"),
       path.join(process.cwd(), "prototype", "meallog", "compare", "images", "set2_snack_blue_bread_label.jpg"),
     ],
-    userPrompt: "Compare these 4 snacks and help me choose the healthiest one.",
+    userPrompt: "",
     expectedChecks: (result: any) => {
       const details: string[] = [];
       let passed = true;
@@ -102,7 +102,7 @@ const testCases: CompareTestCase[] = [
       path.join(process.cwd(), "prototype", "meallog", "compare", "images", "set3_restaurant_menu_page1.jpg"),
       path.join(process.cwd(), "prototype", "meallog", "compare", "images", "set3_restaurant_menu_page2.jpg"),
     ],
-    userPrompt: "Extract and compare all dishes across both pages of this menu. Group and rank them from healthiest to least healthy.",
+    userPrompt: "",
     expectedChecks: (result: any) => {
       const details: string[] = [];
       let passed = true;
@@ -123,7 +123,7 @@ const testCases: CompareTestCase[] = [
     imagePaths: [
       path.join(process.cwd(), "prototype", "meallog", "compare", "images", "set4_juice_and_beverage_list.jpg"),
     ],
-    userPrompt: "Extract and compare every juice and drink option on this menu board. Group and rank them from best to worst.",
+    userPrompt: "",
     expectedChecks: (result: any) => {
       const details: string[] = [];
       let passed = true;
@@ -139,12 +139,12 @@ const testCases: CompareTestCase[] = [
   },
   {
     id: "compare_set5",
-    name: "Compare Set 5: Product Item",
+    name: "Compare Set 5: Indonesian Street Food & Seafood Menu Banner",
     kind: "menu_items",
     imagePaths: [
-      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "set5_packaged_product_photo.jpg"),
+      path.join(process.cwd(), "prototype", "meallog", "compare", "images", "set5_restaurant_banner_menu.jpg"),
     ],
-    userPrompt: "Extract all visible dishes on this menu (Ikan Bakar, Ayam, Seblak, Mie Tek-Tek, Nasi Goreng) and evaluate them.",
+    userPrompt: "",
     expectedChecks: (result: any) => {
       const details: string[] = [];
       let passed = true;
@@ -169,7 +169,7 @@ const testCases: CompareTestCase[] = [
       path.join(process.cwd(), "tests", "Golden_meal", "5. Compare nutrition labels", "PXL_20260716_203945117.jpg"), // 3: Yellow cake
       path.join(process.cwd(), "tests", "Golden_meal", "5. Compare nutrition labels", "PXL_20260716_204340336.jpg"), // 4: Blue bread
     ],
-    userPrompt: "Compare these snacks and help me choose the healthiest one.",
+    userPrompt: "",
     expectedChecks: (result: any) => {
       const details: string[] = [];
       let passed = true;
@@ -258,7 +258,7 @@ const testCases: CompareTestCase[] = [
       path.join(process.cwd(), "tests", "Golden_meal", "6. Compare menu items", "Menu_page_1.jpg"),
       path.join(process.cwd(), "tests", "Golden_meal", "6. Compare menu items", "Menu_page_2.jpg"),
     ],
-    userPrompt: "What are the healthier options on this menu?",
+    userPrompt: "",
     expectedChecks: (result: any) => {
       const details: string[] = [];
       let passed = true;
@@ -282,7 +282,7 @@ const testCases: CompareTestCase[] = [
     imagePaths: [
       path.join(process.cwd(), "tests", "Golden_meal", "7. Compare large set of similar choices", "Large_food_item_comparison_Up_to_50.jpg"),
     ],
-    userPrompt: "Scan all rows of this shelf from top to bottom and compare all the chip and snack options on this shelf.",
+    userPrompt: "",
     expectedChecks: (result: any) => {
       const details: string[] = [];
       let passed = true;

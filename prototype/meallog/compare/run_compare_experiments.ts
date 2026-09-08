@@ -54,9 +54,9 @@ export const imageFilesSet4 = [
   "set4_juice_and_beverage_list.jpg",
 ];
 
-// Set 5: Packaged Product / Drink Item
+// Set 5: Indonesian Street Food & Seafood Menu Banner
 export const imageFilesSet5 = [
-  "set5_packaged_product_photo.jpg",
+  "set5_restaurant_banner_menu.jpg",
 ];
 
 // Set 6: Supermarket Chip Aisle Shelf (Large Set)
@@ -91,8 +91,8 @@ export const compareSets: Record<string, CompareSetMetadata> = {
   },
   "5": {
     id: "set5",
-    name: "Set 5: Packaged Product Item",
-    description: "Standalone packaged beverage / snack product evaluation",
+    name: "Set 5: Indonesian Street Food & Seafood Menu Banner",
+    description: "Roadside restaurant banner menu comparing seafood, poultry, rice, and noodle dishes",
     files: imageFilesSet5,
   },
   "6": {

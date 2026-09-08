@@ -51,7 +51,7 @@ const imageFilesSet4 = [
 ];
 
 const imageFilesSet5 = [
-  "set5_packaged_product_photo.jpg",
+  "set5_restaurant_banner_menu.jpg",
 ];
 
 const imageFilesSet6 = [
@@ -85,8 +85,8 @@ export const compareSets: Record<string, CompareSetMetadata> = {
   },
   "5": {
     id: "set5",
-    name: "Set 5: Packaged Product Item",
-    description: "Standalone packaged beverage / snack product evaluation",
+    name: "Set 5: Indonesian Street Food & Seafood Menu Banner",
+    description: "Roadside restaurant banner menu comparing seafood, poultry, rice, and noodle dishes",
     files: imageFilesSet5,
   },
   "6": {
