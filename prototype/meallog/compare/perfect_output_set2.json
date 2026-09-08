@@ -1,0 +1,159 @@
+{
+  "_internalReasoning": "Comparing 4 packaged bakery and snack items using verified nutrition panels, evaluating sugar density, sodium, protein, and satiety.",
+  "comparisonTitle": "Packaged Bread & Snack Nutrition Label Comparison",
+  "comparisonType": "nutrition_labels",
+  "summary": "This comparison evaluates four packaged bakery and snack products across verified Indonesian nutrition facts panels. While the green snack bar appears low in total calories (90 kcal) due to its miniature 23g portion size, it is over 30% sugar by weight with negligible protein. In contrast, Mr Bread sliced bread and multiseed bread provide staple nutrition with low sugar (2-4g) and superior protein (4-8g), though multiseed carries elevated sodium (330mg). The sarikaya custard bun is the least favorable due to excessive sugar (19g) and high saturated fat (4.5g).",
+  "items": [
+    {
+      "name": "Green Packaged Snack Bar",
+      "brand": "Unbranded Snack Bar",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": true,
+      "servingSize": "23g",
+      "servingsPerPack": "6",
+      "perServing": {
+        "calories": 90,
+        "totalFat": 3.0,
+        "saturatedFat": 1.0,
+        "protein": 1.0,
+        "totalCarbohydrate": 15.0,
+        "sugar": 7.0,
+        "sodiumMg": 20,
+        "saltMg": null
+      }
+    },
+    {
+      "name": "Mr Bread Multiseed Bread (Pumpkin Seeds & Wheat Bran)",
+      "brand": "Mr Bread",
+      "sourceImageIndex": 1,
+      "hasNutritionLabel": true,
+      "servingSize": "80g",
+      "servingsPerPack": "3",
+      "perServing": {
+        "calories": 250,
+        "totalFat": 7.0,
+        "saturatedFat": 3.0,
+        "protein": 8.0,
+        "totalCarbohydrate": 38.0,
+        "sugar": 4.0,
+        "sodiumMg": 330,
+        "saltMg": null
+      }
+    },
+    {
+      "name": "Sarikaya Custard Sweet Bun (Pasta Sarikaya 29.65%)",
+      "brand": "Packaged Bakery",
+      "sourceImageIndex": 2,
+      "hasNutritionLabel": true,
+      "servingSize": "75g",
+      "servingsPerPack": "2",
+      "perServing": {
+        "calories": 250,
+        "totalFat": 6.0,
+        "saturatedFat": 4.5,
+        "protein": 6.0,
+        "totalCarbohydrate": 42.0,
+        "sugar": 19.0,
+        "sodiumMg": 125,
+        "saltMg": null
+      }
+    },
+    {
+      "name": "Mr Bread White Bread (Roti Tawar)",
+      "brand": "Mr Bread",
+      "sourceImageIndex": 3,
+      "hasNutritionLabel": true,
+      "servingSize": "44g",
+      "servingsPerPack": "5",
+      "perServing": {
+        "calories": 120,
+        "totalFat": 2.5,
+        "saturatedFat": 1.5,
+        "protein": 4.0,
+        "totalCarbohydrate": 21.0,
+        "sugar": 2.0,
+        "sodiumMg": 150,
+        "saltMg": null
+      }
+    }
+  ],
+  "groups": [
+    {
+      "groupName": "Tier 1 - Best Everyday Bread: Mr Bread White Bread",
+      "scoutItemIndices": [3],
+      "verdict": {
+        "level": "good",
+        "label": "Low Sugar & Balanced Portion"
+      },
+      "comparisonSentence": "Compared to the high-sugar custard bun and dense multiseed loaf, this single-slice bread keeps sugar minimal at 2g and provides moderate sodium (150mg) with 4g of protein for just 120 calories.",
+      "message": "Providing 120 kcal, 4g protein, 1.5g saturated fat, and only 2g sugar per 44g serving, this staple bread avoids glycemic spikes. It represents the cleanest macronutrient baseline among the baked goods evaluated.",
+      "averageNutrients": {
+        "calories": 120,
+        "protein": 4.0,
+        "totalFat": 2.5,
+        "saturatedFat": 1.5,
+        "carbohydrates": 21.0,
+        "sugar": 2.0,
+        "sodium": 150
+      }
+    },
+    {
+      "groupName": "Tier 2 - Satiety & Micronutrient Option: Mr Bread Multiseed",
+      "scoutItemIndices": [1],
+      "verdict": {
+        "level": "neutral",
+        "label": "High Protein with Sodium Caution"
+      },
+      "comparisonSentence": "Unlike the refined white breads and sugary confection, this multiseed loaf incorporates pumpkin seeds and wheat bran to deliver 8g of protein, though its 330mg sodium content requires moderation.",
+      "message": "Formulated with 5% pumpkin seeds and wheat bran, this bread offers excellent sustained satiety with 8g of plant protein and only 4g sugar per 80g serving. However, with 330mg sodium (22% DV) and 250 kcal per serving, portion awareness is advised for blood pressure management.",
+      "averageNutrients": {
+        "calories": 250,
+        "protein": 8.0,
+        "totalFat": 7.0,
+        "saturatedFat": 3.0,
+        "carbohydrates": 38.0,
+        "sugar": 4.0,
+        "sodium": 330
+      }
+    },
+    {
+      "groupName": "Tier 3 - Portion-Controlled Treat: Green Snack Bar",
+      "scoutItemIndices": [0],
+      "verdict": {
+        "level": "warning",
+        "label": "Low Calorie but Sugar-Dense"
+      },
+      "comparisonSentence": "Compared to the filling bread options, this miniature 23g bar is low in total calories (90 kcal) but concentrates 7g of added sugar (over 30% by weight) with negligible protein and fiber.",
+      "message": "While appealing for its low absolute calorie count (90 kcal) and minimal sodium (20mg), this snack bar consists mostly of quick-digesting refined carbohydrates and sugar with only 1g protein. It provides fleeting satiety and warrants caution against multi-serving consumption.",
+      "averageNutrients": {
+        "calories": 90,
+        "protein": 1.0,
+        "totalFat": 3.0,
+        "saturatedFat": 1.0,
+        "carbohydrates": 15.0,
+        "sugar": 7.0,
+        "sodium": 20
+      }
+    },
+    {
+      "groupName": "Tier 4 - Caloric & Sugar Alert: Sarikaya Custard Bun",
+      "scoutItemIndices": [2],
+      "verdict": {
+        "level": "alert",
+        "label": "High Sugar & Saturated Fat"
+      },
+      "comparisonSentence": "Unlike the wholesome breads, this filled pastry packs 19g of sugar and 4.5g of saturated fat per serving, creating a sharp glycemic burden and elevated cardiovascular risk.",
+      "message": "With 29.65% custard paste, a single 75g serving delivers 250 kcal, 4.5g saturated fat, and 19g sugar (eating both servings in the pack yields 38g sugar and 500 kcal). It should be categorized strictly as a dessert rather than a breakfast or everyday snack.",
+      "averageNutrients": {
+        "calories": 250,
+        "protein": 6.0,
+        "totalFat": 6.0,
+        "saturatedFat": 4.5,
+        "carbohydrates": 42.0,
+        "sugar": 19.0,
+        "sodium": 125
+      }
+    }
+  ],
+  "recommendedOption": "Mr Bread White Bread (Roti Tawar) or Mr Bread Multiseed Bread (for higher protein/fiber)"
+}

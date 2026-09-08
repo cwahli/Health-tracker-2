@@ -1,0 +1,116 @@
+{
+  "_internalReasoning": "Analyzing beverage menu (Cafe Crisna) across sugar concentration, artificial syrups, condensed milk, electrolyte hydration, and antioxidant polyphenols.",
+  "comparisonTitle": "Cafe Crisna: Beverage & Juice Health Comparison",
+  "comparisonType": "menu_items",
+  "summary": "This clinical comparison evaluates the diverse beverages on the Cafe Crisna menu board, distinguishing natural whole-food drinks from high-glycemic dessert soups. Pure fresh young coconut water (Es Kelapa Muda), warm brewed ginger (Wedang Jahe), and plain coffee represent optimal hydration and polyphenol intake. Single-fruit juices (Melon, Kedondong, Sirsak, Alpukat) offer vitamins and healthy fats, but require ordering without sweetened condensed milk (SKM) or sugar syrup. Traditional dessert bowls (Es Campur, Es Teler Durian, Sop Buah) deliver severe metabolic burdens with upwards of 45-65g of simple sugars.",
+  "items": [
+    {
+      "name": "Es Kelapa Muda (Young Coconut Water)",
+      "brand": "Cafe Crisna",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": false,
+      "servingSize": "1 glass (~350ml)",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Wedang Jahe (Warm Ginger Brew)",
+      "brand": "Cafe Crisna",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": false,
+      "servingSize": "1 mug (~250ml)",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Kopi (Brewed Coffee)",
+      "brand": "Cafe Crisna",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": false,
+      "servingSize": "1 cup (~180ml)",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Jus Melon / Jus Kedondong",
+      "brand": "Cafe Crisna",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": false,
+      "servingSize": "1 tall glass (~350ml)",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Jus Alpukat (Avocado Juice with Chocolate Drizzle)",
+      "brand": "Cafe Crisna",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": false,
+      "servingSize": "1 tall glass (~350ml)",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Es Campur (Shaved Ice with Syrups & Jellies)",
+      "brand": "Cafe Crisna",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": false,
+      "servingSize": "1 bowl (~400ml)",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Es Teler Durian (Avocado, Coconut & Durian with Condensed Milk)",
+      "brand": "Cafe Crisna",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": false,
+      "servingSize": "1 bowl (~400ml)",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Es Teh Manis (Sweet Iced Tea)",
+      "brand": "Cafe Crisna",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": false,
+      "servingSize": "1 mug (~300ml)",
+      "servingsPerPack": "1",
+      "perServing": null
+    }
+  ],
+  "groups": [
+    {
+      "groupName": "Tier 1 - Safest Choice: Pure Coconut Water & Herbal Infusions",
+      "scoutItemIndices": [0, 1, 2],
+      "verdict": {
+        "level": "good",
+        "label": "Natural Electrolytes & Bioactive Polyphenols"
+      },
+      "comparisonSentence": "Compared to sugar-laden iced syrups and dessert soups, fresh young coconut water and brewed ginger provide clean hydration, essential potassium, and anti-inflammatory gingerols with zero artificial flavorings.",
+      "message": "Es Kelapa Muda provides natural isotonic hydration containing potassium and magnesium with low intrinsic sugars (~5g/100ml) when ordered without added sugar syrup. Wedang Jahe and black coffee supply potent bioactive polyphenols that support vascular endothelial health and glucose regulation.",
+      "averageNutrients": null
+    },
+    {
+      "groupName": "Tier 2 - Nutrient-Dense Whole Fruit Juices (Caution on Added Sugar)",
+      "scoutItemIndices": [3, 4],
+      "verdict": {
+        "level": "neutral",
+        "label": "Vitamins & Healthy Fats (Order Unsweetened)"
+      },
+      "comparisonSentence": "Unlike artificial cordial drinks, fresh melon and avocado juices retain natural vitamins and monounsaturated fats, but require requesting 'tanpa gula dan susu kental manis' to prevent caloric spikes.",
+      "message": "Avocado juice delivers heart-healthy oleic acid, potassium, and dietary fiber, but Indonesian preparation typically includes heavy chocolate condensed milk syrups that push calories past 380 kcal. Requesting fresh melon, kedondong, or avocado juice without added sweeteners keeps the glycemic impact low.",
+      "averageNutrients": null
+    },
+    {
+      "groupName": "Tier 3 - Metabolic Hazard: Shaved Ice Desserts & Sugar Syrups",
+      "scoutItemIndices": [5, 6, 7],
+      "verdict": {
+        "level": "alert",
+        "label": "Excessive Fructose & Sweetened Condensed Milk"
+      },
+      "comparisonSentence": "Compared to fresh fruit drinks, traditional dessert bowls like Es Teler Durian and Es Campur combine multiple ladles of condensed milk, flavored simple syrups, and calorie-dense durian, delivering over 45g of fast-acting sugars.",
+      "message": "Es Campur, Es Teler Durian, and Es Teh Manis are hyper-palatable sugar delivery vehicles. With 350 to 500+ kcal per serving and 40-65g of simple sugars, they trigger rapid postprandial hyperglycemia, hepatic de novo lipogenesis, and elevated serum triglycerides.",
+      "averageNutrients": null
+    }
+  ],
+  "recommendedOption": "Es Kelapa Muda Murni (pure young coconut water, no added syrup) or Wedang Jahe (no sugar)"
+}

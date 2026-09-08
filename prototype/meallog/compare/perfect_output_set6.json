@@ -1,0 +1,98 @@
+{
+  "_internalReasoning": "Evaluating supermarket chip and packaged snack aisle across portion size (mini-bags vs family packs), base ingredients (potato vs corn vs cassava), frying oil density, and sodium concentration.",
+  "comparisonTitle": "Supermarket Snack Aisle: Chips & Crisps Health Evaluation",
+  "comparisonType": "shelf_selection",
+  "summary": "This clinical comparison evaluates the snack options across a commercial supermarket chip aisle. As all items belong to ultra-processed snack categories (NOVA Group 4), relative ranking is governed by portion budgeting and saturated fat/sodium density. Bottom-shelf mini pouches (Chiki Twist, Taro 25g at Rp 4.900) enforce strict portion control (~120 kcal per pouch). Mid-sized potato crisps (Chitato Lite at Rp 17.500) offer a thinner slice with slightly reduced lipid absorption. In contrast, large family-sized bags of deep-fried cassava chips (Qtela Rp 20.200) and salted corn tortilla chips (Happy Tos, Doritos) introduce massive 700-900 kcal loads with excessive saturated palm fat and sodium.",
+  "items": [
+    {
+      "name": "Chiki Twist / Taro Mini Pouch (Rp 4.900)",
+      "brand": "Chiki / Taro",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": false,
+      "servingSize": "1 small pouch (~25g)",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Chitato Lite Green Seaweed (Rp 17.500)",
+      "brand": "Chitato",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": false,
+      "servingSize": "1 medium bag (~55g)",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Lay's Classic Potato Crisps (Rp 19.500)",
+      "brand": "Lay's",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": false,
+      "servingSize": "1 bag (~55g)",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Happy Tos Corn Tortilla Chips (Rp 10.200 - 13.700)",
+      "brand": "Happy Tos",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": false,
+      "servingSize": "1 bag (~140g)",
+      "servingsPerPack": "3",
+      "perServing": null
+    },
+    {
+      "name": "Doritos Nacho Cheese / Roasted Corn (Rp 10.900)",
+      "brand": "Doritos",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": false,
+      "servingSize": "1 bag (~115g)",
+      "servingsPerPack": "2.5",
+      "perServing": null
+    },
+    {
+      "name": "Qtela Singkong Original / Balado Family Pack (Rp 18.800 - 20.200)",
+      "brand": "Qtela",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": false,
+      "servingSize": "1 large bag (~180g)",
+      "servingsPerPack": "4",
+      "perServing": null
+    }
+  ],
+  "groups": [
+    {
+      "groupName": "Tier 1 - Built-In Portion Control: Small Mini-Pouches",
+      "scoutItemIndices": [0],
+      "verdict": {
+        "level": "neutral",
+        "label": "Controlled Calorie Pouch (<130 kcal)"
+      },
+      "comparisonSentence": "Compared to the large 140-180g sharing bags that easily exceed 750 calories, these miniature 25g pouches strictly cap total energy intake to under 130 calories and prevent unconscious bingeing.",
+      "message": "While extruded puffed starches offer low micronutrient density, purchasing small 25g snack packs (Chiki Twist, Taro at Rp 4.900) creates an insurmountable physical boundary against overeating. This provides the safest harm-reduction strategy in a convenience snack aisle.",
+      "averageNutrients": null
+    },
+    {
+      "groupName": "Tier 2 - Moderated Crisps: Thin-Cut Potato Crisps",
+      "scoutItemIndices": [1, 2],
+      "verdict": {
+        "level": "warning",
+        "label": "Lighter Cut but Moderate Saturated Fat"
+      },
+      "comparisonSentence": "Unlike dense deep-fried cassava chips and artificial cheese-dusted tortillas, thin-cut potato crisps like Chitato Lite have lower starch density and slightly reduced oil retention per bite.",
+      "message": "Chitato Lite and standard Lay's provide potato crisps that absorb slightly less oil than heavy corn tortillas or fried root vegetables. However, a single 55g bag still delivers ~280 kcal and significant sodium (~250-350mg), requiring moderation.",
+      "averageNutrients": null
+    },
+    {
+      "groupName": "Tier 3 - High Sodium & Lipid Alert: Dense Tortillas & Family Cassava Packs",
+      "scoutItemIndices": [3, 4, 5],
+      "verdict": {
+        "level": "alert",
+        "label": "Severe Caloric, Saturated Fat & Sodium Load"
+      },
+      "comparisonSentence": "Compared to single-serving bags, these large 140g-180g bags of deep-fried cassava and cheese-coated tortilla chips deliver an alarming 750 to 950 kcal and up to 1,200mg of sodium per bag.",
+      "message": "Qtela Singkong chips are deep-fried root vegetable slices with high fat absorption (~30-35g fat per bag) and concentrated carbohydrates. Happy Tos and Doritos add intense MSG and artificial flavoring powders that promote hyper-palatability and overconsumption, posing serious risks for hypertension and weight gain.",
+      "averageNutrients": null
+    }
+  ],
+  "recommendedOption": "Chiki Twist or Taro small mini-pouch (Rp 4.900) for portion discipline; otherwise avoid snacking from this aisle"
+}

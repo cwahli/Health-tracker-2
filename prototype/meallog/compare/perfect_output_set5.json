@@ -1,0 +1,127 @@
+{
+  "_internalReasoning": "Evaluating Indonesian seafood and poultry menu across cooking preparation (Garang Asem water-poached vs Bakar grilled vs Goreng deep-fried vs Seblak processed), lipid profile, and sodium.",
+  "comparisonTitle": "Indonesian Seafood & Poultry Menu Health Evaluation",
+  "comparisonType": "menu_items",
+  "summary": "This clinical evaluation compares diverse culinary preparations on the 'Daftar Menu' board. Tangy broth dishes (Ikan Nila or Ayam Garang Asem) and grilled whole fish (Baronang/Bawal Bakar) represent optimal cardiometabolic choices by utilizing water/acid-based simmering or open-flame grilling to eliminate deep-frying oils. Plain grilled chicken (Ayam Bakar) provides reliable lean protein. In contrast, flour-battered fried squid (Cumi Goreng Tepung) and oily fried rice introduce substantial oxidized lipids, while Seblak Cobek Viral represents an acute sodium and refined-starch hazard.",
+  "items": [
+    {
+      "name": "Ikan Nila Garang Asem + Nasi (Rp 35.000)",
+      "brand": "Daftar Menu Seafood & Ayam",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": false,
+      "servingSize": "1 bowl with rice",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Baronang / Bawal Bakar + Nasi (Rp 30.000 - 60.000)",
+      "brand": "Daftar Menu Seafood & Ayam",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": false,
+      "servingSize": "1 whole grilled fish with rice",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Rujak Mangga Muda (Rp 20.000)",
+      "brand": "Daftar Menu Seafood & Ayam",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": false,
+      "servingSize": "1 plate (~150g)",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Ayam Bakar + Nasi (Rp 25.000)",
+      "brand": "Daftar Menu Seafood & Ayam",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": false,
+      "servingSize": "1 chicken portion with rice",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Tongkol Suir Pete + Nasi (Rp 40.000)",
+      "brand": "Daftar Menu Seafood & Ayam",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": false,
+      "servingSize": "1 plate with rice",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Cumi Goreng Tepung + Nasi",
+      "brand": "Daftar Menu Seafood & Ayam",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": false,
+      "servingSize": "1 plate with rice",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Nasi Goreng Seafood",
+      "brand": "Daftar Menu Seafood & Ayam",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": false,
+      "servingSize": "1 plate (~300g)",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Seblak Cobek Viral / Seblak Seafood",
+      "brand": "Daftar Menu Seafood & Ayam",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": false,
+      "servingSize": "1 bowl (~350g)",
+      "servingsPerPack": "1",
+      "perServing": null
+    }
+  ],
+  "groups": [
+    {
+      "groupName": "Tier 1 - Safest Choice: Tangy Poached Broths & Grilled Marine Fish",
+      "scoutItemIndices": [0, 1, 2],
+      "verdict": {
+        "level": "good",
+        "label": "Low Saturated Fat & Clean Protein"
+      },
+      "comparisonSentence": "Compared to flour-battered fried seafood and oily fried noodles, Garang Asem stew and grilled sea fish eliminate commercial deep-frying oils while preserving essential omega-3 fatty acids.",
+      "message": "Garang Asem is simmered in an aromatic, tart broth flavored with green tomatoes and bilimbi without cooking oils, delivering exceptional lean protein with minimal cardiovascular strain. Grilled Baronang and Bawal offer potent cardioprotective EPA/DHA fatty acids.",
+      "averageNutrients": null
+    },
+    {
+      "groupName": "Tier 2 - Balanced Protein: Grilled Poultry & Sautéed Skipjack",
+      "scoutItemIndices": [3, 4],
+      "verdict": {
+        "level": "neutral",
+        "label": "Lean Protein (Moderate Sweet Glaze)"
+      },
+      "comparisonSentence": "Unlike breaded and deep-fried entrees, grilled chicken and shredded skipjack tuna supply high-quality protein, requiring only mild vigilance over sweet soy marinade glazes and salt.",
+      "message": "Ayam Bakar is far superior to fried chicken (Ayam Geprek Tepung) as it avoids oil-logged flour crusts. Tongkol Suir Pete combines high-protein tuna with bitter beans (Parkia speciosa) that offer antioxidant polyphenols, provided the chili sambal is kept in moderation.",
+      "averageNutrients": null
+    },
+    {
+      "groupName": "Tier 3 - Caloric & Lipid Caution: Battered Calamari & Fried Rice",
+      "scoutItemIndices": [5, 6],
+      "verdict": {
+        "level": "warning",
+        "label": "High Oxidized Fat & Refined Carbohydrates"
+      },
+      "comparisonSentence": "Compared to poached broths and open-flame grilling, deep-fried breaded squid and fried rice absorb copious amounts of reused vegetable oil, elevating caloric density and atherogenic lipid risk.",
+      "message": "Cumi Goreng Tepung combines cholesterol from cephalopods with high-heat deep frying, creating trans-fats and lipid peroxides. Nasi Goreng Seafood presents a heavy glycemic load with high sodium and oxidized cooking fats.",
+      "averageNutrients": null
+    },
+    {
+      "groupName": "Tier 4 - Severe Hazard: Ultra-Processed Seblak & Chili Glazes",
+      "scoutItemIndices": [7],
+      "verdict": {
+        "level": "alert",
+        "label": "Excessive Sodium & Inflammatory Refined Starches"
+      },
+      "comparisonSentence": "Unlike wholesome whole-food dishes, Seblak Cobek Viral consists of boiled tapioca crackers, processed meat analogs, and intense chili paste delivering over 1500mg of sodium in a single serving.",
+      "message": "Seblak is an ultra-processed culinary preparation based on gelatinized tapioca crackers soaked in spicy oil and flavor enhancers. It induces acute blood pressure spikes, gastrointestinal irritation, and severe metabolic strain without providing meaningful dietary fiber or quality micronutrients.",
+      "averageNutrients": null
+    }
+  ],
+  "recommendedOption": "Ikan Nila Garang Asem + Nasi or Baronang Bakar (grilled whole fish with minimal sweet soy)"
+}

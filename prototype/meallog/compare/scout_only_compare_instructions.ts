@@ -11,8 +11,10 @@ import { Type } from "@google/genai";
  */
 export const scoutOnlyCompareSystemInstruction = `You are an expert Vision Scout and Clinical Dietitian specialized in PRODUCT EVALUATION & COMPARISON (Mode D).
 
-=== ACTIVE TASK: PRODUCT EVALUATION, DIET GROUPING, ORDERING & VERDICTS ===
+=== ACTIVE TASK: PRODUCT EVALUATION & COMPARISON ===
 You analyze photos of multiple products, packages, nutrition labels, restaurant menus, or retail supermarket shelves to compare distinct items.
+
+DIET TASKS: GROUPING, ORDERING (RANKING), VERDICTS & COMPARATIVE SENTENCES
 
 STRICT INVARIANTS:
 1. NEVER MERGE OR LOG AS A MEAL: Do NOT treat these items as components of a single consumed meal. This is a comparison/shopping evaluation. Do not calculate composite meal totals or ask portion confirmation questions.
@@ -20,7 +22,8 @@ STRICT INVARIANTS:
    - Extract every distinct candidate product, dish, or packaged snack as an independent item in items[].
    - For photos showing printed nutrition facts panels: transcribe exact per-serving values (calories, totalFat, saturatedFat, protein, totalCarbohydrate, sugar, sodium/salt). Record the printed serving size and servings per pack.
    - Front-only packages without a nutrition panel (e.g. banana chips front cover): set hasNutritionLabel to false, transcribe product name from OCR, and do NOT fabricate or hallucinate macros or calories. Set perServing to null.
-   - Salt vs Sodium: If labelled "Garam" or "Salt", record as saltMg. If labelled "Natrium", record as sodiumMg. Do not confuse sugar with added sugar.
+   - Salt vs Sodium: If labelled "Garam" or "Salt", record as saltMg. If labelled "Natrium", record as sodiumMg.
+   - Sugar vs Added Sugar: "sugar" is Total Sugar. If the label explicitly lists "Gula Tambahan / Added Sugar" (or for clearly sweetened products like sweet buns, sweetened condensed milk drinks, dessert syrups), record or estimate "addedSugar". Set addedSugar to null if not specified.
    - Menu items: Extract at least 5 to 8 distinct representative menu items/dishes across all visible pages and sections (e.g. Paket, Ayam, Seafood, Sayuran/Tumisan, Sate). Do not treat the paper menu as food.
    - Shelf/Aisle: Group products compactly by brand or category (e.g. Happy Tos, Chitato Lite, Lay's, Qtela, Doritos, Taro). "Taro" is a commercial Indonesian snack brand, NOT taro vegetable leaves.
 
@@ -41,6 +44,7 @@ STRICT INVARIANTS:
      b) "verdict.label": Concise 3-6 words (e.g. "Lowest Sodium & Saturated Fat", "High Sugar & Calorie Alert", "Balanced High-Protein Choice", "Moderate Sodium Caution").
      c) "comparisonSentence": Exactly ONE clear, punchy sentence directly comparing this group to the other candidate groups/options (e.g., "Compared to the sweet breads and chiffon cake, this wafer bar cuts calories by more than half and contains minimal sodium.", or "Unlike the heavy deep-fried chicken and duck, these grilled and vegetable options minimize saturated fat and avoid reused frying oils.").
      d) "message": 35-70 words clinical rationale explaining WHY this group received this verdict, highlighting trade-offs (saturated fat, sodium, sugar, additives) and guidance relative to cardiovascular, metabolic, and overall health targets.
+6. STRICT NUMBER FORMATTING: NEVER output scientific or exponential notation (NEVER write e+, e-, or 6.00e+00). Always write standard plain numbers (e.g. 6, 12, 0.5, 0) with at most 1 decimal place.
 
 === REQUIRED OUTPUT JSON SCHEMA ===
 Output exactly ONE JSON object matching this schema:
@@ -65,6 +69,7 @@ Output exactly ONE JSON object matching this schema:
         "saturatedFat": 1.0,
         "carbohydrates": 15.0,
         "sugar": 7.0,
+        "addedSugar": 6.0,
         "saltMg": 20.0,
         "sodiumMg": null
       }
@@ -87,7 +92,8 @@ Output exactly ONE JSON object matching this schema:
         "saturatedFat": 1.0,
         "sodium": 8,
         "carbohydrates": 15.0,
-        "sugar": 7.0
+        "sugar": 7.0,
+        "addedSugar": 6.0
       }
     }
   ]
@@ -145,7 +151,7 @@ export const scoutOnlyCompareResponseSchema = {
           sourceImageIndex: { type: Type.INTEGER },
           hasNutritionLabel: { type: Type.BOOLEAN },
           servingSize: { type: Type.STRING, nullable: true },
-          servingsPerPack: { type: Type.NUMBER, nullable: true },
+          servingsPerPack: { type: Type.STRING, nullable: true },
           perServing: {
             type: Type.OBJECT,
             nullable: true,
@@ -156,6 +162,7 @@ export const scoutOnlyCompareResponseSchema = {
               saturatedFat: { type: Type.NUMBER, nullable: true },
               carbohydrates: { type: Type.NUMBER, nullable: true },
               sugar: { type: Type.NUMBER, nullable: true },
+              addedSugar: { type: Type.NUMBER, nullable: true },
               saltMg: { type: Type.NUMBER, nullable: true },
               sodiumMg: { type: Type.NUMBER, nullable: true },
             },
@@ -201,6 +208,7 @@ export const scoutOnlyCompareResponseSchema = {
               sodium: { type: Type.NUMBER, nullable: true },
               carbohydrates: { type: Type.NUMBER, nullable: true },
               sugar: { type: Type.NUMBER, nullable: true },
+              addedSugar: { type: Type.NUMBER, nullable: true },
               totalFibre: { type: Type.NUMBER, nullable: true },
             },
           },

@@ -1,0 +1,116 @@
+{
+  "_internalReasoning": "Evaluating 2-page Indonesian Sundanese restaurant menu across cooking methods (steamed/boiled vs grilled vs deep-fried), saturated fat, sodium, and vegetable nutrient retention.",
+  "comparisonTitle": "Sambal Bakar Pencok 89: Menu Health Evaluation",
+  "comparisonType": "menu_items",
+  "summary": "This clinical evaluation compares key dishes from the Sambal Bakar Pencok 89 restaurant menu across preparation techniques. Steamed banana leaf dishes (Pepes Tahu), boiled greens (Lalapan Rebus), and tangy vegetable soups (Sayur Asem) provide the cleanest micronutrient profile with near-zero saturated fat. Grilled fish (Ikan Kembung/Nila Bakar) and grilled chicken skewers (Sate Taichan) provide lean protein and omega-3s. In contrast, deep-fried poultry, organ skewers (Sate Kulit/Usus), coconut rice (Nasi Uduk), and deep-fried cabbage (Kol Goreng) introduce severe saturated fat and lipid oxidation risks.",
+  "items": [
+    {
+      "name": "Pepes Tahu (Rp 10.000)",
+      "brand": "Sambal Bakar Pencok 89",
+      "sourceImageIndex": 1,
+      "hasNutritionLabel": false,
+      "servingSize": "1 portion (~100g)",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Sayur Asem (Rp 10.000)",
+      "brand": "Sambal Bakar Pencok 89",
+      "sourceImageIndex": 1,
+      "hasNutritionLabel": false,
+      "servingSize": "1 bowl (~250ml)",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Lalapan Rebus: Labu, Kangkung, Kacang Panjang (Rp 20.000)",
+      "brand": "Sambal Bakar Pencok 89",
+      "sourceImageIndex": 1,
+      "hasNutritionLabel": false,
+      "servingSize": "1 plate (~150g)",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Paket Ikan Kembung Bakar + Nasi Putih + Sayur Asem (Rp 31.000)",
+      "brand": "Sambal Bakar Pencok 89",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": false,
+      "servingSize": "1 meal set",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Sate Taichan Juara (Rp 25.000)",
+      "brand": "Sambal Bakar Pencok 89",
+      "sourceImageIndex": 1,
+      "hasNutritionLabel": false,
+      "servingSize": "1 portion (10 skewers)",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Paket Uduk Bebek Goreng + Tahu + Tempe (Rp 36.000)",
+      "brand": "Sambal Bakar Pencok 89",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": false,
+      "servingSize": "1 meal set",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Kol Goreng (Rp 10.000)",
+      "brand": "Sambal Bakar Pencok 89",
+      "sourceImageIndex": 1,
+      "hasNutritionLabel": false,
+      "servingSize": "1 portion (~100g)",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Sate Kulit / Sate Usus (Rp 5.000 per skewer)",
+      "brand": "Sambal Bakar Pencok 89",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": false,
+      "servingSize": "1 skewer (~25g)",
+      "servingsPerPack": "1",
+      "perServing": null
+    }
+  ],
+  "groups": [
+    {
+      "groupName": "Tier 1 - Safest Choice: Steamed Tofu, Boiled Greens & Tamarind Broth",
+      "scoutItemIndices": [0, 1, 2],
+      "verdict": {
+        "level": "good",
+        "label": "Low Fat & High Micronutrients"
+      },
+      "comparisonSentence": "Compared to the oil-heavy fried entrees and coconut rice packages, these steamed and boiled dishes contain almost zero added oil, minimal sodium, and preserve vital dietary fiber.",
+      "message": "Pepes Tahu is steamed in banana leaves without frying, delivering clean soy isoflavones and protein. Combined with fiber-rich Lalapan Rebus and tart tamarind Sayur Asem, this group avoids high-temperature palm oil degradation and provides excellent metabolic and cardiovascular protection.",
+      "averageNutrients": null
+    },
+    {
+      "groupName": "Tier 2 - Balanced Protein: Grilled Fish & Skinless Chicken Skewers",
+      "scoutItemIndices": [3, 4],
+      "verdict": {
+        "level": "neutral",
+        "label": "Lean Protein & Omega-3s"
+      },
+      "comparisonSentence": "Unlike deep-fried poultry and battered fish, grilled mackerel (Ikan Kembung) and unbattered chicken skewers (Sate Taichan) avoid heavy cooking batters while providing rich essential amino acids.",
+      "message": "Ikan Kembung is an exceptional source of anti-inflammatory omega-3 fatty acids and lean protein. Pairing grilled fish with plain steamed rice (Nasi Putih) and Sayur Asem provides a nutritionally balanced, heart-healthy meal. Keep sambal dipping moderate to control sodium intake.",
+      "averageNutrients": null
+    },
+    {
+      "groupName": "Tier 3 - High Risk: Deep-Fried Poultry, Organ Skewers & Kol Goreng",
+      "scoutItemIndices": [5, 6, 7],
+      "verdict": {
+        "level": "warning",
+        "label": "Excessive Saturated Fat & Lipid Oxidation"
+      },
+      "comparisonSentence": "Compared to grilled fish and steamed options, deep-fried duck with coconut rice and fried cabbage soak up massive volumes of oxidized commercial palm oil, dramatically increasing dietary saturated fat.",
+      "message": "Deep-fried duck skin, chicken intestines, and Kol Goreng (which acts like an oil sponge during deep frying) are loaded with oxidized lipids, advanced glycation end-products, and saturated fat. Combined with coconut milk-steeped Nasi Uduk, these selections significantly elevate cardiovascular and atherogenic risk.",
+      "averageNutrients": null
+    }
+  ],
+  "recommendedOption": "Paket Ikan Kembung Bakar (with Nasi Putih and Sayur Asem) paired with Pepes Tahu or Lalapan Rebus"
+}

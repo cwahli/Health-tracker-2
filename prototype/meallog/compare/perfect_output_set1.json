@@ -1,0 +1,95 @@
+{
+  "_internalReasoning": "Comparing SilverQueen cashew milk chocolate with Say Bread bakery items based on legible nutrition facts, ingredients, and portion control.",
+  "comparisonTitle": "Packaged Chocolate Bar vs. Artisan Bakery Showcase",
+  "comparisonType": "shelf_selection",
+  "summary": "This comparison contrasts a packaged, portion-controlled milk chocolate bar with fresh artisan bakery pastries. The SilverQueen bar provides full nutritional transparency with exact portion metrics (110 kcal, 6g sugar per 20g serving), whereas the Say Bread pastries (Polo buns, Cheese pies) lack nutrition panels and deliver substantially higher unmeasured refined starches, fats, and caloric density per piece.",
+  "items": [
+    {
+      "name": "SilverQueen Milk Chocolate with Cashews (52g Bar)",
+      "brand": "SilverQueen / Ceres",
+      "sourceImageIndex": 0,
+      "hasNutritionLabel": true,
+      "servingSize": "20g",
+      "servingsPerPack": "2.5",
+      "perServing": {
+        "calories": 110,
+        "totalFat": 7.0,
+        "saturatedFat": 3.5,
+        "protein": 2.0,
+        "totalCarbohydrate": 10.0,
+        "sugar": 6.0,
+        "sodiumMg": null,
+        "saltMg": 20
+      }
+    },
+    {
+      "name": "Say Bread Polo Cokelat (Rp 13.000)",
+      "brand": "Say Bread",
+      "sourceImageIndex": 1,
+      "hasNutritionLabel": false,
+      "servingSize": "1 piece (~85g)",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Say Bread Polo Keju (Rp 13.000)",
+      "brand": "Say Bread",
+      "sourceImageIndex": 1,
+      "hasNutritionLabel": false,
+      "servingSize": "1 piece (~85g)",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Say Bread Double Cheese Bread (Rp 12.500)",
+      "brand": "Say Bread",
+      "sourceImageIndex": 1,
+      "hasNutritionLabel": false,
+      "servingSize": "1 piece (~90g)",
+      "servingsPerPack": "1",
+      "perServing": null
+    },
+    {
+      "name": "Say Bread Cheese Topping Pie",
+      "brand": "Say Bread",
+      "sourceImageIndex": 1,
+      "hasNutritionLabel": false,
+      "servingSize": "1 piece (~80g)",
+      "servingsPerPack": "1",
+      "perServing": null
+    }
+  ],
+  "groups": [
+    {
+      "groupName": "Tier 1 - Measured Indulgence: SilverQueen Cashew Chocolate",
+      "scoutItemIndices": [0],
+      "verdict": {
+        "level": "warning",
+        "label": "Transparent Portion-Controlled Treat"
+      },
+      "comparisonSentence": "Compared to the large unlabelled bakery buns that easily exceed 300 calories each, this chocolate bar offers verified nutrition data allowing strict portion control to 110 calories per 20g serving.",
+      "message": "The SilverQueen bar contains cashews, cocoa solids (22%), and milk solids (23%), with 110 kcal, 3.5g saturated fat, and 6g sugar per 20g serving (275 kcal and 15g sugar for the full 52g bar). While saturated fat and sugar remain high for cardiovascular prevention, nutritional transparency makes conscious budgeting possible.",
+      "averageNutrients": {
+        "calories": 110,
+        "protein": 2.0,
+        "totalFat": 7.0,
+        "saturatedFat": 3.5,
+        "carbohydrates": 10.0,
+        "sugar": 6.0,
+        "sodium": 8
+      }
+    },
+    {
+      "groupName": "Tier 2 - Caloric Density Alert: Say Bread Sweet Breads & Pies",
+      "scoutItemIndices": [1, 2, 3, 4],
+      "verdict": {
+        "level": "alert",
+        "label": "High-Calorie Unlabelled Pastries"
+      },
+      "comparisonSentence": "Unlike the packaged chocolate bar with clear serving guidance, these commercial sweet breads combine high refined flour, shortening, cheese toppings, and sugar glazes with no nutritional accountability.",
+      "message": "These artisan bakery items (Polo buns, Cheese pies) typically deliver 280 to 380 kcal per piece, derived predominantly from high-glycemic refined wheat flour, hydrogenated fats, and added sugars. Without printed nutrition facts panels, they pose substantial risks for acute postprandial glucose spikes and untracked caloric excess.",
+      "averageNutrients": null
+    }
+  ],
+  "recommendedOption": "SilverQueen Milk Chocolate with Cashews (52g Bar) — consume strictly 1 serving (20g)"
+}
