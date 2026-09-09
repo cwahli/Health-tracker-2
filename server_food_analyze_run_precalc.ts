@@ -1,15 +1,16 @@
 import { AnalyzeRunContext } from './server_food_analyze_run_types.js';
 import { runDatabaseSearchStage } from './src/server/food/server_food_db_search.js';
-import { isDishEstimateEnabled } from './src/server/food/server_food_flags.js';
-import { inferPackagedBindChains, isPackagedBindItem } from './src/server/food/server_food_scout_source.js';
-import { buildFoodSearchQuerySet } from './query_set.js';
+import { isDishEstimateEnabled } from './server_food_flags.js';
+import { inferPackagedBindChains } from './src/server/food/server_food_scout_source.js';
+import { isPackagedBindItem } from './server_brand_match.js';
+import { buildFoodSearchQuerySet } from './server_query_set.js';
 import { detectChainKeyFromText, enrichScoutComponentsWithMatches } from './src/server/food/server_food_analyze_helpers.js';
-import { buildPortionClarifyPayload } from './src/server/food/server_portion_clarify.js';
+import { buildPortionClarifyPayload } from './server_portion_clarify.js';
 import { detectDominantBrand, collectFdcHintTasks, isFdcHintRelevant, mapLedgersToPrecalcItems } from './src/server/food/server_food_precalc.js';
-import { finalizeDishLedger } from './src/server/food/server_dish_finalize.js';
-import { extractUSDANutrientsPer100g, extractOFFNutrientsPer100g } from './src/server/food/server_pure_helpers.js';
+import { finalizeDishLedger } from './server_dish_finalize.js';
+import { extractUSDANutrientsPer100g, extractOFFNutrientsPer100g } from './server_pure_helpers.js';
 import { checkMenuScaleBypass } from './src/server/food/server_food_scout_source.js';
-import { NUTRIENT_KEYS } from './utils/nutrients.js';
+import { NUTRIENT_KEYS } from './src/utils/nutrients.js';
 
 export async function executePrecalcPhase(ctx: AnalyzeRunContext, dbDeps: any): Promise<void> {
   const isMenuScale = checkMenuScaleBypass({ visionScoutContentType: ctx.visionScoutContentType, scoutRecommendedMode: ctx.scoutRecommendedMode });

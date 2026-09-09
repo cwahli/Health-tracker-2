@@ -981,14 +981,17 @@ export function parseAndHealVisionScout(
       }
     }
   }
-  parsedScout = validateOrFallback(
-    VisionScoutSchema,
-    parsedScout,
-    typeof scoutOutput === "string" ? scoutOutput : JSON.stringify(scoutOutput),
-    "Vision Scout",
-    { items: [] },
-    addDebugLog
-  );
+  let isCompareData = isCompareMode || (parsedScout && (Boolean(parsedScout.comparisonTitle) || Array.isArray(parsedScout.groups)));
+  if (!isCompareData) {
+    parsedScout = validateOrFallback(
+      VisionScoutSchema,
+      parsedScout,
+      typeof scoutOutput === "string" ? scoutOutput : JSON.stringify(scoutOutput),
+      "Vision Scout",
+      { items: [] },
+      addDebugLog
+    );
+  }
   
   // Clone the raw JSON from the LLM before we aggressively mutate parsedScout with injected items
   const originalScoutJson = JSON.parse(JSON.stringify(parsedScout));
@@ -1337,7 +1340,38 @@ export function parseAndHealVisionScout(
         parsedScout.items = [...parsedScout.items, ...spreadsheetItems];
       }
     }
-    if (Array.isArray(parsedScout.items)) {
+
+    if (isCompareData && Array.isArray(parsedScout.items)) {
+      visionScoutItems = parsedScout.items.map((it: any, idx: number) => {
+        const pServ = it.perServing || {};
+        const p100 = it.per100g || {};
+        const rawLabel = it.hasNutritionLabel ? {
+          servingSize: it.servingSize || null,
+          calories: pServ.calories != null ? `${pServ.calories} kcal` : null,
+          protein: pServ.protein != null ? `${pServ.protein}g` : null,
+          totalFat: pServ.totalFat != null ? `${pServ.totalFat}g` : null,
+          saturatedFat: pServ.saturatedFat != null ? `${pServ.saturatedFat}g` : null,
+          carbohydrates: pServ.carbohydrates != null ? `${pServ.carbohydrates}g` : null,
+          sugar: pServ.sugar != null ? `${pServ.sugar}g` : null,
+          sodium: pServ.sodiumMg != null ? `${pServ.sodiumMg}mg` : null,
+        } : null;
+        return {
+          ...it,
+          scoutIndex: idx,
+          keyword: it.name || it.keyword || `Item ${idx + 1}`,
+          originalName: it.name || it.originalName || it.keyword || `Item ${idx + 1}`,
+          name: it.name || it.originalName || it.keyword || `Item ${idx + 1}`,
+          estimatedWeightGrams: 100,
+          nutrientBasisWeight: 100,
+          source: it.hasNutritionLabel ? "label" : "visual",
+          sourceImageIndex: typeof it.sourceImageIndex === "number" ? it.sourceImageIndex : 0,
+          rawNutritionLabel: rawLabel,
+          nutrients: pServ.calories != null ? pServ : null,
+          per100g: p100,
+        };
+      });
+      visionScoutRanAndReturnedItems = visionScoutItems.length > 0;
+    } else if (Array.isArray(parsedScout.items)) {
       let explodedItems: any[] = [];
       parsedScout.items.forEach((item: any) => {
         const rawOriginal = item.originalName || item.keyword || "";
@@ -1775,9 +1809,11 @@ export function parseAndHealVisionScout(
         }
         visionScoutItems = mergedList;
       }
-      visionScoutItems = resolvePackageAndContextItems(visionScoutItems, addDebugLog, userMessage, isCompareMode);
-      visionScoutItems = clusterSpatialCompositeDishes(visionScoutItems, addDebugLog, isCompareMode);
-      visionScoutItems = reconcileContainerVolumeBudget(visionScoutItems, addDebugLog);
+      if (!isCompareData) {
+        visionScoutItems = resolvePackageAndContextItems(visionScoutItems, addDebugLog, userMessage, isCompareMode);
+        visionScoutItems = clusterSpatialCompositeDishes(visionScoutItems, addDebugLog, isCompareMode);
+        visionScoutItems = reconcileContainerVolumeBudget(visionScoutItems, addDebugLog);
+      }
       // Re-index finalized items so scoutIndex is contiguous (0, 1, 2, ...) after deduplicating labels
       visionScoutItems = visionScoutItems.map((item: any, idx: number) => ({
         ...item,

@@ -460,7 +460,7 @@ export const FoodCard: React.FC<AgentCardProps & {
   const {
     msg, messages, report, foodLogs, t, formatNutrientValue,
     onLogFood, setLoggedMessageIds, loggedMessageIds, profile, handleSend,
-    setInputText, fileInputRef
+    setInputText, fileInputRef, remainingAllowance
   } = props;
 
   const language = props.language || profile?.language || 'en';
@@ -1173,7 +1173,7 @@ export const FoodCard: React.FC<AgentCardProps & {
   return (
     <>
       {(mode === 'evaluation' && comparisonData && comparisonData.groups && comparisonData.groups.length > 0) && (
-                    <div className="space-y-3 animation-fade-in w-full max-w-full min-w-0 overflow-hidden bg-transparent">
+                    <div data-testid="compare-evaluation-card" className="space-y-3 animation-fade-in w-full max-w-full min-w-0 overflow-hidden bg-transparent">
                       {msg.data.correctionOf && (
                          <div className="flex justify-center pb-2">
                            <button 
@@ -1190,7 +1190,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                          </div>
                       )}
                       <div className="flex items-center justify-between border-b border-theme-border/50 pb-2 gap-2">
-                        <h4 className="font-bold text-theme-text text-sm break-words flex flex-wrap items-center gap-1.5 w-full">
+                        <h4 data-testid="compare-title" className="font-bold text-theme-text text-sm break-words flex flex-wrap items-center gap-1.5 w-full">
                           <span className="shrink-0">{t.comparisonLabel || 'Comparison'}</span> <span className="text-indigo-600 dark:text-indigo-400 font-bold break-words">
                             {(() => {
                               const val = comparisonData?.comparisonTitle || comparisonData?.keyNutrientConcern || 'Nutrients of Concern';
@@ -1354,11 +1354,11 @@ export const FoodCard: React.FC<AgentCardProps & {
                               {idx > 0 && (
                                 <div className="w-[1px] bg-slate-200 dark:bg-slate-800 self-stretch my-2 shrink-0 mx-[10px]" />
                               )}
-                              <div className="w-[80%] sm:w-[320px] shrink-0 snap-align-start flex flex-col relative space-y-3">
+                              <div data-testid="compare-group-card" className="w-[80%] sm:w-[320px] shrink-0 snap-align-start flex flex-col relative space-y-3">
                                 
                                 <div className="flex flex-col gap-1.5">
                                   {!(displayGroups.length === 1 && activeScoutItems.length === 1 && (group.groupName === activeScoutItems[0].keyword || group.groupName === activeScoutItems[0].originalName)) && (
-                                    <h4 className="font-bold text-slate-800 dark:text-slate-100 text-[15px] leading-snug">
+                                    <h4 data-testid="compare-group-name" className="font-bold text-slate-800 dark:text-slate-100 text-[15px] leading-snug">
                                       {group.groupName}
                                     </h4>
                                   )}
@@ -1391,7 +1391,11 @@ export const FoodCard: React.FC<AgentCardProps & {
                                       const resolvedImgSrc = (resolvedMessageImages.length > 0)
                                         ? resolvedMessageImages[imgIdx >= 0 && imgIdx < resolvedMessageImages.length ? imgIdx : 0]
                                         : getFoodImageUrl(firstItem.name, '');
-                                      const bb = firstItem.boundingBox2D || (matchingScout ? matchingScout.boundingBox2D : null);
+                                      const bb = isValidBoundingBox(firstItem.boundingBox2D) 
+                                        ? firstItem.boundingBox2D 
+                                        : (isValidBoundingBox(group.boundingBox2D) 
+                                            ? group.boundingBox2D 
+                                            : (matchingScout ? matchingScout.boundingBox2D : null));
 
                                       if (isValidBoundingBox(bb)) {
                                         const activeScoutIdx = activeScoutItems.findIndex((s: any) => s.keyword === (matchingScout?.keyword || firstItem.name));
@@ -1580,15 +1584,34 @@ export const FoodCard: React.FC<AgentCardProps & {
 
                                   return null;
                                 })()}
+                                            {/* Recommendation & Clinical Insights */}
+                                 <div className="space-y-1.5 pt-1">
+                                   {group.comparisonSentence && (
+                                     <p data-testid="compare-sentence" className="text-[12.5px] font-semibold text-slate-800 dark:text-slate-100 italic bg-slate-50 dark:bg-slate-850/80 p-2 rounded-lg border border-slate-200/60 dark:border-slate-800 leading-snug">
+                                       <span className="not-italic font-bold text-indigo-600 dark:text-indigo-400 mr-1.5">
+                                         {t.comparisonSentenceLabel || "Comparison"}:
+                                       </span>
+                                       {group.comparisonSentence}
+                                     </p>
+                                   )}
+                                   {(group.message || group.recommendation) && (
+                                     <p className="text-[13px] text-theme-neutral leading-snug">
+                                       {group.message || group.recommendation}
+                                     </p>
+                                   )}
+                                   {group.orderingTip && (
+                                     <p data-testid="compare-ordering-tip" className="text-[12px] font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50/70 dark:bg-emerald-950/40 p-2 rounded-lg border border-emerald-200/60 dark:border-emerald-900/60 leading-snug">
+                                       <span className="font-bold mr-1.5">💡 {t.orderingTipLabel || "Ordering Tip"}:</span>
+                                       {group.orderingTip}
+                                     </p>
+                                   )}
+                                   {group.averageNutrientsPer100g && (
+                                     <p data-testid="compare-per-100g-note" className="text-[11px] text-slate-500 italic pt-1">
+                                       * Nutritional values are estimates per 100g
+                                     </p>
+                                   )}
+                                 </div>
                                 
-                                {/* Recommendation */}
-                                <div className="space-y-1.5 pt-1">
-                                  {(group.message || group.recommendation) && (
-                                    <p className="text-[13px] text-theme-neutral leading-snug">
-                                      {group.message || group.recommendation}
-                                    </p>
-                                  )}
-                                </div>
                                                          {/* Items in this bucket */}
                                  {(group.items && group.items.length > 1) && (
                                    <div className="pt-2 border-t border-theme-border/50">
@@ -1791,6 +1814,7 @@ export const FoodCard: React.FC<AgentCardProps & {
 
                                                         const chipContent = !shouldShowAsPreview ? (
                                                           <div 
+                                                            data-testid="compare-item-chip"
                                                             className={`flex flex-col justify-center p-2 rounded-xl border cursor-pointer shadow-sm transition-all duration-200 text-left min-h-[48px] px-3 w-full ${
                                                               isSelected 
                                                                 ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 ring-2 ring-indigo-500/50 shadow-md font-bold scale-[1.02]' 
@@ -1838,7 +1862,7 @@ export const FoodCard: React.FC<AgentCardProps & {
 
                                                         return (
                                                           <React.Fragment key={itemIdx}>
-                                                            <div className={`relative flex flex-col gap-2 w-full ${hasBeenSearched && isGridExpanded ? 'col-span-2' : 'col-span-1'}`}>
+                                                            <div data-testid="compare-item-wrapper" className={`relative flex flex-col gap-2 w-full ${hasBeenSearched && isGridExpanded ? 'col-span-2' : 'col-span-1'}`}>
                                                                 {chipContent}
                                                                 {!!searchResults[fullItemKey] && (
                                                                     <button 
@@ -2560,6 +2584,103 @@ export const FoodCard: React.FC<AgentCardProps & {
                             <span className={`text-[11px] font-bold px-3 py-0.5 rounded-full border inline-block ${colorCls} font-sans`}>
                               {v.label}
                             </span>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Top Nutrients Allowance & Rolling Average summary for logged meal card */}
+                      {(() => {
+                        const mealNutrients = msg.data?.pendingFoodLog?.nutrients || msg.pendingFoodLog?.nutrients;
+                        if (!mealNutrients || Object.keys(mealNutrients).length === 0) return null;
+
+                        const allowanceObj = remainingAllowance || msg.data?.remainingAllowance;
+                        const defaultTargets: { [key: string]: number } = { calories: 2000, saturatedFat: 15, sodium: 1200, addedSugar: 30, totalFat: 65, protein: 50, carbohydrates: 250, totalFibre: 30 };
+                        const nutrientLabels: { [key: string]: string } = { calories: t.caloriesLabel || 'Calories', saturatedFat: t.satFatLabel || 'Sat Fat', sodium: t.sodiumLabel || 'Sodium', addedSugar: (t as any).addedSugarLabel || 'Added Sugar', totalFat: (t as any).fatLabel || 'Total Fat', protein: (t as any).proteinLabel || 'Protein', carbohydrates: t.carbohydratesLabel || 'Carbs', totalFibre: (t as any).fiberLabel || 'Fiber' };
+                        const nutrientUnits: { [key: string]: string } = { calories: 'kcal', saturatedFat: 'g', sodium: 'mg', addedSugar: 'g', totalFat: 'g', protein: 'g', carbohydrates: 'g', totalFibre: 'g' };
+
+                        const rawReportTargets = (report as any)?.topNutrientTargets || (report as any)?.nutrientTargets;
+                        const reportKeys = Array.isArray(rawReportTargets) && rawReportTargets.length > 0
+                          ? rawReportTargets.map((item: any) => typeof item === 'string' ? item : (item?.nutrientKey || item?.key || '')).filter(Boolean)
+                          : null;
+                        const activeKeys = reportKeys || profile?.topNutrientsToMonitor || ['calories', 'saturatedFat', 'sodium', 'protein'];
+                        const keysToRender = activeKeys.filter((k: string) => {
+                          if (mealNutrients[k] !== undefined && mealNutrients[k] !== null && Number(mealNutrients[k]) > 0) return true;
+                          const lower = String(k).toLowerCase().replace(/[^a-z0-9]/g, '');
+                          return Object.keys(mealNutrients).some(mk => mk.toLowerCase().replace(/[^a-z0-9]/g, '') === lower && Number(mealNutrients[mk]) > 0);
+                        });
+
+                        if (keysToRender.length === 0) return null;
+
+                        return (
+                          <div className="py-2.5 border-b border-theme-border/50 w-full text-left font-sans">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                                {t.nutrientTargetsRollingStatus || 'Nutrient Targets & 7-Day Rolling Status'}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap gap-2 justify-start">
+                              {keysToRender.map((key: string) => {
+                                const rawVal = mealNutrients[key] ?? Object.entries(mealNutrients).find(([mk]) => mk.toLowerCase().replace(/[^a-z0-9]/g, '') === key.toLowerCase().replace(/[^a-z0-9]/g, ''))?.[1];
+                                const mealVal = Number(rawVal) || 0;
+                                if (mealVal <= 0) return null;
+
+                                const targetVal = Number(
+                                  allowanceObj?.[`${key}Target`] ||
+                                  (report as any)?.dailyNutrientTargets?.[key] ||
+                                  profile?.targets?.[key] ||
+                                  defaultTargets[key] ||
+                                  1000
+                                );
+                                const alreadyLogged = Number(
+                                  key === 'saturatedFat'
+                                    ? allowanceObj?.saturatedFatLogged
+                                    : allowanceObj?.[`${key}Logged`] ?? 0
+                                );
+                                const remainingVal = allowanceObj?.[key] !== undefined
+                                  ? Number(allowanceObj[key])
+                                  : Math.max(0, targetVal - (alreadyLogged + mealVal));
+                                const avgVal = allowanceObj?.averages?.[key] !== undefined
+                                  ? Number(allowanceObj.averages[key])
+                                  : null;
+
+                                const color = getNutrientColor(key);
+                                const label = nutrientLabels[key] || key;
+                                const unit = nutrientUnits[key] || 'g';
+
+                                return (
+                                  <div
+                                    key={key}
+                                    className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900/60 border border-slate-200/70 dark:border-slate-800/80 px-2.5 py-1.5 rounded-xl shadow-xs"
+                                  >
+                                    <NutrientPieChart
+                                      allowance={targetVal}
+                                      alreadyConsumed={alreadyLogged}
+                                      mealValue={mealVal}
+                                      nutrientKey={key as any}
+                                      size="sm"
+                                    />
+                                    <div className="flex flex-col text-left">
+                                      <div className="flex items-center gap-1 leading-tight">
+                                        <span className="text-[11px] font-bold" style={{ color }}>
+                                          {formatNutrientValue ? formatNutrientValue(mealVal, unit) : `${mealVal}${unit}`}
+                                        </span>
+                                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                                          {label}
+                                        </span>
+                                      </div>
+                                      <div className="text-[9.5px] text-slate-400 dark:text-slate-500 font-mono leading-tight mt-0.5 flex items-center gap-1.5">
+                                        <span>{Math.round(remainingVal)} {unit} left</span>
+                                        {avgVal !== null && !isNaN(avgVal) && (
+                                          <span className="text-indigo-600 dark:text-indigo-400 font-semibold">
+                                            {t.sevenDayAvg || '7d Avg:'} {Math.round(avgVal)}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
                         );
                       })()}

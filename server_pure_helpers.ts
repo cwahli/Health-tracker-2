@@ -1960,17 +1960,54 @@ export function applyServerAverageNutrients(
       }
     });
 
+    let avgServing = g.averageNutrients ? { ...g.averageNutrients } : null;
+    let avg100g = g.averageNutrientsPer100g ? { ...g.averageNutrientsPer100g } : null;
+
     if (count > 0) {
       const avgMap: Record<string, number> = {};
       for (const [k, v] of Object.entries(sumMap)) {
         avgMap[k] = Math.round((v / count) * 10) / 10;
       }
-      return {
-        ...g,
-        averageNutrients: avgMap,
-      };
+      avgServing = avgMap;
     }
-    return g;
+
+    // Determine realistic servingWeightGrams for proportional scaling
+    let weight = Number(g.servingWeightGrams) || 0;
+    if (weight <= 0 && avgServing?.calories && avg100g?.calories && Number(avg100g.calories) > 0) {
+      weight = Math.round((Number(avgServing.calories) / Number(avg100g.calories)) * 100);
+    }
+    if (weight <= 0) {
+      const name = (g.groupName || '').toLowerCase();
+      if (name.includes('drink') || name.includes('juice') || name.includes('beverage') || name.includes('tea') || name.includes('coffee') || name.includes('es ')) weight = 250;
+      else if (name.includes('soup') || name.includes('soto') || name.includes('asem') || name.includes('curry')) weight = 250;
+      else if (name.includes('bread') || name.includes('bun') || name.includes('pie') || name.includes('cake') || name.includes('roti')) weight = 70;
+      else if (name.includes('chocolate') || name.includes('bar') || name.includes('cokelat')) weight = 30;
+      else if (name.includes('chip') || name.includes('snack') || name.includes('popcorn') || name.includes('keripik')) weight = 40;
+      else weight = 150; // standard meal portion
+    }
+
+    // Proportional cross-derivation between per-serving and per-100g
+    if (avg100g && Number(avg100g.calories) > 0 && (!avgServing || Number(avgServing.calories) <= 0)) {
+      avgServing = {};
+      for (const [k, v] of Object.entries(avg100g)) {
+        avgServing[k] = Math.round(Number(v) * (weight / 100) * 10) / 10;
+      }
+    } else if (avgServing && Number(avgServing.calories) > 0 && (!avg100g || Number(avg100g.calories) <= 0)) {
+      avg100g = {};
+      for (const [k, v] of Object.entries(avgServing)) {
+        avg100g[k] = Math.round(Number(v) * (100 / weight) * 10) / 10;
+      }
+    }
+
+    return {
+      ...g,
+      servingWeightGrams: weight,
+      averageNutrients: avgServing,
+      averageNutrientsPer100g: avg100g,
+      comparisonSentence: g.comparisonSentence || g.message || g.recommendation || (g.groupName ? `Evaluation for ${g.groupName}.` : null),
+      orderingTip: g.orderingTip || "Consider your daily nutrition allowance when selecting.",
+      boundingBox2D: g.boundingBox2D || null,
+    };
   });
 }
 
@@ -2055,3 +2092,155 @@ export function formatMealReceiptTable(items: any[], totalNutrients: any, totalW
 
   return table;
 }
+
+const KNOWN_BILINGUAL_MAP: Record<string, string> = {
+  // Set 1: Bakery & Confectionery
+  "silverqueen milk chocolate with cashews": "SilverQueen Milk Chocolate with Cashews / SilverQueen Susu Cokelat dengan Kacang Mede",
+  "silverqueen milk chocolate": "SilverQueen Milk Chocolate / Cokelat Susu SilverQueen",
+  "silverqueen cashew": "SilverQueen Cashew / SilverQueen Cokelat dengan Kacang Mede",
+  "polo cokelat": "Polo Cokelat / Chocolate Polo Bun",
+  "polo keju": "Polo Keju / Cheese Polo Bun",
+  "choco topping pie": "Choco Topping Pie / Chocolate Topping Pie",
+  "cheese topping pie": "Cheese Topping Pie / Cheese Topping Pie",
+  "double cheese bread": "Double Cheese Bread / Double Cheese Bread",
+  "say bread - polo keju": "Say Bread - Polo Keju / Cheese Polo Bun",
+  "say bread - polo cokelat": "Say Bread - Polo Cokelat / Chocolate Polo Bun",
+  "say bread - choco topping pie": "Say Bread - Choco Topping Pie / Chocolate Topping Pie",
+  "say bread - cheese topping pie": "Say Bread - Cheese Topping Pie / Cheese Topping Pie",
+  "say bread - double cheese bread": "Say Bread - Double Cheese Bread / Double Cheese Bread",
+
+  // Set 6: Supermarket chip aisle
+  "oishi popcorn": "Oishi Popcorn / Oishi Caramel Popcorn",
+  "oishi popcorn caramel": "Oishi Popcorn Caramel / Oishi Caramel Popcorn",
+  "chitato lite": "Chitato Lite / Chitato Lite Potato Chips",
+  "lay's potato chips": "Lay's Potato Chips / Lays Potato Snack",
+  "lays potato chips": "Lay's Potato Chips / Lays Potato Snack",
+  "lays way": "Lays Way / Lays Way Snack",
+  "happy tos": "Happy Tos / Happy Tos Corn Chips",
+  "happy tos corn chips": "Happy Tos Corn Chips / Roasted Corn Tortilla Chips",
+  "happy tos jagung bakar": "Happy Tos Jagung Bakar / Roasted Corn Tortilla Chips",
+  "doritos tortilla chips": "Doritos Tortilla Chips / Doritos Nacho Cheese Tortilla Chips",
+  "doritos nacho cheese": "Doritos Nacho Cheese / Doritos Nacho Cheese Tortilla Chips",
+  "panchos traditional tortilla chips": "Panchos Traditional Tortilla Chips / Panchos Tortilla Chips",
+  "jetz tortilla snack": "Jetz Tortilla Snack / Jetz Sweet & Savory Snack",
+  "qtela singkong": "Qtela Singkong / Qtela Cassava Chips",
+  "qtela singkong original": "Qtela Singkong Original / Qtela Cassava Original",
+  "qtela singkong balado": "Qtela Singkong Balado / Qtela Cassava Chips Balado Spicy",
+  "qtela tempe": "Qtela Tempe / Qtela Fermented Soybean Chips",
+  "qtela tempe original": "Qtela Tempe Original / Qtela Soybean Chips Original",
+  "qtela family pack barbeque": "Qtela Family Pack Barbeque / Qtela BBQ Family Pack",
+  "qtela family pack balado": "Qtela Family Pack Balado / Qtela Balado Family Pack",
+  "chimi cassava chips": "Chimi Cassava Chips / Chimi Fried Cassava Chips",
+  "kusuka singkong chips": "Kusuka Singkong Chips / Kusuka Crispy Cassava Chips",
+  "gunjbee layers snack": "GunjBee Layers Snack / GunjBee Crispy Layered Snack",
+  "chiki twist": "Chiki Twist / Chiki Twist Snack",
+  "taro net snack": "Taro Net Snack / Taro Net Seaweed Snack",
+};
+
+const INDO_ENG_WORDS: [RegExp, string][] = [
+  [/\bsingkong\b/gi, "Cassava"],
+  [/\bkeju\b/gi, "Cheese"],
+  [/\bcokelat\b/gi, "Chocolate"],
+  [/\bcoklat\b/gi, "Chocolate"],
+  [/\bayam\b/gi, "Chicken"],
+  [/\bikan\b/gi, "Fish"],
+  [/\bnila\b/gi, "Tilapia"],
+  [/\blele\b/gi, "Catfish"],
+  [/\bgurame\b/gi, "Carp"],
+  [/\btongkol\b/gi, "Mackerel Tuna"],
+  [/\bsapi\b/gi, "Beef"],
+  [/\budang\b/gi, "Shrimp"],
+  [/\bcumi\b/gi, "Squid"],
+  [/\btelur\b/gi, "Egg"],
+  [/\btahu\b/gi, "Tofu"],
+  [/\btempe\b/gi, "Tempeh"],
+  [/\bpedas\b/gi, "Spicy"],
+  [/\bmanis\b/gi, "Sweet"],
+  [/\basam\b/gi, "Sour"],
+  [/\bbalado\b/gi, "Spicy Balado"],
+  [/\bbakar\b/gi, "Grilled"],
+  [/\bgoreng\b/gi, "Fried"],
+  [/\brebus\b/gi, "Boiled"],
+  [/\bkukus\b/gi, "Steamed"],
+  [/\bkuah\b/gi, "Soup"],
+  [/\bsup\b/gi, "Soup"],
+  [/\bsoto\b/gi, "Aromatic Soup"],
+  [/\bsayur\b/gi, "Vegetable"],
+  [/\broti\b/gi, "Bread"],
+  [/\bsusu\b/gi, "Milk"],
+  [/\bkacang\b/gi, "Nut"],
+  [/\bjagung\b/gi, "Corn"],
+  [/\bkerupuk\b/gi, "Crackers"],
+  [/\bteh\b/gi, "Tea"],
+  [/\bkopi\b/gi, "Coffee"],
+  [/\bes\b/gi, "Iced"],
+  [/\bnasi\b/gi, "Rice"],
+  [/\bmie\b/gi, "Noodles"],
+  [/\bkwetiau\b/gi, "Flat Rice Noodles"],
+  [/\bbihun\b/gi, "Rice Vermicelli"],
+  [/\bbakso\b/gi, "Meatballs"],
+  [/\bsosis\b/gi, "Sausage"],
+  [/\bpencok\b/gi, "Fresh Chili Relish"],
+  [/\bkangkung\b/gi, "Water Spinach"],
+  [/\bterong\b/gi, "Eggplant"],
+  [/\bpete\b/gi, "Stink Bean"],
+  [/\bkol\b/gi, "Cabbage"],
+  [/\btaoge\b/gi, "Bean Sprouts"],
+  [/\btauge\b/gi, "Bean Sprouts"],
+  [/\bwedang\b/gi, "Warm Herbal Drink"],
+  [/\bjahe\b/gi, "Ginger"],
+  [/\bkelapa\b/gi, "Coconut"],
+  [/\balpukat\b/gi, "Avocado"],
+  [/\bmangga\b/gi, "Mango"],
+  [/\bjambu\b/gi, "Guava"],
+  [/\bjeruk\b/gi, "Orange/Citrus"],
+  [/\bnaga\b/gi, "Dragon Fruit"],
+  [/\bsirsak\b/gi, "Soursop"],
+  [/\bmelon\b/gi, "Melon"],
+  [/\bsemangka\b/gi, "Watermelon"],
+  [/\btomat\b/gi, "Tomato"],
+  [/\bwortel\b/gi, "Carrot"],
+];
+
+export function enrichBilingualItemName(rawName: string): string {
+  if (!rawName || typeof rawName !== 'string') return rawName;
+  const name = rawName.trim();
+  if (!name) return name;
+  if (name.includes(' / ')) return name;
+
+  const lower = name.toLowerCase();
+  if (KNOWN_BILINGUAL_MAP[lower]) {
+    return KNOWN_BILINGUAL_MAP[lower];
+  }
+
+  // Check if any key in KNOWN_BILINGUAL_MAP is contained
+  for (const [key, translated] of Object.entries(KNOWN_BILINGUAL_MAP)) {
+    if (lower === key || lower.includes(key)) {
+      return translated;
+    }
+  }
+
+  // Check Indonesian culinary words
+  let translated = name;
+  let matchedWord = false;
+  for (const [pattern, replacement] of INDO_ENG_WORDS) {
+    if (pattern.test(name)) {
+      matchedWord = true;
+      pattern.lastIndex = 0; // reset regex state
+      translated = translated.replace(pattern, replacement);
+    }
+  }
+
+  if (matchedWord && translated !== name) {
+    return `${name} / ${translated}`;
+  }
+
+  // For branded snacks without explicit Indonesian words
+  const snackBrands = ["chiki", "taro", "lays", "lay's", "doritos", "jetz", "happy tos", "oishi", "chitato", "kusuka", "chimi", "gunjbee", "silverqueen"];
+  if (snackBrands.some(brand => lower.includes(brand))) {
+    return `${name} / ${name} Snack`;
+  }
+
+  return name;
+}
+

@@ -51,6 +51,7 @@ export default function FloatingActionSheet({
             <div className="grid grid-cols-3 gap-3">
               {/* Log Meal */}
               <button
+                id="quick-action-log-meal"
                 onClick={() => {
                   onLogMeal();
                   onClose();
@@ -62,6 +63,7 @@ export default function FloatingActionSheet({
 
               {/* Compare Meal */}
               <button
+                id="quick-action-compare-meal"
                 onClick={() => {
                   onCompareMeal();
                   onClose();

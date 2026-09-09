@@ -1805,7 +1805,15 @@ export default function App() {
         setProfile(newProfile);
         await saveAndSync(newProfile, foodLogsRef.current, biomarkersRef.current, biomarkerHistoryRef.current, actions, dailyBenefits, report, { type: 'profile' });
       }
+      if (typeof window !== 'undefined') {
+        (window as any).JobStore = JobStore;
+      }
     });
+
+    if (typeof window !== 'undefined') {
+      (window as any).JobStore = JobStore;
+      (window as any).setActiveJobId = setActiveJobId;
+    }
 
     return () => {
       clearTimeout(ingestTimer);

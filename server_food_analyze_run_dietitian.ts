@@ -1,11 +1,10 @@
 import { AnalyzeRunContext } from './server_food_analyze_run_types.js';
-import { computeDietitianSkipGates, isAcceptDefaultsWithinTolerance, composeAcceptDefaultsParsed, decideScoutVerdict, decideScoutAdvice, buildPureScaleResponse, sumPrecalcTotals, buildCreateSkipResponse, resolveCreateMealTitle, PROJECTOR_NARRATOR_INSTRUCTION } from '../server_food_dietitian_dispatch.js';
-import { buildTimeContext, buildUserContext, buildHistoryContext, buildImageContext, buildVisionScoutContext, buildBiomarkersContext, selectSystemInstruction, stitchFoodPrompt, buildDatabaseMatchesContext, assemblePrecalcPromptBlock } from "../server_food_prompt_context.js";
-import { getCurrentDateInTimezone } from '../../utils/dateUtils.js';
-import { interpolate } from '../../utils/i18n.js';
-import { t } from '../../utils/translations.js';
-import { diffScoutToEditCommands } from '../server_meal_edit.js';
-import { normalizeParsedPostDietitian } from '../server_food_mode_routing.js';
+import { computeDietitianSkipGates, isAcceptDefaultsWithinTolerance, composeAcceptDefaultsParsed, decideScoutVerdict, decideScoutAdvice, buildPureScaleResponse, sumPrecalcTotals, buildCreateSkipResponse, resolveCreateMealTitle, PROJECTOR_NARRATOR_INSTRUCTION } from './src/server/food/server_food_dietitian_dispatch.js';
+import { buildTimeContext, buildUserContext, buildHistoryContext, buildImageContext, buildVisionScoutContext, buildBiomarkersContext, selectSystemInstruction, stitchFoodPrompt, buildDatabaseMatchesContext, assemblePrecalcPromptBlock } from "./src/server/food/server_food_prompt_context.js";
+import { getCurrentDateInTimezone } from './src/utils/dateUtils.js';
+import { interpolate, t } from './src/utils/i18n.js';
+import { diffScoutToEditCommands } from './server_edit_patch_ledger.js';
+import { normalizeParsedPostDietitian } from './src/server/food/server_food_mode_routing.js';
 
 export async function executeDietitianPhase(ctx: AnalyzeRunContext): Promise<{ textOutput: string, rawParsed: any, narratorInput: any }> {
   let textOutput: string = "";

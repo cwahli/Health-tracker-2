@@ -3,6 +3,8 @@ import {
   evaluateNutrientWarnings,
   enforceTitlePluralParity,
   sanitizeVerdictLabel,
+  enrichBilingualItemName,
+  applyServerAverageNutrients,
 } from '../../../server_pure_helpers.js';
 import { pickQueryScopedMatch } from '../../../server_query_scoped_match.js';
 import { extractMostRecentImageDate } from '../../utils/dateUtils.js';
@@ -12,7 +14,6 @@ import { appendHistory } from '../../mealBuild/consolidate.js';
 import { buildMealFromFinalizeLedgers } from '../../../server_meal_from_finalize.js';
 import { finalizeDishLedger } from '../../../server_dish_finalize.js';
 import { resolveComparisonGroups } from '../../../server.js';
-import { applyServerAverageNutrients } from '../../../server_pure_helpers.js';
 import { fromEvaluationComparison } from '../../mealBuild/adapters.js';
 import { mergeScoutItems } from '../../../server_vision_scout.js';
 import { namesReferToSameFood } from '../../../server_scout_reconcile.js';
@@ -746,6 +747,22 @@ export function assembleEvaluationComparison(args: EvaluationComparisonArgs): {
   onLog(`[Comparison Resolve] ${visionScoutItems.length} scout item(s) -> ${resolvedGroups.length} group(s), covering ${resolvedGroups.reduce((sum: number, g: any) => sum + (g.items?.length || 0), 0)} item(s).`);
   comparisonData.groups = applyServerAverageNutrients(resolvedGroups, preCalcByScoutIndex);
   comparisonData.isMenuScale = isMenuScale;
+  if (!comparisonData.items || !Array.isArray(comparisonData.items) || comparisonData.items.length === 0) {
+    comparisonData.items = visionScoutItems || [];
+  }
+  if (Array.isArray(comparisonData.items)) {
+    comparisonData.items.forEach((it: any) => {
+      if (it && (it.name || it.originalName)) {
+        it.name = enrichBilingualItemName(it.name || it.originalName);
+      }
+    });
+  }
+  if (!comparisonData.recommendedOption || comparisonData.recommendedOption.toLowerCase().includes('unassigned')) {
+    comparisonData.recommendedOption = comparisonData.groups[0]?.items?.[0]?.name || comparisonData.groups[0]?.groupName || 'Recommended Choice';
+  }
+  if (comparisonData.recommendedOption) {
+    comparisonData.recommendedOption = enrichBilingualItemName(comparisonData.recommendedOption);
+  }
   onLog('[MealBuild] mode=D stream');
   const comparisonSet = fromEvaluationComparison(comparisonData, visionScoutItems, {
     id: jobId || `cmp_${Date.now()}`,

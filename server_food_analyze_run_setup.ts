@@ -1,4 +1,4 @@
-import { logSessionStorage, sessionDebugLogs, globalDebugLogs } from './server_logging_storage.js';
+import { logSessionStorage, sessionDebugLogs, globalDebugLogs } from './server.js';
 import { attachSseJsonResponder } from './server_sse_json.js';
 
 export function initializeAnalysisRun(req: any, res: any) {

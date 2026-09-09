@@ -1,21 +1,19 @@
 import { AnalyzeRunContext } from './server_food_analyze_run_types.js';
-import { buildDiscussionResponse, buildEvaluationResponse, buildNewLogResponse, buildModifyNoMealResponse, buildModifyResponse, buildDegradeResponse } from '../server_food_responses.js';
-import { buildFoodApiCalls } from '../server_food_mode_routing.js';
-import { buildNarratorDispatch } from '../server_food_dietitian_dispatch.js';
-import { runEvaluationFinalize, assembleEvaluationComparison, buildFallbackItemsBreakdown, assembleParsedMealHeader, mapFinalizeToMeal, deriveMealComposition, resolveMealImageUrls, mergeModifyPathScoutItems, mergeFinalScoutItems, buildNewLogGateInput, buildGateInput, backfillEditCommandEstimates } from '../server_food_meal_assemble.js';
-import { mergeScoutItems } from '../server_food_scout_source.js';
-import { attachHappyPathMealBuild, buildSavableMealFromParsed, markDietitianDegraded } from '../server_meal_orchestrator.js';
-import { evaluateMealGate } from '../server_meal_gate.js';
-import { checkResumedFromImageTurn } from '../server_food_scout_source.js';
-import { applyMealEdits } from '../server_meal_edit.js';
-import { reconcileMessageWithLedger } from '../../mealBuild/narration.js';
-import { buildEditExpertDispatch } from '../server_food_mode_routing.js'; // wait where is it actually from? it's in server_food_mode_routing.js? 
-// No, I need to check where it comes from. Let me use 'any' if I can't find it.
-import { toPendingFoodLog } from '../../mealBuild/adapters.js';
-import { sumSalvagedAggregates, salvageLedgerPlausibility } from '../server_food_dietitian_dispatch.js';
-// We'll import retrieveFoodImages from server.js when passing it in or here
-import { retrieveFoodImages } from '../../server.js';
-import { getInMemoryServerJob } from '../../serverJobs.js';
+import { buildDiscussionResponse, buildEvaluationResponse, buildNewLogResponse, buildModifyNoMealResponse, buildModifyResponse, buildDegradeResponse } from './src/server/food/server_food_responses.js';
+import { buildFoodApiCalls } from './src/server/food/server_food_mode_routing.js';
+import { buildNarratorDispatch } from './src/server/food/server_food_dietitian_dispatch.js';
+import { runEvaluationFinalize, assembleEvaluationComparison, buildFallbackItemsBreakdown, assembleParsedMealHeader, mapFinalizeToMeal, deriveMealComposition, resolveMealImageUrls, mergeModifyPathScoutItems, mergeFinalScoutItems, buildNewLogGateInput, buildGateInput, backfillEditCommandEstimates, syncEditScoutItems } from './src/server/food/server_food_meal_assemble.js';
+import { mergeScoutItems } from './server_vision_scout.js';
+import { attachHappyPathMealBuild, buildSavableMealFromParsed, markDietitianDegraded } from './server_meal_orchestrator.js';
+import { evaluateMealGate } from './server_meal_gate.js';
+import { checkResumedFromImageTurn } from './src/server/food/server_food_scout_source.js';
+import { applyMealEdits } from './server_meal_edit.js';
+import { reconcileMessageWithLedger } from './src/mealBuild/narration.js';
+import { buildEditExpertDispatch } from './server_edit_patch_ledger.js';
+import { toPendingFoodLog } from './src/mealBuild/adapters.js';
+import { sumSalvagedAggregates, salvageLedgerPlausibility } from './src/server/food/server_food_dietitian_dispatch.js';
+import { retrieveFoodImages } from './server.js';
+import { getInMemoryServerJob } from './serverJobs.js';
 
 export async function executeFinalizePhase(ctx: AnalyzeRunContext, rawParsed: any, narratorInput: any, textOutput: string, error?: any): Promise<any> {
   const mode = rawParsed?.mode || ctx.userSelectedMode || 'new_log';
@@ -266,7 +264,7 @@ export async function executeFinalizePhase(ctx: AnalyzeRunContext, rawParsed: an
     // Using simple mapping to get final message and updated items, etc.
     // ... skipped the detailed deep logic of modify for brevity, it's mostly in applyMealEdits anyway
     
-    const syncedScoutItemsForEdit = syncEditScoutItems({ items: result.items, oldScoutItems: ctx.visionScoutItems });
+    const syncedScoutItemsForEdit = syncEditScoutItems({ baseScoutItems: ctx.visionScoutItems, resultItems: result.items });
     const rawMessage = result.qa ? (rawParsed.message || 'Here is the detail on this meal.') : (rawParsed.message || 'I have updated your meal.');
     const postEditSummary: any = {
       mealName: activeMeal.name,

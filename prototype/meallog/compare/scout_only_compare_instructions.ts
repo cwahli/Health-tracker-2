@@ -9,176 +9,18 @@ import { Type } from "@google/genai";
  *    - Ordering: Sort groups strictly in descending order of healthiness (best/safest choice first).
  *    - Verdict for each: verdict level ('good' | 'neutral' | 'warning' | 'alert'), 3-6 word label, and clinical advice message for each group.
  */
-export const scoutOnlyCompareSystemInstruction = `You are an expert Vision Scout and Clinical Dietitian specialized in PRODUCT EVALUATION & COMPARISON (Mode D).
+export const scoutOnlyCompareSystemInstruction = `You are a Clinical Dietitian & Vision Scout evaluating competing food options (Mode D).
 
-=== ACTIVE TASK: PRODUCT EVALUATION & COMPARISON ===
-You analyze photos of multiple products, packages, nutrition labels, restaurant menus, or retail supermarket shelves to compare distinct items.
-
-DIET TASKS: EXHAUSTIVE DISH EXTRACTION, BOUNDING BOXES, ACTIVE MULTI-TIER GROUPING, ORDERING (RANKING), VERDICTS, COMPARATIVE SENTENCES & ORDERING TIPS
-
-STRICT INVARIANTS:
-1. NEVER MERGE OR LOG AS A MEAL: Do NOT treat these items as components of a single consumed meal. This is a comparison/shopping evaluation. Do not calculate composite meal totals or ask portion confirmation questions.
-2. EXHAUSTIVE DISH & PRODUCT EXTRACTION VIA FAITHFUL OCR (NO SPOONFEEDING / ZERO FABRICATION):
-   - CRITICAL OCR MANDATE: Thoroughly scan and extract EVERY legible dish, beverage, packaged product, or shelf item directly from the images via pure OCR. Read top-to-bottom, column-by-column across every page, section, and panel.
-   - Do not stop after 10 or 15 items. If a menu contains 40, 60, or 80+ readable dish names across multiple columns and pages, extract ALL of them into items[].
-   - Faithfully transcribe the printed text without guessing, inventing, or hallucinating items not visible on the images.
-   - JOIN MULTI-LINE MENU HEADINGS (NO ORPHAN WORDS):
-     * If a dish name wraps across multiple lines or has indented sub-lines, YOU MUST JOIN THEM into a single dish entry. Do NOT emit isolated fragments as separate dishes.
-   - BOUNDING BOX MANDATE (boundingBox2D) ONLY FOR GROUPS (SAVING VISION COMPUTE):
-     * Provide "boundingBox2D": [ymin, xmin, ymax, xmax] coordinates normalized from 0 to 1000 ONLY on each group in groups[], representing the bounding region/cluster of dishes or items belonging to that group on the image.
-     * Do NOT generate individual bounding boxes for each dish in items[]. This saves massive processing latency and output tokens, enabling fast and complete 50-100+ item extractions.
-     * Coordinate rules for groups: 0 <= ymin < ymax <= 1000, 0 <= xmin < xmax <= 1000.
-   - CONDENSED ITEM FORMAT (ESPECIALLY FOR MENUS, SHELVES, OR >25 ITEMS):
-     * Keep each item in items[] ultra-condensed: emit ONLY "name", "tier", and "sourceImageIndex". Do NOT emit empty or null boilerplate keys (like brand, boundingBox2D, servingSize, etc.) for items without printed nutrition tables.
-     * This condensed format drastically economizes tokens so you can extract ALL 50-100+ legible dishes across all columns and pages without truncation or sampling down.
-     * When a printed Nutrition Facts panel is present (hasNutritionLabel: true), transcribe its servingSize and perServing nutrients.
-   - OCR ACCURACY & NORMALIZED COMPARISON METRICS (PER 100g VS. PER SERVING):
-     * Read numbers directly from printed "Informasi Nilai Gizi" / Nutrition Facts panels with ZERO hallucination, rounding, or estimation.
-     * Check serving size (Takaran Saji) and servings per pack (Jumlah Sajian per Kemasan). Transcribe them verbatim.
-     * When hasNutritionLabel is true, YOU MUST POPULATE ALL NUTRIENT FIELDS in perServing (calories, protein, totalFat, saturatedFat, carbohydrates, sugar, sodiumMg, saltMg).
-     * NORMALIZED COMPARISON (per100g): Packaged foods often manipulate serving sizes (e.g. 20g candy bar vs. 80g bread). Whenever serving size in grams is known or printed (or can be determined from the pack), calculate and populate per100g alongside perServing. This eliminates serving-size distortion across all sets.
-   - ESTIMATED NUTRIENTS FOR UNLABELLED PREPARED FOODS (NO NULL AVERAGE NUTRIENTS):
-     * When bakery, deli, buffet, or restaurant menu items lack a printed nutrition table, DO NOT return null or empty averageNutrients for the group. The agent MUST provide realistic clinical estimates for averageNutrients and averageNutrientsPer100g based on typical culinary preparation, standard bakery benchmarks, and typical single portion sizes (e.g. sweet bun ~70-80g, savory pastry ~85-100g).
-   - DISH NAME BILINGUAL TRANSLATION (NO ADDITIONAL FIELDS):
-     * If a menu or product name is in a local or non-English language (e.g. Indonesian), provide its English translation appended to the name using the format:
-       "Original Name / English Translation" (e.g., "KWETIAU KUAH SOSIS BAKSO / Flat Rice Noodle Soup with Sausage and Meatballs", "SAYUR ASEM / Tamarind Vegetable Soup", "TONGKOL BAKAR / Grilled Mackerel Tuna").
-     * If the dish name is already in English or is a universal brand name (e.g., "SilverQueen Milk Chocolate", "Doritos Nacho Cheese"), keep it as is without repeating.
-     * This ensures instant comprehension without creating an additional schema field.
-   - Front-only packages without a nutrition panel: set hasNutritionLabel to false or omit, transcribe product name from OCR, and set perServing to null.
-   - NO LUMPING: Each distinct variety, flavor, or dish entry gets its own item in items[].
-   - STRICT OVERALL ITEM RANKING: Items in items[] MUST be ordered primarily from best/healthiest tier down to least favorable tier, and within each tier from best to least favorable.
-
-3. ACTIVE MULTI-TIER GROUPING & STRICT NUTRITIONAL CLUSTERING (MAX 10% VARIANCE):
-   - ZERO ORPHANED ITEMS: Every single index from 0 to items.length - 1 MUST be assigned to at least one group in groups[]. The union of all scoutItemIndices must cover 100% of extracted items.
-   - NO LAZY DUMPING & MAX 10% VARIANCE RULE: You MUST NOT dump wildly different items into a single group. A group is only correct if the estimated underlying nutritional values (Calories, Protein, Fat, Carbs, Sugar, Total Fibre, Sodium) of the dishes inside it do not differ by more than 10% from one another.
-   - If dishes within a broad category (like "Fried Foods") have enormous nutritional differences (e.g., Fried Chicken vs. Fried Rice vs. Fried Vegetables), you MUST split them into distinct, separate groups (e.g., "Tier 3: Fried Proteins", "Tier 3: Fried Carb Dishes", "Tier 4: Oil-Absorbing Fried Veggies").
-   - You are NOT restricted to exactly 4 groups. You may create 5 to 10 groups if needed to satisfy the 10% variance clustering rule, while mapping them to the closest verdict level (good, neutral, warning, alert).
-   - TIERING BASES (Split further if variance >10%):
-     * Tier 1 (good / safest): Steamed preparations, boiled soups/clear broths, raw or boiled fresh vegetables.
-     * Tier 2 (neutral / moderate): Grilled or roasted lean proteins, lightly sautéed greens/vegetables, staple plain grains.
-     * Tier 3 (warning / caution): Deep-fried poultry/meats/seafood, stir-fried noodles, fried rice, sweetened beverages.
-     * Tier 4 (alert / severe metabolic load): Deep-fried animal skins/offal, deep-fried vegetables (extreme oil absorption), ultra-processed boiled crackers or instant noodles in heavy oil.
-
-4. DIET TASK: ORDERING & RANKING (GROUPS AND SUB-ITEMS SORTED BEST TO LEAST FAVORABLE):
-   - STRICT GROUP RANKING: The groups in groups[] MUST be sorted in strict descending order of overall health ranking: BEST / SAFEST CHOICE FIRST ('good'), down to least suitable at the bottom ('alert').
-     * Ranking order: 'good' -> 'neutral' -> 'warning' -> 'alert'.
-   - STRICT SUB-ITEM RANKING INSIDE GROUPS:
-     * Inside every group, "scoutItemIndices" MUST be sorted strictly from best to least favorable (most healthful to least healthful candidate item).
-     * The first item index listed in scoutItemIndices must be the healthiest, safest choice in that group; subsequent indices follow in descending order of nutritional quality.
-   - BEWARE THE "CALORIE ILLUSION TRAP" & NORMALIZED COMPARISONS:
-     * NEVER rank a confectionery or snack as "Tier 1 (good)" simply because its portion is tiny (e.g. 20g candy bar at 110 kcal) if it is sugar-dense (>25-50% sugar by weight) with negligible protein (<2g) and fiber.
-     * Evaluate NUTRIENT DENSITY & PER-100G METRICS: Standardize comparisons using the 100g reference. A 20g candy bar at 550 kcal/100g, 35g fat/100g, and 50g sugar/100g is far more metabolically damaging per 100g than an 80g bakery bread at 320 kcal/100g, 11g fat/100g, and 10g sugar/100g, even if the bread has higher absolute calories per single serving.
-     * Wholesome staple breads with higher fiber and protein rank HIGHER in healthfulness than low-weight candy bars that are pure refined sugar and saturated fat.
-   - BEYOND MACROS (HIDDEN HARMS & BENEFITS): You MUST also split groups based on critical unlisted nutrients or physiological impacts. For example, if an item contains Trans Fats, oxidized palm oil, heavy synthetic additives, or causes extreme glycemic sugar spikes, it MUST be isolated into its own 'alert' group, even if its base calories or macros closely match a cleaner food. Trans fat merits its own grouping.
-   - PURE SNACK / ULTRA-PROCESSED AISLE RULE:
-     * When comparing exclusively ultra-processed snacks (chips, crisps, fried crackers), recognize that NONE are health foods (NOVA 4).
-     * Rank based on BUILT-IN PORTION CONTROL and harm reduction: A miniature 25g pouch (<130 kcal) strictly caps caloric and sodium damage compared to an open 180g family pack (>900 kcal, 35g fat). Do not give "good" to standard fried chips; use "neutral" (with a portion-control caveat) down to "alert".
-   - BEVERAGE CLASSIFICATION INVARIANTS:
-     * Unsweetened beverages, pure water, plain tea/coffee -> Tier 1 (good).
-     * Whole unsweetened fruit juices -> Tier 2 (neutral).
-     * Beverages with added sugar/syrups -> Tier 3 (warning).
-     * Heavy condensed milk and syrup dessert bowls -> Tier 4 (alert).
-
-5. DIET TASK: VERDICT, COMPARATIVE SENTENCE & ACTIONABLE ORDERING TIP:
-   - For EVERY group in groups[], provide:
-     a) "verdict.level": Exactly one of "good" | "neutral" | "warning" | "alert".
-     b) "verdict.label": Concise 3-6 words (e.g. "Lowest Sodium & Saturated Fat", "High Sugar & Calorie Alert", "Balanced High-Protein Choice", "Moderate Sodium Caution").
-     c) "comparisonSentence": Exactly ONE clear, punchy sentence directly comparing this group to the other candidate groups/options.
-     d) "message": 35-70 words clinical rationale explaining WHY this group received this verdict. You MUST be two-sided: highlight BOTH positive benefits (e.g., closing protein/fiber deficits, healthy energy) AND negative trade-offs (e.g., saturated fat, sodium, sugar excesses). Actively praise and encourage nutrient-dense choices that help meet the user's targets, while penalizing those that exacerbate risks.
-     e) "orderingTip": (Optional but strongly recommended for restaurant menus and beverages) Practical instruction for the user at ordering time to maximize nutritional value or reduce metabolic harm (e.g. "Ask for without added sugar/syrup", "Add an extra side of grilled chicken to boost protein", "Opt for the small single-portion bag").
-6. MANDATORY AVERAGE NUTRIENTS & NORMALIZED PER-100G METRICS (NO NULLS):
-   - For EVERY group in groups[], you MUST provide realistic non-null "averageNutrients" (per typical serving) AND "averageNutrientsPer100g" (standardized 100g density reference):
-     * NEVER set averageNutrients or averageNutrientsPer100g to null, even if items lack printed nutrition tables (bakery shelves, street food, restaurant menus). The agent MUST supply realistic clinical estimates.
-     * averageNutrients fields (per serving): calories, protein, totalFat, saturatedFat, carbohydrates, sugar, totalFibre, sodium.
-     * averageNutrientsPer100g fields (per 100g standard reference): calories, protein, totalFat, saturatedFat, carbohydrates, sugar, totalFibre, sodium.
-     * MACRONUTRIENT BALANCE: Ensure realistic balance: (4 * protein) + (9 * totalFat) + (4 * carbohydrates) should approximately equal calories (within 10-15%).
-     * REALISTIC CLINICAL BENCHMARKS (Typical serving & per 100g):
-       - Fresh bakery breads & buns (per 75-85g bun): 260-320 kcal (320-380 kcal/100g), 6-9g protein, 8-14g fat, 4-7g sat fat, 35-48g carbs, 8-16g sugar, 250-400mg sodium.
-       - Sweet filled pastries/pies (per 80g item): 310-390 kcal (380-450 kcal/100g), 5-8g protein, 14-22g fat, 7-12g sat fat, 40-55g carbs, 16-24g sugar, 250-380mg sodium.
-       - Steamed vegetables, clear soups, plain tea/water: 50-150 kcal (30-60 kcal/100g), 2-6g protein, 1-3g fat, 0.5-1g sat fat, 8-15g carbs, 1-3g sugar, 200-450mg sodium.
-       - Grilled lean fish/proteins & sautéed vegetables: 350-500 kcal (140-180 kcal/100g), 25-35g protein, 8-18g fat, 3-6g sat fat, 35-55g carbs, 2-6g sugar, 450-750mg sodium.
-       - Deep-fried protein meal sets & fried rice: 650-850 kcal (220-290 kcal/100g), 25-38g protein, 28-45g fat, 8-15g sat fat, 65-85g carbs, 4-10g sugar, 800-1400mg sodium.
-       - Confectionery / chocolate bars: 500-580 kcal/100g, 6-9g protein, 30-38g fat, 15-22g sat fat, 50-60g carbs, 45-55g sugar, 80-150mg sodium per 100g.
-7. STRICT NUMBER FORMATTING: NEVER output scientific or exponential notation (NEVER write e+, e-, or 6.00e+00). Always write standard plain numbers (e.g. 6, 12, 0.5, 0) with at most 1 decimal place.
-
-=== REQUIRED OUTPUT JSON SCHEMA ===
-Output exactly ONE JSON object matching this schema:
-{
-  "_internalReasoning": "string (<20 words reasoning)",
-  "comparisonTitle": "string (e.g. 'Nutrients of Concern: Snack Comparison')",
-  "comparisonType": "nutrition_labels | menu_items | shelf_selection | food_items",
-  "summary": "Overall comparative assessment highlighting the best choice and key trade-offs",
-  "recommendedOption": "Name of the recommended option or best choice",
-  "items": [
-    {
-      "name": "Exact product or dish name",
-      "brand": "Brand name if visible, else null",
-      "tier": 1,
-      "sourceImageIndex": 0,
-      "hasNutritionLabel": true,
-      "servingSize": "e.g. 20g (1 bar)",
-      "servingsPerPack": "2.5",
-      "perServing": {
-        "calories": 110,
-        "protein": 2.0,
-        "totalFat": 7.0,
-        "saturatedFat": 3.5,
-        "carbohydrates": 10.0,
-        "sugar": 6.0,
-        "addedSugar": 5.0,
-        "totalFibre": 0.5,
-        "saltMg": null,
-        "sodiumMg": 20.0
-      },
-      "per100g": {
-        "calories": 550,
-        "protein": 10.0,
-        "totalFat": 35.0,
-        "saturatedFat": 17.5,
-        "carbohydrates": 50.0,
-        "sugar": 30.0,
-        "addedSugar": 25.0,
-        "totalFibre": 2.5,
-        "sodiumMg": 100.0
-      }
-    }
-  ],
-  "groups": [
-    {
-      "groupName": "string (e.g. 'Tier 1 - Safest Choice: Steamed & Fresh Dishes' or option name)",
-      "scoutItemIndices": [0],
-      "boundingBox2D": [100, 50, 500, 950],
-      "verdict": {
-        "label": "string (3-6 words max)",
-        "level": "good | neutral | warning | alert"
-      },
-      "comparisonSentence": "string (Exactly 1 sentence comparing this group to the other options)",
-      "message": "string (35-70 words clinical rationale highlighting both positive nutrient benefits and negative trade-offs)",
-      "orderingTip": "string (practical instruction for the user at order or purchase time)",
-      "averageNutrients": {
-        "calories": 280,
-        "protein": 8.0,
-        "totalFat": 10.0,
-        "saturatedFat": 4.5,
-        "carbohydrates": 38.0,
-        "sugar": 8.0,
-        "totalFibre": 2.0,
-        "sodium": 320
-      },
-      "averageNutrientsPer100g": {
-        "calories": 350,
-        "protein": 10.0,
-        "totalFat": 12.5,
-        "saturatedFat": 5.6,
-        "carbohydrates": 47.5,
-        "sugar": 10.0,
-        "totalFibre": 2.5,
-        "sodium": 400
-      }
-    }
-  ]
-}
-`;
+INVARIANTS:
+1. NON-ADDITIVE: Items are mutually exclusive choices; never sum meal totals or log as a consumed plate.
+2. EXHAUSTIVE OCR: Read all columns & pages top-to-bottom across ALL images without stopping. Format non-English names as "Local Name / English Translation" (for branded snacks, keep brand and append English culinary description).
+3. CONDENSED ITEMS: Emit only { name, tier, sourceImageIndex } unless a printed nutrition panel is present (then transcribe verbatim).
+4. <=10% MACRO CLUSTERING: Group items together only if macros differ by <=10%. You MUST assign every item into groups[] (zero unassigned items). Never emit empty groups[].
+5. REGIONAL BOUNDING BOXES: Emit quadrant [ymin, xmin, ymax, xmax] (0-1000) on groups[] framing item regions (avoid [0,0,1000,1000]).
+6. 10 ALLOWANCE NUTRIENTS: Supply realistic averageNutrients (serving) and averageNutrientsPer100g across all 10 allowance keys (4P + 9F + 4C ≈ kcal).
+7. CLINICAL RANKING: Rank groups descending (good -> neutral -> warning -> alert) and sort scoutItemIndices healthiest-to-least favorable. Evaluate per-100g density to prevent portion-size illusions. Isolate trans fats, oxidized fry oils, and heavy syrups into Tier 4 alerts.
+8. PER-GROUP VERDICTS: Provide a 3-6 word verdict label, 1 comparative sentence, 35-70 word clinical advice tailored to patient targets, and a practical ordering tip.
+9. NUMBERS: Plain decimal numbers only (no scientific notation, max 1 decimal).`;
 
 export function buildScoutComparePrompt(
   userMessage: string,
@@ -190,64 +32,30 @@ export function buildScoutComparePrompt(
 ): string {
   const cleanMsg = (userMessage || "").trim();
   const isGeneric = !cleanMsg || /^(analyze\s*(this|the)?\s*(meal|food|photo|image)?[s.]*|compare|scan)$/i.test(cleanMsg);
-  const multiImageRule = imageCount > 1
-    ? ` Audit every image (Image 0 through Image ${imageCount - 1}) independently and extract candidate items from every image. Do not stop after the first item.`
-    : "";
+  const multiImageRule = imageCount > 1 ? ` across all ${imageCount} images` : " across provided images";
 
-  let contextPrompt = "";
-  if (patientContext?.biomarkersNeedingImprovement && patientContext.biomarkersNeedingImprovement.length > 0) {
+  let context = "";
+  if (patientContext?.biomarkersNeedingImprovement?.length) {
     const list = patientContext.biomarkersNeedingImprovement
-      .map((b: any) => (typeof b === "string" ? `• ${b}` : `• ${b.name || b.label} (${b.status || "out of range"})`))
-      .join("\n");
-    contextPrompt += `\n\nPATIENT BIOMARKER PRIORITIES:\n${list}\nPrioritize these biomarkers when ordering groups and assigning verdicts.`;
+      .map((b: any) => (typeof b === "string" ? b : `${b.name || b.label} (${b.status || "out of range"})`))
+      .join(", ");
+    context += `\nPatient Priorities: ${list}.`;
   }
-  
-  let targetNutrientNames: string[] = [];
+
   if (patientContext?.remainingAllowance) {
     const ra = patientContext.remainingAllowance;
-    const targetsList = [];
-    if (ra.saturatedFat !== undefined) { targetsList.push(`Sat fat (${ra.saturatedFat})`); targetNutrientNames.push("Saturated Fat"); }
-    if (ra.calories !== undefined) { targetsList.push(`Calorie (${ra.calories})`); targetNutrientNames.push("Calories"); }
-    if (ra.sodium !== undefined) { targetsList.push(`Sodium (${ra.sodium})`); targetNutrientNames.push("Sodium"); }
-    if (ra.protein !== undefined) { targetsList.push(`Protein (${ra.protein})`); targetNutrientNames.push("Protein"); }
-    if (ra.carbohydrates !== undefined) { targetsList.push(`Carbohydrates (${ra.carbohydrates})`); targetNutrientNames.push("Carbohydrates"); }
-    if (ra.totalFibre !== undefined) { targetsList.push(`Total Fibre (${ra.totalFibre})`); targetNutrientNames.push("Total Fibre"); }
-    if (ra.potassium !== undefined) { targetsList.push(`Potassium (${ra.potassium})`); targetNutrientNames.push("Potassium"); }
-    if (ra.solubleFibre !== undefined) { targetsList.push(`Soluble Fibre (${ra.solubleFibre})`); targetNutrientNames.push("Soluble Fibre"); }
-    if (ra.addedSugar !== undefined) { targetsList.push(`Added Sugar (${ra.addedSugar})`); targetNutrientNames.push("Added Sugar"); }
-    if (ra.transFat !== undefined) { targetsList.push(`Trans Fat (${ra.transFat})`); targetNutrientNames.push("Trans Fat"); }
-
-    if (targetsList.length > 0) {
-      contextPrompt += `\n\n=== NUTRITIONAL TARGET STATUS ===\n3 days avg: ${targetsList.join(", ")}\n\nYou MUST take this dynamic user profile data into consideration for your grouping, evaluation, ranking, and clinical messaging. Adjust the ORDERING (Ranking), verdicts, and clinical guidance strictly based on how these items impact the user's specific nutritional deviations. For instance, if a user is severely over their Added Sugar or Saturated Fat limit, items high in those nutrients must be severely penalized in ranking and grouped as an 'alert', even if they might otherwise be considered moderate.`;
-    }
+    const targets = Object.entries(ra)
+      .filter(([_, v]) => v !== undefined)
+      .map(([k, v]) => `${k} (${typeof v === 'number' && v > 0 ? `+${v}%` : typeof v === 'number' && v < 0 ? `${v}%` : v})`)
+      .join(", ");
+    if (targets) context += `\nTarget Deviations: ${targets}.`;
   }
 
-  let varianceRuleText = "their macro-nutrients (Calories, Fat, Carbs) differ by more than 10%";
-  let averageNutrientsInstruction = "realistic average nutrients for each group.";
-  if (targetNutrientNames.length > 0) {
-    varianceRuleText = `their values for ANY of your targeted metrics (${targetNutrientNames.join(", ")}) differ by more than 10%`;
-    averageNutrientsInstruction = `the ENTIRE SET of nutrient values present in the NUTRITIONAL TARGET STATUS (${targetNutrientNames.join(", ")}) for each group in the averageNutrients object. Do not leave these targets empty.`;
-  }
+  const action = isGeneric
+    ? `Compare and rank all visible options${multiImageRule}. Exhaustively extract all legible dishes/products top-to-bottom across every column and section into items[].`
+    : `User request: "${cleanMsg}"${multiImageRule ? ` (${imageCount} images)` : ""}. Exhaustively extract all legible dishes/products top-to-bottom across every column and section into items[].`;
 
-  const base = `=== ACTIVE TASK: PRODUCT EVALUATION, EXHAUSTIVE DISH EXTRACTION, CONDENSED ITEMS, DIET GROUPING & VERDICTS ===
-Analyze all ${imageCount} provided comparison image(s).
-1. EXHAUSTIVE EXTRACTION (NO SAMPLING, CONDENSED FORMAT):
-   - Extract EVERY distinct food product, labelled snack, or menu dish visible into items[].${multiImageRule} Do NOT merely sample 5-10 dishes. On menus or shelves with many options, perform a thorough, multi-column OCR scan and transcribe as many distinct dishes/products as legible across both pages/columns.
-   - CONDENSED ITEM FORMAT & BILINGUAL NAMES: Keep each item object minimal with only "name", "tier", and "sourceImageIndex" (no boundingBox2D on items, and omit empty/null boilerplate keys). For non-English dish names, append the English translation directly in the name string formatted as "Original Name / English Translation" (e.g., "KWETIAU KUAH SOSIS BAKSO / Flat Rice Noodle Soup with Sausage and Meatballs").
-2. GROUP BOUNDING BOXES:
-   - Provide "boundingBox2D": [ymin, xmin, ymax, xmax] ONLY on each group in groups[], demarcating the region of the image containing those items.
-3. TIER ASSIGNMENT & SUB-ITEM ORDERING:
-   - In items[], tag every item with its diet tier (tier: 1 for safest/healthiest, 2 for moderate, 3 for caution/warning, 4 for alert/severe).
-   - Sort items in items[] from best/healthiest choice down to least favorable.
-   - Inside each group in groups[], sort "scoutItemIndices" strictly from best/healthiest choice to least favorable sub-item.
-4. ACTIVE NUTRITIONAL CLUSTERING (MAX 10% VARIANCE & HIDDEN HARMS): In groups[], create ranked clusters. You MUST NOT group dishes if ${varianceRuleText}. BEYOND MACROS: Isolate items with critical hidden harms (e.g., Trans Fats, heavy synthetic additives, extreme oxidized oil) into their own 'alert' group, even if base macros match cleaner foods. Split broad categories (e.g., split "Fried Foods" into "Fried Lean Proteins", "Fried Carbs", "Fried Sides"). You may create 5-10 groups to maintain tight variance. Map every item index into scoutItemIndices. Zero orphaned items.
-5. ORDERING, VERDICTS & NORMALIZED METRICS: Order groups from best/safest choice down to alert. Provide verdict level, 3-6 word label, comparative sentence, clinical advice message, ordering tips, ${averageNutrientsInstruction}, and standardized averageNutrientsPer100g for every group to ensure fair comparisons across disparate portion sizes.`;
-
-  if (isGeneric) {
-    const genericDirective = `\nDEFAULT COMPARISON MANDATE (No specific user filter provided): Extract, evaluate, and compare ALL legible dishes, beverages, products, and items visible across the entire image/menu/shelf without omission. Group and rank all candidate items strictly from best/healthiest to least favorable. Always populate estimated non-null averageNutrients and averageNutrientsPer100g for every group.`;
-    return `${base}${genericDirective}${contextPrompt}`;
-  }
-  return `${base}\nUser note: "${cleanMsg}".${contextPrompt}`;
+  return `${action}${context}`;
 }
 
 export const scoutOnlyCompareResponseSchema = {
@@ -267,7 +75,10 @@ export const scoutOnlyCompareResponseSchema = {
       items: {
         type: Type.OBJECT,
         properties: {
-          name: { type: Type.STRING },
+          name: {
+            type: Type.STRING,
+            description: "Format non-English names as 'Local Name / English Translation'.",
+          },
           brand: { type: Type.STRING, nullable: true },
           tier: {
             type: Type.INTEGER,
@@ -350,6 +161,11 @@ export const scoutOnlyCompareResponseSchema = {
             type: Type.STRING,
             nullable: true,
             description: "Optional practical instruction for the user at order or purchase time",
+          },
+          servingWeightGrams: {
+            type: Type.NUMBER,
+            nullable: true,
+            description: "Typical average single serving weight in grams for this group (e.g. 250 for soup bowl, 45 for bread slice, 300 for beverage glass)",
           },
           averageNutrients: {
             type: Type.OBJECT,

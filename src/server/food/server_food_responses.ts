@@ -47,6 +47,7 @@ export function buildEvaluationResponse(args: {
     rawScout: rawScoutData,
     comparison: comparisonData,
     comparisonSet,
+    items: scoutItems,
     scoutItems,
     scoutContentType,
     diningEnvironment,

@@ -25,3 +25,6 @@ tmp/
 # Aider local
 .aider*
 scripts/_qwen_ping.txt
+
+# Local tax/accounting files
+tax_reference/

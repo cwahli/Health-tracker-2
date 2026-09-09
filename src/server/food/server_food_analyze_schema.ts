@@ -318,3 +318,153 @@ export const visionScoutResponseSchema = {
   },
   required: ["contentType", "diningEnvironment", "dishes"],
 };
+
+export const scoutOnlyCompareResponseSchema = {
+  type: Type.OBJECT,
+  properties: {
+    _internalReasoning: { type: Type.STRING },
+    comparisonTitle: { type: Type.STRING },
+    comparisonType: {
+      type: Type.STRING,
+      enum: ["nutrition_labels", "menu_items", "shelf_selection", "food_items"],
+    },
+    summary: { type: Type.STRING },
+    recommendedOption: { type: Type.STRING, nullable: true },
+    items: {
+      type: Type.ARRAY,
+      description: "Condensed list of all distinct extracted dishes/products. For menus/shelves, only name, tier, and sourceImageIndex are needed.",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          name: { type: Type.STRING },
+          brand: { type: Type.STRING, nullable: true },
+          tier: {
+            type: Type.INTEGER,
+            description: "Assigned diet tier: 1 (safest/best) to 4 (caution/alert)",
+          },
+          sourceImageIndex: { type: Type.INTEGER },
+          hasNutritionLabel: { type: Type.BOOLEAN, nullable: true },
+          servingSize: { type: Type.STRING, nullable: true },
+          servingsPerPack: { type: Type.STRING, nullable: true },
+          perServing: {
+            type: Type.OBJECT,
+            nullable: true,
+            properties: {
+              calories: { type: Type.NUMBER, nullable: true },
+              protein: { type: Type.NUMBER, nullable: true },
+              totalFat: { type: Type.NUMBER, nullable: true },
+              saturatedFat: { type: Type.NUMBER, nullable: true },
+              carbohydrates: { type: Type.NUMBER, nullable: true },
+              sugar: { type: Type.NUMBER, nullable: true },
+              addedSugar: { type: Type.NUMBER, nullable: true },
+              totalFibre: { type: Type.NUMBER, nullable: true },
+              saltMg: { type: Type.NUMBER, nullable: true },
+              sodiumMg: { type: Type.NUMBER, nullable: true },
+            },
+          },
+          per100g: {
+            type: Type.OBJECT,
+            nullable: true,
+            description: "Normalized nutrient metrics per 100g standard reference, eliminating serving size distortions.",
+            properties: {
+              calories: { type: Type.NUMBER, nullable: true },
+              protein: { type: Type.NUMBER, nullable: true },
+              totalFat: { type: Type.NUMBER, nullable: true },
+              saturatedFat: { type: Type.NUMBER, nullable: true },
+              carbohydrates: { type: Type.NUMBER, nullable: true },
+              sugar: { type: Type.NUMBER, nullable: true },
+              addedSugar: { type: Type.NUMBER, nullable: true },
+              totalFibre: { type: Type.NUMBER, nullable: true },
+              saltMg: { type: Type.NUMBER, nullable: true },
+              sodiumMg: { type: Type.NUMBER, nullable: true },
+            },
+          },
+        },
+        required: ["name", "tier", "sourceImageIndex"],
+      },
+    },
+    groups: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          groupName: { type: Type.STRING },
+          scoutItemIndices: {
+            type: Type.ARRAY,
+            description: "List of item indices belonging to this group, strictly sorted in descending order from best/healthiest choice to least favorable sub-item.",
+            items: { type: Type.INTEGER },
+          },
+          boundingBox2D: {
+            type: Type.ARRAY,
+            items: { type: Type.INTEGER },
+            description: "[ymin, xmin, ymax, xmax] bounding box covering the items in this group",
+          },
+          verdict: {
+            type: Type.OBJECT,
+            properties: {
+              label: { type: Type.STRING },
+              level: {
+                type: Type.STRING,
+                enum: ["good", "neutral", "warning", "alert"],
+              },
+            },
+            required: ["label", "level"],
+          },
+          comparisonSentence: {
+            type: Type.STRING,
+            description: "Exactly one direct comparative sentence contrasting this group to the other options",
+          },
+          message: { type: Type.STRING },
+          orderingTip: {
+            type: Type.STRING,
+            nullable: true,
+            description: "Optional practical instruction for the user at order or purchase time",
+          },
+          servingWeightGrams: {
+            type: Type.NUMBER,
+            nullable: true,
+            description: "Typical average single serving weight in grams for this group (e.g. 250 for soup bowl, 45 for bread slice, 300 for beverage glass)",
+          },
+          averageNutrients: {
+            type: Type.OBJECT,
+            description: "Typical average nutrients per single serving for this group. MANDATORY non-null for all groups including unlabelled bakery/prepared dishes.",
+            properties: {
+              calories: { type: Type.NUMBER, description: "Typical average calories in kcal" },
+              protein: { type: Type.NUMBER, description: "Typical average protein in grams" },
+              totalFat: { type: Type.NUMBER, description: "Typical average total fat in grams" },
+              saturatedFat: { type: Type.NUMBER, description: "Typical average saturated fat in grams" },
+              carbohydrates: { type: Type.NUMBER, description: "Typical average carbohydrates in grams" },
+              sugar: { type: Type.NUMBER, description: "Typical average sugar in grams" },
+              totalFibre: { type: Type.NUMBER, description: "Typical average total fibre in grams" },
+              sodium: { type: Type.NUMBER, description: "Typical average sodium in mg" },
+              potassium: { type: Type.NUMBER, nullable: true, description: "Typical average potassium in mg" },
+              solubleFibre: { type: Type.NUMBER, nullable: true, description: "Typical average soluble fibre in grams" },
+              addedSugar: { type: Type.NUMBER, nullable: true, description: "Typical average added sugar in grams" },
+              transFat: { type: Type.NUMBER, nullable: true, description: "Typical average trans fat in grams" },
+            },
+            required: ["calories", "protein", "totalFat", "saturatedFat", "carbohydrates", "sugar", "totalFibre", "sodium"],
+          },
+          averageNutrientsPer100g: {
+            type: Type.OBJECT,
+            nullable: true,
+            description: "Standardized normalized nutrients per 100g reference for this group to eliminate serving-size distortions.",
+            properties: {
+              calories: { type: Type.NUMBER, description: "Calories per 100g (kcal)" },
+              protein: { type: Type.NUMBER, description: "Protein per 100g (g)" },
+              totalFat: { type: Type.NUMBER, description: "Total fat per 100g (g)" },
+              saturatedFat: { type: Type.NUMBER, description: "Saturated fat per 100g (g)" },
+              carbohydrates: { type: Type.NUMBER, description: "Carbohydrates per 100g (g)" },
+              sugar: { type: Type.NUMBER, description: "Sugar per 100g (g)" },
+              totalFibre: { type: Type.NUMBER, description: "Total fibre per 100g (g)" },
+              sodium: { type: Type.NUMBER, description: "Sodium per 100g (mg)" },
+            },
+            required: ["calories", "protein", "totalFat", "saturatedFat", "carbohydrates", "sugar", "totalFibre", "sodium"],
+          },
+        },
+        required: ["groupName", "scoutItemIndices", "boundingBox2D", "verdict", "comparisonSentence", "message", "averageNutrients"],
+      },
+    },
+  },
+  required: ["_internalReasoning", "comparisonTitle", "comparisonType", "summary", "items", "groups"],
+};
+

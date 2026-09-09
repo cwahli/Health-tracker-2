@@ -1,8 +1,8 @@
 import { AnalyzeRunContext } from './server_food_analyze_run_types.js';
-import { runScoutRetryLoop, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries, logScoutImageInventory, applyWeightModShortcut, applySkipScoutShortcut } from './src/server/food/server_food_scout_source.js';
-import { buildScoutFailureError } from './src/server/food/server_food_mode_routing.js';
-import { scoutSystemInstruction, buildVisualScoutPrompt, buildScoutPersonalizationBlock, withScoutLanguage, formatLockedSlotsForPrompt } from './agents/scoutInstructions.js';
-import { mapCompareItemsToScoutItems } from './prototype/meallog/compare/scout_compare_adapter.js';
+import { runScoutRetryLoop, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries, logScoutImageInventory, applyWeightModShortcut, applySkipScoutShortcut, buildScoutFailureError, mapCompareItemsToScoutItems } from './src/server/food/server_food_scout_source.js';
+import { scoutSystemInstruction, buildVisualScoutPrompt, buildScoutPersonalizationBlock } from './agents/scoutInstructions.js';
+import { withScoutLanguage } from './src/utils/i18n.js';
+import { formatLockedSlotsForPrompt } from './server_edit_patch_ledger.js';
 import { buildNutritionTargetStatus, pickExplicitTargets } from './src/utils/nutritionTargetStatus.js';
 import { getCurrentDateInTimezone } from './src/utils/dateUtils.js';
 

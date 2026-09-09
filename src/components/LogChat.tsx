@@ -6211,6 +6211,7 @@ ${logsText}`);
                           idx={idx}
                           messages={messages}
                           report={report}
+                          remainingAllowance={remainingAllowance}
                           foodLogs={activeFoodLogs}
                           language={profile?.language || "en"}
                           t={t}

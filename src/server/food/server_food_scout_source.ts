@@ -12,7 +12,9 @@ import { isGeminiQuotaError, nextGeminiFallbackEngine } from '../../../server_ge
 import { t, withScoutLanguage } from '../../utils/i18n.js';
 import { extractFoodSearchQueriesFromText } from './server_food_analyze_helpers.js';
 import { scoutSystemInstruction } from '../../../agents/scoutInstructions.js';
-import { visionScoutResponseSchema } from './server_food_analyze_schema.js';
+import { scoutOnlyCompareSystemInstruction } from '../../../prototype/meallog/compare/scout_only_compare_instructions.js';
+import { enrichBilingualItemName } from '../../../server_pure_helpers.js';
+import { visionScoutResponseSchema, scoutOnlyCompareResponseSchema } from './server_food_analyze_schema.js';
 import { applyPortionChoices } from '../../../server_portion_clarify.js';
 import {
   applyWeightRefineToScoutItems,
@@ -333,17 +335,29 @@ export function applyScoutResultState(args: ScoutResultStateArgs): {
   if (scoutInternalReasoning) {
     onLog(`[Vision Scout Internal Reasoning] ${scoutInternalReasoning}`);
   }
-  const visionScoutItems = (scoutResult.items || []).map((item: any) => ({
-    ...item,
-    internalReasoning: scoutInternalReasoning,
-    // Vision Scout's schema/prompt never asks the model to populate `source`, so
-    // photographed dishes arrive with it undefined. Tag anything without a
-    // transcribed printed nutrition label as 'visual' so the single-serve-photo
-    // guard in detectPortionAmbiguity() (server_portion_clarify.ts) can actually
-    // fire. Items with a genuine rawNutritionLabel (OCR'd package) are left as-is
-    // so they still flow through multi-serve-pack portion clarification.
-    source: item.source || (item.rawNutritionLabel ? 'label' : 'visual'),
-  }));
+  if (requestedMode === 'compare' && rawScoutData && Array.isArray(rawScoutData.items)) {
+    rawScoutData.items.forEach((it: any) => {
+      if (it && (it.name || it.originalName)) {
+        it.name = enrichBilingualItemName(it.name || it.originalName);
+      }
+    });
+  }
+  const visionScoutItems = (scoutResult.items || []).map((item: any) => {
+    const rawName = item.name || item.originalName || item.keyword;
+    const enrichedName = (requestedMode === 'compare') ? enrichBilingualItemName(rawName) : rawName;
+    return {
+      ...item,
+      name: enrichedName,
+      internalReasoning: scoutInternalReasoning,
+      // Vision Scout's schema/prompt never asks the model to populate `source`, so
+      // photographed dishes arrive with it undefined. Tag anything without a
+      // transcribed printed nutrition label as 'visual' so the single-serve-photo
+      // guard in detectPortionAmbiguity() (server_portion_clarify.ts) can actually
+      // fire. Items with a genuine rawNutritionLabel (OCR'd package) are left as-is
+      // so they still flow through multi-serve-pack portion clarification.
+      source: item.source || (item.rawNutritionLabel ? 'label' : 'visual'),
+    };
+  });
   const scoutConfidenceRating = scoutResult.scoutConfidenceRating;
   const scoutConfidenceComment = scoutResult.scoutConfidenceComment;
   const scoutCookingMethod = scoutResult.scoutCookingMethod;
@@ -856,6 +870,7 @@ export interface ScoutCallArgs {
   language?: unknown;
   scoutPromptText: string;
   imagePayloads: any;
+  isCompare?: boolean;
 }
 
 /**
@@ -863,10 +878,12 @@ export interface ScoutCallArgs {
  * runFoodAnalyze. The SSE onStream hookup stays inline (res-bound).
  */
 export function buildScoutCallArgs(args: ScoutCallArgs): Record<string, any> {
-  const { engine, language, scoutPromptText, imagePayloads } = args;
+  const { engine, language, scoutPromptText, imagePayloads, isCompare } = args;
   return {
     modelId: (typeof engine === 'object' ? engine?.name || engine?.model : engine) || "gemini-3.5-flash-lite",
-    systemInstruction: withScoutLanguage(scoutSystemInstruction, language),
+    systemInstruction: isCompare
+      ? withScoutLanguage(scoutOnlyCompareSystemInstruction, language)
+      : withScoutLanguage(scoutSystemInstruction, language),
     promptText: scoutPromptText,
     imagePayloads,
     responseMimeType: "application/json",
@@ -878,7 +895,7 @@ export function buildScoutCallArgs(args: ScoutCallArgs): Record<string, any> {
     // ~+1.5k tokens. Timeout fallback retries with skipThinking anyway.
     skipThinking: false,
     logStagePrefix: 'scout',
-    responseSchema: visionScoutResponseSchema,
+    responseSchema: isCompare ? scoutOnlyCompareResponseSchema : visionScoutResponseSchema,
   };
 }
 
@@ -937,7 +954,7 @@ export async function runScoutRetryLoop(args: ScoutRetryArgs): Promise<{
         onLog(`[Vision Scout] Retrying LLM call (Attempt ${attempts} of ${maxAttempts}) using engine ${currentEngine}...`);
       }
       
-      const callArgs: any = buildScoutCallArgs({ engine: currentEngine, language, scoutPromptText, imagePayloads });
+      const callArgs: any = buildScoutCallArgs({ engine: currentEngine, language, scoutPromptText, imagePayloads, isCompare });
       if (onStreamChunk) callArgs.onStream = onStreamChunk;
 
       const scoutOutput = await callUnifiedLLM(callArgs);

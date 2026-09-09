@@ -33,6 +33,8 @@ import {
   build31NutrientsMarkdownServer,
   formatMealReceiptTable,
   sanitizeVerdictLabel,
+  applyServerAverageNutrients,
+  enrichBilingualItemName,
 } from './server_pure_helpers.js';
 import {
   matchBreakdownItemToScout,
@@ -143,6 +145,7 @@ import { matchBrandMenu, isPackagedBindItem } from './server_brand_match.js';
 import { classifyDishAtomic } from './server_dish_classify.js';
 import { t, interpolate, withScoutLanguage } from './src/utils/i18n.js';
 import { scoutSystemInstruction } from './agents/scoutInstructions.js';
+import { scoutOnlyCompareSystemInstruction, buildScoutComparePrompt } from './prototype/meallog/compare/scout_only_compare_instructions.js';
 import { takeUnifiedUsage, takeUnifiedTiming, formatUnifiedUsage } from './src/utils/unifiedUsage.js';
 import {
   addDebugLog,
@@ -398,8 +401,13 @@ export async function runFoodAnalyze(req: any, res: any) {
             `2. FULL NUTRIENT VALUES: Always provide complete, accurate nutrients for any new or edited dish or food component.\n` +
             `3. SEPARATE DISHES: Keep distinct plated items, sides, and beverages as separate distinct dishes in dishes[]. Never merge drinks into food dishes.\n` +
             `4. CLINICAL ADVICE & NARRATIVE: Provide an updated direct 35-70 word clinicalAdvice in 2nd person ("You got...") on the FULL updated meal (all dishes at their locked weights — never just the edited item). Lead with the most significant finding: flag plainly any nutrient far over budget and compounding against the 7-day average, state the health impact, then one actionable next step/movement.`;
-    } else {
-          scoutPromptText = buildVisualScoutPrompt(message || '', imageCount, userSelectedMode === 'compare');
+    } else if (userSelectedMode === 'compare') {
+          scoutPromptText = buildScoutComparePrompt(message || '', imageCount, {
+            biomarkersNeedingImprovement: biomarkersNeedingImprovement || userProfile?.topNutrientsToMonitor,
+            remainingAllowance: remainingAllowance || userProfile?.threeDayExcesses || req.body?.dailyNutrientTargets || undefined,
+          });
+        } else {
+          scoutPromptText = buildVisualScoutPrompt(message || '', imageCount, false);
         }
         const scoutPersonalization = buildScoutPersonalizationBlock({ biomarkersNeedingImprovement });
         const nutritionTargetStatus = buildNutritionTargetStatus({
@@ -407,7 +415,9 @@ export async function runFoodAnalyze(req: any, res: any) {
           targets: pickExplicitTargets(req.body.dailyNutrientTargets),
           todayStr: getCurrentDateInTimezone(userProfile?.timezone),
         });
-        const resolvedScoutSystemInstruction = withScoutLanguage(scoutSystemInstruction, userProfile?.language) + (scoutPersonalization ? `\n${scoutPersonalization}` : '') + (nutritionTargetStatus ? `\n${nutritionTargetStatus}` : '');
+        const resolvedScoutSystemInstruction = userSelectedMode === 'compare'
+          ? withScoutLanguage(scoutOnlyCompareSystemInstruction, userProfile?.language) + (scoutPersonalization ? `\n${scoutPersonalization}` : '') + (nutritionTargetStatus ? `\n${nutritionTargetStatus}` : '')
+          : withScoutLanguage(scoutSystemInstruction, userProfile?.language) + (scoutPersonalization ? `\n${scoutPersonalization}` : '') + (nutritionTargetStatus ? `\n${nutritionTargetStatus}` : '');
         scoutInstructionForDebug = {
           systemInstruction: resolvedScoutSystemInstruction,
           userPrompt: scoutPromptText,
@@ -552,7 +562,7 @@ export async function runFoodAnalyze(req: any, res: any) {
         addDebugLog('[CuratorSkipped] Dish estimate pipeline active, skipping hot-path database search and resolver curator.');
       }
     }
-    const shouldRunDbSearch = !isDishEstimateEnabled(req) && !isWeightModification && !isMenuScale && !isEvaluationScale &&
+    const shouldRunDbSearch = userSelectedMode !== 'compare' && !isDishEstimateEnabled(req) && !isWeightModification && !isMenuScale && !isEvaluationScale &&
       databaseMatchesArray.length === 0 && // skip if already restored from turn-1 resolvedDbCandidates
       (visionScoutRanAndReturnedItems || (!hasImage && uniqueQueries.length > 0));
     // Task 1 cont.: DB search runs HERE — before portionClarify check — so candidates are
@@ -873,7 +883,42 @@ export async function runFoodAnalyze(req: any, res: any) {
         model: 'projector', latencyMs: 0, tokens: 0, projected: true,
       };
     } else if (visionScoutRanAndReturnedItems || (visionScoutItems && visionScoutItems.length > 0) || rawScoutData) {
-      if (isModifySession) {
+      if (userSelectedMode === 'compare' && (rawScoutData?.comparisonTitle || rawScoutData?.groups || rawScoutData?.items)) {
+        addDebugLog('[MealAgent] Single-agent compare path: using Scout comparison directly without secondary LLM call.');
+        sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'completed', message: 'Comparison analysis finalized.' });
+        const enrichedGroups = applyServerAverageNutrients(rawScoutData.groups || [], {});
+        const enrichedItems = (rawScoutData.items || visionScoutItems || []).map((it: any) => {
+          const name = it.name || it.originalName || '';
+          return {
+            ...it,
+            name: enrichBilingualItemName(name),
+          };
+        });
+        const recOption = rawScoutData.recommendedOption
+          ? enrichBilingualItemName(rawScoutData.recommendedOption)
+          : (enrichedGroups[0]?.items?.[0]?.name || enrichedGroups[0]?.groupName || 'Recommended Choice');
+        rawParsed = {
+          _internalReasoning: scoutInternalReasoning || '[MealAgent] Single-agent compare path',
+          mode: 'evaluation',
+          message: rawScoutData.summary || rawScoutData.message || rawScoutData.clinicalAdvice || 'Here is the product evaluation.',
+          comparison: {
+            comparisonTitle: rawScoutData.comparisonTitle,
+            comparisonType: rawScoutData.comparisonType,
+            summary: rawScoutData.summary,
+            recommendedOption: recOption,
+            items: enrichedItems,
+            groups: enrichedGroups,
+          },
+          items: enrichedItems,
+          scoutItems: visionScoutItems,
+        };
+        textOutput = JSON.stringify(rawParsed);
+        narratorInput = {
+          systemInstruction: PROJECTOR_NARRATOR_INSTRUCTION,
+          userPrompt: `[projector] single-agent compare — evaluation finalized directly from scout compare pass.`,
+          model: 'projector', latencyMs: 0, tokens: 0, projected: true,
+        };
+      } else if (isModifySession) {
         addDebugLog('[MealAgent] Single-agent edit path: diffing Scout output into active meal.');
         sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'completed', message: 'Meal update finalized.' });
         const scoutDishes = (rawScoutData?.dishes && Array.isArray(rawScoutData.dishes))

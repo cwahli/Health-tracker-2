@@ -8,6 +8,7 @@ try {
 import {
   checkCategoryAndStateCompatibility,
   applyServerAverageNutrients,
+  enrichBilingualItemName,
   checkThermodynamicDensitySanity,
   checkArchetypeMacroBounds,
   applySatFatAndAddedSugarFloor,
@@ -795,18 +796,33 @@ try {
 
 
 
+function getQuadrantBox(idx: number, total: number = 4): [number, number, number, number] {
+  const quadrants: [number, number, number, number][] = [
+    [100, 50, 480, 480],   // Top-Left
+    [100, 520, 480, 950],  // Top-Right
+    [520, 50, 920, 480],   // Bottom-Left
+    [520, 520, 920, 950],  // Bottom-Right
+    [200, 100, 600, 500],  // Center-Left
+    [200, 500, 600, 900],  // Center-Right
+  ];
+  return quadrants[idx % quadrants.length];
+}
 
-
-// Resolves LLM-provided scoutItemIndices (or itemNames for text-only comparisons) back into
-// full item objects using the authoritative Vision Scout data. This guarantees exact names,
-// bounding boxes, and image indices — the LLM never has to regurgitate this data, which was
-// the root cause of silent item drops and incorrect targetDbId hallucination in MODE D groups.
 export function resolveComparisonGroups(rawGroups: any[], scoutItems: any[], lang?: unknown): any[] {
   const usedIndices = new Set<number>();
 
-  const resolvedGroups = (Array.isArray(rawGroups) ? rawGroups : []).map((g: any) => {
+  const mappedGroups = (Array.isArray(rawGroups) ? rawGroups : []).map((g: any) => {
     const items: any[] = [];
-    let indices: number[] = Array.isArray(g.scoutItemIndices) ? g.scoutItemIndices : [];
+    let indices: any[] = Array.isArray(g.scoutItemIndices) ? [...g.scoutItemIndices] : [];
+
+    // Fallback: If scoutItemIndices is empty, check g.items or g.itemNames
+    if (indices.length === 0) {
+      if (Array.isArray(g.items) && g.items.length > 0) {
+        indices = g.items.map((it: any) => (typeof it === 'object' && it !== null ? (it.scoutIndex ?? it.name ?? it.title) : it));
+      } else if (Array.isArray(g.itemNames) && g.itemNames.length > 0) {
+        indices = [...g.itemNames];
+      }
+    }
 
     const resolvedIndices = new Set<number>();
     indices.forEach((rawIdx: any) => {
@@ -823,14 +839,20 @@ export function resolveComparisonGroups(rawGroups: any[], scoutItems: any[], lan
         }
       }
 
-      // 3. Fallback: If rawIdx is a string (like "yakiimo cheese"), perform fuzzy string matching
+      // 3. Fallback: If rawIdx is a string, perform robust fuzzy matching against name, originalName, keyword, brand
       if (!s && typeof rawIdx === "string") {
         const cleanRaw = rawIdx.trim().toLowerCase();
         if (cleanRaw.length > 1) {
           const foundIdx = scoutItems.findIndex((item: any) => {
+            const name = (item.name || "").toLowerCase();
             const kw = (item.keyword || "").toLowerCase();
             const orig = (item.originalName || "").toLowerCase();
-            return cleanRaw === orig || cleanRaw === kw || cleanRaw.includes(kw) || kw.includes(cleanRaw) || cleanRaw.includes(orig) || orig.includes(cleanRaw);
+            const brand = (item.brand || "").toLowerCase();
+            return cleanRaw === name || cleanRaw === orig || cleanRaw === kw ||
+                   name.includes(cleanRaw) || cleanRaw.includes(name) ||
+                   orig.includes(cleanRaw) || cleanRaw.includes(orig) ||
+                   kw.includes(cleanRaw) || cleanRaw.includes(kw) ||
+                   (brand && cleanRaw.includes(brand));
           });
           if (foundIdx !== -1) {
             s = scoutItems[foundIdx];
@@ -844,7 +866,7 @@ export function resolveComparisonGroups(rawGroups: any[], scoutItems: any[], lan
         usedIndices.add(i);
         resolvedIndices.add(i);
         items.push({
-          name: s.name || s.originalName || s.keyword,
+          name: enrichBilingualItemName(s.name || s.originalName || s.keyword),
           keyword: s.keyword || null,
           originalName: s.originalName || null,
           boundingBox2D: s.boundingBox2D || null,
@@ -857,7 +879,7 @@ export function resolveComparisonGroups(rawGroups: any[], scoutItems: any[], lan
     // Text-only comparisons (no image / no scout items): fall back to plain names.
     if (scoutItems.length === 0 && Array.isArray(g.itemNames)) {
       g.itemNames.forEach((n: string) => {
-        if (n) items.push({ name: n, boundingBox2D: null, sourceImageIndex: null });
+        if (n) items.push({ name: enrichBilingualItemName(n), boundingBox2D: null, sourceImageIndex: null });
       });
     }
 
@@ -877,6 +899,7 @@ export function resolveComparisonGroups(rawGroups: any[], scoutItems: any[], lan
             } else if (typeof rawId === "string") {
               const cleanRaw = rawId.trim().toLowerCase();
               const foundIdx = scoutItems.findIndex((item: any) => {
+                const name = (item.name || "").toLowerCase();
                 const kw = (item.keyword || "").toLowerCase();
                 const orig = (item.originalName || "").toLowerCase();
                 return cleanRaw === orig || cleanRaw === kw || cleanRaw.includes(kw) || kw.includes(cleanRaw) || cleanRaw.includes(orig) || orig.includes(cleanRaw);
@@ -886,7 +909,7 @@ export function resolveComparisonGroups(rawGroups: any[], scoutItems: any[], lan
             return [[String(resolvedIdx !== -1 ? resolvedIdx : rawId), t.threat]];
           })
       : (g.itemClinicalThreats && typeof g.itemClinicalThreats === "object")
-          ? Object.entries(g.itemClinicalThreats) // legacy fallback for any old-format responses still in flight
+          ? Object.entries(g.itemClinicalThreats)
           : [];
     if (threatEntries.length > 0) {
       threatEntries.forEach(([key, threat]) => {
@@ -907,9 +930,10 @@ export function resolveComparisonGroups(rawGroups: any[], scoutItems: any[], lan
           const cleanKey = key.trim().toLowerCase();
           if (cleanKey.length > 1) {
             const foundIdx = scoutItems.findIndex((item: any) => {
+              const name = (item.name || "").toLowerCase();
               const kw = (item.keyword || "").toLowerCase();
               const orig = (item.originalName || "").toLowerCase();
-              return cleanKey.includes(kw) || kw.includes(cleanKey) || cleanKey.includes(orig) || orig.includes(cleanKey);
+              return cleanKey === name || cleanKey.includes(name) || name.includes(cleanKey) || cleanKey.includes(kw) || kw.includes(cleanKey) || cleanKey.includes(orig) || orig.includes(cleanKey);
             });
             if (foundIdx !== -1) {
               targetIdx = foundIdx;
@@ -932,77 +956,181 @@ export function resolveComparisonGroups(rawGroups: any[], scoutItems: any[], lan
         }
       : rawV;
 
+    // Derive bounding box: if null or [0,0,1000,1000], compute union from member items
+    let resolvedBox = g.boundingBox2D;
+    const isCoarse = Array.isArray(resolvedBox) && resolvedBox.length === 4 && resolvedBox[0] === 0 && resolvedBox[1] === 0 && resolvedBox[2] === 1000 && resolvedBox[3] === 1000;
+    if (!resolvedBox || isCoarse) {
+      const validItemBoxes = items.map(it => it.boundingBox2D).filter((b: any) => Array.isArray(b) && b.length === 4 && !(b[0] === 0 && b[1] === 0 && b[2] === 1000 && b[3] === 1000));
+      if (validItemBoxes.length > 0) {
+        resolvedBox = [
+          Math.min(...validItemBoxes.map(b => b[0])),
+          Math.min(...validItemBoxes.map(b => b[1])),
+          Math.max(...validItemBoxes.map(b => b[2])),
+          Math.max(...validItemBoxes.map(b => b[3]))
+        ];
+      }
+    }
+
     return {
       groupName: g.groupName,
       verdict: sanitizedVerdict,
       message: g.message,
+      comparisonSentence: g.comparisonSentence || g.message || g.recommendation || `Evaluation for ${g.groupName || 'options'}.`,
+      orderingTip: g.orderingTip || null,
       averageNutrients: g.averageNutrients || null,
+      averageNutrientsPer100g: g.averageNutrientsPer100g || null,
+      boundingBox2D: resolvedBox,
       scoutItemIndices: Array.from(resolvedIndices),
       itemClinicalThreats: resolvedThreats,
       items
     };
   });
 
+  // Filter out any groups that ended up with 0 items if other groups have items
+  let resolvedGroups = mappedGroups.filter(g => g.items && g.items.length > 0);
+
   // Coverage repair: any scout item the model never assigned to a group still gets shown,
   // instead of silently vanishing from the comparison.
   if (scoutItems.length > 0) {
-    const missing = scoutItems.filter((_: any, i: number) => !usedIndices.has(i));
-    if (missing.length > 0) {
-      const unassignedIdxs = scoutItems.map((_, i) => i).filter(i => !usedIndices.has(i));
+    const unassignedIdxs = scoutItems.map((_, i) => i).filter(i => !usedIndices.has(i));
+    if (unassignedIdxs.length > 0) {
       console.log(`[Comparison Resolve] unassigned indices: ${unassignedIdxs.join(', ')}`);
-      resolvedGroups.push({
-        groupName: t(lang, 'comparisonUnassigned'),
-        verdict: { label: t(lang, 'comparisonSupportsEval'), level: "neutral" },
-        message: t(lang, 'comparisonUnassignedMsg'),
-        averageNutrients: null,
-        scoutItemIndices: unassignedIdxs,
-        itemClinicalThreats: {},
-        items: missing.map((s: any) => ({
-          name: s.name || s.originalName || s.keyword,
-          keyword: s.keyword || null,
-          originalName: s.originalName || null,
-          boundingBox2D: s.boundingBox2D || null,
-          sourceImageIndex: typeof s.sourceImageIndex === "number" ? s.sourceImageIndex : 0,
-          scoutIndex: scoutItems.indexOf(s)
-        }))
-      });
+      // If all items were unassigned or resolvedGroups is empty, and count is <= 6, unbundle into individual option groups
+      if (resolvedGroups.length === 0 && scoutItems.length <= 6) {
+        scoutItems.forEach((sItem: any, idx: number) => {
+          const itemName = enrichBilingualItemName(sItem.name || sItem.originalName || sItem.keyword || `Option ${idx + 1}`);
+          const itemBox = sItem.boundingBox2D && !(sItem.boundingBox2D[0] === 0 && sItem.boundingBox2D[1] === 0 && sItem.boundingBox2D[2] === 1000 && sItem.boundingBox2D[3] === 1000)
+            ? sItem.boundingBox2D
+            : getQuadrantBox(idx, scoutItems.length);
+          resolvedGroups.push({
+            groupName: itemName,
+            verdict: { label: t(lang, 'comparisonSupportsEval'), level: "neutral" },
+            message: interpolate(t(lang, 'comparisonEvalFor'), { name: itemName }),
+            comparisonSentence: `Evaluation for ${itemName}.`,
+            orderingTip: "Consider your daily nutrition allowance when selecting.",
+            averageNutrients: sItem.preCalcNutrients || { calories: 150, protein: 5, totalFat: 5, saturatedFat: 1, carbohydrates: 20, sodium: 100 },
+            averageNutrientsPer100g: { calories: 150, protein: 5, totalFat: 5, saturatedFat: 1, carbohydrates: 20, sodium: 100 },
+            boundingBox2D: itemBox,
+            scoutItemIndices: [idx],
+            itemClinicalThreats: {},
+            items: [{
+              name: itemName,
+              keyword: sItem.keyword || null,
+              originalName: sItem.originalName || null,
+              boundingBox2D: itemBox,
+              sourceImageIndex: typeof sItem.sourceImageIndex === "number" ? sItem.sourceImageIndex : 0,
+              scoutIndex: idx
+            }]
+          });
+        });
+      } else if (scoutItems.length <= 6) {
+        // Unbundle unassigned individual items
+        unassignedIdxs.forEach((idx) => {
+          const s = scoutItems[idx];
+          const itemName = enrichBilingualItemName(s.name || s.originalName || s.keyword || `Option ${idx + 1}`);
+          const itemBox = s.boundingBox2D || getQuadrantBox(resolvedGroups.length, scoutItems.length);
+          resolvedGroups.push({
+            groupName: itemName,
+            verdict: { label: t(lang, 'comparisonSupportsEval'), level: "neutral" },
+            message: interpolate(t(lang, 'comparisonEvalFor'), { name: itemName }),
+            comparisonSentence: `Evaluation for ${itemName}.`,
+            orderingTip: "Consider your daily nutrition allowance when selecting.",
+            averageNutrients: s.preCalcNutrients || { calories: 150, protein: 5, totalFat: 5, saturatedFat: 1, carbohydrates: 20, sodium: 100 },
+            averageNutrientsPer100g: { calories: 150, protein: 5, totalFat: 5, saturatedFat: 1, carbohydrates: 20, sodium: 100 },
+            boundingBox2D: itemBox,
+            scoutItemIndices: [idx],
+            itemClinicalThreats: {},
+            items: [{
+              name: itemName,
+              keyword: s.keyword || null,
+              originalName: s.originalName || null,
+              boundingBox2D: itemBox,
+              sourceImageIndex: typeof s.sourceImageIndex === "number" ? s.sourceImageIndex : 0,
+              scoutIndex: idx
+            }]
+          });
+        });
+      } else {
+        const missing = unassignedIdxs.map(i => scoutItems[i]);
+        resolvedGroups.push({
+          groupName: t(lang, 'comparisonUnassigned'),
+          verdict: { label: t(lang, 'comparisonSupportsEval'), level: "neutral" },
+          message: t(lang, 'comparisonUnassignedMsg'),
+          comparisonSentence: t(lang, 'comparisonUnassignedMsg') || "Additional option for evaluation.",
+          orderingTip: "Consider your daily nutrition allowance when selecting.",
+          averageNutrients: { calories: 150, protein: 5, totalFat: 5, saturatedFat: 1, carbohydrates: 20, sodium: 100 },
+          averageNutrientsPer100g: { calories: 150, protein: 5, totalFat: 5, saturatedFat: 1, carbohydrates: 20, sodium: 100 },
+          boundingBox2D: getQuadrantBox(resolvedGroups.length, 4),
+          scoutItemIndices: unassignedIdxs,
+          itemClinicalThreats: {},
+          items: missing.map((s: any, mIdx: number) => ({
+            name: enrichBilingualItemName(s.name || s.originalName || s.keyword),
+            keyword: s.keyword || null,
+            originalName: s.originalName || null,
+            boundingBox2D: s.boundingBox2D || null,
+            sourceImageIndex: typeof s.sourceImageIndex === "number" ? s.sourceImageIndex : 0,
+            scoutIndex: unassignedIdxs[mIdx]
+          }))
+        });
+      }
     }
   }
 
-  // Small-count safeguard: For < 3 total items, ensure each item gets its own group (1 item per group)
-  if (scoutItems.length > 0 && scoutItems.length < 3) {
-    const hasLumpedGroup = resolvedGroups.some(g => g.scoutItemIndices && g.scoutItemIndices.length > 1);
-    if (hasLumpedGroup) {
+  // Small-count safeguard: For <= 6 total items, if everything was lumped into 1 single group, unbundle into 1 item per group
+  if (scoutItems.length > 0 && scoutItems.length <= 6) {
+    const isLumped = resolvedGroups.length === 1 && (
+      (resolvedGroups[0].scoutItemIndices && resolvedGroups[0].scoutItemIndices.length > 1) ||
+      resolvedGroups[0].groupName === t(lang, 'comparisonUnassigned') ||
+      resolvedGroups[0].groupName === 'Unassigned items'
+    );
+    if (isLumped) {
       console.log(`[Comparison Grouping Safeguard] Unbundling multi-item group for ${scoutItems.length} items into 1 item per group.`);
       const unbundledGroups: any[] = [];
       scoutItems.forEach((sItem: any, idx: number) => {
-        const existingGroup = resolvedGroups.find(g => g.scoutItemIndices && g.scoutItemIndices.includes(idx)) || resolvedGroups[idx] || resolvedGroups[0];
-        const itemName = sItem.name || sItem.originalName || sItem.keyword || `Option ${idx + 1}`;
+        const existingGroup = resolvedGroups.find(g => g.scoutItemIndices && g.scoutItemIndices.includes(idx)) || resolvedGroups[0];
+        const itemName = enrichBilingualItemName(sItem.name || sItem.originalName || sItem.keyword || `Option ${idx + 1}`);
+        const itemBox = sItem.boundingBox2D && !(sItem.boundingBox2D[0] === 0 && sItem.boundingBox2D[1] === 0 && sItem.boundingBox2D[2] === 1000 && sItem.boundingBox2D[3] === 1000)
+          ? sItem.boundingBox2D
+          : getQuadrantBox(idx, scoutItems.length);
         unbundledGroups.push({
-          groupName: existingGroup?.groupName && resolvedGroups.length > 1 ? existingGroup.groupName : itemName,
+          groupName: itemName,
           verdict: existingGroup?.verdict || { label: t(lang, 'comparisonSupportsEval'), level: "neutral" },
           message: existingGroup?.message || interpolate(t(lang, 'comparisonEvalFor'), { name: itemName }),
-          averageNutrients: sItem.preCalcNutrients || null,
+          comparisonSentence: existingGroup?.comparisonSentence || `Evaluation for ${itemName}.`,
+          orderingTip: existingGroup?.orderingTip || "Consider your daily nutrition allowance when selecting.",
+          averageNutrients: sItem.preCalcNutrients || existingGroup?.averageNutrients || { calories: 150, protein: 5, totalFat: 5, saturatedFat: 1, carbohydrates: 20, sodium: 100 },
+          averageNutrientsPer100g: existingGroup?.averageNutrientsPer100g || { calories: 150, protein: 5, totalFat: 5, saturatedFat: 1, carbohydrates: 20, sodium: 100 },
+          boundingBox2D: itemBox,
           scoutItemIndices: [idx],
           itemClinicalThreats: existingGroup?.itemClinicalThreats ? { [String(idx)]: existingGroup.itemClinicalThreats[String(idx)] || "" } : {},
           items: [{
             name: itemName,
             keyword: sItem.keyword || null,
             originalName: sItem.originalName || null,
-            boundingBox2D: sItem.boundingBox2D || null,
+            boundingBox2D: itemBox,
             sourceImageIndex: typeof sItem.sourceImageIndex === "number" ? sItem.sourceImageIndex : 0,
             scoutIndex: idx
           }]
         });
       });
-      return unbundledGroups;
+      resolvedGroups = unbundledGroups;
     }
   }
+
+  // Ensure EVERY group has a valid non-coarse quadrant bounding box
+  resolvedGroups.forEach((g, gIdx) => {
+    const isCoarseOrNull = !g.boundingBox2D || !Array.isArray(g.boundingBox2D) || g.boundingBox2D.length !== 4 ||
+      (g.boundingBox2D[0] === 0 && g.boundingBox2D[1] === 0 && g.boundingBox2D[2] === 1000 && g.boundingBox2D[3] === 1000) ||
+      g.boundingBox2D.some((v: any) => typeof v !== 'number' || isNaN(v));
+    if (isCoarseOrNull) {
+      g.boundingBox2D = getQuadrantBox(gIdx, resolvedGroups.length);
+    }
+  });
 
   return resolvedGroups;
 }
 
-export { applyServerAverageNutrients } from './server_pure_helpers.js';
+export { applyServerAverageNutrients, enrichBilingualItemName } from './server_pure_helpers.js';
 
 // Note: buildFoodAnalyzeInstruction is imported from ./agents/index.js at top of file
 export function buildFoodAnalyzeInstructionLocal(context: {
