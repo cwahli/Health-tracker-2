@@ -341,6 +341,9 @@ test.describe('Meal 03 Compare Mode — 6 Cases Benchmark (Blank User Input)', (
         const debugPath = path.join(GOLDEN_DIR, 'debug_runs', debugFileName);
         const md = buildModeDDebugMarkdown(c, body, durationMs, cleanRec);
         fs.writeFileSync(debugPath, md, 'utf-8');
+        if (c.setNum === 1) {
+          fs.writeFileSync(path.join(GOLDEN_DIR, 'debug_runs', 'debug_set1_bakery_shelf.md'), md, 'utf-8');
+        }
         console.log(`[Playwright Benchmark] Successfully synchronized pure Mode D debug run: ${debugPath}`);
       }
 
