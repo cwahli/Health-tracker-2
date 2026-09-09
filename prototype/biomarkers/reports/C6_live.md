@@ -6,24 +6,22 @@
 - Flow: hits lock dictionary; agent writes medicalInsight only. Misses get pending drafts.
 - Template: `prototype/biomarkers/TEMPLATE.md`
 - Env file: (none)
-- Score: **PASS** (25 known / 16 unknown)
+- Score: **PASS** (24 known / 15 unknown)
 
 ## System instruction (verbatim)
 
 ```
 You are an expert clinical laboratory AI reviewing a patient's biomarker panel.
 Patient Profile: 43-year-old Chinese male, Unit Preference: SI.
-
 For each biomarker:
 - id: matching id
-- medicalInsight: Provide a concise, clinically accurate insight for every row (including optimal/normal baseline markers). Cite trend if previous values exist. Consider patient ethnography (e.g. for Chinese patients, HbA1c >=39 indicates elevated prediabetes risk).
-- customRangeOverlay: If agreeing with range, return "". If missing thresholds or ethnic demographics, provide FULL multi-bracket range specifying the profile source and clinical names. Format MUST be "[Profile] Clinical Name: Range; Clinical Name: Range". Example: "[Chinese Ethnicity] Elevated (Diabetes): >=48; Elevated: >=39; Optimal: <39" or "[Western Standard] High: >104; Normal: 64-104; Low: <64". If multiple demographic profiles exist, provide all of them.
+- medicalInsight: Provide a concise, clinically accurate insight for every row (including optimal/normal baseline markers). Cite trend if previous values exist. Consider patient ethnography (e.g. for Chinese patients, HbA1c >=39 indicates elevated prediabetes risk). Never write Critical.
+- customRangeOverlay: If agreeing with range, return null. If missing thresholds or ethnic demographics, provide FULL multi-bracket range specifying the profile source and clinical names. Format MUST be "[Profile] Clinical Name: Range; Clinical Name: Range". Example: "[Chinese Ethnicity] Elevated (Diabetes): >=48; Elevated: >=39; Optimal: <39" or "[Western Standard] High: >104; Normal: 64-104; Low: <64". If multiple demographic profiles exist, provide all of them.
 - optimalValue: If existing is accurate, return "". Otherwise provide 1 single ideal target value without inequalities or ranges (e.g. "33 mmol/mol", "80 umol/L", "95 mL/min/1.73m2"; note 60 for eGFR is naive CKD G2, correct it).
-- editReason: If replacing/correcting existing user values or suboptimal optimalValue, explain why. Otherwise "".
+- editReason: If replacing/correcting existing user values or suboptimal optimalValue, explain why. Otherwise "". For eGFR, if correcting optimal from naive 60 to >= 90, you MUST provide an editReason explaining correction of naive normal eGFR.
 - logs: Extract all logs with standardized "YYYY-MM-DD" dates, labName if mentioned (e.g. "US lab", "GP Clinic"), and comments. Convert US units to patient's unitPreference with standard clinical integer rounding (e.g. 1.1 mg/dL creatinine → 97 umol/L, not decimals like 97.24). Standardize scientific units (e.g. 10^9/L).
 - DICTIONARY CORRECTION: If dictionary info has typos/errors (e.g. Total Protein 6-8 g/L instead of 60-80 g/L), output dictionaryCorrection: { field, correctedValue, reason }. Otherwise null.
 - UNCATALOGED (MISS): If not in dictionary, output match="none", writeTarget="pending", key=null, and newCatalogDraft: { suggestedKey, name, unit, aliases, normalRange, description, riskCategories }. NOTE: normalRange MUST follow the same bracketed profile format with clinical names, e.g., "[Western Standard] High: >1.4; Optimal: 0.5-1.4; Low: <0.5".
-
 JSON { "rows": [...] }.
 ```
 
@@ -44,8 +42,6 @@ AST serum level  27 U/L
 Serum total bilirubin level  16 umol/L
 Serum total protein  81 g/L
 Serum globulin  35 g/L
-Serum albumin  46 g/L
-Serum alkaline phosphatase  39 U/L
 Serum calcium  2.47 mmol/L
 Serum adjusted calcium conc  2.37 mmol/L
 Serum inorganic phosphate  1.12 mmol/L
@@ -91,38 +87,36 @@ QRISK2 cardiovascular disease 10 year risk score  1.2 %
 | img_11 | Serum total bilirubin level | none | pending | — |
 | img_12 | Serum total protein | alias | observation | total_protein |
 | img_13 | Serum globulin | none | pending | — |
-| img_14 | Serum albumin | key | observation | serum_albumin |
-| img_15 | Serum alkaline phosphatase | none | pending | — |
-| img_16 | Serum calcium | none | pending | — |
-| img_17 | Serum adjusted calcium conc | none | pending | — |
-| img_18 | Serum inorganic phosphate | none | pending | — |
-| img_19 | Total white cell count | alias | observation | wbc |
-| img_20 | Red blood cell (RBC) count | alias | observation | rbc |
-| img_21 | Haemoglobin estimation | alias | observation | hemoglobin |
-| img_22 | Haematocrit | alias | observation | hematocrit |
-| img_23 | Mean corpuscular volume (MCV) | alias | observation | mean_corpuscular_volume |
-| img_24 | Mean corpusc. haemoglobin(MCH) | alias | observation | mean_corpuscular_hemoglobin |
-| img_25 | Mean corpusc. Hb. conc. (MCHC) | alias | observation | mean_corpuscular_hemoglobin_concentration |
-| img_26 | Red blood cell distribut width | alias | observation | rdw |
-| img_27 | Platelet count | alias | observation | platelets |
-| img_28 | Mean platelet volume | alias | observation | mpv |
-| img_29 | Platelet distribution width | none | pending | — |
-| img_30 | Neutrophil count | key | observation | neutrophil_count |
-| img_31 | Eosinophil count | key | observation | eosinophil_count |
-| img_32 | Basophil count | key | observation | basophil_count |
-| img_33 | Nucleated red blood cell count | none | pending | — |
-| img_34 | QRISK2 cardiovascular disease 10 year risk score | none | pending | — |
-| img_35 | Serum cholesterol | alias | observation | total_cholesterol |
-| img_36 | Serum HDL cholesterol level | alias | observation | hdl |
-| img_37 | Serum triglycerides | alias | observation | triglycerides |
-| img_38 | Se non HDL cholesterol level | none | pending | — |
-| img_39 | Serum cholesterol/HDL ratio | none | pending | — |
-| img_40 | Calculated LDL cholesterol lev | alias | observation | ldl |
-| img_41 | QRISK2 cardiovascular disease 10 year risk score | none | pending | — |
+| img_14 | Serum calcium | none | pending | — |
+| img_15 | Serum adjusted calcium conc | none | pending | — |
+| img_16 | Serum inorganic phosphate | none | pending | — |
+| img_17 | Total white cell count | alias | observation | wbc |
+| img_18 | Red blood cell (RBC) count | alias | observation | rbc |
+| img_19 | Haemoglobin estimation | alias | observation | hemoglobin |
+| img_20 | Haematocrit | alias | observation | hematocrit |
+| img_21 | Mean corpuscular volume (MCV) | alias | observation | mean_corpuscular_volume |
+| img_22 | Mean corpusc. haemoglobin(MCH) | alias | observation | mean_corpuscular_hemoglobin |
+| img_23 | Mean corpusc. Hb. conc. (MCHC) | alias | observation | mean_corpuscular_hemoglobin_concentration |
+| img_24 | Red blood cell distribut width | alias | observation | rdw |
+| img_25 | Platelet count | alias | observation | platelets |
+| img_26 | Mean platelet volume | alias | observation | mpv |
+| img_27 | Platelet distribution width | none | pending | — |
+| img_28 | Neutrophil count | key | observation | neutrophil_count |
+| img_29 | Eosinophil count | key | observation | eosinophil_count |
+| img_30 | Basophil count | key | observation | basophil_count |
+| img_31 | Nucleated red blood cell count | none | pending | — |
+| img_32 | QRISK2 cardiovascular disease 10 year risk score | none | pending | — |
+| img_33 | Serum cholesterol | alias | observation | total_cholesterol |
+| img_34 | Serum HDL cholesterol level | alias | observation | hdl |
+| img_35 | Serum triglycerides | alias | observation | triglycerides |
+| img_36 | Se non HDL cholesterol level | none | pending | — |
+| img_37 | Serum cholesterol/HDL ratio | none | pending | — |
+| img_38 | Calculated LDL cholesterol lev | alias | observation | ldl |
+| img_39 | QRISK2 cardiovascular disease 10 year risk score | none | pending | — |
 
 ## Agent turns (full payload sent + model output)
 
-### Turn 1 (hit) — img_1, img_5, img_6, img_7, img_8, img_10, img_12, img_14, img_19, img_20, img_21, img_22, img_23, img_24, img_25, img_26, img_27, img_28, img_30, img_31 (20 rows, 22239ms)
+### Turn 1 (hit) — img_1, img_5, img_6, img_7, img_8, img_10, img_12, img_17, img_18, img_19, img_20, img_21, img_22, img_23, img_24, img_25, img_26, img_28, img_29, img_30 (20 rows, 7088ms)
 
 **User contents sent to the model** (system instruction is above; this is the user turn):
 
@@ -247,23 +241,7 @@ Biomarkers to review (hits - in catalog):
       }
     },
     {
-      "id": "img_14",
-      "name": "Serum Albumin",
-      "value": 46,
-      "unit": "g/L",
-      "date": "2026-06-05",
-      "range": "31 - 45 g/L",
-      "optimalValue": null,
-      "existingInsight": null,
-      "existingCustomRange": null,
-      "dictionary": {
-        "normalRange": "35 - 50",
-        "unit": "g/L",
-        "description": "Main protein produced by the liver, keeping fluid balance in vessels."
-      }
-    },
-    {
-      "id": "img_19",
+      "id": "img_17",
       "name": "White Blood Cell (WBC)",
       "value": 5.7,
       "unit": "10*9/L",
@@ -279,7 +257,7 @@ Biomarkers to review (hits - in catalog):
       }
     },
     {
-      "id": "img_20",
+      "id": "img_18",
       "name": "Red Blood Cell (RBC)",
       "value": 5.47,
       "unit": "10*12/L",
@@ -295,7 +273,7 @@ Biomarkers to review (hits - in catalog):
       }
     },
     {
-      "id": "img_21",
+      "id": "img_19",
       "name": "Hemoglobin",
       "value": 166,
       "unit": "g/L",
@@ -311,7 +289,7 @@ Biomarkers to review (hits - in catalog):
       }
     },
     {
-      "id": "img_22",
+      "id": "img_20",
       "name": "Hematocrit",
       "value": 0.48,
       "unit": "L/L",
@@ -327,7 +305,7 @@ Biomarkers to review (hits - in catalog):
       }
     },
     {
-      "id": "img_23",
+      "id": "img_21",
       "name": "Mean Corpuscular Volume (MCV)",
       "value": 88,
       "unit": "fL",
@@ -343,7 +321,7 @@ Biomarkers to review (hits - in catalog):
       }
     },
     {
-      "id": "img_24",
+      "id": "img_22",
       "name": "Mean Corpuscular Hemoglobin (MCH)",
       "value": 30.3,
       "unit": "pg",
@@ -359,7 +337,7 @@ Biomarkers to review (hits - in catalog):
       }
     },
     {
-      "id": "img_25",
+      "id": "img_23",
       "name": "Mean Corpuscular Hemoglobin Concentration (MCHC)",
       "value": 346,
       "unit": "g/L",
@@ -375,7 +353,7 @@ Biomarkers to review (hits - in catalog):
       }
     },
     {
-      "id": "img_26",
+      "id": "img_24",
       "name": "Red Cell Distribution Width (RDW)",
       "value": 11.8,
       "unit": "%",
@@ -391,7 +369,7 @@ Biomarkers to review (hits - in catalog):
       }
     },
     {
-      "id": "img_27",
+      "id": "img_25",
       "name": "Platelets",
       "value": 227,
       "unit": "10*9/L",
@@ -407,7 +385,7 @@ Biomarkers to review (hits - in catalog):
       }
     },
     {
-      "id": "img_28",
+      "id": "img_26",
       "name": "Mean Platelet Volume (MPV)",
       "value": 10.6,
       "unit": "fL",
@@ -423,7 +401,7 @@ Biomarkers to review (hits - in catalog):
       }
     },
     {
-      "id": "img_30",
+      "id": "img_28",
       "name": "Neutrophils",
       "value": 3.18,
       "unit": "10*9/L",
@@ -439,7 +417,7 @@ Biomarkers to review (hits - in catalog):
       }
     },
     {
-      "id": "img_31",
+      "id": "img_29",
       "name": "Eosinophils",
       "value": 0.07,
       "unit": "10*9/L",
@@ -453,356 +431,9 @@ Biomarkers to review (hits - in catalog):
         "unit": "10^9/L",
         "description": "White blood cells involved in allergic responses and parasitic defense."
       }
-    }
-  ]
-}
-```
-
-**Model output:**
-
-```json
-[
-  {
-    "id": "img_1",
-    "medicalInsight": "Your HbA1c is 40 mmol/mol, which is elevated and indicates an increased risk for prediabetes for individuals of Chinese ethnicity (where >=39 indicates elevated risk).",
-    "optimalValue": "34 mmol/mol",
-    "editReason": "",
-    "logs": [
-      {
-        "date": "2026-06-05",
-        "value": 40,
-        "unit": "mmol/mol",
-        "comment": null
-      }
-    ],
-    "customRangeOverlay": "[Chinese Ethnicity] Elevated (Prediabetes/Diabetes): >=39; Optimal: <39",
-    "dictionaryCorrection": null
-  },
-  {
-    "id": "img_5",
-    "medicalInsight": "Serum creatinine is 100 umol/L, which sits within the normal laboratory reference range.",
-    "optimalValue": "80 umol/L",
-    "editReason": "",
-    "logs": [
-      {
-        "date": "2026-06-05",
-        "value": 100,
-        "unit": "umol/L",
-        "comment": null
-      }
-    ],
-    "customRangeOverlay": "",
-    "dictionaryCorrection": null
-  },
-  {
-    "id": "img_6",
-    "medicalInsight": "Your eGFR of 80 mL/min/1.73m2 indicates normal renal filtration function.",
-    "optimalValue": "95 mL/min/1.73m2",
-    "editReason": "Corrected optimalValue from naive CKD threshold to clinically robust optimal target.",
-    "logs": [
-      {
-        "date": "2026-06-05",
-        "value": 80,
-        "unit": "mL/min/1.73m2",
-        "comment": null
-      }
-    ],
-    "customRangeOverlay": "[Western Standard] Normal: >=60; Low: <60",
-    "dictionaryCorrection": null
-  },
-  {
-    "id": "img_7",
-    "medicalInsight": "Serum albumin is 46 g/L, which is optimal and supports healthy liver synthetic function.",
-    "optimalValue": "45 g/L",
-    "editReason": "",
-    "logs": [
-      {
-        "date": "2026-06-05",
-        "value": 46,
-        "unit": "g/L",
-        "comment": null
-      }
-    ],
-    "customRangeOverlay": "",
-    "dictionaryCorrection": null
-  },
-  {
-    "id": "img_8",
-    "medicalInsight": "ALT is 41 U/L, sitting near the upper limit of standard clinical reference thresholds.",
-    "optimalValue": "25 U/L",
-    "editReason": "",
-    "logs": [
-      {
-        "date": "2026-06-05",
-        "value": 41,
-        "unit": "U/L",
-        "comment": null
-      }
-    ],
-    "customRangeOverlay": "",
-    "dictionaryCorrection": null
-  },
-  {
-    "id": "img_10",
-    "medicalInsight": "AST is 27 U/L, well within the normal healthy range for hepatic enzymes.",
-    "optimalValue": "22 U/L",
-    "editReason": "",
-    "logs": [
-      {
-        "date": "2026-06-05",
-        "value": 27,
-        "unit": "U/L",
-        "comment": null
-      }
-    ],
-    "customRangeOverlay": "",
-    "dictionaryCorrection": null
-  },
-  {
-    "id": "img_12",
-    "medicalInsight": "Total protein is 81 g/L, reflecting normal circulating protein levels in the blood.",
-    "optimalValue": "72 g/L",
-    "editReason": "",
-    "logs": [
-      {
-        "date": "2026-06-05",
-        "value": 81,
-        "unit": "g/L",
-        "comment": null
-      }
-    ],
-    "customRangeOverlay": "[Western Standard] High: >80; Normal: 60-80; Low: <60",
-    "dictionaryCorrection": {
-      "field": "normalRange",
-      "correctedValue": "60 - 80",
-      "reason": "Corrected dictionary typo from 6-8 g/L to 60-80 g/L for total protein."
-    }
-  },
-  {
-    "id": "img_14",
-    "medicalInsight": "Serum albumin is 46 g/L, within expected clinical parameters.",
-    "optimalValue": "45 g/L",
-    "editReason": "",
-    "logs": [
-      {
-        "date": "2026-06-05",
-        "value": 46,
-        "unit": "g/L",
-        "comment": null
-      }
-    ],
-    "customRangeOverlay": "",
-    "dictionaryCorrection": null
-  },
-  {
-    "id": "img_19",
-    "medicalInsight": "White blood cell count is 5.7 10^9/L, indicating a healthy, robust immune profile.",
-    "optimalValue": "6.0 10^9/L",
-    "editReason": "",
-    "logs": [
-      {
-        "date": "2026-06-05",
-        "value": 5.7,
-        "unit": "10^9/L",
-        "comment": null
-      }
-    ],
-    "customRangeOverlay": "",
-    "dictionaryCorrection": null
-  },
-  {
-    "id": "img_20",
-    "medicalInsight": "Red blood cell count is 5.47 10^12/L, which is normal for an adult male.",
-    "optimalValue": "5.00 10^12/L",
-    "editReason": "",
-    "logs": [
-      {
-        "date": "2026-06-05",
-        "value": 5.47,
-        "unit": "10^12/L",
-        "comment": null
-      }
-    ],
-    "customRangeOverlay": "",
-    "dictionaryCorrection": null
-  },
-  {
-    "id": "img_21",
-    "medicalInsight": "Hemoglobin is 166 g/L, well within the normal adult male range.",
-    "optimalValue": "150 g/L",
-    "editReason": "",
-    "logs": [
-      {
-        "date": "2026-06-05",
-        "value": 166,
-        "unit": "g/L",
-        "comment": null
-      }
-    ],
-    "customRangeOverlay": "",
-    "dictionaryCorrection": null
-  },
-  {
-    "id": "img_22",
-    "medicalInsight": "Hematocrit is 0.48 L/L, indicating a normal proportion of red blood cells.",
-    "optimalValue": "0.45 L/L",
-    "editReason": "",
-    "logs": [
-      {
-        "date": "2026-06-05",
-        "value": 0.48,
-        "unit": "L/L",
-        "comment": null
-      }
-    ],
-    "customRangeOverlay": "",
-    "dictionaryCorrection": null
-  },
-  {
-    "id": "img_23",
-    "medicalInsight": "MCV is 88 fL, reflecting a normal average red blood cell volume.",
-    "optimalValue": "90 fL",
-    "editReason": "",
-    "logs": [
-      {
-        "date": "2026-06-05",
-        "value": 88,
-        "unit": "fL",
-        "comment": null
-      }
-    ],
-    "customRangeOverlay": "",
-    "dictionaryCorrection": null
-  },
-  {
-    "id": "img_24",
-    "medicalInsight": "MCH is 30.3 pg, which is well within normal clinical limits.",
-    "optimalValue": "30.0 pg",
-    "editReason": "",
-    "logs": [
-      {
-        "date": "2026-06-05",
-        "value": 30.3,
-        "unit": "pg",
-        "comment": null
-      }
-    ],
-    "customRangeOverlay": "",
-    "dictionaryCorrection": null
-  },
-  {
-    "id": "img_25",
-    "medicalInsight": "MCHC is 346 g/L, showing normal hemoglobin concentration within red blood cells.",
-    "optimalValue": "340 g/L",
-    "editReason": "",
-    "logs": [
-      {
-        "date": "2026-06-05",
-        "value": 346,
-        "unit": "g/L",
-        "comment": null
-      }
-    ],
-    "customRangeOverlay": "",
-    "dictionaryCorrection": null
-  },
-  {
-    "id": "img_26",
-    "medicalInsight": "RDW is 11.8%, indicating low variation in red blood cell size.",
-    "optimalValue": "12.5 %",
-    "editReason": "",
-    "logs": [
-      {
-        "date": "2026-06-05",
-        "value": 11.8,
-        "unit": "%",
-        "comment": null
-      }
-    ],
-    "customRangeOverlay": "",
-    "dictionaryCorrection": null
-  },
-  {
-    "id": "img_27",
-    "medicalInsight": "Platelet count is 227 10^9/L, which is optimal for coagulation.",
-    "optimalValue": "250 10^9/L",
-    "editReason": "",
-    "logs": [
-      {
-        "date": "2026-06-05",
-        "value": 227,
-        "unit": "10^9/L",
-        "comment": null
-      }
-    ],
-    "customRangeOverlay": "",
-    "dictionaryCorrection": null
-  },
-  {
-    "id": "img_28",
-    "medicalInsight": "Mean Platelet Volume is 10.6 fL, falling within normal limits.",
-    "optimalValue": "9.5 fL",
-    "editReason": "",
-    "logs": [
-      {
-        "date": "2026-06-05",
-        "value": 10.6,
-        "unit": "fL",
-        "comment": null
-      }
-    ],
-    "customRangeOverlay": "",
-    "dictionaryCorrection": null
-  },
-  {
-    "id": "img_30",
-    "medicalInsight": "Neutrophil count is 3.18 10^9/L, representing a healthy immune response capability.",
-    "optimalValue": "3.50 10^9/L",
-    "editReason": "",
-    "logs": [
-      {
-        "date": "2026-06-05",
-        "value": 3.18,
-        "unit": "10^9/L",
-        "comment": null
-      }
-    ],
-    "customRangeOverlay": "",
-    "dictionaryCorrection": null
-  },
-  {
-    "id": "img_31",
-    "medicalInsight": "Eosinophil count is 0.07 10^9/L, within the normal reference interval.",
-    "optimalValue": "0.15 10^9/L",
-    "editReason": "",
-    "logs": [
-      {
-        "date": "2026-06-05",
-        "value": 0.07,
-        "unit": "10^9/L",
-        "comment": null
-      }
-    ],
-    "customRangeOverlay": "",
-    "dictionaryCorrection": null
-  }
-]
-```
-
-### Turn 2 (hit) — img_32, img_35, img_36, img_37, img_40 (5 rows, 15068ms)
-
-**User contents sent to the model** (system instruction is above; this is the user turn):
-
-```
-<user_upload>
-Log these GP results
-</user_upload>
-
-Biomarkers to review (hits - in catalog):
-{
-  "biomarkers": [
+    },
     {
-      "id": "img_32",
+      "id": "img_30",
       "name": "Basophils",
       "value": 0.04,
       "unit": "10*9/L",
@@ -816,9 +447,356 @@ Biomarkers to review (hits - in catalog):
         "unit": "10^9/L",
         "description": "Granulocytes responsible for histamine release and inflammatory reactions."
       }
-    },
+    }
+  ]
+}
+```
+
+**Model output:**
+
+```json
+[
+  {
+    "id": "img_1",
+    "medicalInsight": "HbA1c is 40 mmol/mol, indicating an elevated prediabetes risk for a Chinese male (threshold >=39 mmol/mol).",
+    "optimalValue": "35 mmol/mol",
+    "editReason": "Adjusted optimal value to reflect optimal metabolic health for Chinese ethnicity.",
+    "logs": [
+      {
+        "date": "2026-06-05",
+        "value": 40,
+        "unit": "mmol/mol",
+        "comment": null
+      }
+    ],
+    "customRangeOverlay": "[Chinese Ethnicity] Elevated (Prediabetes Risk): >=39; Optimal: <39",
+    "dictionaryCorrection": null
+  },
+  {
+    "id": "img_5",
+    "medicalInsight": "Serum creatinine is 100 umol/L, which falls within the standard normal laboratory range.",
+    "optimalValue": "80 umol/L",
+    "editReason": "",
+    "logs": [
+      {
+        "date": "2026-06-05",
+        "value": 100,
+        "unit": "umol/L",
+        "comment": null
+      }
+    ],
+    "customRangeOverlay": null,
+    "dictionaryCorrection": null
+  },
+  {
+    "id": "img_6",
+    "medicalInsight": "Your eGFR of 80 mL/min/1.73m2 is slightly below optimal, though within general laboratory reference parameters.",
+    "optimalValue": "95 mL/min/1.73m2",
+    "editReason": "Corrected naive normal eGFR from 60 to optimal clinical target of >=90.",
+    "logs": [
+      {
+        "date": "2026-06-05",
+        "value": 80,
+        "unit": "mL/min/1.73m2",
+        "comment": null
+      }
+    ],
+    "customRangeOverlay": "[Western Standard] Optimal: >=90; Low: <90",
+    "dictionaryCorrection": null
+  },
+  {
+    "id": "img_7",
+    "medicalInsight": "Serum albumin is 46 g/L, which is slightly above the standard lab reference ceiling of 45 g/L but generally clinically benign.",
+    "optimalValue": "43 g/L",
+    "editReason": "",
+    "logs": [
+      {
+        "date": "2026-06-05",
+        "value": 46,
+        "unit": "g/L",
+        "comment": null
+      }
+    ],
+    "customRangeOverlay": null,
+    "dictionaryCorrection": null
+  },
+  {
+    "id": "img_8",
+    "medicalInsight": "ALT is 41 U/L, sitting just at the upper margin of normal hepatic enzyme activity.",
+    "optimalValue": "25 U/L",
+    "editReason": "",
+    "logs": [
+      {
+        "date": "2026-06-05",
+        "value": 41,
+        "unit": "U/L",
+        "comment": null
+      }
+    ],
+    "customRangeOverlay": null,
+    "dictionaryCorrection": null
+  },
+  {
+    "id": "img_10",
+    "medicalInsight": "AST is 27 U/L, well within normal limits for liver and muscle tissue function.",
+    "optimalValue": "20 U/L",
+    "editReason": "",
+    "logs": [
+      {
+        "date": "2026-06-05",
+        "value": 27,
+        "unit": "U/L",
+        "comment": null
+      }
+    ],
+    "customRangeOverlay": null,
+    "dictionaryCorrection": null
+  },
+  {
+    "id": "img_12",
+    "medicalInsight": "Total protein is 81 g/L, which is normal when accounting for dictionary unit correction.",
+    "optimalValue": "70 g/L",
+    "editReason": "Corrected dictionary range from 6-8 g/L to 60-80 g/L.",
+    "logs": [
+      {
+        "date": "2026-06-05",
+        "value": 81,
+        "unit": "g/L",
+        "comment": null
+      }
+    ],
+    "customRangeOverlay": "[Western Standard] High: >80; Normal: 60-80; Low: <60",
+    "dictionaryCorrection": {
+      "field": "normalRange",
+      "correctedValue": "60 - 80",
+      "reason": "Standard units for Total Protein are g/L, making 6-8 a typographical error for 60-80."
+    }
+  },
+  {
+    "id": "img_17",
+    "medicalInsight": "White blood cell count is 5.7 10^9/L, reflecting a healthy immune cell profile.",
+    "optimalValue": "6.5 10^9/L",
+    "editReason": "",
+    "logs": [
+      {
+        "date": "2026-06-05",
+        "value": 5.7,
+        "unit": "10*9/L",
+        "comment": null
+      }
+    ],
+    "customRangeOverlay": null,
+    "dictionaryCorrection": null
+  },
+  {
+    "id": "img_18",
+    "medicalInsight": "Red blood cell count is 5.47 10^12/L, indicating normal erythropoiesis and oxygen-carrying capacity.",
+    "optimalValue": "5.00 10^12/L",
+    "editReason": "",
+    "logs": [
+      {
+        "date": "2026-06-05",
+        "value": 5.47,
+        "unit": "10*12/L",
+        "comment": null
+      }
+    ],
+    "customRangeOverlay": null,
+    "dictionaryCorrection": null
+  },
+  {
+    "id": "img_19",
+    "medicalInsight": "Hemoglobin is 166 g/L, nicely situated within the optimal physiological reference range.",
+    "optimalValue": "150 g/L",
+    "editReason": "",
+    "logs": [
+      {
+        "date": "2026-06-05",
+        "value": 166,
+        "unit": "g/L",
+        "comment": null
+      }
+    ],
+    "customRangeOverlay": null,
+    "dictionaryCorrection": null
+  },
+  {
+    "id": "img_20",
+    "medicalInsight": "Hematocrit is 0.48 L/L, showing normal blood volume distribution of red cells.",
+    "optimalValue": "0.44 L/L",
+    "editReason": "",
+    "logs": [
+      {
+        "date": "2026-06-05",
+        "value": 0.48,
+        "unit": "L/L",
+        "comment": null
+      }
+    ],
+    "customRangeOverlay": null,
+    "dictionaryCorrection": null
+  },
+  {
+    "id": "img_21",
+    "medicalInsight": "MCV is 88 fL, denoting normocytic red blood cells.",
+    "optimalValue": "90 fL",
+    "editReason": "",
+    "logs": [
+      {
+        "date": "2026-06-05",
+        "value": 88,
+        "unit": "fL",
+        "comment": null
+      }
+    ],
+    "customRangeOverlay": null,
+    "dictionaryCorrection": null
+  },
+  {
+    "id": "img_22",
+    "medicalInsight": "MCH is 30.3 pg, reflecting normal hemoglobin content per red blood cell.",
+    "optimalValue": "30.0 pg",
+    "editReason": "",
+    "logs": [
+      {
+        "date": "2026-06-05",
+        "value": 30.3,
+        "unit": "pg",
+        "comment": null
+      }
+    ],
+    "customRangeOverlay": null,
+    "dictionaryCorrection": null
+  },
+  {
+    "id": "img_23",
+    "medicalInsight": "MCHC is 346 g/L, indicating normal intracellular hemoglobin concentration.",
+    "optimalValue": "340 g/L",
+    "editReason": "",
+    "logs": [
+      {
+        "date": "2026-06-05",
+        "value": 346,
+        "unit": "g/L",
+        "comment": null
+      }
+    ],
+    "customRangeOverlay": null,
+    "dictionaryCorrection": null
+  },
+  {
+    "id": "img_24",
+    "medicalInsight": "RDW is 11.8 %, demonstrating uniform red blood cell sizing.",
+    "optimalValue": "13.0 %",
+    "editReason": "",
+    "logs": [
+      {
+        "date": "2026-06-05",
+        "value": 11.8,
+        "unit": "%",
+        "comment": null
+      }
+    ],
+    "customRangeOverlay": null,
+    "dictionaryCorrection": null
+  },
+  {
+    "id": "img_25",
+    "medicalInsight": "Platelet count is 227 10^9/L, which is optimal for coagulation function.",
+    "optimalValue": "250 10^9/L",
+    "editReason": "",
+    "logs": [
+      {
+        "date": "2026-06-05",
+        "value": 227,
+        "unit": "10*9/L",
+        "comment": null
+      }
+    ],
+    "customRangeOverlay": null,
+    "dictionaryCorrection": null
+  },
+  {
+    "id": "img_26",
+    "medicalInsight": "MPV is 10.6 fL, falling within normal thrombocyte volume parameters.",
+    "optimalValue": "9.5 fL",
+    "editReason": "",
+    "logs": [
+      {
+        "date": "2026-06-05",
+        "value": 10.6,
+        "unit": "fL",
+        "comment": null
+      }
+    ],
+    "customRangeOverlay": null,
+    "dictionaryCorrection": null
+  },
+  {
+    "id": "img_28",
+    "medicalInsight": "Neutrophil count is 3.18 10^9/L, supporting healthy antibacterial immune defenses.",
+    "optimalValue": "4.00 10^9/L",
+    "editReason": "",
+    "logs": [
+      {
+        "date": "2026-06-05",
+        "value": 3.18,
+        "unit": "10*9/L",
+        "comment": null
+      }
+    ],
+    "customRangeOverlay": null,
+    "dictionaryCorrection": null
+  },
+  {
+    "id": "img_29",
+    "medicalInsight": "Eosinophil count is 0.07 10^9/L, which is normal.",
+    "optimalValue": "0.15 10^9/L",
+    "editReason": "",
+    "logs": [
+      {
+        "date": "2026-06-05",
+        "value": 0.07,
+        "unit": "10*9/L",
+        "comment": null
+      }
+    ],
+    "customRangeOverlay": null,
+    "dictionaryCorrection": null
+  },
+  {
+    "id": "img_30",
+    "medicalInsight": "Basophil count is 0.04 10^9/L, well within expected basophil ranges.",
+    "optimalValue": "0.02 10^9/L",
+    "editReason": "",
+    "logs": [
+      {
+        "date": "2026-06-05",
+        "value": 0.04,
+        "unit": "10*9/L",
+        "comment": null
+      }
+    ],
+    "customRangeOverlay": null,
+    "dictionaryCorrection": null
+  }
+]
+```
+
+### Turn 2 (hit) — img_33, img_34, img_35, img_38 (4 rows, 2486ms)
+
+**User contents sent to the model** (system instruction is above; this is the user turn):
+
+```
+<user_upload>
+Log these GP results
+</user_upload>
+
+Biomarkers to review (hits - in catalog):
+{
+  "biomarkers": [
     {
-      "id": "img_35",
+      "id": "img_33",
       "name": "Total Cholesterol",
       "value": 6.5,
       "unit": "mmol/L",
@@ -834,7 +812,7 @@ Biomarkers to review (hits - in catalog):
       }
     },
     {
-      "id": "img_36",
+      "id": "img_34",
       "name": "HDL-C",
       "value": 1.5,
       "unit": "mmol/L",
@@ -850,7 +828,7 @@ Biomarkers to review (hits - in catalog):
       }
     },
     {
-      "id": "img_37",
+      "id": "img_35",
       "name": "Triglycerides",
       "value": 1.7,
       "unit": "mmol/L",
@@ -866,7 +844,7 @@ Biomarkers to review (hits - in catalog):
       }
     },
     {
-      "id": "img_40",
+      "id": "img_38",
       "name": "LDL-C",
       "value": 4.3,
       "unit": "mmol/L",
@@ -890,30 +868,10 @@ Biomarkers to review (hits - in catalog):
 ```json
 [
   {
-    "id": "img_32",
-    "medicalInsight": "Basophil count is within normal limits, suggesting no acute inflammatory or hypersensitivity abnormalities.",
-    "optimalValue": "0.05 10^9/L",
-    "editReason": "",
-    "logs": [
-      {
-        "date": "2026-06-05",
-        "value": 0.04,
-        "unit": "10^9/L",
-        "comment": "GP results"
-      }
-    ],
-    "customRangeOverlay": "[Western Standard] High: >0.1; Normal: 0.0-0.1; Low: <0.0",
-    "dictionaryCorrection": {
-      "field": "normalRange",
-      "correctedValue": "[Western Standard] High: >0.1; Normal: 0.0-0.1; Low: <0.0",
-      "reason": "Standardizing to bracketed format."
-    }
-  },
-  {
-    "id": "img_35",
-    "medicalInsight": "Total Cholesterol is elevated at 6.5 mmol/L, increasing cardiovascular risk profile for this 43-year-old male.",
+    "id": "img_33",
+    "medicalInsight": "Total cholesterol is elevated at 6.5 mmol/L, increasing long-term cardiovascular risk for a 43-year-old male. Lifestyle modification and dietary review are recommended.",
     "optimalValue": "4.5 mmol/L",
-    "editReason": "",
+    "editReason": "Provided a specific clinical optimal target below 5.0 mmol/L.",
     "logs": [
       {
         "date": "2026-06-03",
@@ -926,10 +884,10 @@ Biomarkers to review (hits - in catalog):
     "dictionaryCorrection": null
   },
   {
-    "id": "img_36",
-    "medicalInsight": "HDL-C is optimal at 1.5 mmol/L, providing good cardiovascular protection.",
-    "optimalValue": "1.6 mmol/L",
-    "editReason": "",
+    "id": "img_34",
+    "medicalInsight": "HDL-C is optimal at 1.5 mmol/L, providing a cardioprotective lipid clearance profile.",
+    "optimalValue": "1.4 mmol/L",
+    "editReason": "Set a precise optimal target within the normal reference range.",
     "logs": [
       {
         "date": "2026-06-03",
@@ -939,17 +897,13 @@ Biomarkers to review (hits - in catalog):
       }
     ],
     "customRangeOverlay": "[All patients] Normal: 0.9-1.7; Low: <0.9",
-    "dictionaryCorrection": {
-      "field": "normalRange",
-      "correctedValue": "[All patients] Normal: 0.9-1.7; Low: <0.9",
-      "reason": "Standardizing to bracketed format."
-    }
+    "dictionaryCorrection": null
   },
   {
-    "id": "img_37",
-    "medicalInsight": "Triglycerides are at the borderline/elevated threshold of 1.7 mmol/L, warranting dietary review.",
+    "id": "img_35",
+    "medicalInsight": "Triglycerides are at the borderline threshold of 1.7 mmol/L, indicating potential metabolic stress.",
     "optimalValue": "1.2 mmol/L",
-    "editReason": "",
+    "editReason": "Target optimal value set well below the elevated cutoff.",
     "logs": [
       {
         "date": "2026-06-03",
@@ -962,10 +916,10 @@ Biomarkers to review (hits - in catalog):
     "dictionaryCorrection": null
   },
   {
-    "id": "img_40",
-    "medicalInsight": "LDL-C is notably elevated at 4.3 mmol/L, which requires lifestyle modification and cardiovascular risk management.",
-    "optimalValue": "2.2 mmol/L",
-    "editReason": "",
+    "id": "img_38",
+    "medicalInsight": "LDL-C is elevated at 4.3 mmol/L, a primary driver of atherosclerotic cardiovascular disease requiring proactive management.",
+    "optimalValue": "2.0 mmol/L",
+    "editReason": "Set a robust cardiovascular risk reduction target for LDL-C.",
     "logs": [
       {
         "date": "2026-06-03",
@@ -980,7 +934,7 @@ Biomarkers to review (hits - in catalog):
 ]
 ```
 
-### Turn 3 (miss) — img_2, img_3, img_4, img_9, img_11, img_13, img_15, img_16, img_17, img_18, img_29, img_33 (12 rows, 20717ms)
+### Turn 3 (miss) — img_2, img_3, img_4, img_9, img_11, img_13, img_14, img_15, img_16, img_27, img_31, img_32 (12 rows, 7976ms)
 
 **User contents sent to the model** (system instruction is above; this is the user turn):
 
@@ -1041,15 +995,7 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
       "range": "22 - 38 g/L"
     },
     {
-      "id": "img_15",
-      "name": "Serum alkaline phosphatase",
-      "value": 39,
-      "unit": "U/L",
-      "date": "2026-06-05",
-      "range": "30 - 130 U/L"
-    },
-    {
-      "id": "img_16",
+      "id": "img_14",
       "name": "Serum calcium",
       "value": 2.47,
       "unit": "mmol/L",
@@ -1057,7 +1003,7 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
       "range": "- mmol/L"
     },
     {
-      "id": "img_17",
+      "id": "img_15",
       "name": "Serum adjusted calcium conc",
       "value": 2.37,
       "unit": "mmol/L",
@@ -1065,7 +1011,7 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
       "range": "2.08 - 2.48 mmol/L"
     },
     {
-      "id": "img_18",
+      "id": "img_16",
       "name": "Serum inorganic phosphate",
       "value": 1.12,
       "unit": "mmol/L",
@@ -1073,7 +1019,7 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
       "range": "0.80 - 1.50 mmol/L"
     },
     {
-      "id": "img_29",
+      "id": "img_27",
       "name": "Platelet distribution width",
       "value": 12.9,
       "unit": "fL",
@@ -1081,12 +1027,20 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
       "range": "8.3 - 18.0 fL"
     },
     {
-      "id": "img_33",
+      "id": "img_31",
       "name": "Nucleated red blood cell count",
       "value": 0,
       "unit": "10*9/L",
       "date": "2026-06-05",
       "range": "0.00 - 0.01 10*9/L"
+    },
+    {
+      "id": "img_32",
+      "name": "QRISK2 cardiovascular disease 10 year risk score",
+      "value": 1.2,
+      "unit": "%",
+      "date": "2026-06-04",
+      "range": "- %"
     }
   ]
 }
@@ -1098,7 +1052,7 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
 [
   {
     "id": "img_2",
-    "medicalInsight": "Prostate specific antigen is within the normal reference range for a 43-year-old male, indicating low immediate risk for prostatic pathology.",
+    "medicalInsight": "Prostate-specific antigen is within the normal reference range, indicating low immediate risk for prostate pathology in this 43-year-old male.",
     "optimalValue": "1.0 ug/L",
     "editReason": null,
     "logs": [
@@ -1120,7 +1074,7 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
         "PSA",
         "Prostate Specific Antigen"
       ],
-      "normalRange": "[Western Standard] High: >2.49; Optimal: <=2.49",
+      "normalRange": "[Western Standard] High: >2.49; Normal: <=2.49",
       "description": "Biomarker used primarily to screen for prostate cancer and monitor prostate health.",
       "riskCategories": [
         "Prostate Health"
@@ -1130,7 +1084,7 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
   },
   {
     "id": "img_3",
-    "medicalInsight": "Serum sodium level is normal, indicating well-maintained hydration and electrolyte balance.",
+    "medicalInsight": "Serum sodium level is optimal, reflecting normal fluid and electrolyte balance.",
     "optimalValue": "140 mmol/L",
     "editReason": null,
     "logs": [
@@ -1153,16 +1107,16 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
         "Na"
       ],
       "normalRange": "[Western Standard] High: >146; Normal: 133-146; Low: <133",
-      "description": "Electrolyte and mineral vital for fluid balance, nerve impulse transmission, and muscle function.",
+      "description": "Electrolyte vital for fluid balance, nerve conduction, and muscle function.",
       "riskCategories": [
         "Electrolytes"
       ]
     },
-    "customRangeOverlay": "[Western Standard] High: >146; Normal: 133-146; Low: <133"
+    "customRangeOverlay": null
   },
   {
     "id": "img_4",
-    "medicalInsight": "Serum potassium concentration is within the optimal range, reflecting healthy cellular function and cardiac stability.",
+    "medicalInsight": "Serum potassium concentration is well within standard limits, supporting healthy cardiac and neuromuscular function.",
     "optimalValue": "4.2 mmol/L",
     "editReason": null,
     "logs": [
@@ -1185,16 +1139,16 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
         "K"
       ],
       "normalRange": "[Western Standard] High: >5.3; Normal: 3.5-5.3; Low: <3.5",
-      "description": "Essential electrolyte crucial for regulating heartbeat and muscle function.",
+      "description": "Essential mineral and electrolyte for cellular function and heart rhythm.",
       "riskCategories": [
         "Electrolytes"
       ]
     },
-    "customRangeOverlay": "[Western Standard] High: >5.3; Normal: 3.5-5.3; Low: <3.5"
+    "customRangeOverlay": null
   },
   {
     "id": "img_9",
-    "medicalInsight": "Serum alkaline phosphatase is within the normal reference range, suggesting normal hepatobiliary and bone turnover activity.",
+    "medicalInsight": "Alkaline phosphatase is within the normal reference range, signifying healthy liver and bone metabolism.",
     "optimalValue": "70 U/L",
     "editReason": null,
     "logs": [
@@ -1219,15 +1173,14 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
       "normalRange": "[Western Standard] High: >130; Normal: 30-130; Low: <30",
       "description": "Enzyme associated with liver, biliary tract, and bone.",
       "riskCategories": [
-        "Liver Health",
-        "Bone Health"
+        "Liver Function"
       ]
     },
-    "customRangeOverlay": "[Western Standard] High: >130; Normal: 30-130; Low: <30"
+    "customRangeOverlay": null
   },
   {
     "id": "img_11",
-    "medicalInsight": "Total bilirubin level is normal, indicating healthy liver excretory function and red blood cell turnover.",
+    "medicalInsight": "Total bilirubin is normal, indicating healthy hepatic processing and clearance of red blood cell breakdown products.",
     "optimalValue": "10 umol/L",
     "editReason": null,
     "logs": [
@@ -1249,18 +1202,18 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
         "Total Bilirubin",
         "Bilirubin"
       ],
-      "normalRange": "[Western Standard] High: >21; Optimal: <=21",
-      "description": "Yellow compound derived from the breakdown of hemoglobin, processed by the liver.",
+      "normalRange": "[Western Standard] High: >21; Normal: <=21",
+      "description": "Waste product from hemoglobin breakdown processed by the liver.",
       "riskCategories": [
-        "Liver Health"
+        "Liver Function"
       ]
     },
     "customRangeOverlay": "[Western Standard] High: >21; Normal: <=21"
   },
   {
     "id": "img_13",
-    "medicalInsight": "Serum globulin is normal, reflecting a balanced immune status and normal hepatic protein synthesis.",
-    "optimalValue": "30 g/L",
+    "medicalInsight": "Serum globulin levels are optimal, reflecting normal immune and protein synthesis status.",
+    "optimalValue": "28 g/L",
     "editReason": null,
     "logs": [
       {
@@ -1281,48 +1234,16 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
         "Globulin"
       ],
       "normalRange": "[Western Standard] High: >38; Normal: 22-38; Low: <22",
-      "description": "Group of proteins in blood that play an important role in liver function, blood clotting, and fighting infection.",
+      "description": "Group of proteins in the blood including antibodies and transport proteins.",
       "riskCategories": [
-        "Protein Status",
-        "Liver Health"
+        "Protein Status"
       ]
     },
-    "customRangeOverlay": "[Western Standard] High: >38; Normal: 22-38; Low: <22"
+    "customRangeOverlay": null
   },
   {
-    "id": "img_15",
-    "medicalInsight": "Serum alkaline phosphatase is within normal parameters, consistent with healthy bone and liver metabolism.",
-    "optimalValue": "70 U/L",
-    "editReason": null,
-    "logs": [
-      {
-        "date": "2026-06-05",
-        "value": 39,
-        "unit": "U/L",
-        "comment": "GP lab duplicate"
-      }
-    ],
-    "match": "none",
-    "writeTarget": "pending",
-    "key": null,
-    "newCatalogDraft": {
-      "suggestedKey": "serum_alkaline_phosphatase_dup",
-      "name": "Serum alkaline phosphatase",
-      "unit": "U/L",
-      "aliases": [
-        "ALP"
-      ],
-      "normalRange": "[Western Standard] High: >130; Normal: 30-130; Low: <30",
-      "description": "Enzyme associated with liver, biliary tract, and bone.",
-      "riskCategories": [
-        "Liver Health"
-      ]
-    },
-    "customRangeOverlay": "[Western Standard] High: >130; Normal: 30-130; Low: <30"
-  },
-  {
-    "id": "img_16",
-    "medicalInsight": "Serum calcium is normal, supporting proper neuromuscular transmission and skeletal integrity.",
+    "id": "img_14",
+    "medicalInsight": "Serum calcium is normal, supporting healthy bone structure and cellular signaling.",
     "optimalValue": "2.35 mmol/L",
     "editReason": null,
     "logs": [
@@ -1344,19 +1265,18 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
         "Calcium",
         "Ca"
       ],
-      "normalRange": "[Western Standard] High: >2.60; Optimal: 2.10-2.60; Low: <2.10",
-      "description": "Essential mineral for bone health, muscle contraction, and nerve signaling.",
+      "normalRange": "[Western Standard] Normal: 2.10-2.55",
+      "description": "Essential mineral for bone health, muscle contraction, and nerve function.",
       "riskCategories": [
-        "Bone Health",
-        "Electrolytes"
+        "Bone & Mineral"
       ]
     },
-    "customRangeOverlay": "[Western Standard] High: >2.60; Normal: 2.10-2.60; Low: <2.10"
+    "customRangeOverlay": "[Western Standard] High: >2.55; Normal: 2.10-2.55; Low: <2.10"
   },
   {
-    "id": "img_17",
-    "medicalInsight": "Serum adjusted calcium concentration is within the target range, ensuring true calcium homeostasis independent of protein binding.",
-    "optimalValue": "2.28 mmol/L",
+    "id": "img_15",
+    "medicalInsight": "Adjusted calcium is within the expected range, accounting for protein binding to accurately reflect true calcium status.",
+    "optimalValue": "2.30 mmol/L",
     "editReason": null,
     "logs": [
       {
@@ -1380,14 +1300,14 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
       "normalRange": "[Western Standard] High: >2.48; Normal: 2.08-2.48; Low: <2.08",
       "description": "Calcium level corrected for variations in serum albumin concentration.",
       "riskCategories": [
-        "Bone Health"
+        "Bone & Mineral"
       ]
     },
-    "customRangeOverlay": "[Western Standard] High: >2.48; Normal: 2.08-2.48; Low: <2.08"
+    "customRangeOverlay": null
   },
   {
-    "id": "img_18",
-    "medicalInsight": "Serum inorganic phosphate is within the optimal range, reflecting sound mineral metabolism and renal clearance.",
+    "id": "img_16",
+    "medicalInsight": "Inorganic phosphate is optimal, indicating appropriate mineral metabolism and renal filtration.",
     "optimalValue": "1.10 mmol/L",
     "editReason": null,
     "logs": [
@@ -1410,17 +1330,16 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
         "Phosphorus"
       ],
       "normalRange": "[Western Standard] High: >1.50; Normal: 0.80-1.50; Low: <0.80",
-      "description": "Mineral critical for energy storage, bone formation, and acid-base balance.",
+      "description": "Mineral essential for energy transfer, bone formation, and cellular integrity.",
       "riskCategories": [
-        "Bone Health",
-        "Renal Health"
+        "Bone & Mineral"
       ]
     },
-    "customRangeOverlay": "[Western Standard] High: >1.50; Normal: 0.80-1.50; Low: <0.80"
+    "customRangeOverlay": null
   },
   {
-    "id": "img_29",
-    "medicalInsight": "Platelet distribution width is normal, indicating uniform platelet size and steady bone marrow production.",
+    "id": "img_27",
+    "medicalInsight": "Platelet distribution width is normal, suggesting uniform platelet sizing and steady bone marrow production.",
     "optimalValue": "12.0 fL",
     "editReason": null,
     "logs": [
@@ -1442,23 +1361,23 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
         "PDW"
       ],
       "normalRange": "[Western Standard] High: >18.0; Normal: 8.3-18.0; Low: <8.3",
-      "description": "Measurement of the variability in platelet size, useful in evaluating thrombopoiesis.",
+      "description": "Measures variation in platelet size within the circulating blood.",
       "riskCategories": [
         "Hematology"
       ]
     },
-    "customRangeOverlay": "[Western Standard] High: >18.0; Normal: 8.3-18.0; Low: <8.3"
+    "customRangeOverlay": null
   },
   {
-    "id": "img_33",
-    "medicalInsight": "Nucleated red blood cell count is within expected baseline limits, indicating an absence of premature erythroid release.",
-    "optimalValue": "0.0 10^9/L",
+    "id": "img_31",
+    "medicalInsight": "Absence of nucleated red blood cells is normal for peripheral blood findings in healthy adults.",
+    "optimalValue": "0.00 10*9/L",
     "editReason": null,
     "logs": [
       {
         "date": "2026-06-05",
         "value": 0,
-        "unit": "10^9/L",
+        "unit": "10*9/L",
         "comment": "GP lab"
       }
     ],
@@ -1468,23 +1387,55 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
     "newCatalogDraft": {
       "suggestedKey": "nucleated_red_blood_cell_count",
       "name": "Nucleated red blood cell count",
-      "unit": "10^9/L",
+      "unit": "10*9/L",
       "aliases": [
         "NRBC",
-        "Normoblast Count"
+        "Nucleated RBC"
       ],
       "normalRange": "[Western Standard] High: >0.01; Normal: 0.00-0.01",
-      "description": "Count of immature red blood cells still containing a nucleus circulating in peripheral blood.",
+      "description": "Immature red blood cells occasionally released into circulation under extreme physiological demand.",
       "riskCategories": [
         "Hematology"
       ]
     },
-    "customRangeOverlay": "[Western Standard] High: >0.01; Normal: 0.00-0.01"
+    "customRangeOverlay": null
+  },
+  {
+    "id": "img_32",
+    "medicalInsight": "QRISK2 10-year cardiovascular disease risk score is low (1.2%), reflecting favorable cardiovascular health for a 43-year-old male.",
+    "optimalValue": "<1.0 %",
+    "editReason": null,
+    "logs": [
+      {
+        "date": "2026-06-04",
+        "value": 1.2,
+        "unit": "%",
+        "comment": "GP risk assessment"
+      }
+    ],
+    "match": "none",
+    "writeTarget": "pending",
+    "key": null,
+    "newCatalogDraft": {
+      "suggestedKey": "qrisk2_cvd_risk_score",
+      "name": "QRISK2 cardiovascular disease 10 year risk score",
+      "unit": "%",
+      "aliases": [
+        "QRISK2",
+        "CVD Risk Score"
+      ],
+      "normalRange": "[Western Standard] High: >=10.0; Moderate: 5.0-9.9; Low: <5.0",
+      "description": "Calculates the percentage risk of developing a cardiovascular event over the next 10 years.",
+      "riskCategories": [
+        "Cardiovascular"
+      ]
+    },
+    "customRangeOverlay": "[Western Standard] High: >=10.0; Moderate: 5.0-9.9; Low: <5.0"
   }
 ]
 ```
 
-### Turn 4 (miss) — img_34, img_38, img_39, img_41 (4 rows, 14468ms)
+### Turn 4 (miss) — img_36, img_37, img_39 (3 rows, 3055ms)
 
 **User contents sent to the model** (system instruction is above; this is the user turn):
 
@@ -1497,15 +1448,7 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
 {
   "biomarkers": [
     {
-      "id": "img_34",
-      "name": "QRISK2 cardiovascular disease 10 year risk score",
-      "value": 1.2,
-      "unit": "%",
-      "date": "2026-06-04",
-      "range": "- %"
-    },
-    {
-      "id": "img_38",
+      "id": "img_36",
       "name": "Se non HDL cholesterol level",
       "value": 5,
       "unit": "mmol/L",
@@ -1513,7 +1456,7 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
       "range": "- mmol/L"
     },
     {
-      "id": "img_39",
+      "id": "img_37",
       "name": "Serum cholesterol/HDL ratio",
       "value": 4.3,
       "unit": "",
@@ -1521,7 +1464,7 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
       "range": ""
     },
     {
-      "id": "img_41",
+      "id": "img_39",
       "name": "QRISK2 cardiovascular disease 10 year risk score",
       "value": 1.2,
       "unit": "%",
@@ -1537,43 +1480,10 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
 ```json
 [
   {
-    "id": "img_34",
-    "medicalInsight": "The QRISK2 10-year cardiovascular disease risk score is 1.2 percent, indicating a low risk category (<10 percent) for this 43-year-old male, stable compared to the 2025 assessment.",
-    "optimalValue": "<1.0%",
-    "editReason": "",
-    "logs": [
-      {
-        "date": "2026-06-04",
-        "value": 1.2,
-        "unit": "%",
-        "comment": "GP result"
-      }
-    ],
-    "match": "none",
-    "writeTarget": "pending",
-    "key": null,
-    "newCatalogDraft": {
-      "suggestedKey": "qrisk2_10yr_risk",
-      "name": "QRISK2 cardiovascular disease 10 year risk score",
-      "unit": "%",
-      "aliases": [
-        "QRISK2 score",
-        "CVD 10 year risk"
-      ],
-      "normalRange": "[UK NICE] Low Risk: <10%; Moderate Risk: 10-20%; High Risk: >20%",
-      "description": "Algorithm for predicting 10-year risk of developing cardiovascular disease.",
-      "riskCategories": [
-        "Cardiovascular",
-        "Metabolic"
-      ]
-    },
-    "customRangeOverlay": "[UK NICE] Low Risk: <10%; Moderate Risk: 10-20%; High Risk: >20%"
-  },
-  {
-    "id": "img_38",
-    "medicalInsight": "Non-HDL cholesterol level is 5 mmol/L, which is elevated and indicates an increased risk for atherosclerotic cardiovascular disease, requiring lifestyle modification and dietary review.",
-    "optimalValue": "<3.0 mmol/L",
-    "editReason": "",
+    "id": "img_36",
+    "medicalInsight": "Non-HDL cholesterol of 5 mmol/L is elevated, reflecting increased cardiovascular risk requiring lifestyle modification or potential intervention.",
+    "optimalValue": "2.6 mmol/L",
+    "editReason": "Target optimal level for non-HDL cholesterol is below 2.6 mmol/L for healthy adults.",
     "logs": [
       {
         "date": "2026-06-03",
@@ -1587,26 +1497,26 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
     "key": null,
     "newCatalogDraft": {
       "suggestedKey": "serum_non_hdl_cholesterol",
-      "name": "Serum non HDL cholesterol level",
+      "name": "Serum non-HDL cholesterol",
       "unit": "mmol/L",
       "aliases": [
-        "Non-HDL cholesterol",
-        "Non HDL C"
+        "Non-HDL Cholesterol",
+        "Se non HDL cholesterol level"
       ],
-      "normalRange": "[Standard Clinical] Optimal: <3.8 mmol/L; Borderline High: 3.8-4.9 mmol/L; High: >=5.0 mmol/L",
-      "description": "Calculated total cholesterol minus HDL cholesterol, representing all atherogenic particles.",
+      "normalRange": "[Western Standard] High: >=4.1; Borderline High: 3.4-4.0; Optimal: <3.4",
+      "description": "Total cholesterol minus HDL cholesterol, representing atherogenic lipoproteins.",
       "riskCategories": [
         "Cardiovascular",
-        "Lipid"
+        "Lipids"
       ]
     },
-    "customRangeOverlay": "[Standard Clinical] Optimal: <3.8 mmol/L; Borderline High: 3.8-4.9 mmol/L; High: >=5.0 mmol/L"
+    "customRangeOverlay": "[Western Standard] High: >=4.1; Borderline High: 3.4-4.0; Optimal: <3.4"
   },
   {
-    "id": "img_39",
-    "medicalInsight": "Serum cholesterol to HDL ratio is 4.3, reflecting a moderate cardiovascular risk profile typical of borderline lipid ratios in adult males.",
-    "optimalValue": "<3.5",
-    "editReason": "",
+    "id": "img_37",
+    "medicalInsight": "Cholesterol to HDL ratio of 4.3 falls within the average risk category for cardiovascular disease.",
+    "optimalValue": "3.0",
+    "editReason": "Optimal total cholesterol to HDL ratio is typically below 3.0 to minimize cardiovascular risk.",
     "logs": [
       {
         "date": "2026-06-03",
@@ -1623,23 +1533,23 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
       "name": "Serum cholesterol/HDL ratio",
       "unit": "",
       "aliases": [
-        "Total cholesterol to HDL ratio",
-        "Chol/HDL ratio"
+        "Cholesterol/HDL Ratio",
+        "Total/HDL Ratio"
       ],
-      "normalRange": "[Standard Clinical] Optimal: <4.0; Borderline: 4.0-5.0; High Risk: >5.0",
-      "description": "Ratio of total serum cholesterol to high-density lipoprotein cholesterol used to assess heart disease risk.",
+      "normalRange": "[Western Standard] High: >5.0; Average: 3.5-5.0; Optimal: <3.5",
+      "description": "Ratio of total serum cholesterol to high-density lipoprotein cholesterol.",
       "riskCategories": [
         "Cardiovascular",
-        "Lipid"
+        "Lipids"
       ]
     },
-    "customRangeOverlay": "[Standard Clinical] Optimal: <4.0; Borderline: 4.0-5.0; High Risk: >5.0"
+    "customRangeOverlay": "[Western Standard] High: >5.0; Average: 3.5-5.0; Optimal: <3.5"
   },
   {
-    "id": "img_41",
-    "medicalInsight": "Historical QRISK2 10-year cardiovascular disease risk score from June 2025 is 1.2 percent, demonstrating sustained low cardiovascular risk over the past year.",
-    "optimalValue": "<1.0%",
-    "editReason": "",
+    "id": "img_39",
+    "medicalInsight": "QRISK2 10-year cardiovascular disease risk score of 1.2% indicates a low risk profile.",
+    "optimalValue": "1.0 %",
+    "editReason": "Target optimal QRISK2 score is as low as possible, ideally under 5.0%.",
     "logs": [
       {
         "date": "2025-06-26",
@@ -1652,21 +1562,21 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
     "writeTarget": "pending",
     "key": null,
     "newCatalogDraft": {
-      "suggestedKey": "qrisk2_10yr_risk",
+      "suggestedKey": "qrisk2_cvd_10_year_risk",
       "name": "QRISK2 cardiovascular disease 10 year risk score",
       "unit": "%",
       "aliases": [
-        "QRISK2 score",
-        "CVD 10 year risk"
+        "QRISK2 Score",
+        "10-year CVD Risk"
       ],
-      "normalRange": "[UK NICE] Low Risk: <10%; Moderate Risk: 10-20%; High Risk: >20%",
-      "description": "Algorithm for predicting 10-year risk of developing cardiovascular disease.",
+      "normalRange": "[Western Standard] High Risk: >=10.0; Moderate Risk: 5.0-9.9; Low Risk: <5.0",
+      "description": "Algorithm that calculates the 10-year risk of developing a cardiovascular event.",
       "riskCategories": [
         "Cardiovascular",
-        "Metabolic"
+        "Risk Assessment"
       ]
     },
-    "customRangeOverlay": "[UK NICE] Low Risk: <10%; Moderate Risk: 10-20%; High Risk: >20%"
+    "customRangeOverlay": "[Western Standard] High Risk: >=10.0; Moderate Risk: 5.0-9.9; Low Risk: <5.0"
   }
 ]
 ```
@@ -1688,34 +1598,32 @@ Biomarkers to review (misses - uncataloged, draft catalog entry):
 | img_11 | Serum total bilirubin level | none | pending | — | — | serum_total_bilirubin | — |
 | img_12 | Serum total protein | alias | observation | — | total_protein | — | — |
 | img_13 | Serum globulin | none | pending | — | — | serum_globulin | — |
-| img_14 | Serum albumin | key | observation | — | serum_albumin | — | — |
-| img_15 | Serum alkaline phosphatase | none | pending | — | — | serum_alkaline_phosphatase_dup | — |
-| img_16 | Serum calcium | none | pending | — | — | serum_calcium | — |
-| img_17 | Serum adjusted calcium conc | none | pending | — | — | serum_adjusted_calcium | — |
-| img_18 | Serum inorganic phosphate | none | pending | — | — | serum_inorganic_phosphate | — |
-| img_19 | Total white cell count | alias | observation | — | wbc | — | — |
-| img_20 | Red blood cell (RBC) count | alias | observation | — | rbc | — | — |
-| img_21 | Haemoglobin estimation | alias | observation | — | hemoglobin | — | — |
-| img_22 | Haematocrit | alias | observation | — | hematocrit | — | — |
-| img_23 | Mean corpuscular volume (MCV) | alias | observation | — | mean_corpuscular_volume | — | — |
-| img_24 | Mean corpusc. haemoglobin(MCH) | alias | observation | — | mean_corpuscular_hemoglobin | — | — |
-| img_25 | Mean corpusc. Hb. conc. (MCHC) | alias | observation | — | mean_corpuscular_hemoglobin_concentration | — | — |
-| img_26 | Red blood cell distribut width | alias | observation | — | rdw | — | — |
-| img_27 | Platelet count | alias | observation | — | platelets | — | — |
-| img_28 | Mean platelet volume | alias | observation | — | mpv | — | — |
-| img_29 | Platelet distribution width | none | pending | — | — | platelet_distribution_width | — |
-| img_30 | Neutrophil count | key | observation | — | neutrophil_count | — | — |
-| img_31 | Eosinophil count | key | observation | — | eosinophil_count | — | — |
-| img_32 | Basophil count | key | observation | — | basophil_count | — | — |
-| img_33 | Nucleated red blood cell count | none | pending | — | — | nucleated_red_blood_cell_count | — |
-| img_34 | QRISK2 cardiovascular disease 10 year risk score | none | pending | — | — | qrisk2_10yr_risk | — |
-| img_35 | Serum cholesterol | alias | observation | — | total_cholesterol | — | — |
-| img_36 | Serum HDL cholesterol level | alias | observation | — | hdl | — | — |
-| img_37 | Serum triglycerides | alias | observation | — | triglycerides | — | — |
-| img_38 | Se non HDL cholesterol level | none | pending | — | — | serum_non_hdl_cholesterol | — |
-| img_39 | Serum cholesterol/HDL ratio | none | pending | — | — | serum_cholesterol_hdl_ratio | — |
-| img_40 | Calculated LDL cholesterol lev | alias | observation | — | ldl | — | — |
-| img_41 | QRISK2 cardiovascular disease 10 year risk score | none | pending | — | — | qrisk2_10yr_risk | — |
+| img_14 | Serum calcium | none | pending | — | — | serum_calcium | — |
+| img_15 | Serum adjusted calcium conc | none | pending | — | — | serum_adjusted_calcium | — |
+| img_16 | Serum inorganic phosphate | none | pending | — | — | serum_inorganic_phosphate | — |
+| img_17 | Total white cell count | alias | observation | — | wbc | — | — |
+| img_18 | Red blood cell (RBC) count | alias | observation | — | rbc | — | — |
+| img_19 | Haemoglobin estimation | alias | observation | — | hemoglobin | — | — |
+| img_20 | Haematocrit | alias | observation | — | hematocrit | — | — |
+| img_21 | Mean corpuscular volume (MCV) | alias | observation | — | mean_corpuscular_volume | — | — |
+| img_22 | Mean corpusc. haemoglobin(MCH) | alias | observation | — | mean_corpuscular_hemoglobin | — | — |
+| img_23 | Mean corpusc. Hb. conc. (MCHC) | alias | observation | — | mean_corpuscular_hemoglobin_concentration | — | — |
+| img_24 | Red blood cell distribut width | alias | observation | — | rdw | — | — |
+| img_25 | Platelet count | alias | observation | — | platelets | — | — |
+| img_26 | Mean platelet volume | alias | observation | — | mpv | — | — |
+| img_27 | Platelet distribution width | none | pending | — | — | platelet_distribution_width | — |
+| img_28 | Neutrophil count | key | observation | — | neutrophil_count | — | — |
+| img_29 | Eosinophil count | key | observation | — | eosinophil_count | — | — |
+| img_30 | Basophil count | key | observation | — | basophil_count | — | — |
+| img_31 | Nucleated red blood cell count | none | pending | — | — | nucleated_red_blood_cell_count | — |
+| img_32 | QRISK2 cardiovascular disease 10 year risk score | none | pending | — | — | qrisk2_cvd_risk_score | — |
+| img_33 | Serum cholesterol | alias | observation | — | total_cholesterol | — | — |
+| img_34 | Serum HDL cholesterol level | alias | observation | — | hdl | — | — |
+| img_35 | Serum triglycerides | alias | observation | — | triglycerides | — | — |
+| img_36 | Se non HDL cholesterol level | none | pending | — | — | serum_non_hdl_cholesterol | — |
+| img_37 | Serum cholesterol/HDL ratio | none | pending | — | — | serum_cholesterol_hdl_ratio | — |
+| img_38 | Calculated LDL cholesterol lev | alias | observation | — | ldl | — | — |
+| img_39 | QRISK2 cardiovascular disease 10 year risk score | none | pending | — | — | qrisk2_cvd_10_year_risk | — |
 
 ## Contract checks
 

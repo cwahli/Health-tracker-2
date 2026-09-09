@@ -20,21 +20,21 @@
         "r09",
         "r10"
       ],
-      "ms": 10604,
+      "ms": 7992,
       "n": 10,
-      "raw": "{\n  \"rows\": [\n    {\n      \"id\": \"r01\",\n      \"medicalInsight\": \"Prostate-specific antigen (PSA) level is 1.41 ug/L, which is within the normal reference range. For a 43-year-old male, this is a reassuring baseline.\",\n      \"optimalValue\": \"1.0 ug/L\",\n      \"editReason\": \"Provides an optimal target below the upper reference limit for early detection awareness.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 1.41,\n          \"unit\": \"ug/L\",\n          \"comment\": \"Satisfactory - No Action\"\n        }\n      ],\n      \"match\": \"none\",\n      \"writeTarget\": \"pending\",\n      \"key\": null,\n      \"newCatalogDraft\": {\n        \"suggestedKey\": \"se_prostate_specific_ag_level\",\n        \"name\": \"Se prostate specific Ag level\",\n        \"unit\": \"ug/L\",\n        \"aliases\": [\"PSA\", \"Prostate Specific Antigen\"],\n        \"normalRange\": \"[Standard] Normal: <=2.49; Elevated: >2.49\",\n        \"description\": \"Prostate-specific antigen blood test used primarily to screen for prostate cancer.\",\n        \"riskCategories\": [\"Prostate Health\"]\n      },\n      \"customRangeOverlay\": \"[Standard] Normal: <=2.49; Elevated: >2.49\"\n    },\n    {\n      \"id\": \"r02\",\n      \"medicalInsight\": \"Serum sodium is 143 mmol/L, well within the normal physiological range, indicating normal body hydration and electrolyte balance.\",\n      \"optimalValue\": \"140 mmol/L\",\n      \"editReason\": \"Target midpoint of normal sodium balance.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 143,\n          \"unit\": \"mmol/L\",\n          \"comment\": null\n        }\n      ],\n      \"match\": \"none\",\n      \"writeTarget\": \"pending\",\n      \"key\": null,\n      \"newCatalogDraft\": {\n        \"suggestedKey\": \"serum_sodium\",\n        \"name\": \"Serum sodium\",\n        \"unit\": \"mmol/L\",\n        \"aliases\": [\"Sodium\", \"Na\"],\n        \"normalRange\": \"[Standard] High: >146; Normal: 133-146; Low: <133\",\n        \"description\": \"Measurement of sodium concentration in the blood, essential for fluid balance and nerve function.\",\n        \"riskCategories\": [\"Electrolytes\"]\n      },\n      \"customRangeOverlay\": \"[Standard] High: >146; Normal: 133-146; Low: <133\"\n    },\n    {\n      \"id\": \"r03\",\n      \"medicalInsight\": \"Serum potassium is 4.3 mmol/L, perfectly optimal and indicative of healthy cellular function and cardiac electrophysiology.\",\n      \"optimalValue\": \"4.2 mmol/L\",\n      \"editReason\": \"Target median optimal potassium level.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 4.3,\n          \"unit\": \"mmol/L\",\n          \"comment\": null\n        }\n      ],\n      \"match\": \"none\",\n      \"writeTarget\": \"pending\",\n      \"key\": null,\n      \"newCatalogDraft\": {\n        \"suggestedKey\": \"serum_potassium\",\n        \"name\": \"Serum potassium\",\n        \"unit\": \"mmol/L\",\n        \"aliases\": [\"Potassium\", \"K\"],\n        \"normalRange\": \"[Standard] High: >5.3; Normal: 3.5-5.3; Low: <3.5\",\n        \"description\": \"Measurement of potassium in blood, critical for heart and skeletal muscle function.\",\n        \"riskCategories\": [\"Electrolytes\"]\n      },\n      \"customRangeOverlay\": \"[Standard] High: >5.3; Normal: 3.5-5.3; Low: <3.5\"\n    },\n    {\n      \"id\": \"r04\",\n      \"medicalInsight\": \"Serum alkaline phosphatase is 39 U/L, situated safely within the normal range, reflecting healthy liver and bone metabolism.\",\n      \"optimalValue\": \"70 U/L\",\n      \"editReason\": \"Target middle of standard reference interval.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 39,\n          \"unit\": \"U/L\",\n          \"comment\": null\n        }\n      ],\n      \"match\": \"none\",\n      \"writeTarget\": \"pending\",\n      \"key\": null,\n      \"newCatalogDraft\": {\n        \"suggestedKey\": \"serum_alkaline_phosphatase\",\n        \"name\": \"Serum alkaline phosphatase\",\n        \"unit\": \"U/L\",\n        \"aliases\": [\"ALP\", \"Alkaline Phosphatase\"],\n        \"normalRange\": \"[Standard] High: >130; Normal: 30-130; Low: <30\",\n        \"description\": \"Enzyme found in several tissues throughout the body, most notably the liver, bones, kidneys, and digestive tract.\",\n        \"riskCategories\": [\"Liver Function\", \"Bone Health\"]\n      },\n      \"customRangeOverlay\": \"[Standard] High: >130; Normal: 30-130; Low: <30\"\n    },\n    {\n      \"id\": \"r05\",\n      \"medicalInsight\": \"Serum total bilirubin level is 16 umol/L, well within normal limits, indicating normal hepatic processing and clearance of red blood cell breakdown products.\",\n      \"optimalValue\": \"10 umol/L\",\n      \"editReason\": \"Optimal target for healthy hepatic clearance.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 16,\n          \"unit\": \"umol/L\",\n          \"comment\": null\n        }\n      ],\n      \"match\": \"none\",\n      \"writeTarget\": \"pending\",\n      \"key\": null,\n      \"newCatalogDraft\": {\n        \"suggestedKey\": \"serum_total_bilirubin_level\",\n        \"name\": \"Serum total bilirubin level\",\n        \"unit\": \"umol/L\",\n        \"aliases\": [\"Total Bilirubin\", \"Bilirubin\"],\n        \"normalRange\": \"[Standard] High: >21; Normal: 0-21\",\n        \"description\": \"Yellowish pigment found in bile, produced by the liver.\",\n        \"riskCategories\": [\"Liver Function\"]\n      },\n      \"customRangeOverlay\": \"[Standard] High: >21; Normal: 0-21\"\n    },\n    {\n      \"id\": \"r06\",\n      \"medicalInsight\": \"Serum globulin is 35 g/L, falling comfortably within the expected reference interval, representing normal immune protein and carrier protein synthesis.\",\n      \"optimalValue\": \"30 g/L\",\n      \"editReason\": \"Target mid-range for optimal globulin balance.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 35,\n          \"unit\": \"g/L\",\n          \"comment\": null\n        }\n      ],\n      \"match\": \"none\",\n      \"writeTarget\": \"pending\",\n      \"key\": null,\n      \"newCatalogDraft\": {\n        \"suggestedKey\": \"serum_globulin\",\n        \"name\": \"Serum globulin\",\n        \"unit\": \"g/L\",\n        \"aliases\": [\"Globulin\"],\n        \"normalRange\": \"[Standard] High: >38; Normal: 22-38; Low: <22\",\n        \"description\": \"Major group of plasma proteins in the blood acting as immunoglobulins and carrier proteins.\",\n        \"riskCategories\": [\"Protein Status\", \"Liver Function\"]\n      },\n      \"customRangeOverlay\": \"[Standard] High: >38; Normal: 22-38; Low: <22\"\n    },\n    {\n      \"id\": \"r07\",\n      \"medicalInsight\": \"Serum calcium is 2.47 mmol/L, indicating normal total systemic calcium availability.\",\n      \"optimalValue\": \"2.35 mmol/L\",\n      \"editReason\": \"Target optimal mid-point for systemic calcium homeostasis.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 2.47,\n          \"unit\": \"mmol/L\",\n          \"comment\": null\n        }\n      ],\n      \"match\": \"none\",\n      \"writeTarget\": \"pending\",\n      \"key\": null,\n      \"newCatalogDraft\": {\n        \"suggestedKey\": \"serum_calcium\",\n        \"name\": \"Serum calcium\",\n        \"unit\": \"mmol/L\",\n        \"aliases\": [\"Calcium\", \"Ca\"],\n        \"normalRange\": \"[Standard] Normal: 2.10-2.60; High: >2.60; Low: <2.10\",\n        \"description\": \"Total amount of calcium circulating in the blood stream.\",\n        \"riskCategories\": [\"Bone Health\", \"Electrolytes\"]\n      },\n      \"customRangeOverlay\": \"[Standard] Normal: 2.10-2.60; High: >2.60; Low: <2.10\"\n    },\n    {\n      \"id\": \"r08\",\n      \"medicalInsight\": \"Serum adjusted calcium concentration is 2.37 mmol/L, well within the laboratory's updated reference range, indicating proper calcium correction relative to albumin.\",\n      \"optimalValue\": \"2.28 mmol/L\",\n      \"editReason\": \"Target optimal midpoint for adjusted calcium.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 2.37,\n          \"unit\": \"mmol/L\",\n          \"comment\": \"New adjusted calcium equation and new adjusted calcium Abbott Alinity reference ranges in use from 22/09/25.\"\n        }\n      ],\n      \"match\": \"none\",\n      \"writeTarget\": \"pending\",\n      \"key\": null,\n      \"newCatalogDraft\": {\n        \"suggestedKey\": \"serum_adjusted_calcium_conc\",\n        \"name\": \"Serum adjusted calcium conc\",\n        \"unit\": \"mmol/L\",\n        \"aliases\": [\"Adjusted Calcium\", \"Corrected Calcium\"],\n        \"normalRange\": \"[Standard] High: >2.48; Normal: 2.08-2.48; Low: <2.08\",\n        \"description\": \"Calcium level adjusted for variations in serum albumin concentration.\",\n        \"riskCategories\": [\"Bone Health\", \"Electrolytes\"]\n      },\n      \"customRangeOverlay\": \"[Standard] High: >2.48; Normal: 2.08-2.48; Low: <2.08\"\n    },\n    {\n      \"id\": \"r09\",\n      \"medicalInsight\": \"Serum inorganic phosphate is 1.12 mmol/L, well inside the reference limits, supporting normal bone mineralization and cellular energy metabolism.\",\n      \"optimalValue\": \"1.15 mmol/L\",\n      \"editReason\": \"Target stable physiological midpoint for phosphate.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 1.12,\n          \"unit\": \"mmol/L\",\n          \"comment\": null\n        }\n      ],\n      \"match\": \"none\",\n      \"writeTarget\": \"pending\",\n      \"key\": null,\n      \"newCatalogDraft\": {\n        \"suggestedKey\": \"serum_inorganic_phosphate\",\n        \"name\": \"Serum inorganic phosphate\",\n        \"unit\": \"mmol/L\",\n        \"aliases\": [\"Phosphate\", \"Phosphorus\"],\n        \"normalRange\": \"[Standard] High: >1.50; Normal: 0.80-1.50; Low: <0.80\",\n        \"description\": \"Measurement of inorganic phosphorus compounds in the blood crucial for energy transfer and bone structure.\",\n        \"riskCategories\": [\"Bone Health\", \"Metabolic Health\"]\n      },\n      \"customRangeOverlay\": \"[Standard] High: >1.50; Normal: 0.80-1.50; Low: <0.80\"\n    },\n    {\n      \"id\": \"r10\",\n      \"medicalInsight\": \"Homocysteine is 10.2 umol/L, which is within the safe reference range (< 15.0 umol/L), suggesting adequate B-vitamin status and low cardiovascular metabolic risk.\",\n      \"optimalValue\": \"8.0 umol/L\",\n      \"editReason\": \"Target optimal lower homocysteine level for optimal vascular health.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 10.2,\n          \"unit\": \"umol/L\",\n          \"comment\": null\n        }\n      ],\n      \"match\": \"none\",\n      \"writeTarget\": \"pending\",\n      \"key\": null,\n      \"newCatalogDraft\": {\n        \"suggestedKey\": \"homocysteine\",\n        \"name\": \"Homocysteine\",\n        \"unit\": \"umol/L\",\n        \"aliases\": [\"Homocysteine Level\"],\n        \"normalRange\": \"[Standard] Normal: <15.0; High: >=15.0\",\n        \"description\": \"An amino acid in the body whose high levels are linked to heart disease and stroke.\",\n        \"riskCategories\": [\"Cardiovascular Health\", \"Methylation\"]\n      },\n      \"customRangeOverlay\": \"[Standard] Normal: <15.0; High: >=15.0\"\n    }\n  ]\n}",
+      "raw": "{\n  \"rows\": [\n    {\n      \"id\": \"r01\",\n      \"medicalInsight\": \"Prostate-specific antigen (PSA) level is 1.41 ug/L, which is within the normal reference range, indicating a satisfactory result with no acute prostatic concern for this 43-year-old male.\",\n      \"optimalValue\": \"1.0 ug/L\",\n      \"editReason\": \"Target set to optimal low-risk baseline for young adult males.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 1.41,\n          \"unit\": \"ug/L\",\n          \"comment\": \"OlaFRS - Satisfactory - No Action\"\n        }\n      ],\n      \"match\": \"none\",\n      \"writeTarget\": \"pending\",\n      \"key\": null,\n      \"newCatalogDraft\": {\n        \"suggestedKey\": \"se_prostate_specific_ag_level\",\n        \"name\": \"Se prostate specific Ag level\",\n        \"unit\": \"ug/L\",\n        \"aliases\": [\n          \"PSA\",\n          \"Prostate Specific Antigen\"\n        ],\n        \"normalRange\": \"[Standard] Normal: <=2.49; High: >2.49\",\n        \"description\": \"Prostate-specific antigen test measures the level of PSA in the blood.\",\n        \"riskCategories\": [\n          \"Prostate Health\"\n        ]\n      },\n      \"customRangeOverlay\": \"[Standard] Normal: <=2.49; High: >2.49\"\n    },\n    {\n      \"id\": \"r02\",\n      \"medicalInsight\": \"Serum sodium is 143 mmol/L, reflecting normal fluid and electrolyte balance.\",\n      \"optimalValue\": \"140 mmol/L\",\n      \"editReason\": \"Mid-normal physiological target.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 143,\n          \"unit\": \"mmol/L\",\n          \"comment\": null\n        }\n      ],\n      \"match\": \"none\",\n      \"writeTarget\": \"pending\",\n      \"key\": null,\n      \"newCatalogDraft\": {\n        \"suggestedKey\": \"serum_sodium\",\n        \"name\": \"Serum sodium\",\n        \"unit\": \"mmol/L\",\n        \"aliases\": [\n          \"Sodium\",\n          \"Na\"\n        ],\n        \"normalRange\": \"[Standard] High: >146; Normal: 133-146; Low: <133\",\n        \"description\": \"Measures sodium level in blood for hydration and electrolyte status.\",\n        \"riskCategories\": [\n          \"Electrolytes\"\n        ]\n      },\n      \"customRangeOverlay\": \"[Standard] High: >146; Normal: 133-146; Low: <133\"\n    },\n    {\n      \"id\": \"r03\",\n      \"medicalInsight\": \"Serum potassium is 4.3 mmol/L, well within the healthy reference range.\",\n      \"optimalValue\": \"4.2 mmol/L\",\n      \"editReason\": \"Optimal homeostatic target for cardiac and neuromuscular function.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 4.3,\n          \"unit\": \"mmol/L\",\n          \"comment\": null\n        }\n      ],\n      \"match\": \"none\",\n      \"writeTarget\": \"pending\",\n      \"key\": null,\n      \"newCatalogDraft\": {\n        \"suggestedKey\": \"serum_potassium\",\n        \"name\": \"Serum potassium\",\n        \"unit\": \"mmol/L\",\n        \"aliases\": [\n          \"Potassium\",\n          \"K\"\n        ],\n        \"normalRange\": \"[Standard] High: >5.3; Normal: 3.5-5.3; Low: <3.5\",\n        \"description\": \"Measures potassium levels crucial for cellular and cardiac function.\",\n        \"riskCategories\": [\n          \"Electrolytes\"\n        ]\n      },\n      \"customRangeOverlay\": \"[Standard] High: >5.3; Normal: 3.5-5.3; Low: <3.5\"\n    },\n    {\n      \"id\": \"r04\",\n      \"medicalInsight\": \"Serum alkaline phosphatase is 39 U/L, indicating normal hepatobiliary and bone metabolic activity.\",\n      \"optimalValue\": \"70 U/L\",\n      \"editReason\": \"Center of typical healthy adult reference interval.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 39,\n          \"unit\": \"U/L\",\n          \"comment\": null\n        }\n      ],\n      \"match\": \"none\",\n      \"writeTarget\": \"pending\",\n      \"key\": null,\n      \"newCatalogDraft\": {\n        \"suggestedKey\": \"serum_alkaline_phosphatase\",\n        \"name\": \"Serum alkaline phosphatase\",\n        \"unit\": \"U/L\",\n        \"aliases\": [\n          \"ALP\",\n          \"Alkaline Phosphatase\"\n        ],\n        \"normalRange\": \"[Standard] High: >130; Normal: 30-130; Low: <30\",\n        \"description\": \"Enzyme associated with liver, biliary tract, and bone.\",\n        \"riskCategories\": [\n          \"Liver Function\",\n          \"Bone Health\"\n        ]\n      },\n      \"customRangeOverlay\": \"[Standard] High: >130; Normal: 30-130; Low: <30\"\n    },\n    {\n      \"id\": \"r05\",\n      \"medicalInsight\": \"Serum total bilirubin is 16 umol/L, falling within normal physiological limits.\",\n      \"optimalValue\": \"10 umol/L\",\n      \"editReason\": \"Optimal baseline for hepatic clearance.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 16,\n          \"unit\": \"umol/L\",\n          \"comment\": null\n        }\n      ],\n      \"match\": \"none\",\n      \"writeTarget\": \"pending\",\n      \"key\": null,\n      \"newCatalogDraft\": {\n        \"suggestedKey\": \"serum_total_bilirubin_level\",\n        \"name\": \"Serum total bilirubin level\",\n        \"unit\": \"umol/L\",\n        \"aliases\": [\n          \"Total Bilirubin\",\n          \"Bili\"\n        ],\n        \"normalRange\": \"[Standard] High: >21; Normal: <=21\",\n        \"description\": \"Measures total bilirubin resulting from hemoglobin breakdown.\",\n        \"riskCategories\": [\n          \"Liver Function\"\n        ]\n      },\n      \"customRangeOverlay\": \"[Standard] High: >21; Normal: <=21\"\n    },\n    {\n      \"id\": \"r06\",\n      \"medicalInsight\": \"Serum globulin is 35 g/L, representing a normal immunological and protein synthetic profile.\",\n      \"optimalValue\": \"28 g/L\",\n      \"editReason\": \"Optimal median target.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 35,\n          \"unit\": \"g/L\",\n          \"comment\": null\n        }\n      ],\n      \"match\": \"none\",\n      \"writeTarget\": \"pending\",\n      \"key\": null,\n      \"newCatalogDraft\": {\n        \"suggestedKey\": \"serum_globulin\",\n        \"name\": \"Serum globulin\",\n        \"unit\": \"g/L\",\n        \"aliases\": [\n          \"Globulin\"\n        ],\n        \"normalRange\": \"[Standard] High: >38; Normal: 22-38; Low: <22\",\n        \"description\": \"Measures non-albumin serum proteins involved in immune response.\",\n        \"riskCategories\": [\n          \"Protein Status\",\n          \"Immune Function\"\n        ]\n      },\n      \"customRangeOverlay\": \"[Standard] High: >38; Normal: 22-38; Low: <22\"\n    },\n    {\n      \"id\": \"r07\",\n      \"medicalInsight\": \"Serum calcium is 2.47 mmol/L, reflecting normal unadjusted systemic calcium levels.\",\n      \"optimalValue\": \"2.35 mmol/L\",\n      \"editReason\": \"Standard physiological target for systemic calcium.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 2.47,\n          \"unit\": \"mmol/L\",\n          \"comment\": null\n        }\n      ],\n      \"match\": \"none\",\n      \"writeTarget\": \"pending\",\n      \"key\": null,\n      \"newCatalogDraft\": {\n        \"suggestedKey\": \"serum_calcium\",\n        \"name\": \"Serum calcium\",\n        \"unit\": \"mmol/L\",\n        \"aliases\": [\n          \"Calcium\",\n          \"Ca\"\n        ],\n        \"normalRange\": \"[Standard] Normal: 2.10-2.55; High: >2.55; Low: <2.10\",\n        \"description\": \"Measures total calcium in the blood.\",\n        \"riskCategories\": [\n          \"Bone Health\",\n          \"Mineral Metabolism\"\n        ]\n      },\n      \"customRangeOverlay\": \"[Standard] Normal: 2.10-2.55; High: >2.55; Low: <2.10\"\n    },\n    {\n      \"id\": \"r08\",\n      \"medicalInsight\": \"Serum adjusted calcium concentration is 2.37 mmol/L, well within the normal updated reference range, indicating proper protein-corrected calcium homeostasis.\",\n      \"optimalValue\": \"2.30 mmol/L\",\n      \"editReason\": \"Optimal target for albumin-adjusted calcium.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 2.37,\n          \"unit\": \"mmol/L\",\n          \"comment\": \"New adjusted calcium equation and Abbott Alinity reference ranges in use.\"\n        }\n      ],\n      \"match\": \"none\",\n      \"writeTarget\": \"pending\",\n      \"key\": null,\n      \"newCatalogDraft\": {\n        \"suggestedKey\": \"serum_adjusted_calcium_conc\",\n        \"name\": \"Serum adjusted calcium conc\",\n        \"unit\": \"mmol/L\",\n        \"aliases\": [\n          \"Adjusted Calcium\",\n          \"Corrected Calcium\"\n        ],\n        \"normalRange\": \"[Standard] High: >2.48; Normal: 2.08-2.48; Low: <2.08\",\n        \"description\": \"Calcium level adjusted for serum albumin levels.\",\n        \"riskCategories\": [\n          \"Bone Health\",\n          \"Mineral Metabolism\"\n        ]\n      },\n      \"customRangeOverlay\": \"[Standard] High: >2.48; Normal: 2.08-2.48; Low: <2.08\"\n    },\n    {\n      \"id\": \"r09\",\n      \"medicalInsight\": \"Serum inorganic phosphate is 1.12 mmol/L, supporting healthy cellular energy metabolism and bone homeostasis.\",\n      \"optimalValue\": \"1.10 mmol/L\",\n      \"editReason\": \"Ideal central phosphate concentration.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 1.12,\n          \"unit\": \"mmol/L\",\n          \"comment\": null\n        }\n      ],\n      \"match\": \"none\",\n      \"writeTarget\": \"pending\",\n      \"key\": null,\n      \"newCatalogDraft\": {\n        \"suggestedKey\": \"serum_inorganic_phosphate\",\n        \"name\": \"Serum inorganic phosphate\",\n        \"unit\": \"mmol/L\",\n        \"aliases\": [\n          \"Phosphate\",\n          \"Phosphorus\"\n        ],\n        \"normalRange\": \"[Standard] High: >1.50; Normal: 0.80-1.50; Low: <0.80\",\n        \"description\": \"Measures inorganic phosphorus levels in the blood.\",\n        \"riskCategories\": [\n          \"Bone Health\",\n          \"Mineral Metabolism\"\n        ]\n      },\n      \"customRangeOverlay\": \"[Standard] High: >1.50; Normal: 0.80-1.50; Low: <0.80\"\n    },\n    {\n      \"id\": \"r10\",\n      \"medicalInsight\": \"Homocysteine is 10.2 umol/L, which is within the optimal low-risk threshold (< 15.0 umol/L), indicating healthy one-carbon metabolism and vitamin B status.\",\n      \"optimalValue\": \"8.0 umol/L\",\n      \"editReason\": \"Optimal target for cardiovascular and methylation health.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 10.2,\n          \"unit\": \"umol/L\",\n          \"comment\": null\n        }\n      ],\n      \"match\": \"none\",\n      \"writeTarget\": \"pending\",\n      \"key\": null,\n      \"newCatalogDraft\": {\n        \"suggestedKey\": \"homocysteine\",\n        \"name\": \"Homocysteine\",\n        \"unit\": \"umol/L\",\n        \"aliases\": [\n          \"Total Homocysteine\",\n          \"Hcy\"\n        ],\n        \"normalRange\": \"[Standard] Normal: <15.0; High: >=15.0\",\n        \"description\": \"Amino acid in the blood associated with cardiovascular and methylation status when elevated.\",\n        \"riskCategories\": [\n          \"Cardiovascular Health\",\n          \"Methylation\"\n        ]\n      },\n      \"customRangeOverlay\": \"[Standard] Normal: <15.0; High: >=15.0\"\n    }\n  ]\n}",
       "rows": [
         {
           "id": "r01",
-          "medicalInsight": "Prostate-specific antigen (PSA) level is 1.41 ug/L, which is within the normal reference range. For a 43-year-old male, this is a reassuring baseline.",
+          "medicalInsight": "Prostate-specific antigen (PSA) level is 1.41 ug/L, which is within the normal reference range, indicating a satisfactory result with no acute prostatic concern for this 43-year-old male.",
           "optimalValue": "1.0 ug/L",
-          "editReason": "Provides an optimal target below the upper reference limit for early detection awareness.",
+          "editReason": "Target set to optimal low-risk baseline for young adult males.",
           "logs": [
             {
               "date": "2026-06-05",
               "value": 1.41,
               "unit": "ug/L",
-              "comment": "Satisfactory - No Action"
+              "comment": "OlaFRS - Satisfactory - No Action"
             }
           ],
           "match": "none",
@@ -48,19 +48,19 @@
               "PSA",
               "Prostate Specific Antigen"
             ],
-            "normalRange": "[Standard] Normal: <=2.49; Elevated: >2.49",
-            "description": "Prostate-specific antigen blood test used primarily to screen for prostate cancer.",
+            "normalRange": "[Standard] Normal: <=2.49; High: >2.49",
+            "description": "Prostate-specific antigen test measures the level of PSA in the blood.",
             "riskCategories": [
               "Prostate Health"
             ]
           },
-          "customRangeOverlay": "[Standard] Normal: <=2.49; Elevated: >2.49"
+          "customRangeOverlay": "[Standard] Normal: <=2.49; High: >2.49"
         },
         {
           "id": "r02",
-          "medicalInsight": "Serum sodium is 143 mmol/L, well within the normal physiological range, indicating normal body hydration and electrolyte balance.",
+          "medicalInsight": "Serum sodium is 143 mmol/L, reflecting normal fluid and electrolyte balance.",
           "optimalValue": "140 mmol/L",
-          "editReason": "Target midpoint of normal sodium balance.",
+          "editReason": "Mid-normal physiological target.",
           "logs": [
             {
               "date": "2026-06-05",
@@ -81,7 +81,7 @@
               "Na"
             ],
             "normalRange": "[Standard] High: >146; Normal: 133-146; Low: <133",
-            "description": "Measurement of sodium concentration in the blood, essential for fluid balance and nerve function.",
+            "description": "Measures sodium level in blood for hydration and electrolyte status.",
             "riskCategories": [
               "Electrolytes"
             ]
@@ -90,9 +90,9 @@
         },
         {
           "id": "r03",
-          "medicalInsight": "Serum potassium is 4.3 mmol/L, perfectly optimal and indicative of healthy cellular function and cardiac electrophysiology.",
+          "medicalInsight": "Serum potassium is 4.3 mmol/L, well within the healthy reference range.",
           "optimalValue": "4.2 mmol/L",
-          "editReason": "Target median optimal potassium level.",
+          "editReason": "Optimal homeostatic target for cardiac and neuromuscular function.",
           "logs": [
             {
               "date": "2026-06-05",
@@ -113,7 +113,7 @@
               "K"
             ],
             "normalRange": "[Standard] High: >5.3; Normal: 3.5-5.3; Low: <3.5",
-            "description": "Measurement of potassium in blood, critical for heart and skeletal muscle function.",
+            "description": "Measures potassium levels crucial for cellular and cardiac function.",
             "riskCategories": [
               "Electrolytes"
             ]
@@ -122,9 +122,9 @@
         },
         {
           "id": "r04",
-          "medicalInsight": "Serum alkaline phosphatase is 39 U/L, situated safely within the normal range, reflecting healthy liver and bone metabolism.",
+          "medicalInsight": "Serum alkaline phosphatase is 39 U/L, indicating normal hepatobiliary and bone metabolic activity.",
           "optimalValue": "70 U/L",
-          "editReason": "Target middle of standard reference interval.",
+          "editReason": "Center of typical healthy adult reference interval.",
           "logs": [
             {
               "date": "2026-06-05",
@@ -145,7 +145,7 @@
               "Alkaline Phosphatase"
             ],
             "normalRange": "[Standard] High: >130; Normal: 30-130; Low: <30",
-            "description": "Enzyme found in several tissues throughout the body, most notably the liver, bones, kidneys, and digestive tract.",
+            "description": "Enzyme associated with liver, biliary tract, and bone.",
             "riskCategories": [
               "Liver Function",
               "Bone Health"
@@ -155,9 +155,9 @@
         },
         {
           "id": "r05",
-          "medicalInsight": "Serum total bilirubin level is 16 umol/L, well within normal limits, indicating normal hepatic processing and clearance of red blood cell breakdown products.",
+          "medicalInsight": "Serum total bilirubin is 16 umol/L, falling within normal physiological limits.",
           "optimalValue": "10 umol/L",
-          "editReason": "Optimal target for healthy hepatic clearance.",
+          "editReason": "Optimal baseline for hepatic clearance.",
           "logs": [
             {
               "date": "2026-06-05",
@@ -175,21 +175,21 @@
             "unit": "umol/L",
             "aliases": [
               "Total Bilirubin",
-              "Bilirubin"
+              "Bili"
             ],
-            "normalRange": "[Standard] High: >21; Normal: 0-21",
-            "description": "Yellowish pigment found in bile, produced by the liver.",
+            "normalRange": "[Standard] High: >21; Normal: <=21",
+            "description": "Measures total bilirubin resulting from hemoglobin breakdown.",
             "riskCategories": [
               "Liver Function"
             ]
           },
-          "customRangeOverlay": "[Standard] High: >21; Normal: 0-21"
+          "customRangeOverlay": "[Standard] High: >21; Normal: <=21"
         },
         {
           "id": "r06",
-          "medicalInsight": "Serum globulin is 35 g/L, falling comfortably within the expected reference interval, representing normal immune protein and carrier protein synthesis.",
-          "optimalValue": "30 g/L",
-          "editReason": "Target mid-range for optimal globulin balance.",
+          "medicalInsight": "Serum globulin is 35 g/L, representing a normal immunological and protein synthetic profile.",
+          "optimalValue": "28 g/L",
+          "editReason": "Optimal median target.",
           "logs": [
             {
               "date": "2026-06-05",
@@ -209,19 +209,19 @@
               "Globulin"
             ],
             "normalRange": "[Standard] High: >38; Normal: 22-38; Low: <22",
-            "description": "Major group of plasma proteins in the blood acting as immunoglobulins and carrier proteins.",
+            "description": "Measures non-albumin serum proteins involved in immune response.",
             "riskCategories": [
               "Protein Status",
-              "Liver Function"
+              "Immune Function"
             ]
           },
           "customRangeOverlay": "[Standard] High: >38; Normal: 22-38; Low: <22"
         },
         {
           "id": "r07",
-          "medicalInsight": "Serum calcium is 2.47 mmol/L, indicating normal total systemic calcium availability.",
+          "medicalInsight": "Serum calcium is 2.47 mmol/L, reflecting normal unadjusted systemic calcium levels.",
           "optimalValue": "2.35 mmol/L",
-          "editReason": "Target optimal mid-point for systemic calcium homeostasis.",
+          "editReason": "Standard physiological target for systemic calcium.",
           "logs": [
             {
               "date": "2026-06-05",
@@ -241,26 +241,26 @@
               "Calcium",
               "Ca"
             ],
-            "normalRange": "[Standard] Normal: 2.10-2.60; High: >2.60; Low: <2.10",
-            "description": "Total amount of calcium circulating in the blood stream.",
+            "normalRange": "[Standard] Normal: 2.10-2.55; High: >2.55; Low: <2.10",
+            "description": "Measures total calcium in the blood.",
             "riskCategories": [
               "Bone Health",
-              "Electrolytes"
+              "Mineral Metabolism"
             ]
           },
-          "customRangeOverlay": "[Standard] Normal: 2.10-2.60; High: >2.60; Low: <2.10"
+          "customRangeOverlay": "[Standard] Normal: 2.10-2.55; High: >2.55; Low: <2.10"
         },
         {
           "id": "r08",
-          "medicalInsight": "Serum adjusted calcium concentration is 2.37 mmol/L, well within the laboratory's updated reference range, indicating proper calcium correction relative to albumin.",
-          "optimalValue": "2.28 mmol/L",
-          "editReason": "Target optimal midpoint for adjusted calcium.",
+          "medicalInsight": "Serum adjusted calcium concentration is 2.37 mmol/L, well within the normal updated reference range, indicating proper protein-corrected calcium homeostasis.",
+          "optimalValue": "2.30 mmol/L",
+          "editReason": "Optimal target for albumin-adjusted calcium.",
           "logs": [
             {
               "date": "2026-06-05",
               "value": 2.37,
               "unit": "mmol/L",
-              "comment": "New adjusted calcium equation and new adjusted calcium Abbott Alinity reference ranges in use from 22/09/25."
+              "comment": "New adjusted calcium equation and Abbott Alinity reference ranges in use."
             }
           ],
           "match": "none",
@@ -275,19 +275,19 @@
               "Corrected Calcium"
             ],
             "normalRange": "[Standard] High: >2.48; Normal: 2.08-2.48; Low: <2.08",
-            "description": "Calcium level adjusted for variations in serum albumin concentration.",
+            "description": "Calcium level adjusted for serum albumin levels.",
             "riskCategories": [
               "Bone Health",
-              "Electrolytes"
+              "Mineral Metabolism"
             ]
           },
           "customRangeOverlay": "[Standard] High: >2.48; Normal: 2.08-2.48; Low: <2.08"
         },
         {
           "id": "r09",
-          "medicalInsight": "Serum inorganic phosphate is 1.12 mmol/L, well inside the reference limits, supporting normal bone mineralization and cellular energy metabolism.",
-          "optimalValue": "1.15 mmol/L",
-          "editReason": "Target stable physiological midpoint for phosphate.",
+          "medicalInsight": "Serum inorganic phosphate is 1.12 mmol/L, supporting healthy cellular energy metabolism and bone homeostasis.",
+          "optimalValue": "1.10 mmol/L",
+          "editReason": "Ideal central phosphate concentration.",
           "logs": [
             {
               "date": "2026-06-05",
@@ -308,19 +308,19 @@
               "Phosphorus"
             ],
             "normalRange": "[Standard] High: >1.50; Normal: 0.80-1.50; Low: <0.80",
-            "description": "Measurement of inorganic phosphorus compounds in the blood crucial for energy transfer and bone structure.",
+            "description": "Measures inorganic phosphorus levels in the blood.",
             "riskCategories": [
               "Bone Health",
-              "Metabolic Health"
+              "Mineral Metabolism"
             ]
           },
           "customRangeOverlay": "[Standard] High: >1.50; Normal: 0.80-1.50; Low: <0.80"
         },
         {
           "id": "r10",
-          "medicalInsight": "Homocysteine is 10.2 umol/L, which is within the safe reference range (< 15.0 umol/L), suggesting adequate B-vitamin status and low cardiovascular metabolic risk.",
+          "medicalInsight": "Homocysteine is 10.2 umol/L, which is within the optimal low-risk threshold (< 15.0 umol/L), indicating healthy one-carbon metabolism and vitamin B status.",
           "optimalValue": "8.0 umol/L",
-          "editReason": "Target optimal lower homocysteine level for optimal vascular health.",
+          "editReason": "Optimal target for cardiovascular and methylation health.",
           "logs": [
             {
               "date": "2026-06-05",
@@ -337,10 +337,11 @@
             "name": "Homocysteine",
             "unit": "umol/L",
             "aliases": [
-              "Homocysteine Level"
+              "Total Homocysteine",
+              "Hcy"
             ],
             "normalRange": "[Standard] Normal: <15.0; High: >=15.0",
-            "description": "An amino acid in the body whose high levels are linked to heart disease and stroke.",
+            "description": "Amino acid in the blood associated with cardiovascular and methylation status when elevated.",
             "riskCategories": [
               "Cardiovascular Health",
               "Methylation"
@@ -536,15 +537,15 @@
       "optimalValue": "1.0 ug/L",
       "existingInsight": null,
       "existingCustomRange": null,
-      "editReason": "Provides an optimal target below the upper reference limit for early detection awareness.",
-      "customRangeOverlay": "[Standard] Normal: <=2.49; Elevated: >2.49",
-      "medicalInsight": "Prostate-specific antigen (PSA) level is 1.41 ug/L, which is within the normal reference range. For a 43-year-old male, this is a reassuring baseline.",
+      "editReason": "Target set to optimal low-risk baseline for young adult males.",
+      "customRangeOverlay": "[Standard] Normal: <=2.49; High: >2.49",
+      "medicalInsight": "Prostate-specific antigen (PSA) level is 1.41 ug/L, which is within the normal reference range, indicating a satisfactory result with no acute prostatic concern for this 43-year-old male.",
       "historicalLogs": [
         {
           "date": "2026-06-05",
           "value": 1.41,
           "unit": "ug/L",
-          "comment": "Satisfactory - No Action"
+          "comment": "OlaFRS - Satisfactory - No Action"
         }
       ],
       "currentEvaluationStatus": "",
@@ -556,8 +557,8 @@
           "PSA",
           "Prostate Specific Antigen"
         ],
-        "normalRange": "[Standard] Normal: <=2.49; Elevated: >2.49",
-        "description": "Prostate-specific antigen blood test used primarily to screen for prostate cancer.",
+        "normalRange": "[Standard] Normal: <=2.49; High: >2.49",
+        "description": "Prostate-specific antigen test measures the level of PSA in the blood.",
         "riskCategories": [
           "Prostate Health"
         ]
@@ -582,9 +583,9 @@
       "optimalValue": "140 mmol/L",
       "existingInsight": null,
       "existingCustomRange": null,
-      "editReason": "Target midpoint of normal sodium balance.",
+      "editReason": "Mid-normal physiological target.",
       "customRangeOverlay": "[Standard] High: >146; Normal: 133-146; Low: <133",
-      "medicalInsight": "Serum sodium is 143 mmol/L, well within the normal physiological range, indicating normal body hydration and electrolyte balance.",
+      "medicalInsight": "Serum sodium is 143 mmol/L, reflecting normal fluid and electrolyte balance.",
       "historicalLogs": [
         {
           "date": "2026-06-05",
@@ -603,7 +604,7 @@
           "Na"
         ],
         "normalRange": "[Standard] High: >146; Normal: 133-146; Low: <133",
-        "description": "Measurement of sodium concentration in the blood, essential for fluid balance and nerve function.",
+        "description": "Measures sodium level in blood for hydration and electrolyte status.",
         "riskCategories": [
           "Electrolytes"
         ]
@@ -628,9 +629,9 @@
       "optimalValue": "4.2 mmol/L",
       "existingInsight": null,
       "existingCustomRange": null,
-      "editReason": "Target median optimal potassium level.",
+      "editReason": "Optimal homeostatic target for cardiac and neuromuscular function.",
       "customRangeOverlay": "[Standard] High: >5.3; Normal: 3.5-5.3; Low: <3.5",
-      "medicalInsight": "Serum potassium is 4.3 mmol/L, perfectly optimal and indicative of healthy cellular function and cardiac electrophysiology.",
+      "medicalInsight": "Serum potassium is 4.3 mmol/L, well within the healthy reference range.",
       "historicalLogs": [
         {
           "date": "2026-06-05",
@@ -649,7 +650,7 @@
           "K"
         ],
         "normalRange": "[Standard] High: >5.3; Normal: 3.5-5.3; Low: <3.5",
-        "description": "Measurement of potassium in blood, critical for heart and skeletal muscle function.",
+        "description": "Measures potassium levels crucial for cellular and cardiac function.",
         "riskCategories": [
           "Electrolytes"
         ]
@@ -674,9 +675,9 @@
       "optimalValue": "70 U/L",
       "existingInsight": null,
       "existingCustomRange": null,
-      "editReason": "Target middle of standard reference interval.",
+      "editReason": "Center of typical healthy adult reference interval.",
       "customRangeOverlay": "[Standard] High: >130; Normal: 30-130; Low: <30",
-      "medicalInsight": "Serum alkaline phosphatase is 39 U/L, situated safely within the normal range, reflecting healthy liver and bone metabolism.",
+      "medicalInsight": "Serum alkaline phosphatase is 39 U/L, indicating normal hepatobiliary and bone metabolic activity.",
       "historicalLogs": [
         {
           "date": "2026-06-05",
@@ -695,7 +696,7 @@
           "Alkaline Phosphatase"
         ],
         "normalRange": "[Standard] High: >130; Normal: 30-130; Low: <30",
-        "description": "Enzyme found in several tissues throughout the body, most notably the liver, bones, kidneys, and digestive tract.",
+        "description": "Enzyme associated with liver, biliary tract, and bone.",
         "riskCategories": [
           "Liver Function",
           "Bone Health"
@@ -721,9 +722,9 @@
       "optimalValue": "10 umol/L",
       "existingInsight": null,
       "existingCustomRange": null,
-      "editReason": "Optimal target for healthy hepatic clearance.",
-      "customRangeOverlay": "[Standard] High: >21; Normal: 0-21",
-      "medicalInsight": "Serum total bilirubin level is 16 umol/L, well within normal limits, indicating normal hepatic processing and clearance of red blood cell breakdown products.",
+      "editReason": "Optimal baseline for hepatic clearance.",
+      "customRangeOverlay": "[Standard] High: >21; Normal: <=21",
+      "medicalInsight": "Serum total bilirubin is 16 umol/L, falling within normal physiological limits.",
       "historicalLogs": [
         {
           "date": "2026-06-05",
@@ -739,10 +740,10 @@
         "unit": "umol/L",
         "aliases": [
           "Total Bilirubin",
-          "Bilirubin"
+          "Bili"
         ],
-        "normalRange": "[Standard] High: >21; Normal: 0-21",
-        "description": "Yellowish pigment found in bile, produced by the liver.",
+        "normalRange": "[Standard] High: >21; Normal: <=21",
+        "description": "Measures total bilirubin resulting from hemoglobin breakdown.",
         "riskCategories": [
           "Liver Function"
         ]
@@ -764,12 +765,12 @@
       "customRangePopulation": "",
       "printedRange": "22 - 38 g/L",
       "assignedRange": "22 - 38 g/L",
-      "optimalValue": "30 g/L",
+      "optimalValue": "28 g/L",
       "existingInsight": null,
       "existingCustomRange": null,
-      "editReason": "Target mid-range for optimal globulin balance.",
+      "editReason": "Optimal median target.",
       "customRangeOverlay": "[Standard] High: >38; Normal: 22-38; Low: <22",
-      "medicalInsight": "Serum globulin is 35 g/L, falling comfortably within the expected reference interval, representing normal immune protein and carrier protein synthesis.",
+      "medicalInsight": "Serum globulin is 35 g/L, representing a normal immunological and protein synthetic profile.",
       "historicalLogs": [
         {
           "date": "2026-06-05",
@@ -787,10 +788,10 @@
           "Globulin"
         ],
         "normalRange": "[Standard] High: >38; Normal: 22-38; Low: <22",
-        "description": "Major group of plasma proteins in the blood acting as immunoglobulins and carrier proteins.",
+        "description": "Measures non-albumin serum proteins involved in immune response.",
         "riskCategories": [
           "Protein Status",
-          "Liver Function"
+          "Immune Function"
         ]
       }
     },
@@ -813,9 +814,9 @@
       "optimalValue": "2.35 mmol/L",
       "existingInsight": null,
       "existingCustomRange": null,
-      "editReason": "Target optimal mid-point for systemic calcium homeostasis.",
-      "customRangeOverlay": "[Standard] Normal: 2.10-2.60; High: >2.60; Low: <2.10",
-      "medicalInsight": "Serum calcium is 2.47 mmol/L, indicating normal total systemic calcium availability.",
+      "editReason": "Standard physiological target for systemic calcium.",
+      "customRangeOverlay": "[Standard] Normal: 2.10-2.55; High: >2.55; Low: <2.10",
+      "medicalInsight": "Serum calcium is 2.47 mmol/L, reflecting normal unadjusted systemic calcium levels.",
       "historicalLogs": [
         {
           "date": "2026-06-05",
@@ -833,11 +834,11 @@
           "Calcium",
           "Ca"
         ],
-        "normalRange": "[Standard] Normal: 2.10-2.60; High: >2.60; Low: <2.10",
-        "description": "Total amount of calcium circulating in the blood stream.",
+        "normalRange": "[Standard] Normal: 2.10-2.55; High: >2.55; Low: <2.10",
+        "description": "Measures total calcium in the blood.",
         "riskCategories": [
           "Bone Health",
-          "Electrolytes"
+          "Mineral Metabolism"
         ]
       }
     },
@@ -857,18 +858,18 @@
       "customRangePopulation": "",
       "printedRange": "2.08 - 2.48 mmol/L",
       "assignedRange": "2.08 - 2.48 mmol/L",
-      "optimalValue": "2.28 mmol/L",
+      "optimalValue": "2.30 mmol/L",
       "existingInsight": null,
       "existingCustomRange": null,
-      "editReason": "Target optimal midpoint for adjusted calcium.",
+      "editReason": "Optimal target for albumin-adjusted calcium.",
       "customRangeOverlay": "[Standard] High: >2.48; Normal: 2.08-2.48; Low: <2.08",
-      "medicalInsight": "Serum adjusted calcium concentration is 2.37 mmol/L, well within the laboratory's updated reference range, indicating proper calcium correction relative to albumin.",
+      "medicalInsight": "Serum adjusted calcium concentration is 2.37 mmol/L, well within the normal updated reference range, indicating proper protein-corrected calcium homeostasis.",
       "historicalLogs": [
         {
           "date": "2026-06-05",
           "value": 2.37,
           "unit": "mmol/L",
-          "comment": "New adjusted calcium equation and new adjusted calcium Abbott Alinity reference ranges in use from 22/09/25."
+          "comment": "New adjusted calcium equation and Abbott Alinity reference ranges in use."
         }
       ],
       "currentEvaluationStatus": "",
@@ -881,10 +882,10 @@
           "Corrected Calcium"
         ],
         "normalRange": "[Standard] High: >2.48; Normal: 2.08-2.48; Low: <2.08",
-        "description": "Calcium level adjusted for variations in serum albumin concentration.",
+        "description": "Calcium level adjusted for serum albumin levels.",
         "riskCategories": [
           "Bone Health",
-          "Electrolytes"
+          "Mineral Metabolism"
         ]
       }
     },
@@ -904,12 +905,12 @@
       "customRangePopulation": "",
       "printedRange": "0.80 - 1.50 mmol/L",
       "assignedRange": "0.80 - 1.50 mmol/L",
-      "optimalValue": "1.15 mmol/L",
+      "optimalValue": "1.10 mmol/L",
       "existingInsight": null,
       "existingCustomRange": null,
-      "editReason": "Target stable physiological midpoint for phosphate.",
+      "editReason": "Ideal central phosphate concentration.",
       "customRangeOverlay": "[Standard] High: >1.50; Normal: 0.80-1.50; Low: <0.80",
-      "medicalInsight": "Serum inorganic phosphate is 1.12 mmol/L, well inside the reference limits, supporting normal bone mineralization and cellular energy metabolism.",
+      "medicalInsight": "Serum inorganic phosphate is 1.12 mmol/L, supporting healthy cellular energy metabolism and bone homeostasis.",
       "historicalLogs": [
         {
           "date": "2026-06-05",
@@ -928,10 +929,10 @@
           "Phosphorus"
         ],
         "normalRange": "[Standard] High: >1.50; Normal: 0.80-1.50; Low: <0.80",
-        "description": "Measurement of inorganic phosphorus compounds in the blood crucial for energy transfer and bone structure.",
+        "description": "Measures inorganic phosphorus levels in the blood.",
         "riskCategories": [
           "Bone Health",
-          "Metabolic Health"
+          "Mineral Metabolism"
         ]
       }
     },
@@ -954,9 +955,9 @@
       "optimalValue": "8.0 umol/L",
       "existingInsight": null,
       "existingCustomRange": null,
-      "editReason": "Target optimal lower homocysteine level for optimal vascular health.",
+      "editReason": "Optimal target for cardiovascular and methylation health.",
       "customRangeOverlay": "[Standard] Normal: <15.0; High: >=15.0",
-      "medicalInsight": "Homocysteine is 10.2 umol/L, which is within the safe reference range (< 15.0 umol/L), suggesting adequate B-vitamin status and low cardiovascular metabolic risk.",
+      "medicalInsight": "Homocysteine is 10.2 umol/L, which is within the optimal low-risk threshold (< 15.0 umol/L), indicating healthy one-carbon metabolism and vitamin B status.",
       "historicalLogs": [
         {
           "date": "2026-06-05",
@@ -971,10 +972,11 @@
         "name": "Homocysteine",
         "unit": "umol/L",
         "aliases": [
-          "Homocysteine Level"
+          "Total Homocysteine",
+          "Hcy"
         ],
         "normalRange": "[Standard] Normal: <15.0; High: >=15.0",
-        "description": "An amino acid in the body whose high levels are linked to heart disease and stroke.",
+        "description": "Amino acid in the blood associated with cardiovascular and methylation status when elevated.",
         "riskCategories": [
           "Cardiovascular Health",
           "Methylation"
@@ -993,18 +995,18 @@
       "printedRange": "- 2.49 ug/L",
       "assignedRange": "- 2.49 ug/L",
       "optimalValue": "1.0 ug/L",
-      "editReason": "Provides an optimal target below the upper reference limit for early detection awareness.",
+      "editReason": "Target set to optimal low-risk baseline for young adult males.",
       "match": "none",
       "key": null,
       "writeTarget": "pending",
-      "medicalInsight": "Prostate-specific antigen (PSA) level is 1.41 ug/L, which is within the normal reference range. For a 43-year-old male, this is a reassuring baseline.",
-      "customRangeOverlay": "[Standard] Normal: <=2.49; Elevated: >2.49",
+      "medicalInsight": "Prostate-specific antigen (PSA) level is 1.41 ug/L, which is within the normal reference range, indicating a satisfactory result with no acute prostatic concern for this 43-year-old male.",
+      "customRangeOverlay": "[Standard] Normal: <=2.49; High: >2.49",
       "logs": [
         {
           "date": "2026-06-05",
           "value": 1.41,
           "unit": "ug/L",
-          "comment": "Satisfactory - No Action"
+          "comment": "OlaFRS - Satisfactory - No Action"
         }
       ],
       "newCatalogDraft": {
@@ -1015,8 +1017,8 @@
           "PSA",
           "Prostate Specific Antigen"
         ],
-        "normalRange": "[Standard] Normal: <=2.49; Elevated: >2.49",
-        "description": "Prostate-specific antigen blood test used primarily to screen for prostate cancer.",
+        "normalRange": "[Standard] Normal: <=2.49; High: >2.49",
+        "description": "Prostate-specific antigen test measures the level of PSA in the blood.",
         "riskCategories": [
           "Prostate Health"
         ]
@@ -1032,11 +1034,11 @@
       "printedRange": "133 - 146 mmol/L",
       "assignedRange": "133 - 146 mmol/L",
       "optimalValue": "140 mmol/L",
-      "editReason": "Target midpoint of normal sodium balance.",
+      "editReason": "Mid-normal physiological target.",
       "match": "none",
       "key": null,
       "writeTarget": "pending",
-      "medicalInsight": "Serum sodium is 143 mmol/L, well within the normal physiological range, indicating normal body hydration and electrolyte balance.",
+      "medicalInsight": "Serum sodium is 143 mmol/L, reflecting normal fluid and electrolyte balance.",
       "customRangeOverlay": "[Standard] High: >146; Normal: 133-146; Low: <133",
       "logs": [
         {
@@ -1055,7 +1057,7 @@
           "Na"
         ],
         "normalRange": "[Standard] High: >146; Normal: 133-146; Low: <133",
-        "description": "Measurement of sodium concentration in the blood, essential for fluid balance and nerve function.",
+        "description": "Measures sodium level in blood for hydration and electrolyte status.",
         "riskCategories": [
           "Electrolytes"
         ]
@@ -1071,11 +1073,11 @@
       "printedRange": "3.5 - 5.3 mmol/L",
       "assignedRange": "3.5 - 5.3 mmol/L",
       "optimalValue": "4.2 mmol/L",
-      "editReason": "Target median optimal potassium level.",
+      "editReason": "Optimal homeostatic target for cardiac and neuromuscular function.",
       "match": "none",
       "key": null,
       "writeTarget": "pending",
-      "medicalInsight": "Serum potassium is 4.3 mmol/L, perfectly optimal and indicative of healthy cellular function and cardiac electrophysiology.",
+      "medicalInsight": "Serum potassium is 4.3 mmol/L, well within the healthy reference range.",
       "customRangeOverlay": "[Standard] High: >5.3; Normal: 3.5-5.3; Low: <3.5",
       "logs": [
         {
@@ -1094,7 +1096,7 @@
           "K"
         ],
         "normalRange": "[Standard] High: >5.3; Normal: 3.5-5.3; Low: <3.5",
-        "description": "Measurement of potassium in blood, critical for heart and skeletal muscle function.",
+        "description": "Measures potassium levels crucial for cellular and cardiac function.",
         "riskCategories": [
           "Electrolytes"
         ]
@@ -1110,11 +1112,11 @@
       "printedRange": "30 - 130 U/L",
       "assignedRange": "30 - 130 U/L",
       "optimalValue": "70 U/L",
-      "editReason": "Target middle of standard reference interval.",
+      "editReason": "Center of typical healthy adult reference interval.",
       "match": "none",
       "key": null,
       "writeTarget": "pending",
-      "medicalInsight": "Serum alkaline phosphatase is 39 U/L, situated safely within the normal range, reflecting healthy liver and bone metabolism.",
+      "medicalInsight": "Serum alkaline phosphatase is 39 U/L, indicating normal hepatobiliary and bone metabolic activity.",
       "customRangeOverlay": "[Standard] High: >130; Normal: 30-130; Low: <30",
       "logs": [
         {
@@ -1133,7 +1135,7 @@
           "Alkaline Phosphatase"
         ],
         "normalRange": "[Standard] High: >130; Normal: 30-130; Low: <30",
-        "description": "Enzyme found in several tissues throughout the body, most notably the liver, bones, kidneys, and digestive tract.",
+        "description": "Enzyme associated with liver, biliary tract, and bone.",
         "riskCategories": [
           "Liver Function",
           "Bone Health"
@@ -1150,12 +1152,12 @@
       "printedRange": "- 21 umol/L",
       "assignedRange": "- 21 umol/L",
       "optimalValue": "10 umol/L",
-      "editReason": "Optimal target for healthy hepatic clearance.",
+      "editReason": "Optimal baseline for hepatic clearance.",
       "match": "none",
       "key": null,
       "writeTarget": "pending",
-      "medicalInsight": "Serum total bilirubin level is 16 umol/L, well within normal limits, indicating normal hepatic processing and clearance of red blood cell breakdown products.",
-      "customRangeOverlay": "[Standard] High: >21; Normal: 0-21",
+      "medicalInsight": "Serum total bilirubin is 16 umol/L, falling within normal physiological limits.",
+      "customRangeOverlay": "[Standard] High: >21; Normal: <=21",
       "logs": [
         {
           "date": "2026-06-05",
@@ -1170,10 +1172,10 @@
         "unit": "umol/L",
         "aliases": [
           "Total Bilirubin",
-          "Bilirubin"
+          "Bili"
         ],
-        "normalRange": "[Standard] High: >21; Normal: 0-21",
-        "description": "Yellowish pigment found in bile, produced by the liver.",
+        "normalRange": "[Standard] High: >21; Normal: <=21",
+        "description": "Measures total bilirubin resulting from hemoglobin breakdown.",
         "riskCategories": [
           "Liver Function"
         ]
@@ -1188,12 +1190,12 @@
       "date": "2026-06-05",
       "printedRange": "22 - 38 g/L",
       "assignedRange": "22 - 38 g/L",
-      "optimalValue": "30 g/L",
-      "editReason": "Target mid-range for optimal globulin balance.",
+      "optimalValue": "28 g/L",
+      "editReason": "Optimal median target.",
       "match": "none",
       "key": null,
       "writeTarget": "pending",
-      "medicalInsight": "Serum globulin is 35 g/L, falling comfortably within the expected reference interval, representing normal immune protein and carrier protein synthesis.",
+      "medicalInsight": "Serum globulin is 35 g/L, representing a normal immunological and protein synthetic profile.",
       "customRangeOverlay": "[Standard] High: >38; Normal: 22-38; Low: <22",
       "logs": [
         {
@@ -1211,10 +1213,10 @@
           "Globulin"
         ],
         "normalRange": "[Standard] High: >38; Normal: 22-38; Low: <22",
-        "description": "Major group of plasma proteins in the blood acting as immunoglobulins and carrier proteins.",
+        "description": "Measures non-albumin serum proteins involved in immune response.",
         "riskCategories": [
           "Protein Status",
-          "Liver Function"
+          "Immune Function"
         ]
       }
     },
@@ -1228,12 +1230,12 @@
       "printedRange": "- mmol/L",
       "assignedRange": "- mmol/L",
       "optimalValue": "2.35 mmol/L",
-      "editReason": "Target optimal mid-point for systemic calcium homeostasis.",
+      "editReason": "Standard physiological target for systemic calcium.",
       "match": "none",
       "key": null,
       "writeTarget": "pending",
-      "medicalInsight": "Serum calcium is 2.47 mmol/L, indicating normal total systemic calcium availability.",
-      "customRangeOverlay": "[Standard] Normal: 2.10-2.60; High: >2.60; Low: <2.10",
+      "medicalInsight": "Serum calcium is 2.47 mmol/L, reflecting normal unadjusted systemic calcium levels.",
+      "customRangeOverlay": "[Standard] Normal: 2.10-2.55; High: >2.55; Low: <2.10",
       "logs": [
         {
           "date": "2026-06-05",
@@ -1250,11 +1252,11 @@
           "Calcium",
           "Ca"
         ],
-        "normalRange": "[Standard] Normal: 2.10-2.60; High: >2.60; Low: <2.10",
-        "description": "Total amount of calcium circulating in the blood stream.",
+        "normalRange": "[Standard] Normal: 2.10-2.55; High: >2.55; Low: <2.10",
+        "description": "Measures total calcium in the blood.",
         "riskCategories": [
           "Bone Health",
-          "Electrolytes"
+          "Mineral Metabolism"
         ]
       }
     },
@@ -1267,19 +1269,19 @@
       "date": "2026-06-05",
       "printedRange": "2.08 - 2.48 mmol/L",
       "assignedRange": "2.08 - 2.48 mmol/L",
-      "optimalValue": "2.28 mmol/L",
-      "editReason": "Target optimal midpoint for adjusted calcium.",
+      "optimalValue": "2.30 mmol/L",
+      "editReason": "Optimal target for albumin-adjusted calcium.",
       "match": "none",
       "key": null,
       "writeTarget": "pending",
-      "medicalInsight": "Serum adjusted calcium concentration is 2.37 mmol/L, well within the laboratory's updated reference range, indicating proper calcium correction relative to albumin.",
+      "medicalInsight": "Serum adjusted calcium concentration is 2.37 mmol/L, well within the normal updated reference range, indicating proper protein-corrected calcium homeostasis.",
       "customRangeOverlay": "[Standard] High: >2.48; Normal: 2.08-2.48; Low: <2.08",
       "logs": [
         {
           "date": "2026-06-05",
           "value": 2.37,
           "unit": "mmol/L",
-          "comment": "New adjusted calcium equation and new adjusted calcium Abbott Alinity reference ranges in use from 22/09/25."
+          "comment": "New adjusted calcium equation and Abbott Alinity reference ranges in use."
         }
       ],
       "newCatalogDraft": {
@@ -1291,10 +1293,10 @@
           "Corrected Calcium"
         ],
         "normalRange": "[Standard] High: >2.48; Normal: 2.08-2.48; Low: <2.08",
-        "description": "Calcium level adjusted for variations in serum albumin concentration.",
+        "description": "Calcium level adjusted for serum albumin levels.",
         "riskCategories": [
           "Bone Health",
-          "Electrolytes"
+          "Mineral Metabolism"
         ]
       }
     },
@@ -1307,12 +1309,12 @@
       "date": "2026-06-05",
       "printedRange": "0.80 - 1.50 mmol/L",
       "assignedRange": "0.80 - 1.50 mmol/L",
-      "optimalValue": "1.15 mmol/L",
-      "editReason": "Target stable physiological midpoint for phosphate.",
+      "optimalValue": "1.10 mmol/L",
+      "editReason": "Ideal central phosphate concentration.",
       "match": "none",
       "key": null,
       "writeTarget": "pending",
-      "medicalInsight": "Serum inorganic phosphate is 1.12 mmol/L, well inside the reference limits, supporting normal bone mineralization and cellular energy metabolism.",
+      "medicalInsight": "Serum inorganic phosphate is 1.12 mmol/L, supporting healthy cellular energy metabolism and bone homeostasis.",
       "customRangeOverlay": "[Standard] High: >1.50; Normal: 0.80-1.50; Low: <0.80",
       "logs": [
         {
@@ -1331,10 +1333,10 @@
           "Phosphorus"
         ],
         "normalRange": "[Standard] High: >1.50; Normal: 0.80-1.50; Low: <0.80",
-        "description": "Measurement of inorganic phosphorus compounds in the blood crucial for energy transfer and bone structure.",
+        "description": "Measures inorganic phosphorus levels in the blood.",
         "riskCategories": [
           "Bone Health",
-          "Metabolic Health"
+          "Mineral Metabolism"
         ]
       }
     },
@@ -1348,11 +1350,11 @@
       "printedRange": "< 15.0 umol/L",
       "assignedRange": "< 15.0 umol/L",
       "optimalValue": "8.0 umol/L",
-      "editReason": "Target optimal lower homocysteine level for optimal vascular health.",
+      "editReason": "Optimal target for cardiovascular and methylation health.",
       "match": "none",
       "key": null,
       "writeTarget": "pending",
-      "medicalInsight": "Homocysteine is 10.2 umol/L, which is within the safe reference range (< 15.0 umol/L), suggesting adequate B-vitamin status and low cardiovascular metabolic risk.",
+      "medicalInsight": "Homocysteine is 10.2 umol/L, which is within the optimal low-risk threshold (< 15.0 umol/L), indicating healthy one-carbon metabolism and vitamin B status.",
       "customRangeOverlay": "[Standard] Normal: <15.0; High: >=15.0",
       "logs": [
         {
@@ -1367,10 +1369,11 @@
         "name": "Homocysteine",
         "unit": "umol/L",
         "aliases": [
-          "Homocysteine Level"
+          "Total Homocysteine",
+          "Hcy"
         ],
         "normalRange": "[Standard] Normal: <15.0; High: >=15.0",
-        "description": "An amino acid in the body whose high levels are linked to heart disease and stroke.",
+        "description": "Amino acid in the blood associated with cardiovascular and methylation status when elevated.",
         "riskCategories": [
           "Cardiovascular Health",
           "Methylation"

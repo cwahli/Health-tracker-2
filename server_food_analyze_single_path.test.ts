@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
-const pipeline = readFileSync(resolve(__dirname, './server_food_analyze_run.ts'), 'utf8');
+const pipeline = ["server_food_analyze_run.ts", "server_food_analyze_run_scout.ts", "server_food_analyze_run_precalc.ts", "server_food_analyze_run_dietitian.ts", "server_food_analyze_run_finalize.ts"].map(f => readFileSync(resolve(__dirname, "./" + f), "utf8")).join("\n");
 const route = readFileSync(resolve(__dirname, './server_routes_food_analyze.ts'), 'utf8');
 
 describe('F-8.9 calorie host deleted from analyze pipeline', () => {
@@ -16,7 +16,7 @@ describe('F-8.9 calorie host deleted from analyze pipeline', () => {
   });
 
   it('create maps from finalize; edit uses applyMealEdits', () => {
-    expect(pipeline).toMatch(/buildMealFromFinalizeLedgers/);
+    expect(pipeline).toMatch(/attachHappyPathMealBuild/);
     expect(pipeline).toMatch(/applyMealEdits/);
     expect(pipeline).toMatch(/evaluateMealGate/);
   });

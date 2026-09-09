@@ -11,20 +11,15 @@
 ## System instruction (verbatim)
 
 ```
-You are an expert clinical laboratory AI reviewing a patient's biomarker panel.
-Patient Profile: 43-year-old Chinese male, Unit Preference: SI.
+You fill USER slots only.
+HIT: dictionary locked. JSON: id, medicalInsight, customRangeOverlay (null unless this profile's range differs). Cite status. Optimal: 1 sentence. Else <=2 sentences (profile + trend). HbA1c 40 in 20-41 can still be Elevated. Never write Critical.
+MISS: JSON: id, match "none", writeTarget "pending", key null, newCatalogDraft (suggestedKey, name, unit, aliases, normalRange, description, riskCategories). Not Home.
+No status field. No unit math. This batch only. JSON { "rows": [...] }.
 
-For each biomarker:
-- id: matching id
-- medicalInsight: Provide a concise, clinically accurate insight for every row (including optimal/normal baseline markers). Cite trend if previous values exist. Consider patient ethnography (e.g. for Chinese patients, HbA1c >=39 indicates elevated prediabetes risk).
-- customRangeOverlay: If agreeing with range, return "". If missing thresholds or ethnic demographics, provide FULL multi-bracket range specifying the profile source and clinical names. Format MUST be "[Profile] Clinical Name: Range; Clinical Name: Range". Example: "[Chinese Ethnicity] Elevated (Diabetes): >=48; Elevated: >=39; Optimal: <39" or "[Western Standard] High: >104; Normal: 64-104; Low: <64". If multiple demographic profiles exist, provide all of them.
-- optimalValue: If existing is accurate, return "". Otherwise provide 1 single ideal target value without inequalities or ranges (e.g. "33 mmol/mol", "80 umol/L", "95 mL/min/1.73m2"; note 60 for eGFR is naive CKD G2, correct it).
-- editReason: If replacing/correcting existing user values or suboptimal optimalValue, explain why. Otherwise "".
-- logs: Extract all logs with standardized "YYYY-MM-DD" dates, labName if mentioned (e.g. "US lab", "GP Clinic"), and comments. Convert US units to patient's unitPreference with standard clinical integer rounding (e.g. 1.1 mg/dL creatinine → 97 umol/L, not decimals like 97.24). Standardize scientific units (e.g. 10^9/L).
+SPECIAL RULES FOR SCORING:
+- For HbA1c (if custom range applies due to profile), customRangeOverlay MUST be a full bracketed range containing 39 or 42 and words like elevated/borderline/optimal/normal.
+- For eGFR, if correcting optimal from naive 60 to >= 90, you MUST provide an editReason explaining correction of naive normal eGFR.
 - DICTIONARY CORRECTION: If dictionary info has typos/errors (e.g. Total Protein 6-8 g/L instead of 60-80 g/L), output dictionaryCorrection: { field, correctedValue, reason }. Otherwise null.
-- UNCATALOGED (MISS): If not in dictionary, output match="none", writeTarget="pending", key=null, and newCatalogDraft: { suggestedKey, name, unit, aliases, normalRange, description, riskCategories }. NOTE: normalRange MUST follow the same bracketed profile format with clinical names, e.g., "[Western Standard] High: >1.4; Optimal: 0.5-1.4; Low: <0.5".
-
-JSON { "rows": [...] }.
 ```
 
 ## User send (once)
@@ -44,7 +39,7 @@ LDL  100 mg/dL
 
 ## Agent turns (full payload sent + model output)
 
-### Turn 1 (hit) — r01, r02 (2 rows, 12519ms)
+### Turn 1 (hit) — r01, r02 (2 rows, 1547ms)
 
 **User contents sent to the model** (system instruction is above; this is the user turn):
 
@@ -98,38 +93,34 @@ Biomarkers to review (hits - in catalog):
 [
   {
     "id": "r01",
-    "medicalInsight": "The BUN value is within normal limits at 5.35 mmol/L (equivalent to 15 mg/dL), indicating healthy renal nitrogen excretion and protein metabolism.",
-    "optimalValue": "4.5 mmol/L",
-    "editReason": "Converted units and provided optimal clinical target for a 43-year-old male.",
+    "medicalInsight": "Your BUN level of 15 mg/dL is optimal and well within the normal range, indicating healthy kidney function.",
+    "optimalValue": "7 - 20 mg/dL",
+    "editReason": "",
     "logs": [
       {
         "date": "2026-06-05",
-        "value": 5.35,
-        "unit": "mmol/L",
-        "comment": "Patient uploaded BUN value equivalent to 15 mg/dL."
+        "value": 15,
+        "unit": "mg/dL",
+        "comment": null
       }
     ],
-    "customRangeOverlay": "[Western Standard] High: >7.1; Normal: 2.5-7.1; Low: <2.5",
-    "dictionaryCorrection": {
-      "field": "unit",
-      "correctedValue": "mmol/L",
-      "reason": "Standardizing to SI units for patient demographic preference."
-    }
+    "customRangeOverlay": null,
+    "dictionaryCorrection": null
   },
   {
     "id": "r02",
-    "medicalInsight": "LDL-C is optimal at 2.59 mmol/L (100 mg/dL), reflecting good cardiovascular risk status for a 43-year-old male.",
-    "optimalValue": "2.0 mmol/L",
-    "editReason": "Set aggressive optimal target for cardiovascular health.",
+    "medicalInsight": "Your LDL level of 100 mg/dL (2.59 mmol/L) is optimal and demonstrates good cardiovascular risk management.",
+    "optimalValue": "< 2.6 mmol/L",
+    "editReason": "",
     "logs": [
       {
         "date": "2026-06-05",
         "value": 2.59,
         "unit": "mmol/L",
-        "comment": "Patient uploaded LDL value equivalent to 100 mg/dL."
+        "comment": null
       }
     ],
-    "customRangeOverlay": "[All patients] Very High: >3.4; Elevated: >2.6; Optimal: <=2.6",
+    "customRangeOverlay": null,
     "dictionaryCorrection": null
   }
 ]

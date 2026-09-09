@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { motion } from 'motion/react';
 import { Loader2, Trash2, XCircle, CheckCircle2, AlertTriangle, Eye, Save, RotateCcw, Sliders, HelpCircle } from 'lucide-react';
 import { AgentJob, JobStatus } from '../jobs/types';
@@ -12,6 +12,7 @@ import { humanizeJobFailure } from '../utils/jobFailure';
 import { isJobSafeToLeave } from '../jobs/jobUploadState';
 import { toPendingFoodLog } from '../mealBuild/adapters';
 import { translations } from '../utils/translations';
+import { normalizeMealImageUrl, nextPhotoFallbackUrl, isUsableImageUrl } from '../utils/foodImageSources';
 
 interface TaskPlaceholderCardProps {
   job: AgentJob;
@@ -34,6 +35,8 @@ export default function TaskPlaceholderCard({
   const live = useJob(jobProp.id).job;
   const job = live || jobProp;
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const triedUrlsRef = useRef<Set<string>>(new Set());
+  const candidateUrlsRef = useRef<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [nowTs, setNowTs] = useState(() => Date.now());
 
@@ -71,8 +74,8 @@ export default function TaskPlaceholderCard({
         const dataUrls = await Promise.all(
           images.map(async (img) => {
             if (typeof img === 'string') {
-              if (img.startsWith('data:image/') || img.startsWith('http')) {
-                return img;
+              if (img.startsWith('data:image/') || img.startsWith('http') || img.startsWith('/photos/') || img.startsWith('/api/r2/photos/')) {
+                return normalizeMealImageUrl(img) || img;
               }
               if (img.startsWith('blob:')) {
                 try {
@@ -104,55 +107,61 @@ export default function TaskPlaceholderCard({
           })
         );
         
-        const validUrls = dataUrls.filter(url => url && (url.startsWith('data:image/') || url.startsWith('http')));
+        const validUrls = dataUrls.filter(url => url && (url.startsWith('data:image/') || url.startsWith('http') || url.startsWith('/photos/') || url.startsWith('/api/r2/photos/')));
         if (validUrls.length > 0) {
           finalImageUrl = validUrls[0];
           finalImageUrls = validUrls;
         }
       }
 
-      // 2. FALLBACK: If ImageStore didn't yield a valid URL but we have an active, visible preview image or (job as any).photoUrl
-      const remotePhoto =
-        (job as any).photoUrl ||
-        job.result?.photoUrl ||
-        job.result?.clean_result?.photoUrl ||
-        (job.result as any)?.data?.photoUrl ||
-        (job as any).clean_result?.photoUrl ||
-        (job as any).photo_url;
+      // 2. FALLBACK: If ImageStore didn't yield a valid URL, use candidate URLs or imageUrl or remote photos
+      const fallbackCandidates = [
+        imageUrl,
+        ...candidateUrlsRef.current,
+        (job as any).photoUrl,
+        job.result?.photoUrl,
+        job.result?.clean_result?.photoUrl,
+        (job.result as any)?.data?.photoUrl,
+        (job as any).clean_result?.photoUrl,
+        (job as any).photo_url
+      ].filter(Boolean) as string[];
 
-      if (!finalImageUrl && imageUrl) {
-        if (imageUrl.startsWith('data:image/') || imageUrl.startsWith('http')) {
-          finalImageUrl = imageUrl;
-        } else if (imageUrl.startsWith('blob:')) {
+      for (const cand of fallbackCandidates) {
+        if (!cand) continue;
+        if (cand.startsWith('data:image/') || cand.startsWith('http') || cand.startsWith('/photos/') || cand.startsWith('/api/r2/photos/')) {
+          const norm = normalizeMealImageUrl(cand) || cand;
+          if (!finalImageUrl) finalImageUrl = norm;
+          if (!finalImageUrls.includes(norm)) finalImageUrls.push(norm);
+        } else if (cand.startsWith('blob:')) {
           try {
-            const res = await fetch(imageUrl);
+            const res = await fetch(cand);
             const b = await res.blob();
-            finalImageUrl = await new Promise<string>((resolve, reject) => {
+            const dataUrl = await new Promise<string>((resolve, reject) => {
               const reader = new FileReader();
               reader.onload = () => resolve(reader.result as string);
               reader.onerror = reject;
               reader.readAsDataURL(b);
             });
+            if (dataUrl) {
+              if (!finalImageUrl) finalImageUrl = dataUrl;
+              if (!finalImageUrls.includes(dataUrl)) finalImageUrls.push(dataUrl);
+            }
           } catch (e) {
-            console.warn('[TaskPlaceholderCard] Failed to convert active preview imageUrl state to base64:', e);
+            console.warn('[TaskPlaceholderCard] Failed to convert blob to base64:', e);
           }
         }
-      }
-      if (!finalImageUrl && remotePhoto) {
-        finalImageUrl = remotePhoto;
       }
 
       const remotePhotos = 
         job.result?.clean_result?.pendingFoodLog?.imageUrls ||
         job.result?.clean_result?.imageUrls ||
         job.result?.imageUrls ||
-        (remotePhoto ? [remotePhoto] : []);
+        [];
 
       if (remotePhotos.length > 0) {
-        finalImageUrls = remotePhotos;
-        finalImageUrl = remotePhotos[0];
-      } else if (finalImageUrls.length === 0 && remotePhoto) {
-        finalImageUrl = remotePhoto;
+        const normRemotes = remotePhotos.map((r: string) => normalizeMealImageUrl(r) || r);
+        if (finalImageUrls.length === 0) finalImageUrls = normRemotes;
+        if (!finalImageUrl) finalImageUrl = normRemotes[0];
       }
 
       // Apply the resolved image URL(s) if found
@@ -168,82 +177,193 @@ export default function TaskPlaceholderCard({
     }
   };
 
-  // Load image preview: check ImageStore first for raw bytes, then fallback to photoUrl / pendingFoodLog / messages
+  // Load image preview: check ImageStore first for raw bytes, then fallback to photoUrl / pendingFoodLog / messages / inputSnapshot
   useEffect(() => {
     let active = true;
-    let createdObjectUrl: string | null = null;
+    const createdUrls: string[] = [];
 
     const loadPreview = async () => {
       try {
-        // 1. Try ImageStore first for local raw image bytes (most reliable for active/queued/running jobs)
-        const images = await ImageStore.getImages(job.id);
-        if (images && images.length > 0 && active) {
-          const firstImg: any = images[0];
-          if (firstImg) {
-            if (typeof firstImg === 'string' && (firstImg.startsWith('data:image/') || firstImg.startsWith('http'))) {
-              setImageUrl(firstImg);
-              return;
-            }
-            if (firstImg instanceof Blob || (typeof firstImg === 'object' && ('size' in firstImg || 'type' in firstImg))) {
-              try {
-                const blob = firstImg instanceof Blob ? firstImg : new Blob([firstImg], { type: firstImg.type || 'image/jpeg' });
-                createdObjectUrl = URL.createObjectURL(blob);
-                setImageUrl(createdObjectUrl);
-                return;
-              } catch (e) {}
+        const rawCandidates: (string | Blob)[] = [];
+
+        // 1. Check ImageStore first for raw bytes / staged blobs
+        try {
+          const images = await ImageStore.getImages(job.id);
+          if (images && images.length > 0) {
+            rawCandidates.push(...images);
+          }
+        } catch {
+          // ignore
+        }
+
+        // 2. Check inputSnapshot imageRefs (might be image keys or IDs or data URLs)
+        if (job.inputSnapshot?.imageRefs && Array.isArray(job.inputSnapshot.imageRefs)) {
+          for (const ref of job.inputSnapshot.imageRefs) {
+            if (ref) {
+              if (typeof ref === 'string' && (ref.startsWith('data:image/') || ref.startsWith('http') || ref.startsWith('/photos/') || ref.startsWith('/api/r2/photos/'))) {
+                rawCandidates.push(ref);
+              } else if (typeof ref === 'string') {
+                try {
+                  const refImgs = await ImageStore.getImages(ref);
+                  if (refImgs && refImgs.length > 0) {
+                    rawCandidates.push(...refImgs);
+                  }
+                } catch {
+                  // ignore
+                }
+              }
             }
           }
         }
 
+        // 3. Check inputSnapshot additional properties
+        const inputSnap = job.inputSnapshot as any;
+        if (inputSnap?.imageUrl) rawCandidates.push(inputSnap.imageUrl);
+        if (Array.isArray(inputSnap?.imageUrls)) rawCandidates.push(...inputSnap.imageUrls);
+        if (Array.isArray(inputSnap?.photos)) rawCandidates.push(...inputSnap.photos);
+        if (inputSnap?.photoUrl) rawCandidates.push(inputSnap.photoUrl);
+
+        // 4. Check direct job properties & clean_result
+        const directPhoto =
+          (job as any).photoUrl ||
+          (job as any).photo_url ||
+          (job as any).imageUrl ||
+          job.result?.photoUrl ||
+          job.result?.clean_result?.photoUrl ||
+          (job.result as any)?.data?.photoUrl ||
+          (job as any).clean_result?.photoUrl;
+        if (directPhoto) rawCandidates.push(directPhoto);
+
+        const directPhotos =
+          (job as any).imageUrls ||
+          (job as any).remotePhotos ||
+          job.result?.imageUrls ||
+          job.result?.clean_result?.imageUrls;
+        if (Array.isArray(directPhotos)) rawCandidates.push(...directPhotos);
+
+        // 5. Check pendingFoodLog and mealBuild
         const pendingFoodLog =
           job.result?.pendingFoodLog ||
           job.result?.raw?.data ||
           job.result?.data ||
-    job.result?.foodData ||
-    job.result?.mealBuild?.content ||
-    job.mealBuild?.content ||
-    job.result?.foodData ||
+          job.result?.foodData ||
+          job.result?.mealBuild?.content?.pendingFoodLog ||
+          job.result?.mealBuild?.content ||
+          job.mealBuild?.content?.pendingFoodLog ||
+          job.mealBuild?.content ||
           job.messages?.slice().reverse().find((m: any) => m.pendingFoodLog)?.pendingFoodLog ||
           job.messages?.slice().reverse().find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog;
 
-        // 2. Direct photoUrl or pendingFoodLog.imageUrl / imageUrls
-        const directPhoto =
-          (job as any).photoUrl ||
-          ((job as any).remotePhotos && (job as any).remotePhotos.length > 0 && (job as any).remotePhotos[0]) ||
-          ((job as any).imageUrls && (job as any).imageUrls.length > 0 && (job as any).imageUrls[0]) ||
-          job.result?.photoUrl ||
-          job.result?.clean_result?.photoUrl ||
-          (job.result as any)?.data?.photoUrl ||
-          (job as any).clean_result?.photoUrl ||
-          (job as any).photo_url ||
-          pendingFoodLog?.imageUrl ||
-          (pendingFoodLog?.imageUrls && pendingFoodLog.imageUrls[0]);
+        if (pendingFoodLog?.imageUrl) rawCandidates.push(pendingFoodLog.imageUrl);
+        if (Array.isArray(pendingFoodLog?.imageUrls)) rawCandidates.push(...pendingFoodLog.imageUrls);
 
-        if (directPhoto && typeof directPhoto === 'string' && (directPhoto.startsWith('http') || directPhoto.startsWith('data:image/') || directPhoto.startsWith('blob:')) && active) {
-          setImageUrl(directPhoto);
-          return;
+        // 6. Check messages
+        if (job.messages && Array.isArray(job.messages)) {
+          for (let i = job.messages.length - 1; i >= 0; i--) {
+            const m = job.messages[i] as any;
+            if (!m) continue;
+            if (m.imageUrl) rawCandidates.push(m.imageUrl);
+            if (Array.isArray(m.imageUrls)) rawCandidates.push(...m.imageUrls);
+            if (m.photoUrl) rawCandidates.push(m.photoUrl);
+            if (Array.isArray(m.photos)) rawCandidates.push(...m.photos);
+            if (Array.isArray(m.attachments)) {
+              for (const att of m.attachments) {
+                if (typeof att === 'string') rawCandidates.push(att);
+                else if (att?.url) rawCandidates.push(att.url);
+              }
+            }
+            if (m.data?.imageUrl) rawCandidates.push(m.data.imageUrl);
+            if (Array.isArray(m.data?.imageUrls)) rawCandidates.push(...m.data.imageUrls);
+            if (m.data?.pendingFoodLog?.imageUrl) rawCandidates.push(m.data.pendingFoodLog.imageUrl);
+            if (Array.isArray(m.data?.pendingFoodLog?.imageUrls)) rawCandidates.push(...m.data.pendingFoodLog.imageUrls);
+          }
         }
 
-        // 3. Check user messages for valid imageUrl
-        const userMsgWithImg = job.messages?.slice().reverse().find(
-          (m: any) => m.imageUrl && typeof m.imageUrl === 'string' && (m.imageUrl.startsWith('data:image/') || m.imageUrl.startsWith('http') || m.imageUrl.startsWith('blob:'))
-        );
-        if (userMsgWithImg?.imageUrl && active) {
-          setImageUrl(userMsgWithImg.imageUrl);
-          return;
+        // Convert rawCandidates to valid, normalized URLs
+        const validCandidates: string[] = [];
+        for (const item of rawCandidates) {
+          if (!item) continue;
+          if (typeof item === 'string') {
+            const trimmed = item.trim();
+            if (!trimmed || trimmed === '[image_removed_for_snapshot]') continue;
+            if (trimmed.startsWith('data:image/') || trimmed.startsWith('blob:')) {
+              if (!validCandidates.includes(trimmed)) validCandidates.push(trimmed);
+            } else {
+              const norm = (normalizeMealImageUrl(trimmed) || trimmed) as string;
+              const usable = isUsableImageUrl(norm);
+              const isPath = norm.startsWith('/photos/') || norm.startsWith('/api/r2/photos/') || norm.startsWith('http');
+              if (usable || isPath) {
+                if (!validCandidates.includes(norm)) validCandidates.push(norm);
+              }
+            }
+          } else if (item instanceof Blob || (typeof item === 'object' && ('size' in item || 'type' in item))) {
+            try {
+              const blob = item instanceof Blob ? item : new Blob([item], { type: (item as any).type || 'image/jpeg' });
+              const objectUrl = URL.createObjectURL(blob);
+              createdUrls.push(objectUrl);
+              validCandidates.push(objectUrl);
+            } catch {
+              // ignore
+            }
+          }
+        }
+
+        if (!active) return;
+        candidateUrlsRef.current = validCandidates;
+        triedUrlsRef.current.clear();
+
+        if (validCandidates.length > 0) {
+          const first = validCandidates[0];
+          triedUrlsRef.current.add(first);
+          setImageUrl(first);
+        } else {
+          setImageUrl(null);
         }
       } catch (err) {
-        console.warn('Failed to load image preview for task placeholder:', err);
+        console.warn('[TaskPlaceholderCard] Failed to load image preview:', err);
       }
     };
+
     loadPreview();
+
     return () => {
       active = false;
-      if (createdObjectUrl) {
-        URL.revokeObjectURL(createdObjectUrl);
+      for (const u of createdUrls) {
+        URL.revokeObjectURL(u);
       }
     };
-  }, [job.id, (job as any).photoUrl, job.result, job.messages]);
+  }, [
+    job.id,
+    (job as any).photoUrl,
+    (job as any).imageUrl,
+    job.result,
+    job.inputSnapshot,
+    job.messages
+  ]);
+
+  const handleImageError = () => {
+    if (!imageUrl) return;
+    triedUrlsRef.current.add(imageUrl);
+
+    // 1. Try nextPhotoFallbackUrl for proxy / signed R2 routes
+    const nextProxyFallback = nextPhotoFallbackUrl(imageUrl, triedUrlsRef.current);
+    if (nextProxyFallback) {
+      triedUrlsRef.current.add(nextProxyFallback);
+      setImageUrl(nextProxyFallback);
+      return;
+    }
+
+    // 2. Try the next candidate from candidateUrlsRef
+    const nextCandidate = candidateUrlsRef.current.find(c => c && !triedUrlsRef.current.has(c));
+    if (nextCandidate) {
+      triedUrlsRef.current.add(nextCandidate);
+      setImageUrl(nextCandidate);
+      return;
+    }
+
+    // 3. Exhausted all candidates
+    setImageUrl(null);
+  };
 
   const lastMsgContent = (job.messages && job.messages.length > 0) ? job.messages[job.messages.length - 1]?.content : '';
   const pendingLog =
@@ -414,7 +534,7 @@ export default function TaskPlaceholderCard({
               alt={t.mealPreview || "Meal Preview"}
               className="w-full h-full object-cover"
               referrerPolicy="no-referrer"
-              onError={() => setImageUrl(null)}
+              onError={handleImageError}
             />
           ) : (
             <div className="p-2 text-slate-400 font-mono text-[10px] text-center uppercase">

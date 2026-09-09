@@ -31,34 +31,11 @@ Do **not** open `archive/`, `plan/archive/`, `FOOD.md` Part A/B, or old F-9 pack
 
 ---
 
-## Current work — F-8.10
-
-**Already done:** `src/mealBuild/shouldExpandMealAgent.ts` + vitest + `scripts/assert-f10-pr1.mjs`. Do not rewrite.
+## Current work — B0
 
 **Do:**
-1. `server_food_analyze_run.ts` split into 400-600 line shards.
-
-1. `server_derivation.ts` `calculateDerivedNutrients`: when protein, carbohydrates, and totalFat are all numbers, **calories = `computeCaloriesFromMacros`** (ignore `base.calories`). `deriveCarbohydratesFromEnergy` only when carbohydrates is missing. Printed-kcal lock stays in `finalizeDishLedger`, not this helper.
-2. Append to `server_derivation.test.ts`:
-
-```ts
-it('ignores agent calories when P/C/F are present (F-10.2)', () => {
-  const out = calculateDerivedNutrients({
-    calories: 9999, protein: 25, carbohydrates: 50, totalFat: 20,
-    saturatedFat: 5, transFat: 0, sodium: 400,
-  });
-  expect(out.calories).toBe(480);
-  expect(out.unsaturatedFat).toBe(15);
-  expect(out.salt).toBeCloseTo(1.02, 2);
-});
-```
-
-**Do not:** `App.tsx` / `LogChat.tsx` / `JobStore.ts` · skip Dietitian in `server_food_analyze_run.ts` (that is F-10.7) · `npm test` · `npm run build` · edit `AGENTS.md` · leave `patch_*.mjs` at repo root · LLM `calories` on scout schema.
-
-**Gates (this ID only):**
-
-```bash
-npx tsc --noEmit
+1. Check B0 / fill-template C1-C7.
+--noEmit
 npx vitest run src/mealBuild/__tests__/shouldExpandMealAgent.test.ts server_derivation.test.ts
 node scripts/assert-f10-pr1.mjs
 ```

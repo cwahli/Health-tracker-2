@@ -44,7 +44,7 @@ LDL cholesterol  4.3 mmol/L
 
 ## Agent turns (full payload sent + model output)
 
-### Turn 1 (hit) — r01, r02 (2 rows, 1758ms)
+### Turn 1 (hit) — r01, r02 (2 rows, 1417ms)
 
 **User contents sent to the model** (system instruction is above; this is the user turn):
 
@@ -98,9 +98,9 @@ Biomarkers to review (hits - in catalog):
 [
   {
     "id": "r01",
-    "medicalInsight": "For a 43-year-old Chinese male, an HbA1c of 40 mmol/mol falls into the prediabetes risk category (>=39 mmol/mol threshold for Chinese populations), indicating early impaired glucose tolerance.",
+    "medicalInsight": "For a 43-year-old Chinese male, an HbA1c of 40 mmol/mol falls into the elevated prediabetes risk range according to ethnicity-specific cutoffs (>=39 mmol/mol). Lifestyle modifications and close monitoring are advised.",
     "optimalValue": "34 mmol/mol",
-    "editReason": "Applied specific prediabetes risk threshold for Chinese ethnicity.",
+    "editReason": "",
     "logs": [
       {
         "date": "2026-06-05",
@@ -109,14 +109,14 @@ Biomarkers to review (hits - in catalog):
         "comment": "Initial result"
       }
     ],
-    "customRangeOverlay": "[Chinese Ethnicity] Elevated (Prediabetes): >=39; Optimal: <39; [Western Standard] Normal: 20-41; High: >41",
+    "customRangeOverlay": "[Chinese Ethnicity] Elevated (Prediabetes Risk): >=39; Optimal: <39; [Standard Laboratory] Normal: 20-41; High: >41",
     "dictionaryCorrection": null
   },
   {
     "id": "r02",
-    "medicalInsight": "Your LDL cholesterol is 4.3 mmol/L, which is significantly elevated and indicates a higher risk for cardiovascular disease. Targeted lifestyle modifications or discussion on lipid-lowering therapy is recommended.",
+    "medicalInsight": "Your LDL cholesterol is 4.3 mmol/L, which is significantly elevated and increases cardiovascular risk, particularly when combined with prediabetes tendencies.",
     "optimalValue": "2.0 mmol/L",
-    "editReason": "Set optimal target for primary cardiovascular risk reduction.",
+    "editReason": "",
     "logs": [
       {
         "date": "2026-06-05",
@@ -125,7 +125,7 @@ Biomarkers to review (hits - in catalog):
         "comment": "Initial result"
       }
     ],
-    "customRangeOverlay": "",
+    "customRangeOverlay": "[All Patients] Very High: >3.4; Elevated: >2.6; Optimal: <=2.6",
     "dictionaryCorrection": null
   }
 ]
