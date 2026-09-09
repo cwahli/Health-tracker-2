@@ -5,7 +5,7 @@
 > Tracks strictly the **10 profile allowance nutrients** (serving & 100g). No meal-log pollution.
 > Model: `gemini-3.5-flash-lite` | Architecture: Streamlined Schema-First Mode D Scout (Anti-Sampling Enforced).
 
-- **Job ID:** `job_compare_set2_1788980252466` · **Status:** `succeeded`
+- **Job ID:** `job_compare_set2_1788978526240` · **Status:** `succeeded`
 - **Pack:** food · **Mode:** compare · **Version:** 3 · **Savable:** false
 - **Photos:** 4 (set2_snack_pack_front.jpg, set2_snack_blue_bread_label.jpg, set2_snack_green_bar_label.jpg, set2_snack_yellow_cake_label.jpg)
 - **Shown comparison:** 4 extracted options across 4 macro clusters (<=10% variance), complete 10-nutrient profile allowance vectors (per serving & per 100g), direct OCR label locks, normalized bounding box quadrants.
@@ -25,7 +25,7 @@
 | Composer controls count = 1 | ui | ✅ PASS | All composer controls count = 1 |
 | DIAG5 off on food | process | ✅ PASS | DIAG5 auto-send remained off for food comparison |
 | Matrix calc matches ledger | content | ✅ PASS | All 10 profile allowance nutrients present per-serving and per-100g without nulls |
-| Each dispatch has model + latency_ms | process | ✅ PASS | Dispatch carries model (`gemini-3.5-flash-lite`) and latency_ms (7885ms) |
+| Each dispatch has model + latency_ms | process | ✅ PASS | Dispatch carries model (`gemini-3.5-flash-lite`) and latency_ms (10356ms) |
 | Printed-kcal lock wins | content | ✅ PASS | Verbatim OCR locks held for printed nutrition panels; no invented Atwater overrides |
 | Bounding box normalized in [0, 1000] | content | ✅ PASS | All 4 group bounding boxes follow valid normalized coordinates `[ymin, xmin, ymax, xmax]` |
 | Zero orphaned items | content | ✅ PASS | 100% of extracted items (4/4) mapped to comparison groups |
@@ -34,7 +34,7 @@
 
 ## 🪟 Modal Snapshot (Dialog Inventory)
 
-- **State:** comparison complete, decision card rendered · **Card:** 4 options, 4 groups, top recommendation: Blue Pack Bread / Soft Bread (120 kcal per serving)
+- **State:** comparison complete, decision card rendered · **Card:** 4 options, 4 groups, top recommendation: Green Packaged Snack Bar / Green Packaged Snack Bar
 - **Chips:** no Retry · no Attempt 1/3 · composer controls ×1
 - **Visible:** [View Comparison Details, Download Debug Report, Close Modal]
 - **Hidden:** [Retry, Attempt 1 of 3, Save Meal to History]
@@ -191,150 +191,150 @@ All rankings, comparison sentences, and combined clinical messages (with orderin
 - **Raw Emission (Verbatim Output):**
 ```json
 {
-  "allExtractedDishes": [
-    "Green Pack Snack / Green Pack Snack (90 kcal per serving)",
-    "Yellow Pack Bread / Multiseed Bread (250 kcal per serving)",
-    "Yellow-Green Pack Pastry / Sarikaya Pastry (250 kcal per serving)",
-    "Blue Pack Bread / Soft Bread (120 kcal per serving)"
-  ],
-  "_internalReasoning": "Extracted 4 packaged snack/bread items from the nutrition labels provided across the 4 images. Grouped them based on estimated per-100g nutrient profiles into separate tiers according to calorie density, added/total sugars, and sodium levels relative to the patient's excess calories, saturated fat, sodium, and added sugar targets.",
-  "comparisonTitle": "Packaged Bakery & Snack Nutritional Labels Comparison",
+  "_internalReasoning": "Evaluated 4 nutrition labels of packaged bakery snacks and snack bars. Exhaustively extracted all 4 distinct products. Grouped them into nutritional clusters with <=10% macro variance based on per-100g nutrient profiles. Addressed patient's 3-day averages: calories 2500kcal (39% surplus), saturated fat 27.7g (38% surplus), sodium 3000mg (30% surplus), added sugar 45g (50% surplus), carbohydrates 263.3g (32% surplus), and protein 100g (17% deficit). Formulated rankings from lowest caloric/sugar impact to highest.",
+  "comparisonTitle": "Packaged Bakery Snacks and Nutrition Label Comparison",
   "comparisonType": "nutrition_labels",
-  "summary": "Reviewing these 4 packaged items reveals varying degrees of calorie density, sodium, and sugar content. Given your surplus in calories, saturated fat, sodium, and added sugars alongside a fiber deficit, selecting lower-calorie and lower-sugar options is paramount. The Blue Pack Bread offers the most controlled glycemic and energy load among the choices, while higher-calorie items demand strict portion limits.",
-  "recommendedOption": "Blue Pack Bread / Soft Bread (120 kcal per serving)",
+  "summary": "Clinical evaluation of 4 packaged snack items reveals significant variations in calorie density, saturated fat, sodium, and sugar content. Given your active surpluses in calories (+39%), saturated fat (+38%), added sugar (+50%), and sodium (+30%), alongside a protein deficit (-17%), selecting lower-sugar, portion-controlled options is crucial to prevent metabolic overload.",
+  "recommendedOption": "Green Packaged Snack Bar / Green Packaged Snack Bar",
   "groups": [
     {
-      "groupName": "Tier 1 - Safest Choice: Controlled Energy Bakery Items",
-      "sourceImageIndex": 3,
-      "verdict": {
-        "label": "Lowest Calorie & Sodium",
-        "level": "good"
-      },
-      "comparisonSentence": "Compared to heavier multi-seed or pastry options, this item provides a much lower calorie and sodium load per 100g, helping mitigate your active calorie and sodium surpluses.",
-      "message": "This soft bread formulation presents a more manageable caloric and sodium density than the heavier pastry choices. While it lacks substantial dietary fiber to address your deficit, keeping the portion modest prevents exacerbating your daily calorie surplus. Order or select this option when you need a controlled carbohydrate base, and pair it with fresh vegetables or lean protein to boost fiber and satiety.",
-      "boundingBox2D": [
-        290,
-        15,
-        910,
-        980
-      ],
-      "servingWeightGrams": 44,
-      "averageNutrientsPer100g": {
-        "calories": 273,
-        "protein": 9.1,
-        "totalFat": 5.7,
-        "saturatedFat": 3.4,
-        "carbohydrates": 47.7,
-        "sugar": 4.5,
-        "totalFibre": 2,
-        "sodium": 341,
-        "addedSugar": 3,
-        "transFat": 0
-      },
-      "items": [
-        "Blue Pack Bread / Soft Bread (120 kcal per serving)"
-      ]
-    },
-    {
-      "groupName": "Tier 2 - Neutral Choice: Moderate Calorie Snack Packs",
+      "groupName": "Tier 1 - Safest Choice: Portion-Controlled Snack Bar",
       "sourceImageIndex": 0,
       "verdict": {
-        "label": "Moderate Energy Density",
-        "level": "neutral"
+        "label": "Lowest Calorie & Sugar Burden",
+        "level": "good"
       },
-      "comparisonSentence": "This snack pack has a moderate calorie density per 100g that sits between the lightest bread and heavy pastries, requiring careful portion management.",
-      "message": "This green-packaged snack offers moderate per-serving energy but packs a concentrated sugar load relative to its small size, contributing to your added sugar surplus. Enjoy strictly as a single designated serving rather than grazing, and balance it with high-fiber whole foods to stabilize blood glucose.",
+      "comparisonSentence": "This option delivers the lowest calorie and sugar density per 100g among all choices, helping mitigate your active calorie and added sugar surpluses.",
+      "message": "This green-packaged snack bar offers the most favorable nutritional profile among the evaluated items, containing substantially fewer calories and sugars per 100g than the heavy bakery breads. While it does not fully resolve your protein deficit, it minimizes further compounding of your calorie and sugar excesses. Actionable ordering tip: Consume a single measured portion and pair with a clean protein source like boiled egg whites to support your protein target without adding excess sugars.",
       "boundingBox2D": [
-        350,
+        363,
         0,
-        760,
+        757,
         1000
       ],
       "servingWeightGrams": 23,
       "averageNutrientsPer100g": {
-        "calories": 391,
-        "protein": 4.3,
-        "totalFat": 13,
-        "saturatedFat": 4.3,
-        "carbohydrates": 65.2,
-        "sugar": 30.4,
-        "totalFibre": 1.5,
-        "sodium": 87,
+        "calories": 391.3,
+        "protein": 4.35,
+        "totalFat": 13.04,
+        "saturatedFat": 4.35,
+        "carbohydrates": 65.22,
+        "sugar": 30.43,
+        "totalFibre": 2.5,
+        "sodium": 86.96,
         "addedSugar": 20,
         "transFat": 0
       },
       "items": [
-        "Green Pack Snack / Green Pack Snack (90 kcal per serving)"
+        "Green Packaged Snack Bar / Green Packaged Snack Bar"
       ]
     },
     {
-      "groupName": "Tier 3 - Warning: High Calorie & Saturated Fat Pastries",
+      "groupName": "Tier 2 - Moderate Choice: Lower-Sodium White Bread",
+      "sourceImageIndex": 3,
+      "verdict": {
+        "label": "Moderate Sodium & Carbohydrates",
+        "level": "neutral"
+      },
+      "comparisonSentence": "Compared to the higher-sodium bakery variants, this blue-packaged bread keeps sodium closer to baseline while contributing moderate carbohydrate loads.",
+      "message": "This blue-packaged bread option provides a moderate carbohydrate and sodium profile per 100g, though it still contributes significantly to your carbohydrate surplus. It outperforms heavier pastries by keeping sodium relatively controlled at 341mg per 100g. Actionable ordering tip: Opt for a single slice rather than full servings, and avoid high-fat spreads to protect your saturated fat and calorie thresholds.",
+      "boundingBox2D": [
+        308,
+        0,
+        921,
+        907
+      ],
+      "servingWeightGrams": 44,
+      "averageNutrientsPer100g": {
+        "calories": 272.73,
+        "protein": 9.09,
+        "totalFat": 5.68,
+        "saturatedFat": 3.41,
+        "carbohydrates": 47.73,
+        "sugar": 4.55,
+        "totalFibre": 2.2,
+        "sodium": 340.91,
+        "addedSugar": 3,
+        "transFat": 0
+      },
+      "items": [
+        "Blue Packaged Bread / Blue Packaged Bread"
+      ]
+    },
+    {
+      "groupName": "Tier 3 - Warning Choice: High-Sugar Bakery Loaves",
       "sourceImageIndex": 1,
       "verdict": {
-        "label": "High Saturated Fat & Sodium",
+        "label": "High Sugar & Calorie Density",
         "level": "warning"
       },
-      "comparisonSentence": "Unlike lighter breads, this multiseed loaf carries a significant sodium and total fat burden that conflicts with your active sodium and saturated fat surpluses.",
-      "message": "This multiseed bread provides some structural fiber, but its elevated sodium and total fat content make it less ideal given your 3000mg sodium baseline and saturated fat surplus. Consume in strict moderation, and avoid adding high-sodium spreads to keep your cardiovascular parameters in check.",
+      "comparisonSentence": "This yellow-packaged bakery loaf exacerbates your added sugar surplus significantly more than the snack bar alternatives.",
+      "message": "With elevated sugar concentrations (47.5g per 100g) and high calorie density, this yellow-packaged loaf directly worsens your active sugar and calorie surpluses. Regular consumption will hinder metabolic recovery. Actionable ordering tip: If consumed, strictly limit portion size to a fraction of a serving and avoid adding sweet toppings or butter.",
       "boundingBox2D": [
-        250,
-        10,
-        930,
-        990
+        257,
+        0,
+        915,
+        1000
       ],
       "servingWeightGrams": 80,
       "averageNutrientsPer100g": {
-        "calories": 313,
-        "protein": 3.8,
-        "totalFat": 8.8,
-        "saturatedFat": 3.8,
-        "carbohydrates": 50,
+        "calories": 312.5,
+        "protein": 3.75,
+        "totalFat": 8.75,
+        "saturatedFat": 3.75,
+        "carbohydrates": 47.5,
         "sugar": 47.5,
-        "totalFibre": 3,
+        "totalFibre": 2,
         "sodium": 412.5,
         "addedSugar": 35,
         "transFat": 0
       },
       "items": [
-        "Yellow Pack Bread / Multiseed Bread (250 kcal per serving)"
+        "Yellow Packaged Bakery Loaf (3-serving) / Yellow Packaged Bakery Loaf (3-serving)"
       ]
     },
     {
-      "groupName": "Tier 4 - Alert: Energy-Dense Sweet Fillings",
+      "groupName": "Tier 4 - Alert Choice: High-Sodium & Saturated Fat Pastry",
       "sourceImageIndex": 2,
       "verdict": {
-        "label": "Elevated Sugars & Fats",
+        "label": "Excessive Sodium & Saturated Fats",
         "level": "alert"
       },
-      "comparisonSentence": "This pastry option delivers heavy saturated fats and sugars per 100g, directly worsening your active calorie, sugar, and saturated fat surpluses.",
-      "message": "Featuring rich fillings and higher total fats, this sarikaya pastry significantly pushes past your daily calorie and saturated fat allowances while contributing negligible fiber. Avoid making this a routine choice; if consumed, limit to a tiny fraction of a serving and pair with unsweetened green tea.",
+      "comparisonSentence": "This green-yellow packaged pastry presents the highest combined risk for your sodium and saturated fat surpluses among all options.",
+      "message": "This pastry option severely compromises your dietary targets by packing high amounts of saturated fat (6g per serving) and dense calories, compounding your existing 38% saturated fat surplus and 30% sodium surplus. Actionable ordering tip: Avoid this item entirely in favor of unrefined whole-grain or lower-fat alternatives to protect cardiovascular health.",
       "boundingBox2D": [
-        270,
+        242,
         0,
-        950,
+        999,
         1000
       ],
       "servingWeightGrams": 75,
       "averageNutrientsPer100g": {
-        "calories": 333,
+        "calories": 333.33,
         "protein": 0,
         "totalFat": 8,
         "saturatedFat": 6,
         "carbohydrates": 56,
-        "sugar": 25.3,
-        "totalFibre": 1,
-        "sodium": 166.7,
-        "addedSugar": 20,
+        "sugar": 25.33,
+        "totalFibre": 1.5,
+        "sodium": 166.67,
+        "addedSugar": 18,
         "transFat": 0
       },
       "items": [
-        "Yellow-Green Pack Pastry / Sarikaya Pastry (250 kcal per serving)"
+        "Green-Yellow Packaged Pastry / Green-Yellow Packaged Pastry"
       ]
     }
+  ],
+  "allExtractedDishes": [
+    "Green Packaged Snack Bar / Green Packaged Snack Bar",
+    "Yellow Packaged Bakery Loaf (3-serving) / Yellow Packaged Bakery Loaf (3-serving)",
+    "Green-Yellow Packaged Pastry / Green-Yellow Packaged Pastry",
+    "Blue Packaged Bread / Blue Packaged Bread"
   ]
 }
 ```
-- **Signals (REFERENCE):** model=gemini-3.5-flash-lite, latency_ms=7885, tokens=6080
+- **Signals (REFERENCE):** model=gemini-3.5-flash-lite, latency_ms=10356, tokens=6080
 - **Parent:** none (turn 1; single dispatch Mode D evaluation)
 - **Personalization:** at-risk: LDL (high); HbA1c (high) · NUTRITIONAL TARGET STATUS (3 days avg): Sat fat (27.7g - 38% over), Calorie (2500kcal - 39% over), Sodium (3000mg - 30% over), Protein (100g - 17% under), Carbohydrates (263.3g - 32% over), Total Fibre (22.3g - 26% under), Potassium (2100mg), Soluble Fibre (3.5g), Added Sugar (45g - 50% over), Trans Fat (0.1g). Budgets ride in the instruction, not the payload.
 
@@ -351,7 +351,7 @@ All rankings, comparison sentences, and combined clinical messages (with orderin
 ## ⚖️ Gate & Trial-Balance Evaluation
 
 - **Gate:** non-additive comparison evaluation card shown · 4 options · 4 groups
-- **Shown recommendation:** the agent's top recommended option (`Blue Pack Bread / Soft Bread (120 kcal per serving)`)
+- **Shown recommendation:** the agent's top recommended option (`Green Packaged Snack Bar / Green Packaged Snack Bar`)
 - **Macro Variance check:** all items within each group cluster within <=10% macronutrient variance
 - **Hazard Isolation:** Tier 4 alerts isolated for trans fats, oxidized deep-fry oils, or high-sugar syrups
 
@@ -397,7 +397,7 @@ The patient's current profile exhibits significant metabolic imbalances over a 3
 
 ## 🔍 Evaluated Items & Product OCR Extraction (4 Items Extracted)
 
-> **Scout Internal Reasoning:** Extracted 4 packaged snack/bread items from the nutrition labels provided across the 4 images. Grouped them based on estimated per-100g nutrient profiles into separate tiers according to calorie density, added/total sugars, and sodium levels relative to the patient's excess calories, saturated fat, sodium, and added sugar targets.
+> **Scout Internal Reasoning:** Evaluated 4 nutrition labels of packaged bakery snacks and snack bars. Exhaustively extracted all 4 distinct products. Grouped them into nutritional clusters with <=10% macro variance based on per-100g nutrient profiles. Addressed patient's 3-day averages: calories 2500kcal (39% surplus), saturated fat 27.7g (38% surplus), sodium 3000mg (30% surplus), added sugar 45g (50% surplus), carbohydrates 263.3g (32% surplus), and protein 100g (17% deficit). Formulated rankings from lowest caloric/sugar impact to highest.
 
 **Domain:** `Packaged bread & snack nutrition fact panels` | **Comparison Type:** `nutrition_labels`
 
@@ -407,10 +407,10 @@ The model executed the extraction sequentially: first transcribing all 4 items a
 
 | # | Dish / Product Name (Local / English) | Tier | Image | Group Assignment |
 |---|---------------------------------------|:----:|:-----:|------------------|
-| [1] | **Blue Pack Bread / Soft Bread (120 kcal per serving)** | Tier 1 | #3 | Tier 1 - Safest Choice: Controlled Energy Bakery Items |
-| [2] | **Green Pack Snack / Green Pack Snack (90 kcal per serving)** | Tier 2 | #0 | Tier 2 - Neutral Choice: Moderate Calorie Snack Packs |
-| [3] | **Yellow Pack Bread / Multiseed Bread (250 kcal per serving)** | Tier 3 | #1 | Tier 3 - Warning: High Calorie & Saturated Fat Pastries |
-| [4] | **Yellow-Green Pack Pastry / Sarikaya Pastry (250 kcal per serving)** | Tier 4 | #2 | Tier 4 - Alert: Energy-Dense Sweet Fillings |
+| [1] | **Green Packaged Snack Bar / Green Packaged Snack Bar** | Tier 1 | #0 | Tier 1 - Safest Choice: Portion-Controlled Snack Bar |
+| [2] | **Blue Packaged Bread / Blue Packaged Bread** | Tier 2 | #3 | Tier 2 - Moderate Choice: Lower-Sodium White Bread |
+| [3] | **Yellow Packaged Bakery Loaf (3-serving) / Yellow Packaged Bakery Loaf (3-serving)** | Tier 3 | #1 | Tier 3 - Warning Choice: High-Sugar Bakery Loaves |
+| [4] | **Green-Yellow Packaged Pastry / Green-Yellow Packaged Pastry** | Tier 4 | #2 | Tier 4 - Alert Choice: High-Sodium & Saturated Fat Pastry |
 
 ## 📚 Database Search & Entity Resolution
 
@@ -419,113 +419,113 @@ The model executed the extraction sequentially: first transcribing all 4 items a
 
 ## 📊 Comparison Groups & Nutritional Allowance Breakdown (4 Groups Formed)
 
-### Summary: Packaged Bakery & Snack Nutritional Labels Comparison
+### Summary: Packaged Bakery Snacks and Nutrition Label Comparison
 
-**Overall Assessment:** Reviewing these 4 packaged items reveals varying degrees of calorie density, sodium, and sugar content. Given your surplus in calories, saturated fat, sodium, and added sugars alongside a fiber deficit, selecting lower-calorie and lower-sugar options is paramount. The Blue Pack Bread offers the most controlled glycemic and energy load among the choices, while higher-calorie items demand strict portion limits.
+**Overall Assessment:** Clinical evaluation of 4 packaged snack items reveals significant variations in calorie density, saturated fat, sodium, and sugar content. Given your active surpluses in calories (+39%), saturated fat (+38%), added sugar (+50%), and sodium (+30%), alongside a protein deficit (-17%), selecting lower-sugar, portion-controlled options is crucial to prevent metabolic overload.
 
-**Top Recommended Option:** `Blue Pack Bread / Soft Bread (120 kcal per serving)`
+**Top Recommended Option:** `Green Packaged Snack Bar / Green Packaged Snack Bar`
 
-### Rank 1: Tier 1 - Safest Choice: Controlled Energy Bakery Items [GOOD] — *Lowest Calorie & Sodium*
+### Rank 1: Tier 1 - Safest Choice: Portion-Controlled Snack Bar [GOOD] — *Lowest Calorie & Sugar Burden*
 
-- **Regional Bounding Box Quadrant:** `[290, 15, 910, 980]`
-- **Items Included (1):** Blue Pack Bread / Soft Bread (120 kcal per serving)
-- **Comparative Sentence:** "Compared to heavier multi-seed or pastry options, this item provides a much lower calorie and sodium load per 100g, helping mitigate your active calorie and sodium surpluses."
-- **Personalized Clinical Guidance:** This soft bread formulation presents a more manageable caloric and sodium density than the heavier pastry choices. While it lacks substantial dietary fiber to address your deficit, keeping the portion modest prevents exacerbating your daily calorie surplus. Order or select this option when you need a controlled carbohydrate base, and pair it with fresh vegetables or lean protein to boost fiber and satiety.
-
-#### 10-Nutrient Profile Allowance Matrix (Per Serving & Per 100g Density)
-
-| Profile Allowance Key | Per Serving (44g) | Per 100g Density | Patient Target Allowance Context |
-|---|---:|---:|---|
-| **Calories** | **120 kcal** | 273 kcal | Baseline 1800 kcal budget (+39% 3-day surplus) |
-| **Saturated Fat** | **1.5 g** | 3.4 g | Baseline 20g limit (+38% 3-day surplus) |
-| **Added Sugar** | **1.3 g** | 3 g | Baseline 30g limit (+50% 3-day surplus) |
-| **Sodium** | **150 mg** | 341 mg | Baseline 2300mg limit (+30% 3-day surplus) |
-| **Protein** | **4 g** | 9.1 g | Baseline 120g target (-17% active deficit) |
-| **Carbohydrates** | **21 g** | 47.7 g | Baseline 200g target (+32% 3-day surplus) |
-| **Total Fibre** | **0.9 g** | 2 g | Baseline 30g target (-26% active deficit) |
-| **Soluble Fibre** | **— g** | — g | Reference 7g target |
-| **Potassium** | **— mg** | — mg | Reference 3500mg target |
-| **Trans Fat** | **0 g** | 0 g | Zero tolerance target (0.0g) |
-| Total Fat (Macro base) | 2.5 g | 5.7 g | Structural lipid balance |
-| Total Sugar | 2 g | 4.5 g | Total saccharide load |
-
-### Rank 2: Tier 2 - Neutral Choice: Moderate Calorie Snack Packs [NEUTRAL] — *Moderate Energy Density*
-
-- **Regional Bounding Box Quadrant:** `[350, 0, 760, 1000]`
-- **Items Included (1):** Green Pack Snack / Green Pack Snack (90 kcal per serving)
-- **Comparative Sentence:** "This snack pack has a moderate calorie density per 100g that sits between the lightest bread and heavy pastries, requiring careful portion management."
-- **Personalized Clinical Guidance:** This green-packaged snack offers moderate per-serving energy but packs a concentrated sugar load relative to its small size, contributing to your added sugar surplus. Enjoy strictly as a single designated serving rather than grazing, and balance it with high-fiber whole foods to stabilize blood glucose.
+- **Regional Bounding Box Quadrant:** `[363, 0, 757, 1000]`
+- **Items Included (1):** Green Packaged Snack Bar / Green Packaged Snack Bar
+- **Comparative Sentence:** "This option delivers the lowest calorie and sugar density per 100g among all choices, helping mitigate your active calorie and added sugar surpluses."
+- **Personalized Clinical Guidance:** This green-packaged snack bar offers the most favorable nutritional profile among the evaluated items, containing substantially fewer calories and sugars per 100g than the heavy bakery breads. While it does not fully resolve your protein deficit, it minimizes further compounding of your calorie and sugar excesses. Actionable ordering tip: Consume a single measured portion and pair with a clean protein source like boiled egg whites to support your protein target without adding excess sugars.
 
 #### 10-Nutrient Profile Allowance Matrix (Per Serving & Per 100g Density)
 
 | Profile Allowance Key | Per Serving (23g) | Per 100g Density | Patient Target Allowance Context |
 |---|---:|---:|---|
-| **Calories** | **90 kcal** | 391 kcal | Baseline 1800 kcal budget (+39% 3-day surplus) |
-| **Saturated Fat** | **1 g** | 4.3 g | Baseline 20g limit (+38% 3-day surplus) |
+| **Calories** | **90 kcal** | 391.3 kcal | Baseline 1800 kcal budget (+39% 3-day surplus) |
+| **Saturated Fat** | **1 g** | 4.35 g | Baseline 20g limit (+38% 3-day surplus) |
 | **Added Sugar** | **4.6 g** | 20 g | Baseline 30g limit (+50% 3-day surplus) |
-| **Sodium** | **20 mg** | 87 mg | Baseline 2300mg limit (+30% 3-day surplus) |
-| **Protein** | **1 g** | 4.3 g | Baseline 120g target (-17% active deficit) |
-| **Carbohydrates** | **15 g** | 65.2 g | Baseline 200g target (+32% 3-day surplus) |
-| **Total Fibre** | **0.3 g** | 1.5 g | Baseline 30g target (-26% active deficit) |
+| **Sodium** | **20 mg** | 86.96 mg | Baseline 2300mg limit (+30% 3-day surplus) |
+| **Protein** | **1 g** | 4.35 g | Baseline 120g target (-17% active deficit) |
+| **Carbohydrates** | **15 g** | 65.22 g | Baseline 200g target (+32% 3-day surplus) |
+| **Total Fibre** | **0.6 g** | 2.5 g | Baseline 30g target (-26% active deficit) |
 | **Soluble Fibre** | **— g** | — g | Reference 7g target |
 | **Potassium** | **— mg** | — mg | Reference 3500mg target |
 | **Trans Fat** | **0 g** | 0 g | Zero tolerance target (0.0g) |
-| Total Fat (Macro base) | 3 g | 13 g | Structural lipid balance |
-| Total Sugar | 7 g | 30.4 g | Total saccharide load |
+| Total Fat (Macro base) | 3 g | 13.04 g | Structural lipid balance |
+| Total Sugar | 7 g | 30.43 g | Total saccharide load |
 
-### Rank 3: Tier 3 - Warning: High Calorie & Saturated Fat Pastries [WARNING] — *High Saturated Fat & Sodium*
+### Rank 2: Tier 2 - Moderate Choice: Lower-Sodium White Bread [NEUTRAL] — *Moderate Sodium & Carbohydrates*
 
-- **Regional Bounding Box Quadrant:** `[250, 10, 930, 990]`
-- **Items Included (1):** Yellow Pack Bread / Multiseed Bread (250 kcal per serving)
-- **Comparative Sentence:** "Unlike lighter breads, this multiseed loaf carries a significant sodium and total fat burden that conflicts with your active sodium and saturated fat surpluses."
-- **Personalized Clinical Guidance:** This multiseed bread provides some structural fiber, but its elevated sodium and total fat content make it less ideal given your 3000mg sodium baseline and saturated fat surplus. Consume in strict moderation, and avoid adding high-sodium spreads to keep your cardiovascular parameters in check.
+- **Regional Bounding Box Quadrant:** `[308, 0, 921, 907]`
+- **Items Included (1):** Blue Packaged Bread / Blue Packaged Bread
+- **Comparative Sentence:** "Compared to the higher-sodium bakery variants, this blue-packaged bread keeps sodium closer to baseline while contributing moderate carbohydrate loads."
+- **Personalized Clinical Guidance:** This blue-packaged bread option provides a moderate carbohydrate and sodium profile per 100g, though it still contributes significantly to your carbohydrate surplus. It outperforms heavier pastries by keeping sodium relatively controlled at 341mg per 100g. Actionable ordering tip: Opt for a single slice rather than full servings, and avoid high-fat spreads to protect your saturated fat and calorie thresholds.
+
+#### 10-Nutrient Profile Allowance Matrix (Per Serving & Per 100g Density)
+
+| Profile Allowance Key | Per Serving (44g) | Per 100g Density | Patient Target Allowance Context |
+|---|---:|---:|---|
+| **Calories** | **120 kcal** | 272.73 kcal | Baseline 1800 kcal budget (+39% 3-day surplus) |
+| **Saturated Fat** | **1.5 g** | 3.41 g | Baseline 20g limit (+38% 3-day surplus) |
+| **Added Sugar** | **1.3 g** | 3 g | Baseline 30g limit (+50% 3-day surplus) |
+| **Sodium** | **150 mg** | 340.91 mg | Baseline 2300mg limit (+30% 3-day surplus) |
+| **Protein** | **4 g** | 9.09 g | Baseline 120g target (-17% active deficit) |
+| **Carbohydrates** | **21 g** | 47.73 g | Baseline 200g target (+32% 3-day surplus) |
+| **Total Fibre** | **1 g** | 2.2 g | Baseline 30g target (-26% active deficit) |
+| **Soluble Fibre** | **— g** | — g | Reference 7g target |
+| **Potassium** | **— mg** | — mg | Reference 3500mg target |
+| **Trans Fat** | **0 g** | 0 g | Zero tolerance target (0.0g) |
+| Total Fat (Macro base) | 2.5 g | 5.68 g | Structural lipid balance |
+| Total Sugar | 2 g | 4.55 g | Total saccharide load |
+
+### Rank 3: Tier 3 - Warning Choice: High-Sugar Bakery Loaves [WARNING] — *High Sugar & Calorie Density*
+
+- **Regional Bounding Box Quadrant:** `[257, 0, 915, 1000]`
+- **Items Included (1):** Yellow Packaged Bakery Loaf (3-serving) / Yellow Packaged Bakery Loaf (3-serving)
+- **Comparative Sentence:** "This yellow-packaged bakery loaf exacerbates your added sugar surplus significantly more than the snack bar alternatives."
+- **Personalized Clinical Guidance:** With elevated sugar concentrations (47.5g per 100g) and high calorie density, this yellow-packaged loaf directly worsens your active sugar and calorie surpluses. Regular consumption will hinder metabolic recovery. Actionable ordering tip: If consumed, strictly limit portion size to a fraction of a serving and avoid adding sweet toppings or butter.
 
 #### 10-Nutrient Profile Allowance Matrix (Per Serving & Per 100g Density)
 
 | Profile Allowance Key | Per Serving (80g) | Per 100g Density | Patient Target Allowance Context |
 |---|---:|---:|---|
-| **Calories** | **250 kcal** | 313 kcal | Baseline 1800 kcal budget (+39% 3-day surplus) |
-| **Saturated Fat** | **3 g** | 3.8 g | Baseline 20g limit (+38% 3-day surplus) |
+| **Calories** | **250 kcal** | 312.5 kcal | Baseline 1800 kcal budget (+39% 3-day surplus) |
+| **Saturated Fat** | **3 g** | 3.75 g | Baseline 20g limit (+38% 3-day surplus) |
 | **Added Sugar** | **28 g** | 35 g | Baseline 30g limit (+50% 3-day surplus) |
 | **Sodium** | **330 mg** | 412.5 mg | Baseline 2300mg limit (+30% 3-day surplus) |
-| **Protein** | **3 g** | 3.8 g | Baseline 120g target (-17% active deficit) |
-| **Carbohydrates** | **40 g** | 50 g | Baseline 200g target (+32% 3-day surplus) |
-| **Total Fibre** | **2.4 g** | 3 g | Baseline 30g target (-26% active deficit) |
+| **Protein** | **3 g** | 3.75 g | Baseline 120g target (-17% active deficit) |
+| **Carbohydrates** | **38 g** | 47.5 g | Baseline 200g target (+32% 3-day surplus) |
+| **Total Fibre** | **1.6 g** | 2 g | Baseline 30g target (-26% active deficit) |
 | **Soluble Fibre** | **— g** | — g | Reference 7g target |
 | **Potassium** | **— mg** | — mg | Reference 3500mg target |
 | **Trans Fat** | **0 g** | 0 g | Zero tolerance target (0.0g) |
-| Total Fat (Macro base) | 7 g | 8.8 g | Structural lipid balance |
+| Total Fat (Macro base) | 7 g | 8.75 g | Structural lipid balance |
 | Total Sugar | 38 g | 47.5 g | Total saccharide load |
 
-### Rank 4: Tier 4 - Alert: Energy-Dense Sweet Fillings [ALERT] — *Elevated Sugars & Fats*
+### Rank 4: Tier 4 - Alert Choice: High-Sodium & Saturated Fat Pastry [ALERT] — *Excessive Sodium & Saturated Fats*
 
-- **Regional Bounding Box Quadrant:** `[270, 0, 950, 1000]`
-- **Items Included (1):** Yellow-Green Pack Pastry / Sarikaya Pastry (250 kcal per serving)
-- **Comparative Sentence:** "This pastry option delivers heavy saturated fats and sugars per 100g, directly worsening your active calorie, sugar, and saturated fat surpluses."
-- **Personalized Clinical Guidance:** Featuring rich fillings and higher total fats, this sarikaya pastry significantly pushes past your daily calorie and saturated fat allowances while contributing negligible fiber. Avoid making this a routine choice; if consumed, limit to a tiny fraction of a serving and pair with unsweetened green tea.
+- **Regional Bounding Box Quadrant:** `[242, 0, 999, 1000]`
+- **Items Included (1):** Green-Yellow Packaged Pastry / Green-Yellow Packaged Pastry
+- **Comparative Sentence:** "This green-yellow packaged pastry presents the highest combined risk for your sodium and saturated fat surpluses among all options."
+- **Personalized Clinical Guidance:** This pastry option severely compromises your dietary targets by packing high amounts of saturated fat (6g per serving) and dense calories, compounding your existing 38% saturated fat surplus and 30% sodium surplus. Actionable ordering tip: Avoid this item entirely in favor of unrefined whole-grain or lower-fat alternatives to protect cardiovascular health.
 
 #### 10-Nutrient Profile Allowance Matrix (Per Serving & Per 100g Density)
 
 | Profile Allowance Key | Per Serving (75g) | Per 100g Density | Patient Target Allowance Context |
 |---|---:|---:|---|
-| **Calories** | **250 kcal** | 333 kcal | Baseline 1800 kcal budget (+39% 3-day surplus) |
+| **Calories** | **250 kcal** | 333.33 kcal | Baseline 1800 kcal budget (+39% 3-day surplus) |
 | **Saturated Fat** | **4.5 g** | 6 g | Baseline 20g limit (+38% 3-day surplus) |
-| **Added Sugar** | **15 g** | 20 g | Baseline 30g limit (+50% 3-day surplus) |
-| **Sodium** | **125 mg** | 166.7 mg | Baseline 2300mg limit (+30% 3-day surplus) |
+| **Added Sugar** | **13.5 g** | 18 g | Baseline 30g limit (+50% 3-day surplus) |
+| **Sodium** | **125 mg** | 166.67 mg | Baseline 2300mg limit (+30% 3-day surplus) |
 | **Protein** | **0 g** | 0 g | Baseline 120g target (-17% active deficit) |
 | **Carbohydrates** | **42 g** | 56 g | Baseline 200g target (+32% 3-day surplus) |
-| **Total Fibre** | **0.8 g** | 1 g | Baseline 30g target (-26% active deficit) |
+| **Total Fibre** | **1.1 g** | 1.5 g | Baseline 30g target (-26% active deficit) |
 | **Soluble Fibre** | **— g** | — g | Reference 7g target |
 | **Potassium** | **— mg** | — mg | Reference 3500mg target |
 | **Trans Fat** | **0 g** | 0 g | Zero tolerance target (0.0g) |
 | Total Fat (Macro base) | 6 g | 8 g | Structural lipid balance |
-| Total Sugar | 19 g | 25.3 g | Total saccharide load |
+| Total Sugar | 19 g | 25.33 g | Total saccharide load |
 
 ## 💬 Agent Message & Narrative (clinical recommendation)
 
-Reviewing these 4 packaged items reveals varying degrees of calorie density, sodium, and sugar content. Given your surplus in calories, saturated fat, sodium, and added sugars alongside a fiber deficit, selecting lower-calorie and lower-sugar options is paramount. The Blue Pack Bread offers the most controlled glycemic and energy load among the choices, while higher-calorie items demand strict portion limits.
+Clinical evaluation of 4 packaged snack items reveals significant variations in calorie density, saturated fat, sodium, and sugar content. Given your active surpluses in calories (+39%), saturated fat (+38%), added sugar (+50%), and sodium (+30%), alongside a protein deficit (-17%), selecting lower-sugar, portion-controlled options is crucial to prevent metabolic overload.
 
-**Top Recommended Option:** `Blue Pack Bread / Soft Bread (120 kcal per serving)`
+**Top Recommended Option:** `Green Packaged Snack Bar / Green Packaged Snack Bar`
 
 ## 🔬 Mathematical & Thermodynamic Validation
 
@@ -560,7 +560,7 @@ _No thrown exceptions or log errors/warnings captured._
 [INFO] Pure image upload without prompt. Patient priorities: Saturated fat, Added sugar, Calorie surplus, Protein deficit.
 [INFO] 100% verbatim OCR locks held on all 4 nutrition panels (Green bar: 90 kcal, Blue bread: 120 kcal, Yellow 1 & 2: 250 kcal).
 [INFO] Evaluated all 10 profile allowance nutrients per serving and per 100g.
-[scout_only_compare] Single-pass execution completed in 7885ms.
+[scout_only_compare] Single-pass execution completed in 10356ms.
 [scout_only_compare] Extracted 4 items across 4 ranked groups.
 [scout_only_compare] Status: SUCCESS.
 ```

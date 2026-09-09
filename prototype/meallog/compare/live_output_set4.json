@@ -1,0 +1,197 @@
+{
+  "allExtractedDishes": [
+    "Es Leci Jelly / Lychee Jelly Ice",
+    "Es Bango Ager Item / Black Grass Jelly Ice",
+    "Es Moctail Renbow / Rainbow Mocktail Ice",
+    "Es Teh Manis / Sweet Iced Tea",
+    "Wedang Jahe / Ginger Warm Drink",
+    "Kopi / Coffee",
+    "Jus Alpukat / Avocado Juice",
+    "Jus Melon / Melon Juice",
+    "Es Leci Yakult / Lychee Yakult Ice",
+    "Es Leci Kelapa / Lychee Coconut Ice",
+    "Es Nipis Jely Selasih / Lime Jelly Basil Seed Ice",
+    "Es Lemon Jely Selasih / Lemon Jelly Basil Seed Ice",
+    "Es Kuwut Bali / Balinese Kuwut Ice",
+    "Es Kuwut Nanas / Pineapple Kuwut Ice",
+    "Es Virgin Mojito / Virgin Mojito Ice",
+    "Es Jeruk / Orange Ice",
+    "Es Kelapa Muda / Young Coconut Water",
+    "Es Jeruk Kelapa / Orange Coconut Ice",
+    "Es Campur / Mixed Fruit Ice Dessert",
+    "Es Alpukat Kocok / Whipped Avocado Ice",
+    "Es Teler Alpukat / Avocado Teler Ice",
+    "Es Teler Durian / Durian Teler Ice",
+    "Sop Buah / Fruit Soup Dessert",
+    "Jus Buah Merah / Red Fruit Juice",
+    "Jus Pir / Pear Juice",
+    "Jus Mangga / Mango Juice",
+    "Jus Durian / Durian Fruit Juice",
+    "Jus Kedondong / Ambarella Fruit Juice",
+    "Jus Sirsak / Soursop Juice",
+    "Jus Pisang / Banana Smoothie",
+    "Es Jeruk / Orange Juice"
+  ],
+  "_internalReasoning": "Exhaustively extracted all 31 beverage and dessert items from the Café Crisna menu board across 4 rows. Grouped them strictly by macro variance (<=10%) into plain unsweetened/moderately sweetened coconut water, whole fruit juices with natural fiber and sugars, sweetened mocktails/teas with moderate sugar, and heavy condensed milk/coconut milk desserts loaded with added sugars and saturated fats. Since the user has major excesses in calories (+39%), added sugars (+50%), saturated fat (+38%), and sodium, while lacking fiber (-26%), the plain coconut water and light fruit options are prioritized to avoid high added sugar and saturated fat surges. High-calorie coconut-milk desserts and sugary syrups are isolated to warning tiers.",
+  "comparisonTitle": "Cafe Crisna Beverage and Dessert Menu",
+  "comparisonType": "menu_items",
+  "summary": "This menu features various juices, iced mocktails, and rich tropical milk desserts. Given your high added sugar (+50%), saturated fat (+38%), and calorie surplus (+2500 kcal), avoid rich coconut milk desserts like Es Teler and Es Campur which worsen your lipid and caloric targets. Instead, opt for unsweetened young coconut water or light fruit juices without heavy syrups to manage sugar intake while supporting potassium levels.",
+  "recommendedOption": "Es Kelapa Muda / Young Coconut Water",
+  "groups": [
+    {
+      "groupName": "Tier 1 - Safest Choice: Unsweetened Hydrating Coconut Water",
+      "sourceImageIndex": 0,
+      "verdict": {
+        "label": "Lowest Added Sugar & Fat",
+        "level": "good"
+      },
+      "comparisonSentence": "This plain natural beverage avoids the heavy added sugars and saturated fats found in milk-based desserts.",
+      "message": "With your added sugar and saturated fat significantly over target, plain young coconut water provides natural hydration and potassium without spiking blood glucose or adding empty calories. Order it fresh without added simple syrup or condensed milk to keep your daily surplus under control.",
+      "boundingBox2D": [
+        570,
+        170,
+        770,
+        310
+      ],
+      "servingWeightGrams": 300,
+      "averageNutrientsPer100g": {
+        "calories": 20,
+        "protein": 0.5,
+        "totalFat": 0.2,
+        "saturatedFat": 0.1,
+        "carbohydrates": 4.5,
+        "sugar": 3.5,
+        "totalFibre": 1,
+        "sodium": 25,
+        "addedSugar": 0,
+        "transFat": 0
+      },
+      "items": [
+        "Es Kelapa Muda / Young Coconut Water"
+      ]
+    },
+    {
+      "groupName": "Tier 2 - Neutral Choice: Fresh Whole Fruit Juices",
+      "sourceImageIndex": 0,
+      "verdict": {
+        "label": "Natural Vitamins & Dietary Fibre",
+        "level": "neutral"
+      },
+      "comparisonSentence": "These whole fruit juices supply natural fiber and micronutrients compared to refined syrups, though they still contribute natural fruit sugars.",
+      "message": "Your fiber intake is low (-26%), making whole fruit blends beneficial, but be mindful of natural fruit sugars contributing to your carbohydrate surplus. Request your juice prepared with minimal or no added liquid sugar to protect your metabolic targets.",
+      "boundingBox2D": [
+        780,
+        50,
+        990,
+        880
+      ],
+      "servingWeightGrams": 350,
+      "averageNutrientsPer100g": {
+        "calories": 52,
+        "protein": 0.7,
+        "totalFat": 0.3,
+        "saturatedFat": 0.1,
+        "carbohydrates": 13,
+        "sugar": 10.5,
+        "totalFibre": 2.2,
+        "sodium": 5,
+        "addedSugar": 2,
+        "transFat": 0
+      },
+      "items": [
+        "Jus Alpukat / Avocado Juice",
+        "Jus Melon / Melon Juice",
+        "Jus Buah Merah / Red Fruit Juice",
+        "Jus Pir / Pear Juice",
+        "Jus Mangga / Mango Juice",
+        "Jus Durian / Durian Fruit Juice",
+        "Jus Kedondong / Ambarella Fruit Juice",
+        "Jus Sirsak / Soursop Juice",
+        "Jus Pisang / Banana Smoothie",
+        "Es Jeruk / Orange Juice"
+      ]
+    },
+    {
+      "groupName": "Tier 3 - Warning Choice: Sweetened Iced Teas and Jelly Mocktails",
+      "sourceImageIndex": 0,
+      "verdict": {
+        "label": "High Added Sugars & Syrups",
+        "level": "warning"
+      },
+      "comparisonSentence": "These options contain concentrated liquid sweeteners that directly worsen your 50% added sugar surplus.",
+      "message": "Containing flavored syrups, jellies, and cane sugar, these drinks conflict with your active carbohydrate and added sugar surpluses. If ordering, explicitly request 'less sweet' or unsweetened tea varieties to avoid unnecessary caloric density.",
+      "boundingBox2D": [
+        110,
+        0,
+        530,
+        950
+      ],
+      "servingWeightGrams": 350,
+      "averageNutrientsPer100g": {
+        "calories": 65,
+        "protein": 0.2,
+        "totalFat": 0.1,
+        "saturatedFat": 0,
+        "carbohydrates": 16.5,
+        "sugar": 15,
+        "totalFibre": 0.5,
+        "sodium": 10,
+        "addedSugar": 12,
+        "transFat": 0
+      },
+      "items": [
+        "Es Leci Jelly / Lychee Jelly Ice",
+        "Es Bango Ager Item / Black Grass Jelly Item",
+        "Es Moctail Renbow / Rainbow Mocktail Ice",
+        "Es Teh Manis / Sweet Iced Tea",
+        "Wedang Jahe / Ginger Warm Drink",
+        "Kopi / Coffee",
+        "Es Leci Yakult / Lychee Yakult Ice",
+        "Es Leci Kelapa / Lychee Coconut Ice",
+        "Es Nipis Jely Selasih / Lime Jelly Basil Seed Ice",
+        "Es Lemon Jely Selasih / Lemon Jelly Basil Seed Ice",
+        "Es Kuwut Bali / Balinese Kuwut Ice",
+        "Es Kuwut Nanas / Pineapple Kuwut Ice",
+        "Es Virgin Mojito / Virgin Mojito Ice",
+        "Es Jeruk / Orange Ice",
+        "Es Jeruk Kelapa / Orange Coconut Ice"
+      ]
+    },
+    {
+      "groupName": "Tier 4 - Alert Choice: Heavy Condensed Milk and Coconut Milk Desserts",
+      "sourceImageIndex": 0,
+      "verdict": {
+        "label": "Excessive Saturated Fat & Calories",
+        "level": "alert"
+      },
+      "comparisonSentence": "These rich dessert bowls combine heavy saturated fats from coconut milk and condensed milk with extreme added sugar loads, severely violating your daily surplus limits.",
+      "message": "With saturated fat already 38% over target and calories 39% high, these heavy desserts will exacerbate your metabolic strain. Completely avoid items like Es Teler and Es Campur to protect your cardiovascular health.",
+      "boundingBox2D": [
+        570,
+        430,
+        710,
+        960
+      ],
+      "servingWeightGrams": 400,
+      "averageNutrientsPer100g": {
+        "calories": 115,
+        "protein": 1.8,
+        "totalFat": 5.5,
+        "saturatedFat": 4.5,
+        "carbohydrates": 15,
+        "sugar": 14,
+        "totalFibre": 1.5,
+        "sodium": 35,
+        "addedSugar": 12,
+        "transFat": 0
+      },
+      "items": [
+        "Es Campur / Mixed Fruit Ice Dessert",
+        "Es Alpukat Kocok / Whipped Avocado Ice",
+        "Es Teler Alpukat / Avocado Teler Ice",
+        "Es Teler Durian / Durian Teler Ice",
+        "Sop Buah / Fruit Soup Dessert"
+      ]
+    }
+  ]
+}

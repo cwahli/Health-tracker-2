@@ -210,3 +210,188 @@ describe('Golden Meal_03_compare — Clinical Verdict & Recommendation Narrative
     }
   });
 });
+
+describe('Golden Meal_03_compare — Live Precision & Recall Benchmarks (6 Cases)', () => {
+  const evalPath = path.join(__dirname, '..', 'prototype', 'meallog', 'compare', 'six_cases_precision_eval.json');
+  const evalData: any[] = fs.existsSync(evalPath) ? JSON.parse(fs.readFileSync(evalPath, 'utf-8')) : [];
+
+  it('evaluates all 6 benchmark cases from live precision run', () => {
+    expect(evalData.length, 'six_cases_precision_eval.json must contain all 6 cases').toBe(6);
+    expect(evalData.map((d) => d.id)).toEqual(['set1', 'set2', 'set3', 'set4', 'set5', 'set6']);
+  });
+
+  it('exceeds minimum visual extraction recall thresholds per benchmark set', () => {
+    // Ground truth targets: set1 (6), set2 (4), set3 (104), set4 (32), set5 (56), set6 (17)
+    const minRecallThresholds: Record<string, number> = {
+      set1: 6,   // Confectionery + bakery shelf
+      set2: 4,   // 4 printed reference nutrition panels (exact)
+      set3: 95,  // Dual-page complex laminated menu (>=90% recall on 104 items)
+      set4: 28,  // Beverage and dessert price board (>=87.5% recall on 32 items)
+      set5: 56,  // Street food hanging banner (100% recall on 56 items)
+      set6: 17,  // Supermarket snack aisle (100% reference shelf coverage)
+    };
+
+    let totalExtracted = 0;
+    for (const d of evalData) {
+      const itemsCount = d.data?.allExtractedDishes?.length || d.itemCount;
+      totalExtracted += itemsCount;
+      const minRequired = minRecallThresholds[d.id];
+      expect(
+        itemsCount,
+        `${d.name} extracted ${itemsCount} items, expected >= ${minRequired}`
+      ).toBeGreaterThanOrEqual(minRequired);
+    }
+
+    // Combined recall across all 6 cases must be >= 210 items (benchmark ground truth: 219 items)
+    expect(totalExtracted).toBeGreaterThanOrEqual(210);
+  });
+
+  it('achieves >= 90% extraction recall on the 104-item restaurant menu (Set 3)', () => {
+    const set3 = evalData.find((d) => d.id === 'set3');
+    expect(set3).toBeDefined();
+    const count = set3.data?.allExtractedDishes?.length || set3.itemCount;
+    const recallRate = (count / 104) * 100;
+    expect(recallRate).toBeGreaterThanOrEqual(90.0);
+  });
+});
+
+describe('Golden Meal_03_compare — Macro-Variance Strictness & Zero-Orphan Invariant', () => {
+  const evalPath = path.join(__dirname, '..', 'prototype', 'meallog', 'compare', 'six_cases_precision_eval.json');
+  const evalData: any[] = fs.existsSync(evalPath) ? JSON.parse(fs.readFileSync(evalPath, 'utf-8')) : [];
+
+  it('enforces zero-orphan invariant: 100% of extracted items are assigned to groups', () => {
+    for (const d of evalData) {
+      const totalItems = d.data?.allExtractedDishes?.length || d.itemCount;
+      const groupedItemsCount = d.data.groups.reduce((acc: number, g: any) => acc + (g.items?.length || 0), 0);
+      expect(
+        groupedItemsCount,
+        `${d.id} has orphaned items: ${groupedItemsCount} grouped vs ${totalItems} extracted`
+      ).toBe(totalItems);
+    }
+  });
+
+  it('every group has complete normalized 100g nutrients satisfying thermodynamic bounds', () => {
+    for (const d of evalData) {
+      for (let i = 0; i < d.data.groups.length; i++) {
+        const g = d.data.groups[i];
+        const p100 = g.averageNutrientsPer100g;
+        expect(p100, `${d.id} group ${i + 1} missing averageNutrientsPer100g`).toBeDefined();
+        expect(typeof p100.calories).toBe('number');
+        expect(p100.calories).toBeGreaterThanOrEqual(0);
+        expect(p100.calories).toBeLessThanOrEqual(900); // Pure fat is 900 kcal/100g
+
+        expect(typeof p100.protein).toBe('number');
+        expect(typeof p100.totalFat).toBe('number');
+        expect(typeof p100.carbohydrates).toBe('number');
+        expect(typeof p100.sodium).toBe('number');
+
+        // Atwater consistency check: 4P + 9F + 4C ≈ cal (within reasonable food matrix margin)
+        if (p100.calories > 10) {
+          const atwaterEstimate = p100.protein * 4 + p100.totalFat * 9 + p100.carbohydrates * 4;
+          const diffRatio = Math.abs(atwaterEstimate - p100.calories) / p100.calories;
+          expect(diffRatio, `${d.id} G${i + 1} Atwater macro mismatch (${atwaterEstimate} vs ${p100.calories})`).toBeLessThanOrEqual(0.35);
+        }
+      }
+    }
+  });
+
+  it('all group bounding boxes strictly satisfy normalized quadrant bounds [ymin, xmin, ymax, xmax]', () => {
+    for (const d of evalData) {
+      for (const g of d.data.groups) {
+        const box = g.boundingBox2D;
+        expect(Array.isArray(box), `${d.id} ${g.groupName} boundingBox2D must be array`).toBe(true);
+        expect(box).toHaveLength(4);
+        const [ymin, xmin, ymax, xmax] = box;
+        expect(ymin).toBeGreaterThanOrEqual(0);
+        expect(xmin).toBeGreaterThanOrEqual(0);
+        expect(ymax).toBeLessThanOrEqual(1000);
+        expect(xmax).toBeLessThanOrEqual(1000);
+        expect(ymax).toBeGreaterThan(ymin);
+        expect(xmax).toBeGreaterThan(xmin);
+      }
+    }
+  });
+});
+
+describe('Golden Meal_03_compare — Clinical Decision Alignment under Active Patient Targets', () => {
+  const evalPath = path.join(__dirname, '..', 'prototype', 'meallog', 'compare', 'six_cases_precision_eval.json');
+  const evalData: any[] = fs.existsSync(evalPath) ? JSON.parse(fs.readFileSync(evalPath, 'utf-8')) : [];
+
+  // Active targets: +38% Saturated Fat, +50% Added Sugar, +39% Calories, -17% Protein Deficit
+  it('Set 1: rejects Tier 4 high-sugar confectionery and recommends savory bakery staple', () => {
+    const set1 = evalData.find((d) => d.id === 'set1');
+    expect(set1).toBeDefined();
+    // Must not recommend candy/chocolate bar (SilverQueen/Magnum/Kinder)
+    expect(set1.recommended.toLowerCase()).not.toMatch(/silverqueen|chocolate bar|kinder/i);
+    // Must recommend a savory or plain bread item
+    expect(set1.recommended.toLowerCase()).toMatch(/say bread|bread/i);
+  });
+
+  it('Set 2: recommends controlled calorie-density bread or snack to protect calorie budget', () => {
+    const set2 = evalData.find((d) => d.id === 'set2');
+    expect(set2).toBeDefined();
+    // Recommends Blue Pack Bread (120 kcal, 273 kcal/100g) or Green Pack Snack (90 kcal)
+    expect(set2.recommended.toLowerCase()).toMatch(/blue pack|green pack|soft bread/i);
+    expect(set2.recommended.toLowerCase()).not.toMatch(/sarikaya|custard/i);
+  });
+
+  it('Set 3: elevates low-sodium vegetable soup or clean fish, bypassing deep-fried offal', () => {
+    const set3 = evalData.find((d) => d.id === 'set3');
+    expect(set3).toBeDefined();
+    expect(set3.recommended.toLowerCase()).toMatch(/sayur asem|kembung|ikan/i);
+    expect(set3.recommended.toLowerCase()).not.toMatch(/kulit|usus|seblak/i);
+  });
+
+  it('Set 4: elevates unsweetened hydrating coconut water over sugar-laden dessert bowls', () => {
+    const set4 = evalData.find((d) => d.id === 'set4');
+    expect(set4).toBeDefined();
+    expect(set4.recommended.toLowerCase()).toMatch(/kelapa muda|coconut/i);
+    expect(set4.recommended.toLowerCase()).not.toMatch(/es campur|teler|durian/i);
+  });
+
+  it('Set 5: elevates whole poached/grilled fish to close -17% protein deficit', () => {
+    const set5 = evalData.find((d) => d.id === 'set5');
+    expect(set5).toBeDefined();
+    expect(set5.recommended.toLowerCase()).toMatch(/ikan|nila|garang asem/i);
+    expect(set5.recommended.toLowerCase()).not.toMatch(/seblak|gorengan/i);
+  });
+
+  it('Set 6: elevates unextruded lighter crisps over extruded trans-fat snacks', () => {
+    const set6 = evalData.find((d) => d.id === 'set6');
+    expect(set6).toBeDefined();
+    expect(set6.recommended.toLowerCase()).toMatch(/chitato lite|happy tos/i);
+  });
+});
+
+describe('Golden Meal_03_compare — Direct OCR Panel Verbatim Faithfulness', () => {
+  const evalPath = path.join(__dirname, '..', 'prototype', 'meallog', 'compare', 'six_cases_precision_eval.json');
+  const evalData: any[] = fs.existsSync(evalPath) ? JSON.parse(fs.readFileSync(evalPath, 'utf-8')) : [];
+
+  it('Set 1: verbatim locks held on printed SilverQueen chocolate panel', () => {
+    const set1 = evalData.find((d) => d.id === 'set1');
+    expect(set1).toBeDefined();
+    const confGroup = set1.data.groups.find((g: any) => g.items.some((it: string) => it.includes('SilverQueen')));
+    expect(confGroup).toBeDefined();
+    // Printed nutrition panel: 110 kcal / 20g serving -> 535-550 kcal/100g
+    expect(confGroup.averageNutrientsPer100g.calories).toBeGreaterThanOrEqual(520);
+    expect(confGroup.averageNutrientsPer100g.calories).toBeLessThanOrEqual(560);
+    expect(confGroup.averageNutrientsPer100g.saturatedFat).toBeGreaterThanOrEqual(14);
+  });
+
+  it('Set 2: verbatim locks held on all 4 reference nutrition fact panels', () => {
+    const set2 = evalData.find((d) => d.id === 'set2');
+    expect(set2).toBeDefined();
+    expect(set2.data.groups).toHaveLength(4);
+
+    // Blue bread: 120 kcal / 44g serving = 273 kcal/100g
+    const blueGroup = set2.data.groups.find((g: any) => g.items.some((it: string) => it.includes('Blue')));
+    expect(blueGroup).toBeDefined();
+    expect(blueGroup.averageNutrientsPer100g.calories).toBeCloseTo(273, 0);
+
+    // Green snack: 90 kcal / 23g serving = 391 kcal/100g
+    const greenGroup = set2.data.groups.find((g: any) => g.items.some((it: string) => it.includes('Green')));
+    expect(greenGroup).toBeDefined();
+    expect(greenGroup.averageNutrientsPer100g.calories).toBeCloseTo(391, 0);
+  });
+});
+

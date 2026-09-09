@@ -1,0 +1,143 @@
+{
+  "allExtractedDishes": [
+    "Green Pack Snack / Green Pack Snack (90 kcal per serving)",
+    "Yellow Pack Bread / Multiseed Bread (250 kcal per serving)",
+    "Yellow-Green Pack Pastry / Sarikaya Pastry (250 kcal per serving)",
+    "Blue Pack Bread / Soft Bread (120 kcal per serving)"
+  ],
+  "_internalReasoning": "Extracted 4 packaged snack/bread items from the nutrition labels provided across the 4 images. Grouped them based on estimated per-100g nutrient profiles into separate tiers according to calorie density, added/total sugars, and sodium levels relative to the patient's excess calories, saturated fat, sodium, and added sugar targets.",
+  "comparisonTitle": "Packaged Bakery & Snack Nutritional Labels Comparison",
+  "comparisonType": "nutrition_labels",
+  "summary": "Reviewing these 4 packaged items reveals varying degrees of calorie density, sodium, and sugar content. Given your surplus in calories, saturated fat, sodium, and added sugars alongside a fiber deficit, selecting lower-calorie and lower-sugar options is paramount. The Blue Pack Bread offers the most controlled glycemic and energy load among the choices, while higher-calorie items demand strict portion limits.",
+  "recommendedOption": "Blue Pack Bread / Soft Bread (120 kcal per serving)",
+  "groups": [
+    {
+      "groupName": "Tier 1 - Safest Choice: Controlled Energy Bakery Items",
+      "sourceImageIndex": 3,
+      "verdict": {
+        "label": "Lowest Calorie & Sodium",
+        "level": "good"
+      },
+      "comparisonSentence": "Compared to heavier multi-seed or pastry options, this item provides a much lower calorie and sodium load per 100g, helping mitigate your active calorie and sodium surpluses.",
+      "message": "This soft bread formulation presents a more manageable caloric and sodium density than the heavier pastry choices. While it lacks substantial dietary fiber to address your deficit, keeping the portion modest prevents exacerbating your daily calorie surplus. Order or select this option when you need a controlled carbohydrate base, and pair it with fresh vegetables or lean protein to boost fiber and satiety.",
+      "boundingBox2D": [
+        290,
+        15,
+        910,
+        980
+      ],
+      "servingWeightGrams": 44,
+      "averageNutrientsPer100g": {
+        "calories": 273,
+        "protein": 9.1,
+        "totalFat": 5.7,
+        "saturatedFat": 3.4,
+        "carbohydrates": 47.7,
+        "sugar": 4.5,
+        "totalFibre": 2,
+        "sodium": 341,
+        "addedSugar": 3,
+        "transFat": 0
+      },
+      "items": [
+        "Blue Pack Bread / Soft Bread (120 kcal per serving)"
+      ]
+    },
+    {
+      "groupName": "Tier 2 - Neutral Choice: Moderate Calorie Snack Packs",
+      "sourceImageIndex": 0,
+      "verdict": {
+        "label": "Moderate Energy Density",
+        "level": "neutral"
+      },
+      "comparisonSentence": "This snack pack has a moderate calorie density per 100g that sits between the lightest bread and heavy pastries, requiring careful portion management.",
+      "message": "This green-packaged snack offers moderate per-serving energy but packs a concentrated sugar load relative to its small size, contributing to your added sugar surplus. Enjoy strictly as a single designated serving rather than grazing, and balance it with high-fiber whole foods to stabilize blood glucose.",
+      "boundingBox2D": [
+        350,
+        0,
+        760,
+        1000
+      ],
+      "servingWeightGrams": 23,
+      "averageNutrientsPer100g": {
+        "calories": 391,
+        "protein": 4.3,
+        "totalFat": 13,
+        "saturatedFat": 4.3,
+        "carbohydrates": 65.2,
+        "sugar": 30.4,
+        "totalFibre": 1.5,
+        "sodium": 87,
+        "addedSugar": 20,
+        "transFat": 0
+      },
+      "items": [
+        "Green Pack Snack / Green Pack Snack (90 kcal per serving)"
+      ]
+    },
+    {
+      "groupName": "Tier 3 - Warning: High Calorie & Saturated Fat Pastries",
+      "sourceImageIndex": 1,
+      "verdict": {
+        "label": "High Saturated Fat & Sodium",
+        "level": "warning"
+      },
+      "comparisonSentence": "Unlike lighter breads, this multiseed loaf carries a significant sodium and total fat burden that conflicts with your active sodium and saturated fat surpluses.",
+      "message": "This multiseed bread provides some structural fiber, but its elevated sodium and total fat content make it less ideal given your 3000mg sodium baseline and saturated fat surplus. Consume in strict moderation, and avoid adding high-sodium spreads to keep your cardiovascular parameters in check.",
+      "boundingBox2D": [
+        250,
+        10,
+        930,
+        990
+      ],
+      "servingWeightGrams": 80,
+      "averageNutrientsPer100g": {
+        "calories": 313,
+        "protein": 3.8,
+        "totalFat": 8.8,
+        "saturatedFat": 3.8,
+        "carbohydrates": 50,
+        "sugar": 47.5,
+        "totalFibre": 3,
+        "sodium": 412.5,
+        "addedSugar": 35,
+        "transFat": 0
+      },
+      "items": [
+        "Yellow Pack Bread / Multiseed Bread (250 kcal per serving)"
+      ]
+    },
+    {
+      "groupName": "Tier 4 - Alert: Energy-Dense Sweet Fillings",
+      "sourceImageIndex": 2,
+      "verdict": {
+        "label": "Elevated Sugars & Fats",
+        "level": "alert"
+      },
+      "comparisonSentence": "This pastry option delivers heavy saturated fats and sugars per 100g, directly worsening your active calorie, sugar, and saturated fat surpluses.",
+      "message": "Featuring rich fillings and higher total fats, this sarikaya pastry significantly pushes past your daily calorie and saturated fat allowances while contributing negligible fiber. Avoid making this a routine choice; if consumed, limit to a tiny fraction of a serving and pair with unsweetened green tea.",
+      "boundingBox2D": [
+        270,
+        0,
+        950,
+        1000
+      ],
+      "servingWeightGrams": 75,
+      "averageNutrientsPer100g": {
+        "calories": 333,
+        "protein": 0,
+        "totalFat": 8,
+        "saturatedFat": 6,
+        "carbohydrates": 56,
+        "sugar": 25.3,
+        "totalFibre": 1,
+        "sodium": 166.7,
+        "addedSugar": 20,
+        "transFat": 0
+      },
+      "items": [
+        "Yellow-Green Pack Pastry / Sarikaya Pastry (250 kcal per serving)"
+      ]
+    }
+  ]
+}

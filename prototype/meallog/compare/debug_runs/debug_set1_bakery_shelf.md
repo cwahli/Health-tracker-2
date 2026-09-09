@@ -5,10 +5,10 @@
 > Tracks strictly the **10 profile allowance nutrients** (serving & 100g). No meal-log pollution.
 > Model: `gemini-3.5-flash-lite` | Architecture: Streamlined Schema-First Mode D Scout (Anti-Sampling Enforced).
 
-- **Job ID:** `job_compare_set1_1788980252463` · **Status:** `succeeded`
+- **Job ID:** `job_compare_set1_1788978526238` · **Status:** `succeeded`
 - **Pack:** food · **Mode:** compare · **Version:** 3 · **Savable:** false
 - **Photos:** 3 (set1_saybread_bakery_shelf.jpg, set1_silverqueen_chocolate_front.jpg, set1_silverqueen_nutrition_label.jpg)
-- **Shown comparison:** 9 extracted options across 2 macro clusters (<=10% variance), complete 10-nutrient profile allowance vectors (per serving & per 100g), direct OCR label locks, normalized bounding box quadrants.
+- **Shown comparison:** 8 extracted options across 3 macro clusters (<=10% variance), complete 10-nutrient profile allowance vectors (per serving & per 100g), direct OCR label locks, normalized bounding box quadrants.
 
 ## ⚖️ Contract Evaluation
 
@@ -21,20 +21,20 @@
 | Mode D compare not logged as meal | content | ✅ PASS | Evaluated options kept as mutually exclusive alternatives; zero premature meal logging or portion confirm cards |
 | Retry hidden if succeeded | ui | ✅ PASS | Retry button hidden on successful comparison |
 | Attempt 1/3 hidden unless retry | ui | ✅ PASS | Attempt indicator hidden on first-pass success |
-| Dialog on_card matches evaluation | ui | ✅ PASS | Card displays 9 options, 2 groups, and top recommendation |
+| Dialog on_card matches evaluation | ui | ✅ PASS | Card displays 8 options, 3 groups, and top recommendation |
 | Composer controls count = 1 | ui | ✅ PASS | All composer controls count = 1 |
 | DIAG5 off on food | process | ✅ PASS | DIAG5 auto-send remained off for food comparison |
 | Matrix calc matches ledger | content | ✅ PASS | All 10 profile allowance nutrients present per-serving and per-100g without nulls |
-| Each dispatch has model + latency_ms | process | ✅ PASS | Dispatch carries model (`gemini-3.5-flash-lite`) and latency_ms (6016ms) |
+| Each dispatch has model + latency_ms | process | ✅ PASS | Dispatch carries model (`gemini-3.5-flash-lite`) and latency_ms (7833ms) |
 | Printed-kcal lock wins | content | ✅ PASS | Verbatim OCR locks held for printed nutrition panels; no invented Atwater overrides |
-| Bounding box normalized in [0, 1000] | content | ✅ PASS | All 2 group bounding boxes follow valid normalized coordinates `[ymin, xmin, ymax, xmax]` |
-| Zero orphaned items | content | ✅ PASS | 100% of extracted items (9/9) mapped to comparison groups |
+| Bounding box normalized in [0, 1000] | content | ✅ PASS | All 3 group bounding boxes follow valid normalized coordinates `[ymin, xmin, ymax, xmax]` |
+| Zero orphaned items | content | ✅ PASS | 100% of extracted items (8/8) mapped to comparison groups |
 | Intra-group health sorting | content | ✅ PASS | Items ordered within groups from most metabolically favorable to least favorable |
 | Specific hazard segregation | content | ✅ PASS | Trans fats, oxidized deep-fry oils, and simple syrups isolated into Tier 4 alerts |
 
 ## 🪟 Modal Snapshot (Dialog Inventory)
 
-- **State:** comparison complete, decision card rendered · **Card:** 9 options, 2 groups, top recommendation: Say Bread - Double Cheese Bread / Double Cheese Bread
+- **State:** comparison complete, decision card rendered · **Card:** 8 options, 3 groups, top recommendation: Say Bread Double Cheese Bread / Double Cheese Bread
 - **Chips:** no Retry · no Attempt 1/3 · composer controls ×1
 - **Visible:** [View Comparison Details, Download Debug Report, Close Modal]
 - **Hidden:** [Retry, Attempt 1 of 3, Save Meal to History]
@@ -191,98 +191,127 @@ All rankings, comparison sentences, and combined clinical messages (with orderin
 - **Raw Emission (Verbatim Output):**
 ```json
 {
-  "allExtractedDishes": [
-    "SilverQueen Milk Chocolate with Cashews 52g",
-    "SilverQueen Cashew Chocolate Bar 62g",
-    "Magnum Pistachio Ice Cream Bar",
-    "Kinder Joy Egg",
-    "Say Bread - Polo Cokelat / Chocolate Polo Bread",
-    "Say Bread - Polo Keju / Cheese Polo Bread",
-    "Say Bread - Choco Topping Pie",
-    "Say Bread - Cheese Topping Pie",
-    "Say Bread - Double Cheese Bread"
-  ],
-  "_internalReasoning": "Patient profile shows severe surpluses in calories (+39%), saturated fat (+38%), sodium (+30%), added sugar (+50%), and carbohydrates (+32%), alongside deficits in protein (-17%) and fiber (-26%). Exhaustive extraction covered all chocolate items, ice cream, children's treats, and bakery items across the 3 images. Grouped strictly by macro variance <=10%. Confectionery and sweet bakery items dominate the images, all presenting severe risks of aggravating added sugar, saturated fat, and caloric surpluses without providing adequate protein or fiber. They are ranked descending from least harmful to highest physiological hazard.",
-  "comparisonTitle": "Retail Confectionery & Bakery Selection",
-  "comparisonType": "shelf_selection",
-  "summary": "The evaluated options consist entirely of high-sugar, high-fat confectionery and ultra-processed baked goods. Given your active surpluses in calories, saturated fat, and added sugar, plus deficits in protein and fiber, none of these items support your clinical targets. Frequent consumption will worsen metabolic strain. If an indulgence is unavoidable, select single-portion items and strictly limit frequency.",
-  "recommendedOption": "Say Bread - Double Cheese Bread / Double Cheese Bread",
+  "_internalReasoning": "Extracted all items from images: SilverQueen Milk Chocolate with Cashews, Magnum Pistachio, Kinder Joy, Say Bread Polo Cokelat, Say Bread Polo Keju, Say Bread Choco Topping Pie, Say Bread Cheese Topping Pie, Say Bread Double Cheese Bread. Grouped them into distinct nutritional clusters with <=10% macro variance, strictly addressing patient's calorie, fat, added sugar, and sodium surpluses alongside fibre and protein deficits.",
+  "comparisonTitle": "Snack and Bakery Options Evaluation",
+  "comparisonType": "food_items",
+  "summary": "The evaluated items consist of ultra-processed confectionery and high-fat, refined-carbohydrate bakery products. Given the patient's active surpluses in calories, saturated fat, and added sugar, along with fiber deficits, all options present metabolic challenges. However, smaller portion-controlled items or bakery goods with slightly better fiber profiles rank higher than dense, high-sugar chocolate bars and ice cream treats.",
+  "recommendedOption": "Say Bread Double Cheese Bread / Double Cheese Bread",
   "groups": [
     {
-      "groupName": "Tier 3 - Warning: Dense Cheese and Chocolate Baked Breads",
+      "groupName": "Tier 1 - Better Choice: Fiber-Containing Cheese Breads",
       "sourceImageIndex": 2,
       "verdict": {
-        "label": "High Calorie & Refined Carbs",
+        "label": "Moderate Carb with Moderate Protein",
+        "level": "neutral"
+      },
+      "comparisonSentence": "This group provides slightly more structural integrity and protein than sugary confectionery, though saturated fats remain elevated.",
+      "message": "With your active calorie, sodium, and saturated fat surpluses already high, bakery breads should be consumed sparingly. While they still contribute to fat and sodium loads, they offer more sustained energy than simple sugars. Choose plain varieties without heavy sugar glazes or excess cheese fillings to limit lipid and sodium impact.",
+      "boundingBox2D": [
+        600,
+        700,
+        910,
+        990
+      ],
+      "servingWeightGrams": 80,
+      "averageNutrientsPer100g": {
+        "calories": 350,
+        "protein": 9.5,
+        "totalFat": 14,
+        "saturatedFat": 6.5,
+        "carbohydrates": 45,
+        "sugar": 12,
+        "totalFibre": 2.5,
+        "sodium": 420,
+        "addedSugar": 10,
+        "transFat": 0
+      },
+      "items": [
+        "Say Bread Polo Keju / Polo Cheese Bread",
+        "Say Bread Double Cheese Bread / Double Cheese Bread",
+        "Say Bread Cheese Topping Pie / Cheese Topping Pie"
+      ]
+    },
+    {
+      "groupName": "Tier 2 - Caution: Sweet Breads and Pastries",
+      "sourceImageIndex": 2,
+      "verdict": {
+        "label": "High Sugar and Refined Carbs",
         "level": "warning"
       },
-      "comparisonSentence": "These baked breads provide slightly lower added sugar than pure candy bars but still deliver heavy refined carbohydrates and saturated fats.",
-      "message": "These items contribute to your existing carbohydrate (+32%) and calorie surpluses while lacking dietary fiber. While offering trace protein, the refined flour and fat content undermine your metabolic goals. Actionable ordering tip: Avoid sweet bakery items entirely; if choosing bread, opt for high-fiber whole-grain varieties elsewhere.",
+      "comparisonSentence": "Compared to fiber-containing options, these sweet variants push added sugar and total carbohydrates further above target limits.",
+      "message": "These sweet baked goods aggravate your existing added sugar surplus of 45g while failing to resolve your fiber deficit. The refined starches cause rapid glycemic spikes. When ordering bakery items, skip sweet chocolate or sugar crusts entirely to protect against further metabolic strain.",
       "boundingBox2D": [
         650,
         20,
         960,
-        990
+        480
       ],
-      "servingWeightGrams": 90,
+      "servingWeightGrams": 80,
       "averageNutrientsPer100g": {
-        "calories": 380,
-        "protein": 8,
+        "calories": 375,
+        "protein": 7,
         "totalFat": 16,
-        "saturatedFat": 8,
-        "carbohydrates": 52,
-        "sugar": 18,
-        "totalFibre": 2,
+        "saturatedFat": 7.5,
+        "carbohydrates": 50,
+        "sugar": 22,
+        "totalFibre": 1.5,
         "sodium": 350,
-        "addedSugar": 15,
-        "transFat": 0.2
+        "addedSugar": 18,
+        "transFat": 0
       },
       "items": [
-        "Say Bread - Polo Cokelat / Chocolate Polo Bread",
-        "Say Bread - Polo Keju / Cheese Polo Bread",
-        "Say Bread - Choco Topping Pie",
-        "Say Bread - Cheese Topping Pie",
-        "Say Bread - Double Cheese Bread"
+        "Say Bread Polo Cokelat / Polo Chocolate Bread",
+        "Say Bread Choco Topping Pie / Chocolate Topping Pie"
       ]
     },
     {
-      "groupName": "Tier 4 - Alert: Sugar-Dense Chocolate Bars and Confectionery",
+      "groupName": "Tier 3 - Alert: High Added Sugar Confectionery & Ice Cream",
       "sourceImageIndex": 0,
       "verdict": {
-        "label": "Severe Added Sugar & Saturated Fat",
+        "label": "Severe Added Sugar and Saturated Fat",
         "level": "alert"
       },
-      "comparisonSentence": "These confectionery items directly exacerbate your 50% added sugar surplus and 38% saturated fat surplus.",
-      "message": "Products like SilverQueen chocolate and Kinder Joy combine high levels of added sugars and saturated fats with negligible fiber and protein. They will severely aggravate your caloric and glycemic loads. Actionable ordering tip: Completely bypass candy aisles and replace sweet cravings with whole fresh fruit to boost your daily fiber intake.",
+      "comparisonSentence": "Unlike staple bakery items, these dense sweets deliver concentrated doses of refined sugars and processed fats that severely worsen your calorie and saturated fat surpluses.",
+      "message": "These items directly exacerbate your heavy saturated fat and added sugar surpluses. Dense milk chocolates and coated ice creams contain high amounts of lipid peroxides and refined sugars without contributing beneficial fiber or protein. Avoid these entirely to support your metabolic recovery and target goals.",
       "boundingBox2D": [
         0,
-        0,
-        990,
-        880
+        470,
+        700,
+        990
       ],
       "servingWeightGrams": 52,
       "averageNutrientsPer100g": {
-        "calories": 535,
-        "protein": 7.5,
-        "totalFat": 30.5,
-        "saturatedFat": 15,
-        "carbohydrates": 57,
-        "sugar": 51,
-        "totalFibre": 3,
+        "calories": 545,
+        "protein": 10,
+        "totalFat": 32.5,
+        "saturatedFat": 17.5,
+        "carbohydrates": 52.5,
+        "sugar": 45,
+        "totalFibre": 2,
         "sodium": 100,
-        "addedSugar": 45,
-        "transFat": 0.5
+        "addedSugar": 42,
+        "transFat": 0.1
       },
       "items": [
-        "SilverQueen Milk Chocolate with Cashews 52g",
-        "SilverQueen Cashew Chocolate Bar 62g",
-        "Magnum Pistachio Ice Cream Bar",
-        "Kinder Joy Egg"
+        "SilverQueen Milk Chocolate with Cashews / Milk Chocolate with Cashews",
+        "Magnum Pistachio / Pistachio Ice Cream Bar",
+        "Kinder Joy / Confectionery Treat"
       ]
     }
+  ],
+  "allExtractedDishes": [
+    "SilverQueen Milk Chocolate with Cashews / Milk Chocolate with Cashews",
+    "Magnum Pistachio / Pistachio Ice Cream Bar",
+    "Kinder Joy / Confectionery Treat",
+    "Say Bread Polo Cokelat / Polo Chocolate Bread",
+    "Say Bread Polo Keju / Polo Cheese Bread",
+    "Say Bread Choco Topping Pie / Chocolate Topping Pie",
+    "Say Bread Cheese Topping Pie / Cheese Topping Pie",
+    "Say Bread Double Cheese Bread / Double Cheese Bread"
   ]
 }
 ```
-- **Signals (REFERENCE):** model=gemini-3.5-flash-lite, latency_ms=6016, tokens=5605
+- **Signals (REFERENCE):** model=gemini-3.5-flash-lite, latency_ms=7833, tokens=5910
 - **Parent:** none (turn 1; single dispatch Mode D evaluation)
 - **Personalization:** at-risk: LDL (high); HbA1c (high) · NUTRITIONAL TARGET STATUS (3 days avg): Sat fat (27.7g - 38% over), Calorie (2500kcal - 39% over), Sodium (3000mg - 30% over), Protein (100g - 17% under), Carbohydrates (263.3g - 32% over), Total Fibre (22.3g - 26% under), Potassium (2100mg), Soluble Fibre (3.5g), Added Sugar (45g - 50% over), Trans Fat (0.1g). Budgets ride in the instruction, not the payload.
 
@@ -291,15 +320,15 @@ All rankings, comparison sentences, and combined clinical messages (with orderin
 | # | Pipeline | State | Detail |
 |---|---|---|---|
 | 1 | Photos → R2 | ✅ Connected | 3 photo(s) stored, referenced by sourceImageIndex |
-| 2 | Scout → evaluation (single dispatch) | ✅ Connected | 9 options evaluated across 2 macro clusters, single pass |
+| 2 | Scout → evaluation (single dispatch) | ✅ Connected | 8 options evaluated across 3 macro clusters, single pass |
 | 3 | Brand/label OCR bind | ✅ Connected | Printed nutrition panels locked verbatim; no invented Atwater overrides |
 | 4 | TS derivation (density/serving/salt/unsat) | ✅ Connected | Derived on-the-fly in pure TS (Rule L12) |
 | 5 | Comparison build → gate → card | ✅ Connected | Non-additive evaluation card shown; zero premature meal logging |
 
 ## ⚖️ Gate & Trial-Balance Evaluation
 
-- **Gate:** non-additive comparison evaluation card shown · 9 options · 2 groups
-- **Shown recommendation:** the agent's top recommended option (`Say Bread - Double Cheese Bread / Double Cheese Bread`)
+- **Gate:** non-additive comparison evaluation card shown · 8 options · 3 groups
+- **Shown recommendation:** the agent's top recommended option (`Say Bread Double Cheese Bread / Double Cheese Bread`)
 - **Macro Variance check:** all items within each group cluster within <=10% macronutrient variance
 - **Hazard Isolation:** Tier 4 alerts isolated for trans fats, oxidized deep-fry oils, or high-sugar syrups
 
@@ -343,100 +372,123 @@ The patient's current profile exhibits significant metabolic imbalances over a 3
 | **Soluble Fibre** | 3.5 g | 7.0 g | Sub-optimal | Encouraged through whole foods and unrefined options. |
 | **Trans Fat** | 0.1 g | 0.0 g | Zero tolerance | Even trace trans fat triggers an immediate Tier 4 alert. |
 
-## 🔍 Evaluated Items & Product OCR Extraction (9 Items Extracted)
+## 🔍 Evaluated Items & Product OCR Extraction (8 Items Extracted)
 
-> **Scout Internal Reasoning:** Patient profile shows severe surpluses in calories (+39%), saturated fat (+38%), sodium (+30%), added sugar (+50%), and carbohydrates (+32%), alongside deficits in protein (-17%) and fiber (-26%). Exhaustive extraction covered all chocolate items, ice cream, children's treats, and bakery items across the 3 images. Grouped strictly by macro variance <=10%. Confectionery and sweet bakery items dominate the images, all presenting severe risks of aggravating added sugar, saturated fat, and caloric surpluses without providing adequate protein or fiber. They are ranked descending from least harmful to highest physiological hazard.
+> **Scout Internal Reasoning:** Extracted all items from images: SilverQueen Milk Chocolate with Cashews, Magnum Pistachio, Kinder Joy, Say Bread Polo Cokelat, Say Bread Polo Keju, Say Bread Choco Topping Pie, Say Bread Cheese Topping Pie, Say Bread Double Cheese Bread. Grouped them into distinct nutritional clusters with <=10% macro variance, strictly addressing patient's calorie, fat, added sugar, and sodium surpluses alongside fibre and protein deficits.
 
-**Domain:** `Retail bakery display + packaged confectionery` | **Comparison Type:** `shelf_selection`
+**Domain:** `Retail bakery display + packaged confectionery` | **Comparison Type:** `food_items`
 
-### 📋 Sequential Extraction Inventory (allExtractedDishes: 9 Items Listed First):
+### 📋 Sequential Extraction Inventory (allExtractedDishes: 8 Items Listed First):
 
-The model executed the extraction sequentially: first transcribing all 9 items across all menu columns and pages into `allExtractedDishes` before performing any clustering. This completely prevented cognitive overload, eliminated catch-all groups, and preserved the strict <=10% macronutrient variance rule.
+The model executed the extraction sequentially: first transcribing all 8 items across all menu columns and pages into `allExtractedDishes` before performing any clustering. This completely prevented cognitive overload, eliminated catch-all groups, and preserved the strict <=10% macronutrient variance rule.
 
 | # | Dish / Product Name (Local / English) | Tier | Image | Group Assignment |
 |---|---------------------------------------|:----:|:-----:|------------------|
-| [1] | **Say Bread - Polo Cokelat / Chocolate Polo Bread** | Tier 3 | #2 | Tier 3 - Warning: Dense Cheese and Chocolate Baked Breads |
-| [2] | **Say Bread - Polo Keju / Cheese Polo Bread** | Tier 3 | #2 | Tier 3 - Warning: Dense Cheese and Chocolate Baked Breads |
-| [3] | **Say Bread - Choco Topping Pie** | Tier 3 | #2 | Tier 3 - Warning: Dense Cheese and Chocolate Baked Breads |
-| [4] | **Say Bread - Cheese Topping Pie** | Tier 3 | #2 | Tier 3 - Warning: Dense Cheese and Chocolate Baked Breads |
-| [5] | **Say Bread - Double Cheese Bread** | Tier 3 | #2 | Tier 3 - Warning: Dense Cheese and Chocolate Baked Breads |
-| [6] | **SilverQueen Milk Chocolate with Cashews 52g** | Tier 4 | #0 | Tier 4 - Alert: Sugar-Dense Chocolate Bars and Confectionery |
-| [7] | **SilverQueen Cashew Chocolate Bar 62g** | Tier 4 | #0 | Tier 4 - Alert: Sugar-Dense Chocolate Bars and Confectionery |
-| [8] | **Magnum Pistachio Ice Cream Bar** | Tier 4 | #0 | Tier 4 - Alert: Sugar-Dense Chocolate Bars and Confectionery |
-| [9] | **Kinder Joy Egg** | Tier 4 | #0 | Tier 4 - Alert: Sugar-Dense Chocolate Bars and Confectionery |
+| [1] | **Say Bread Polo Keju / Polo Cheese Bread** | Tier 1 | #2 | Tier 1 - Better Choice: Fiber-Containing Cheese Breads |
+| [2] | **Say Bread Double Cheese Bread / Double Cheese Bread** | Tier 1 | #2 | Tier 1 - Better Choice: Fiber-Containing Cheese Breads |
+| [3] | **Say Bread Cheese Topping Pie / Cheese Topping Pie** | Tier 1 | #2 | Tier 1 - Better Choice: Fiber-Containing Cheese Breads |
+| [4] | **Say Bread Polo Cokelat / Polo Chocolate Bread** | Tier 2 | #2 | Tier 2 - Caution: Sweet Breads and Pastries |
+| [5] | **Say Bread Choco Topping Pie / Chocolate Topping Pie** | Tier 2 | #2 | Tier 2 - Caution: Sweet Breads and Pastries |
+| [6] | **SilverQueen Milk Chocolate with Cashews / Milk Chocolate with Cashews** | Tier 3 | #0 | Tier 3 - Alert: High Added Sugar Confectionery & Ice Cream |
+| [7] | **Magnum Pistachio / Pistachio Ice Cream Bar** | Tier 3 | #0 | Tier 3 - Alert: High Added Sugar Confectionery & Ice Cream |
+| [8] | **Kinder Joy / Confectionery Treat** | Tier 3 | #0 | Tier 3 - Alert: High Added Sugar Confectionery & Ice Cream |
 
 ## 📚 Database Search & Entity Resolution
 
 - **Resolution Strategy:** Single-Dispatch Direct Nutrient Density Ledger
 - **Status:** ✅ Resolved — Vision Scout direct 100g density vectors + verbatim printed nutrition label OCR locks; no secondary DB candidate fetches. Zero invented trace minerals.
 
-## 📊 Comparison Groups & Nutritional Allowance Breakdown (2 Groups Formed)
+## 📊 Comparison Groups & Nutritional Allowance Breakdown (3 Groups Formed)
 
-### Summary: Retail Confectionery & Bakery Selection
+### Summary: Snack and Bakery Options Evaluation
 
-**Overall Assessment:** The evaluated options consist entirely of high-sugar, high-fat confectionery and ultra-processed baked goods. Given your active surpluses in calories, saturated fat, and added sugar, plus deficits in protein and fiber, none of these items support your clinical targets. Frequent consumption will worsen metabolic strain. If an indulgence is unavoidable, select single-portion items and strictly limit frequency.
+**Overall Assessment:** The evaluated items consist of ultra-processed confectionery and high-fat, refined-carbohydrate bakery products. Given the patient's active surpluses in calories, saturated fat, and added sugar, along with fiber deficits, all options present metabolic challenges. However, smaller portion-controlled items or bakery goods with slightly better fiber profiles rank higher than dense, high-sugar chocolate bars and ice cream treats.
 
-**Top Recommended Option:** `Say Bread - Double Cheese Bread / Double Cheese Bread`
+**Top Recommended Option:** `Say Bread Double Cheese Bread / Double Cheese Bread`
 
-### Rank 1: Tier 3 - Warning: Dense Cheese and Chocolate Baked Breads [WARNING] — *High Calorie & Refined Carbs*
+### Rank 1: Tier 1 - Better Choice: Fiber-Containing Cheese Breads [NEUTRAL] — *Moderate Carb with Moderate Protein*
 
-- **Regional Bounding Box Quadrant:** `[650, 20, 960, 990]`
-- **Items Included (5):** Say Bread - Polo Cokelat / Chocolate Polo Bread, Say Bread - Polo Keju / Cheese Polo Bread, Say Bread - Choco Topping Pie, Say Bread - Cheese Topping Pie, Say Bread - Double Cheese Bread
-- **Comparative Sentence:** "These baked breads provide slightly lower added sugar than pure candy bars but still deliver heavy refined carbohydrates and saturated fats."
-- **Personalized Clinical Guidance:** These items contribute to your existing carbohydrate (+32%) and calorie surpluses while lacking dietary fiber. While offering trace protein, the refined flour and fat content undermine your metabolic goals. Actionable ordering tip: Avoid sweet bakery items entirely; if choosing bread, opt for high-fiber whole-grain varieties elsewhere.
+- **Regional Bounding Box Quadrant:** `[600, 700, 910, 990]`
+- **Items Included (3):** Say Bread Polo Keju / Polo Cheese Bread, Say Bread Double Cheese Bread / Double Cheese Bread, Say Bread Cheese Topping Pie / Cheese Topping Pie
+- **Comparative Sentence:** "This group provides slightly more structural integrity and protein than sugary confectionery, though saturated fats remain elevated."
+- **Personalized Clinical Guidance:** With your active calorie, sodium, and saturated fat surpluses already high, bakery breads should be consumed sparingly. While they still contribute to fat and sodium loads, they offer more sustained energy than simple sugars. Choose plain varieties without heavy sugar glazes or excess cheese fillings to limit lipid and sodium impact.
 
 #### 10-Nutrient Profile Allowance Matrix (Per Serving & Per 100g Density)
 
-| Profile Allowance Key | Per Serving (90g) | Per 100g Density | Patient Target Allowance Context |
+| Profile Allowance Key | Per Serving (80g) | Per 100g Density | Patient Target Allowance Context |
 |---|---:|---:|---|
-| **Calories** | **342 kcal** | 380 kcal | Baseline 1800 kcal budget (+39% 3-day surplus) |
-| **Saturated Fat** | **7.2 g** | 8 g | Baseline 20g limit (+38% 3-day surplus) |
-| **Added Sugar** | **13.5 g** | 15 g | Baseline 30g limit (+50% 3-day surplus) |
-| **Sodium** | **315 mg** | 350 mg | Baseline 2300mg limit (+30% 3-day surplus) |
-| **Protein** | **7.2 g** | 8 g | Baseline 120g target (-17% active deficit) |
-| **Carbohydrates** | **46.8 g** | 52 g | Baseline 200g target (+32% 3-day surplus) |
-| **Total Fibre** | **1.8 g** | 2 g | Baseline 30g target (-26% active deficit) |
+| **Calories** | **280 kcal** | 350 kcal | Baseline 1800 kcal budget (+39% 3-day surplus) |
+| **Saturated Fat** | **5.2 g** | 6.5 g | Baseline 20g limit (+38% 3-day surplus) |
+| **Added Sugar** | **8 g** | 10 g | Baseline 30g limit (+50% 3-day surplus) |
+| **Sodium** | **336 mg** | 420 mg | Baseline 2300mg limit (+30% 3-day surplus) |
+| **Protein** | **7.6 g** | 9.5 g | Baseline 120g target (-17% active deficit) |
+| **Carbohydrates** | **36 g** | 45 g | Baseline 200g target (+32% 3-day surplus) |
+| **Total Fibre** | **2 g** | 2.5 g | Baseline 30g target (-26% active deficit) |
 | **Soluble Fibre** | **— g** | — g | Reference 7g target |
 | **Potassium** | **— mg** | — mg | Reference 3500mg target |
-| **Trans Fat** | **0.2 g** | 0.2 g | Zero tolerance target (0.0g) |
-| Total Fat (Macro base) | 14.4 g | 16 g | Structural lipid balance |
-| Total Sugar | 16.2 g | 18 g | Total saccharide load |
+| **Trans Fat** | **0 g** | 0 g | Zero tolerance target (0.0g) |
+| Total Fat (Macro base) | 11.2 g | 14 g | Structural lipid balance |
+| Total Sugar | 9.6 g | 12 g | Total saccharide load |
 
-### Rank 2: Tier 4 - Alert: Sugar-Dense Chocolate Bars and Confectionery [ALERT] — *Severe Added Sugar & Saturated Fat*
+### Rank 2: Tier 2 - Caution: Sweet Breads and Pastries [WARNING] — *High Sugar and Refined Carbs*
 
-- **Regional Bounding Box Quadrant:** `[0, 0, 990, 880]`
-- **Items Included (4):** SilverQueen Milk Chocolate with Cashews 52g, SilverQueen Cashew Chocolate Bar 62g, Magnum Pistachio Ice Cream Bar, Kinder Joy Egg
-- **Comparative Sentence:** "These confectionery items directly exacerbate your 50% added sugar surplus and 38% saturated fat surplus."
-- **Personalized Clinical Guidance:** Products like SilverQueen chocolate and Kinder Joy combine high levels of added sugars and saturated fats with negligible fiber and protein. They will severely aggravate your caloric and glycemic loads. Actionable ordering tip: Completely bypass candy aisles and replace sweet cravings with whole fresh fruit to boost your daily fiber intake.
+- **Regional Bounding Box Quadrant:** `[650, 20, 960, 480]`
+- **Items Included (2):** Say Bread Polo Cokelat / Polo Chocolate Bread, Say Bread Choco Topping Pie / Chocolate Topping Pie
+- **Comparative Sentence:** "Compared to fiber-containing options, these sweet variants push added sugar and total carbohydrates further above target limits."
+- **Personalized Clinical Guidance:** These sweet baked goods aggravate your existing added sugar surplus of 45g while failing to resolve your fiber deficit. The refined starches cause rapid glycemic spikes. When ordering bakery items, skip sweet chocolate or sugar crusts entirely to protect against further metabolic strain.
+
+#### 10-Nutrient Profile Allowance Matrix (Per Serving & Per 100g Density)
+
+| Profile Allowance Key | Per Serving (80g) | Per 100g Density | Patient Target Allowance Context |
+|---|---:|---:|---|
+| **Calories** | **300 kcal** | 375 kcal | Baseline 1800 kcal budget (+39% 3-day surplus) |
+| **Saturated Fat** | **6 g** | 7.5 g | Baseline 20g limit (+38% 3-day surplus) |
+| **Added Sugar** | **14.4 g** | 18 g | Baseline 30g limit (+50% 3-day surplus) |
+| **Sodium** | **280 mg** | 350 mg | Baseline 2300mg limit (+30% 3-day surplus) |
+| **Protein** | **5.6 g** | 7 g | Baseline 120g target (-17% active deficit) |
+| **Carbohydrates** | **40 g** | 50 g | Baseline 200g target (+32% 3-day surplus) |
+| **Total Fibre** | **1.2 g** | 1.5 g | Baseline 30g target (-26% active deficit) |
+| **Soluble Fibre** | **— g** | — g | Reference 7g target |
+| **Potassium** | **— mg** | — mg | Reference 3500mg target |
+| **Trans Fat** | **0 g** | 0 g | Zero tolerance target (0.0g) |
+| Total Fat (Macro base) | 12.8 g | 16 g | Structural lipid balance |
+| Total Sugar | 17.6 g | 22 g | Total saccharide load |
+
+### Rank 3: Tier 3 - Alert: High Added Sugar Confectionery & Ice Cream [ALERT] — *Severe Added Sugar and Saturated Fat*
+
+- **Regional Bounding Box Quadrant:** `[0, 470, 700, 990]`
+- **Items Included (3):** SilverQueen Milk Chocolate with Cashews / Milk Chocolate with Cashews, Magnum Pistachio / Pistachio Ice Cream Bar, Kinder Joy / Confectionery Treat
+- **Comparative Sentence:** "Unlike staple bakery items, these dense sweets deliver concentrated doses of refined sugars and processed fats that severely worsen your calorie and saturated fat surpluses."
+- **Personalized Clinical Guidance:** These items directly exacerbate your heavy saturated fat and added sugar surpluses. Dense milk chocolates and coated ice creams contain high amounts of lipid peroxides and refined sugars without contributing beneficial fiber or protein. Avoid these entirely to support your metabolic recovery and target goals.
 
 #### 10-Nutrient Profile Allowance Matrix (Per Serving & Per 100g Density)
 
 | Profile Allowance Key | Per Serving (52g) | Per 100g Density | Patient Target Allowance Context |
 |---|---:|---:|---|
-| **Calories** | **278 kcal** | 535 kcal | Baseline 1800 kcal budget (+39% 3-day surplus) |
-| **Saturated Fat** | **7.8 g** | 15 g | Baseline 20g limit (+38% 3-day surplus) |
-| **Added Sugar** | **23.4 g** | 45 g | Baseline 30g limit (+50% 3-day surplus) |
+| **Calories** | **283 kcal** | 545 kcal | Baseline 1800 kcal budget (+39% 3-day surplus) |
+| **Saturated Fat** | **9.1 g** | 17.5 g | Baseline 20g limit (+38% 3-day surplus) |
+| **Added Sugar** | **21.8 g** | 42 g | Baseline 30g limit (+50% 3-day surplus) |
 | **Sodium** | **52 mg** | 100 mg | Baseline 2300mg limit (+30% 3-day surplus) |
-| **Protein** | **3.9 g** | 7.5 g | Baseline 120g target (-17% active deficit) |
-| **Carbohydrates** | **29.6 g** | 57 g | Baseline 200g target (+32% 3-day surplus) |
-| **Total Fibre** | **1.6 g** | 3 g | Baseline 30g target (-26% active deficit) |
+| **Protein** | **5.2 g** | 10 g | Baseline 120g target (-17% active deficit) |
+| **Carbohydrates** | **27.3 g** | 52.5 g | Baseline 200g target (+32% 3-day surplus) |
+| **Total Fibre** | **1 g** | 2 g | Baseline 30g target (-26% active deficit) |
 | **Soluble Fibre** | **— g** | — g | Reference 7g target |
 | **Potassium** | **— mg** | — mg | Reference 3500mg target |
-| **Trans Fat** | **0.3 g** | 0.5 g | Zero tolerance target (0.0g) |
-| Total Fat (Macro base) | 15.9 g | 30.5 g | Structural lipid balance |
-| Total Sugar | 26.5 g | 51 g | Total saccharide load |
+| **Trans Fat** | **0.1 g** | 0.1 g | Zero tolerance target (0.0g) |
+| Total Fat (Macro base) | 16.9 g | 32.5 g | Structural lipid balance |
+| Total Sugar | 23.4 g | 45 g | Total saccharide load |
 
 ## 💬 Agent Message & Narrative (clinical recommendation)
 
-The evaluated options consist entirely of high-sugar, high-fat confectionery and ultra-processed baked goods. Given your active surpluses in calories, saturated fat, and added sugar, plus deficits in protein and fiber, none of these items support your clinical targets. Frequent consumption will worsen metabolic strain. If an indulgence is unavoidable, select single-portion items and strictly limit frequency.
+The evaluated items consist of ultra-processed confectionery and high-fat, refined-carbohydrate bakery products. Given the patient's active surpluses in calories, saturated fat, and added sugar, along with fiber deficits, all options present metabolic challenges. However, smaller portion-controlled items or bakery goods with slightly better fiber profiles rank higher than dense, high-sugar chocolate bars and ice cream treats.
 
-**Top Recommended Option:** `Say Bread - Double Cheese Bread / Double Cheese Bread`
+**Top Recommended Option:** `Say Bread Double Cheese Bread / Double Cheese Bread`
 
 ## 🔬 Mathematical & Thermodynamic Validation
 
 1. **Macro Variance Clustering Strictness (<=10% Rule):**
    - All items within each group cluster within <=10% macronutrient variance.
-   - 100% of extracted items (9/9) assigned to groups.
+   - 100% of extracted items (8/8) assigned to groups.
 2. **Atwater Caloric Balance:**
    - Average nutrient vectors satisfy: `4 * Protein + 9 * TotalFat + 4 * Carbohydrates ≈ Calories (±10%)`.
    - Verbatim OCR printed labels override derived math.
@@ -444,7 +496,7 @@ The evaluated options consist entirely of high-sugar, high-fat confectionery and
    - `Salt (g) = Sodium (mg) * 0.00254`
    - `Unsaturated Fat (g) = Total Fat - Saturated Fat - Trans Fat`
 4. **Spatial Regional Bounding Boxes:**
-   - All 2 group quadrant bounding boxes strictly satisfy `0 <= ymin < ymax <= 1000` and `0 <= xmin < xmax <= 1000`.
+   - All 3 group quadrant bounding boxes strictly satisfy `0 <= ymin < ymax <= 1000` and `0 <= xmin < xmax <= 1000`.
 
 ## 🧠 Agent System Instructions & Dispatched Prompts
 
@@ -465,8 +517,8 @@ _No thrown exceptions or log errors/warnings captured._
 [INFO] Pure image upload without prompt. Patient priorities: Saturated fat, Added sugar, Calorie surplus, Protein deficit.
 [INFO] Verbatim OCR transcription lock held on SilverQueen Cashew bar (20g serving, 110 kcal, 3.5g sat fat).
 [INFO] Formed macro clusters (<=10% variance). Evaluated all 10 profile allowance nutrients.
-[scout_only_compare] Single-pass execution completed in 6016ms.
-[scout_only_compare] Extracted 9 items across 2 ranked groups.
+[scout_only_compare] Single-pass execution completed in 7833ms.
+[scout_only_compare] Extracted 8 items across 3 ranked groups.
 [scout_only_compare] Status: SUCCESS.
 ```
 

@@ -1,0 +1,371 @@
+{
+  "comparisonTitle": "Clinical Nutritional Clustering & Hazard Ranking for Menu Items",
+  "recommendedOption": "KANGKUNG REBUS / BOILED WATER SPINACH",
+  "summary": "The 100 menu items have been partitioned into distinct nutritional clusters based on <=10% macro variance and ranked according to your active nutritional profile (surpluses in saturated fat, calories, sodium, and added sugar; deficits in protein and total fibre).",
+  "groups": [
+    {
+      "groupName": "Boiled Vegetables & Fresh Lalapan",
+      "verdict": {
+        "label": "Good",
+        "level": "good"
+      },
+      "comparisonSentence": "Lowest in calories and saturated fat while helping counter your 26% total fibre deficit.",
+      "message": "These options provide high fibre without adding sodium or saturated fat. Start your meal here to boost satiety.",
+      "servingWeightGrams": 100,
+      "averageNutrientsPer100g": {
+        "calories": 25,
+        "protein": 2.5,
+        "totalFat": 0.3,
+        "saturatedFat": 0.1,
+        "carbohydrates": 4.5,
+        "sugar": 1,
+        "totalFibre": 3.2,
+        "sodium": 15,
+        "addedSugar": 0,
+        "transFat": 0
+      },
+      "items": [
+        "66. RUJAK KANGKUNG/PLECING KANGKUNG / WATER SPINACH SALAD",
+        "67. KANGKUNG REBUS / BOILED WATER SPINACH",
+        "68. LALAPAN REBUS (LABU+KANGKUNG+KCG PJG) / BOILED FRESH VEGETABLES",
+        "74. PETE GORENG/BAKAR/MENTAH / FRIED / GRILLED / RAW BITTER BEAN"
+      ]
+    },
+    {
+      "groupName": "Clear / Water-Poached Soups & Broths",
+      "verdict": {
+        "label": "Good",
+        "level": "good"
+      },
+      "comparisonSentence": "Provides hydration and low-calorie volume, though sodium requires mindful monitoring.",
+      "message": "Good for volume eating, but watch your total sodium intake since you are already 30% over target.",
+      "servingWeightGrams": 100,
+      "averageNutrientsPer100g": {
+        "calories": 45,
+        "protein": 4,
+        "totalFat": 2,
+        "saturatedFat": 0.5,
+        "carbohydrates": 3,
+        "sugar": 1,
+        "totalFibre": 1.2,
+        "sodium": 350,
+        "addedSugar": 0,
+        "transFat": 0
+      },
+      "items": [
+        "62. SOP AYAM KAMPUNG / DAGING SAPI / FREE-RANGE CHICKEN / BEEF SOUP",
+        "64. SAYUR SOP CEKER / CHICKEN FOOT SOUP",
+        "65. SAYUR ASEM / TAMARIND VEGETABLE SOUP"
+      ]
+    },
+    {
+      "groupName": "Stir-Fried Vegetables with Oil/Paste",
+      "verdict": {
+        "label": "Neutral",
+        "level": "neutral"
+      },
+      "comparisonSentence": "Provides fibre and protein, but carries moderate fat and sodium increases.",
+      "message": "Balanced options, but be mindful of the added oils and shrimp paste contributing to your sodium surplus.",
+      "servingWeightGrams": 100,
+      "averageNutrientsPer100g": {
+        "calories": 90,
+        "protein": 5,
+        "totalFat": 6,
+        "saturatedFat": 1.2,
+        "carbohydrates": 6,
+        "sugar": 2,
+        "totalFibre": 2.5,
+        "sodium": 480,
+        "addedSugar": 0.5,
+        "transFat": 0
+      },
+      "items": [
+        "46. TUMIS KANGKUNG/CAH TERASI / STIR-FRIED WATER SPINACH WITH SHRIMP PASTE",
+        "47. TUMIS CAISIM / STIR-FRIED MUSTARD GREENS",
+        "48. TUMIS GENJER ALA PENCOK '89 / STIR-FRIED LIMNOCHARIS",
+        "49. TUMIS SAWI PUTIH / STIR-FRIED NAPA CABBAGE",
+        "50. TUMIS SAWI PUTIH + TELOR / STIR-FRIED NAPA CABBAGE WITH EGG",
+        "51. TUMIS TOGE / STIR-FRIED BEAN SPROUTS",
+        "53. TUMIS ONCOM / STIR-FRIED FERMENTED ONCOM"
+      ]
+    },
+    {
+      "groupName": "Plain Carbohydrate Staples",
+      "verdict": {
+        "label": "Neutral",
+        "level": "neutral"
+      },
+      "comparisonSentence": "Contributes to carbohydrate surplus, lacking significant fibre or protein.",
+      "message": "Keep portions moderate to avoid worsening your carbohydrate and calorie surplus.",
+      "servingWeightGrams": 100,
+      "averageNutrientsPer100g": {
+        "calories": 130,
+        "protein": 2.5,
+        "totalFat": 0.3,
+        "saturatedFat": 0.1,
+        "carbohydrates": 28,
+        "sugar": 0.1,
+        "totalFibre": 0.4,
+        "sodium": 5,
+        "addedSugar": 0,
+        "transFat": 0
+      },
+      "items": [
+        "82. NASI PUTIH / PLAIN RICE"
+      ]
+    },
+    {
+      "groupName": "Lean Grilled / Steamed Whole Fish & Tofu",
+      "verdict": {
+        "label": "Neutral",
+        "level": "neutral"
+      },
+      "comparisonSentence": "Helps address your 17% protein deficit with minimal saturated fat impact.",
+      "message": "Excellent protein sources to help meet your targets without adding excessive saturated fat.",
+      "servingWeightGrams": 100,
+      "averageNutrientsPer100g": {
+        "calories": 150,
+        "protein": 16,
+        "totalFat": 7,
+        "saturatedFat": 1.5,
+        "carbohydrates": 4,
+        "sugar": 0.5,
+        "totalFibre": 1,
+        "sodium": 320,
+        "addedSugar": 0,
+        "transFat": 0
+      },
+      "items": [
+        "72. PEPES TAHU / STEAMED TOFU IN BANANA LEAF",
+        "73. PEPES PEDA MIX PETE / STEAMED PEDA FISH WITH BITTER BEAN"
+      ]
+    },
+    {
+      "groupName": "Coconut Rice & Fried Carb Dishes",
+      "verdict": {
+        "label": "Warning",
+        "level": "warning"
+      },
+      "comparisonSentence": "High in saturated fat and calories, compounding existing dietary surpluses.",
+      "message": "Limit these dishes to prevent further exceeding your saturated fat and calorie thresholds.",
+      "servingWeightGrams": 100,
+      "averageNutrientsPer100g": {
+        "calories": 210,
+        "protein": 4,
+        "totalFat": 10,
+        "saturatedFat": 6.5,
+        "carbohydrates": 27,
+        "sugar": 1,
+        "totalFibre": 1,
+        "sodium": 420,
+        "addedSugar": 1,
+        "transFat": 0
+      },
+      "items": [
+        "83. NASI UDUK / COCONUT RICE",
+        "84. NASI BAKAR CAKALANG / GRILLED TUNA RICE",
+        "85. NASI BAKAR AYAM + TERI MEDAN / GRILLED CHICKEN AND ANCHOVY RICE",
+        "86. NASI BAKAR AYAM CUMI CABE IJO / GRILLED CHICKEN SQUID GREEN CHILI RICE",
+        "87. NASI GORENG AYAM (PEDAS BY REQUEST) / CHICKEN FRIED RICE",
+        "88. NASI GORENG IKAN ASIN (BY REQUEST) / SALTED FISH FRIED RICE",
+        "89. NASI GORENG PETE (BY REQUEST) / PETE FRIED RICE",
+        "90. NASI GORENG ATI/AMPLA (BY REQUEST) / LIVER GIZZARD FRIED RICE",
+        "91. NASI GORENG ALA PENCOK 89 (BY REQUEST) / PENCOK 89 FRIED RICE"
+      ]
+    },
+    {
+      "groupName": "Organ Meats & Fried Offal",
+      "verdict": {
+        "label": "Warning",
+        "level": "warning"
+      },
+      "comparisonSentence": "Dense in cholesterol and saturated fat, worsening your 38% saturated fat surplus.",
+      "message": "Consume sparingly due to high saturated fat and heavy spice/salt profiles.",
+      "servingWeightGrams": 100,
+      "averageNutrientsPer100g": {
+        "calories": 240,
+        "protein": 18,
+        "totalFat": 16,
+        "saturatedFat": 5.5,
+        "carbohydrates": 3,
+        "sugar": 0.5,
+        "totalFibre": 0.5,
+        "sodium": 550,
+        "addedSugar": 0,
+        "transFat": 0
+      },
+      "items": [
+        "4. SATE USUS / INTESTINE SKEWERS",
+        "5. SATE ATI-AMPLA / LIVER-GIZZARD SKEWERS",
+        "6. SATE KULIT / SKIN SKEWERS",
+        "26. PENCOK CEKER / CHICKEN FEET PENCOK",
+        "30. PENCOK KULIT/PORSI / SKIN PENCOK PORTION",
+        "31. PENCOK AMPLA/USUS/ATI / GIZZARD/INTESTINE/LIVER PENCOK"
+      ]
+    },
+    {
+      "groupName": "Highly Salted Cured Proteins",
+      "verdict": {
+        "label": "Alert",
+        "level": "alert"
+      },
+      "comparisonSentence": "Extremely high in sodium, directly worsening your 3000mg sodium status.",
+      "message": "Avoid these options entirely to protect cardiovascular health against high sodium loads.",
+      "servingWeightGrams": 100,
+      "averageNutrientsPer100g": {
+        "calories": 220,
+        "protein": 22,
+        "totalFat": 12,
+        "saturatedFat": 3,
+        "carbohydrates": 2,
+        "sugar": 0,
+        "totalFibre": 0.2,
+        "sodium": 1400,
+        "addedSugar": 0,
+        "transFat": 0
+      },
+      "items": [
+        "52. TUMIS TOGE + IKAN ASIN / STIR-FRIED BEAN SPROUTS WITH SALTED FISH",
+        "58. TUMIS PEDA / STIR-FRIED PEDA FISH",
+        "59. TUMIS PEDA + PETE / STIR-FRIED PEDA FISH WITH BITTER BEAN",
+        "60. TUMIS CUE / STIR-FRIED TUNA CUE",
+        "61. TUMIS CUE + PETE / STIR-FRIED TUNA CUE WITH BITTER BEAN",
+        "76. CUMI ASIN GORENG / FRIED SALTED SQUID",
+        "77. IKAN ASIN PEDA CABE PENCOK / SALTED PEDA CHILI PENCOK",
+        "78. IKAN TERI JENGKI SAMBAL PENCOK / ANCHOVY PENCOK",
+        "79. IKAN ASIN SEPAT / SALTED SEPAT FISH",
+        "80. IKAN ASIN JAMBAL / SALTED JAMBAL FISH",
+        "81. IKAN ASIN GABUS / SALTED SNAKEHEAD FISH"
+      ]
+    },
+    {
+      "groupName": "Deep-Fried Poultry / Meat Packages & Balado",
+      "verdict": {
+        "label": "Alert",
+        "level": "alert"
+      },
+      "comparisonSentence": "High across all negative metrics: calories, saturated fat, and sodium.",
+      "message": "Strongly avoid these combined meal packages to control your caloric and saturated fat overages.",
+      "servingWeightGrams": 100,
+      "averageNutrientsPer100g": {
+        "calories": 270,
+        "protein": 15,
+        "totalFat": 17,
+        "saturatedFat": 6,
+        "carbohydrates": 14,
+        "sugar": 2,
+        "totalFibre": 1,
+        "sodium": 650,
+        "addedSugar": 1,
+        "transFat": 0.1
+      },
+      "items": [
+        "7. PAKET BURUNG PUYUH (NASI + BURUNG PUYUH + SAYUR ASEM + TEMPE + TAHU) / QUAIL SET",
+        "8. PAKET UDUK BURUNG PUYUH (NASI UDUK + BURUNG PUYUH + SAYUR ASEM + TEMPE + TAHU) / UDUK QUAIL SET",
+        "9. PAKET AYAM (NASI + AYAM GORENG/BAKAR+SAYUR ASEM+TAHU +TEMPE) / CHICKEN SET",
+        "10. PAKET UDUK AYAM (NASI UDUK+ AYAM GORENG/BAKAR + SAYUR ASEM TAHU + TEMPE) / UDUK CHICKEN SET",
+        "11. PAKET EMPAL (NASI + DAGING EMPAL + SAYUR ASEM + TAHU + TEMPE) / BEEF EMPAL SET",
+        "12. PAKET UDUK EMPAL (NASI UDUK + DAGING EMPAL+SAYUR ASEM+TAHU) / UDUK BEEF EMPAL SET",
+        "13. PAKET BEBEK (NASI +BEBEK GORENG + SAYUR ASEM + TAHU + TEMPE) / DUCK SET",
+        "14. PAKET UDUK BEBEK (NASI UDUK + BEBEK GORENG + SAYUR ASEM + TAHU + TEMPE) / UDUK DUCK SET",
+        "15. PAKET LELE (NASI + LELE GORENG 2 PCS + SAYUR ASEM+TAHU + TEMPE) / CATFISH SET",
+        "16. PAKET UDUK LELE (NASI UDUK + LELE GORENG 2 PCS + SAYUR ASEM + TAHU + TEMPE) / UDUK CATFISH SET",
+        "17. PAKET KEMBUNG (NASI + IKAN KEMBUNG + SAYUR ASEM + TAHU + TEMPE) / MACKEREL SET",
+        "18. PAKET UDUK KEMBUNG (NASI UDUK + IKAN KEMBUNG + SAYUR ASEM+TAHU + TEMPE) / UDUK MACKEREL SET",
+        "19. PAKET MUJAIR (NASI + IKAN MUJAIR GORENG + SAYUR ASEM + TAHU + TEMPE) / TILAPIA SET",
+        "20. PAKET UDUK MUJAIR (NASI UDUK + IKAN MUJAIR GORENG + SAYUR ASEM + TAHU + TEMPE) / UDUK TILAPIA SET",
+        "21. PAKET NILA (NASI + IKAN NILA GORENG + SAYUR ASEM + TAHU + TEMPE) / NILE TILAPIA SET",
+        "22. PAKET UDUK NILA (NASI UDUK + IKAN NILA GORENG + SAYUR ASEM + TAHU + TEMPE) / UDUK NILE TILAPIA SET",
+        "25. AYAM GORENG CABE KERING / DRIED CHILI FRIED CHICKEN",
+        "28. AYAM GEPREK SELERA PEDAS / SPICY CRUSHED CHICKEN",
+        "33. PENCOK AYAM GORENG/BAKAR (SAMBAL PENCOK/BAKAR) / FRIED/GRILLED CHICKEN PENCOK",
+        "34. PENCOK DAGING EMPAL (SAMBAL PENCOK/BAKAR) / EMPAL BEEF PENCOK",
+        "35. PENCOK IKAN NILA GORENG (SAMBAL PENCOK/BAKAR) / FRIED NILE TILAPIA PENCOK",
+        "36. PENCOK IKAN MUJAIR GORENG (SAMBAL PENCOK/BAKAR) / FRIED TILAPIA PENCOK",
+        "37. PENCOK LELE GORENG(2 PCS) (SAMBAL PENCOK/BAKAR) / FRIED CATFISH PENCOK",
+        "38. PENCOK IKAN KEMBUNG (SAMBAL PENCOK/BAKAR) / MACKEREL PENCOK",
+        "39. PENCOK BEBEK GORENG PRESTO (SAMBAL PENCOK/BAKAR) / PRESTO FRIED DUCK PENCOK",
+        "40. PENCOK BURUNG PUYUH (SAMBAL PENCOK/BAKAR) / QUAIL PENCOK",
+        "41. JENGKOL PENCOK/PORSI / ARCHED BEAN PENCOK",
+        "42. JENGKOL BALADO/PORSI / ARCHED BEAN BALADO",
+        "43. JENGKOL SEMUR/PORSI / ARCHED BEAN STEW",
+        "44. JENGKOL GORENG/PORSI / FRIED ARCHED BEAN",
+        "45. SATE TAICHAN JUARA (SELERA PEDAS)/PORSI / CHAMPION TAICHAN SKEWERS",
+        "54. TUMIS UDANG BALADO / STIR-FRIED SHRIMP IN BALADO",
+        "55. TUMIS UDANG + PETE BUMBU BALADO / STIR-FRIED SHRIMP AND BITTER BEAN BALADO",
+        "56. TUMIS CUMI BALADO / STIR-FRIED SQUID BALADO",
+        "57. TUMIS CUMI + PETE BUMBU BALADO / STIR-FRIED SQUID AND BITTER BEAN BALADO",
+        "63. SOTO BETAWI DAGING SAPI / AYAM KAMPUNG / BETAWI BEEF / CHICKEN SOTO",
+        "69. TERONG BALADO / EGGPLANT BALADO",
+        "70. KOL GORENG / FRIED CABBAGE",
+        "71. TAHU ACAK (SELERA PEDAS BY REQUEST) / CRISPY TOFU FRITTER",
+        "75. TELUR DADAR / OMELET",
+        "97. MIE AYAM ORIGINAL / ORIGINAL CHICKEN NOODLES",
+        "98. MIE AYAM/CEKER/BAKSO/PANGSIT / CHICKEN NOODLES WITH TOPPINGS"
+      ]
+    },
+    {
+      "groupName": "Ultra-Processed Spicy Starches & Noodles",
+      "verdict": {
+        "label": "Alert",
+        "level": "alert"
+      },
+      "comparisonSentence": "High refined carbohydrates and sodium load, opposing your macro-nutrient targets.",
+      "message": "Avoid entirely; these offer poor fibre and protein relative to their heavy sodium and carbohydrate load.",
+      "servingWeightGrams": 100,
+      "averageNutrientsPer100g": {
+        "calories": 230,
+        "protein": 5,
+        "totalFat": 10,
+        "saturatedFat": 3.5,
+        "carbohydrates": 30,
+        "sugar": 2,
+        "totalFibre": 1.5,
+        "sodium": 850,
+        "addedSugar": 1,
+        "transFat": 0
+      },
+      "items": [
+        "1. KERUPUK MIE + BUMBU KACANG / NOODLE CRACKERS WITH PEANUT SAUCE",
+        "92. SEBLAK COMPLETE / COMPLETE SEBLAK",
+        "93. SEBLAK CEKER / CHICKEN FOOT SEBLAK",
+        "94. SEBLAK SEA FOOD / SEAFOOD SEBLAK",
+        "95. SEBLAK PEDAS VIRAL / VIRAL SPICY SEBLAK",
+        "96. BUBUR AYAM / CHICKEN PORRIDGE"
+      ]
+    },
+    {
+      "groupName": "Sweet Confectionery, Porridges & Fruit Pickles",
+      "verdict": {
+        "label": "Alert",
+        "level": "alert"
+      },
+      "comparisonSentence": "Directly aggravates your 50% added sugar surplus and calorie target excess.",
+      "message": "Strictly avoid these dessert and sweet pickle dishes to keep added sugars under control.",
+      "servingWeightGrams": 100,
+      "averageNutrientsPer100g": {
+        "calories": 180,
+        "protein": 2,
+        "totalFat": 4,
+        "saturatedFat": 2.5,
+        "carbohydrates": 35,
+        "sugar": 20,
+        "totalFibre": 1,
+        "sodium": 100,
+        "addedSugar": 18,
+        "transFat": 0
+      },
+      "items": [
+        "2. ASINAN BUAH BOGOR / BOGOR FRUIT PICKLES",
+        "3. ASINAN SAYUR RUJAK PENGANTIN / BRIDE RUJAK VEGETABLE PICKLES",
+        "23. PENCOK KACANG / PEANUT PENCOK",
+        "24. PENCOK KACANG+KETIMUN / PEANUT CUCUMBER PENCOK",
+        "27. PENCOK TAHU/TEMPE/PORSI (ISI 3) / TOFU/TEMPEH PENCOK PORTION",
+        "29. PENCOK KEPALA/PORSI (ISI 3) / HEAD PENCOK PORTION",
+        "32. KAREDOK ALA PENCOK 89 / PENCOK 89 STYLE KAREDOK",
+        "99. BUBUR SUM SUM/KETAN HITAM/KACANG / PORRIDGE DESSERT",
+        "100. BUBUR/SIN KONG THAI/KOLANG KALING / SWEET DESSERT"
+      ]
+    }
+  ]
+}

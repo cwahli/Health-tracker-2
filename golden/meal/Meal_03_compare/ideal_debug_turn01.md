@@ -83,11 +83,6 @@ Target Deviations: Sat fat (27.7g - 38% over), Calorie (2500kcal - 39% over), So
 
 - **System Instruction:**
 ```
-=== USER OUTPUT LANGUAGE ===
-The patient's UI language is English (code: en).
-Write every user-visible string in English.
-Format non-English culinary and product names as 'Local Name / English Translation'.
-
 === NUTRITIONAL TARGET STATUS ===
 3 days avg: Sat fat (27.7g - 38% over), Calorie (2500kcal - 39% over), Sodium (3000mg - 30% over), Protein (100g - 17% under), Carbohydrates (263.3g - 32% over), Total Fibre (22.3g - 26% under), Potassium (2100mg), Soluble Fibre (3.5g), Added Sugar (45g - 50% over), Trans Fat (0.1g)
 

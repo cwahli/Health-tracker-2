@@ -1,0 +1,582 @@
+{
+  "allExtractedDishes": [
+    "Kerupuk Mie + Bumbu Kacang / Noodle Crackers with Peanut Sauce",
+    "Asinan Buah Bogor / Bogor Fruit Pickle",
+    "Asinan Sayur Rujak Pengantin / Bride's Vegetable Pickle Rujak",
+    "Paket Burung Puyuh (Nasi + Burung Puyuh + Sayur Asem + Tempe + Tahu) / Quail Meal Package",
+    "Paket Uduk Burung Puyuh (Nasi Uduk + Burung Puyuh + Sayur Asem + Tempe + Tahu) / Quail Coconut Rice Meal Package",
+    "Paket Ayam (Nasi + Ayam Goreng/Bakar + Sayur Asem + Tahu + Tempe) / Chicken Meal Package",
+    "Paket Uduk Ayam (Nasi Uduk + Ayam Goreng/Bakar + Sayur Asem Tahu + Tempe) / Chicken Coconut Rice Meal Package",
+    "Paket Empal (Nasi + Daging Empal + Sayur Asem + Tahu + Tempe) / Beef Empal Meal Package",
+    "Paket Uduk Empal (Nasi Uduk + Daging Empal + Sayur Asem + Tahu) / Beef Empal Coconut Rice Meal Package",
+    "Paket Bebek (Nasi + Bebek Goreng + Sayur Asem + Tahu + Tempe) / Duck Meal Package",
+    "Paket Uduk Bebek (Nasi Uduk + Bebek Goreng + Sayur Asem + Tahu + Tempe) / Duck Coconut Rice Meal Package",
+    "Paket Lele (Nasi + Lele Goreng 2 Pcs + Sayur Asem + Tahu + Tempe) / Catfish Meal Package",
+    "Paket Uduk Lele (Nasi Uduk + Lele Goreng 2 Pcs + Sayur Asem + Tahu + Tempe) / Catfish Coconut Rice Meal Package",
+    "Paket Kembung (Nasi + Ikan Kembung + Sayur Asem + Tahu + Tempe) / Mackerel Meal Package",
+    "Paket Uduk Kembung (Nasi Uduk + Ikan Kembung + Sayur Asem + Tahu + Tempe) / Mackerel Coconut Rice Meal Package",
+    "Paket Mujair (Nasi + Ikan Mujair Goreng + Sayur Asem + Tahu + Tempe) / Tilapia Meal Package",
+    "Paket Uduk Mujair (Nasi Uduk + Ikan Mujair Goreng + Sayur Asem + Tahu + Tempe) / Tilapia Coconut Rice Meal Package",
+    "Paket Nila (Nasi + Ikan Nila Goreng + Sayur Asem + Tahu + Tempe) / Nile Tilapia Meal Package",
+    "Paket Uduk Nila (Nasi Uduk + Ikan Nila Goreng + Sayur Asem + Tahu + Tempe) / Nile Tilapia Coconut Rice Meal Package",
+    "Sate Usus / Intestine Skewers",
+    "Sate Ati-Ampla / Liver-Gizzard Skewers",
+    "Sate Kulit / Skin Skewers",
+    "Pencok Kacang / Peanut Pencok Relish",
+    "Pencok Kacang+Ketimun / Peanut and Cucumber Pencok Relish",
+    "Ayam Goreng Cabe Kering / Fried Chicken with Dried Chili",
+    "Pencok Ceker / Chicken Feet Pencok Relish",
+    "Pencok Tahu/Tempe / Tofu and Tempeh Pencok Relish",
+    "Ayam Geprek Selera Pedas / Spicy Smashed Fried Chicken",
+    "Pencok Kepala / Head Pencok Relish",
+    "Pencok Kulit / Skin Pencok Relish",
+    "Pencok Ampla/Usus/Ati / Gizzard/Intestine/Liver Pencok Relish",
+    "Karedok Ala Pencok 89 / Karedok Salad Pencok 89 Style",
+    "Pencok Ayam Goreng/Bakar / Fried/Grilled Chicken Pencok",
+    "Pencok Daging Empal / Beef Empal Pencok",
+    "Pencok Ikan Nila Goreng / Fried Nile Tilapia Pencok",
+    "Pencok Ikan Mujair Goreng / Fried Tilapia Pencok",
+    "Pencok Lele Goreng / Fried Catfish Pencok",
+    "Pencok Ikan Kembung / Mackerel Pencok",
+    "Pencok Bebek Goreng Presto / Pressure-Cooked Duck Pencok",
+    "Pencok Burung Puyuh / Quail Pencok",
+    "Jengkol Pencok / Bitter Bean Pencok",
+    "Jengkol Balado / Bitter Bean Balado",
+    "Jengkol Semur / Stewed Bitter Bean",
+    "Jengkol Goreng / Fried Bitter Bean",
+    "Sate Taichan Juara / Taichan Chicken Skewers",
+    "Tumis Kangkung/Cah Terasi / Stir-Fried Water Spinach with Shrimp Paste",
+    "Tumis Caisim / Stir-Fried Mustard Greens",
+    "Tumis Genjer Ala Pencok '89 / Stir-Fried Velvetleaf",
+    "Tumis Sawi Putih / Stir-Fried Napa Cabbage",
+    "Tumis Sawi Putih + Telor / Stir-Fried Napa Cabbage with Egg",
+    "Tumis Toge / Stir-Fried Bean Sprouts",
+    "Tumis Toge + Ikan Asin / Stir-Fried Bean Sprouts with Salted Fish",
+    "Tumis Oncom / Stir-Fried Oncom",
+    "Tumis Udang Balado / Stir-Fried Shrimp Balado",
+    "Tumis Udang + Pete Bumbu Balado / Stir-Fried Shrimp and Bitter Bean Balado",
+    "Tumis Cumi Balado / Stir-Fried Squid Balado",
+    "Tumis Cumi + Pete Bumbu Balado / Stir-Fried Squid and Bitter Bean Balado",
+    "Tumis Peda / Stir-Fried Peda Fish",
+    "Tumis Peda + Pete / Stir-Fried Peda Fish with Bitter Bean",
+    "Tumis Cue / Stir-Fried Tuna Cue",
+    "Tumis Cue + Pete / Stir-Fried Tuna Cue with Bitter Bean",
+    "Sop Ayam Kampung / Daging Sapi / Free-Range Chicken or Beef Soup",
+    "Soto Betawi Daging Sapi / Ayam Kampung / Betawi Beef or Chicken Soto",
+    "Sayur Sop Ceker / Chicken Feet Vegetable Soup",
+    "Sayur Asem / Tamarind Clear Vegetable Soup",
+    "Rujak Kangkung/Plecing Kangkung / Water Spinach Rujak or Plecing",
+    "Kangkung Rebus / Boiled Water Spinach",
+    "Lalapan Rebus / Boiled Fresh Vegetables",
+    "Terong Balado / Eggplant Balado",
+    "Kol Goreng / Fried Cabbage",
+    "Tahu Acak / Crushed Tofu",
+    "Pepes Tahu / Steamed Tofu in Banana Leaf",
+    "Pepes Peda Mix Pete / Steamed Peda Fish with Bitter Bean",
+    "Pete Goreng/Bakar/Mentah / Fried, Grilled, or Raw Bitter Bean",
+    "Telur Dadar / Omelette",
+    "Cumi Asin Goreng / Fried Salted Squid",
+    "Ikan Asin Peda Cabe Pencok / Salted Peda Fish with Chili Pencok",
+    "Ikan Teri Jengki Sambal Pencok / Salted Anchovy with Chili Pencok",
+    "Ikan Asin Sepat / Salted Sepat Fish",
+    "Ikan Asin Jambal / Salted Jambal Fish",
+    "Ikan Asin Gabus / Salted Snakehead Fish",
+    "Nasi Putih / Plain White Rice",
+    "Nasi Uduk / Coconut Rice",
+    "Nasi Bakar Cakalang / Skipjack Tuna Grilled Rice in Banana Leaf",
+    "Nasi Bakar Ayam + Teri Medan / Grilled Chicken Rice with Medan Anchovies",
+    "Nasi Bakar Ayam Cumi Cabe Ijo / Grilled Chicken Rice with Squid and Green Chili",
+    "Nasi Goreng Ayam / Chicken Fried Rice",
+    "Nasi Goreng Ikan Asin / Salted Fish Fried Rice",
+    "Nasi Goreng Pete / Bitter Bean Fried Rice",
+    "Nasi Goreng Ati/Ampla / Liver and Gizzard Fried Rice",
+    "Nasi Goreng Ala Pencok 89 / Pencok 89 Special Fried Rice",
+    "Seblak Complete / Complete Seblak Spicy Crackers",
+    "Seblak Ceker / Chicken Feet Seblak",
+    "Seblak Sea Food / Seafood Seblak",
+    "Seblak Ciret Viral / Viral Viral Seblak",
+    "Bubur Ayam / Chicken Porridge",
+    "Mie Ayam Original / Original Chicken Noodles",
+    "Mie Ayam/Ceker/Bakso/Pangsits / Chicken, Feet, Meatball, Wonton Noodles",
+    "Bubur Sum Sum/Ketan Hitam/Kacang / Rice Flour Porridge with Black Sticky Rice and Mung Beans",
+    "Bubur/Singkong Thai/Kolang Kaling / Thai Porridge and Palm Fruit Sweet"
+  ],
+  "comparisonTitle": "Sambal Bakar Pencok 89 Menu Evaluation",
+  "comparisonType": "menu_items",
+  "summary": "This evaluation analyzes the Sambal Bakar Pencok 89 menu against an active metabolic profile presenting with high sodium (3000mg), surplus calories (2500kcal), excess saturated fats (27.7g), and added sugars (45g), alongside dietary fiber and protein deficits. The menu leans heavily on deep-fried proteins, coconut rice, and ultra-processed spicy items. Safer choices focus on clear tamarind broths, boiled greens, and lean grilled fish, while deep-fried sets, salted fish, and seblak represent severe metabolic and cardiovascular risks.",
+  "recommendedOption": "Sayur Asem / Tamarind Clear Vegetable Soup",
+  "groups": [
+    {
+      "groupName": "Tier 1 - Safest Choice: Clear Vegetable Soups & Broths",
+      "sourceImageIndex": 1,
+      "verdict": {
+        "label": "Good",
+        "level": "good"
+      },
+      "comparisonSentence": "Unlike fried packages, these clear, water-based soups provide low-calorie hydration and potassium without exacerbating sodium retention or fat surpluses.",
+      "message": "These clear, water-poached broths deliver essential dietary fiber, potassium, and micronutrients while maintaining minimal lipid content. They help mitigate your sodium and calorie surpluses without contributing to saturated fat loads. Order a serving of Sayur Asem as your primary starter to improve hydration and satiety before heavier items.",
+      "boundingBox2D": [
+        433,
+        119,
+        452,
+        392
+      ],
+      "servingWeightGrams": 250,
+      "averageNutrientsPer100g": {
+        "calories": 28,
+        "protein": 1.2,
+        "totalFat": 0.5,
+        "saturatedFat": 0.1,
+        "carbohydrates": 5.2,
+        "sugar": 2.1,
+        "totalFibre": 2.4,
+        "sodium": 310,
+        "addedSugar": 1,
+        "transFat": 0
+      },
+      "items": [
+        "Sayur Asem"
+      ]
+    },
+    {
+      "groupName": "Tier 2 - Low-Risk: Boiled Vegetables & Fresh Lalapan",
+      "sourceImageIndex": 1,
+      "verdict": {
+        "label": "Good",
+        "level": "good"
+      },
+      "comparisonSentence": "These raw and boiled greens directly target your fiber deficit with zero added oils, outperforming stir-fried vegetable options loaded with hidden fats.",
+      "message": "Boiled vegetables and fresh plant matter directly address your daily fiber deficit (22.3g) without adding saturated fats or excess calories. Rich in potassium, they assist in countering your 3000mg sodium load by promoting electrolyte balance. Prioritize Kangkung Rebus or Lalapan Rebus alongside your meal for optimal micronutrient density.",
+      "boundingBox2D": [
+        453,
+        119,
+        491,
+        383
+      ],
+      "servingWeightGrams": 150,
+      "averageNutrientsPer100g": {
+        "calories": 22,
+        "protein": 2.1,
+        "totalFat": 0.3,
+        "saturatedFat": 0,
+        "carbohydrates": 3.8,
+        "sugar": 1.1,
+        "totalFibre": 3.5,
+        "sodium": 45,
+        "addedSugar": 0,
+        "transFat": 0
+      },
+      "items": [
+        "Rujak Kangkung/Plecing Kangkung",
+        "Kangkung Rebus",
+        "Lalapan Rebus"
+      ]
+    },
+    {
+      "groupName": "Tier 3 - Low-Risk: Steamed Whole Plant Proteins & Soups",
+      "sourceImageIndex": 1,
+      "verdict": {
+        "label": "Neutral",
+        "level": "neutral"
+      },
+      "comparisonSentence": "Offering plant-based protein with moderate calories, these steamed options avoid the deep-frying oxidative stress seen in meat packages.",
+      "message": "Steamed plant proteins like tofu provide valuable amino acids without driving up your saturated fat or calorie surpluses. While containing moderate sodium, they present a safer protein alternative than deep-fried poultry or salted cured fish. Incorporate Pepes Tahu to meet your protein requirements safely.",
+      "boundingBox2D": [
+        392,
+        119,
+        433,
+        383
+      ],
+      "servingWeightGrams": 150,
+      "averageNutrientsPer100g": {
+        "calories": 85,
+        "protein": 8,
+        "totalFat": 4.5,
+        "saturatedFat": 0.8,
+        "carbohydrates": 4.2,
+        "sugar": 0.8,
+        "totalFibre": 1.5,
+        "sodium": 350,
+        "addedSugar": 0,
+        "transFat": 0
+      },
+      "items": [
+        "Sop Ayam Kampung / Daging Sapi",
+        "Soto Betawi Daging Sapi / Ayam Kampung",
+        "Sayur Sop Ceker",
+        "Tahu Acak",
+        "Pepes Tahu"
+      ]
+    },
+    {
+      "groupName": "Tier 4 - Moderate Caution: Stir-Fried Non-Starchy Greens with Oil",
+      "sourceImageIndex": 1,
+      "verdict": {
+        "label": "Neutral",
+        "level": "neutral"
+      },
+      "comparisonSentence": "These stir-fried greens supply valuable fiber and potassium, though added cooking oils increase their caloric density compared to boiled alternatives.",
+      "message": "While stir-fried vegetables supply vital fiber and minerals, cooking oils contribute unnecessary fats that compound your calorie surplus. Sodium levels are also elevated due to soy and shrimp paste seasonings. Balance your intake by pairing a small portion with plain steamed rice and plenty of fresh water.",
+      "boundingBox2D": [
+        253,
+        129,
+        363,
+        392
+      ],
+      "servingWeightGrams": 150,
+      "averageNutrientsPer100g": {
+        "calories": 95,
+        "protein": 3,
+        "totalFat": 7.2,
+        "saturatedFat": 1.2,
+        "carbohydrates": 5.5,
+        "sugar": 1.5,
+        "totalFibre": 2.8,
+        "sodium": 520,
+        "addedSugar": 0,
+        "transFat": 0
+      },
+      "items": [
+        "Tumis Kangkung/Cah Terasi",
+        "Tumis Caisim",
+        "Tumis Genjer Ala Pencok '89",
+        "Tumis Sawi Putih",
+        "Tumis Sawi Putih + Telor",
+        "Tumis Toge",
+        "Tumis Toge + Ikan Asin",
+        "Tumis Oncom"
+      ]
+    },
+    {
+      "groupName": "Tier 5 - Moderate Caution: Plain Carbohydrate Staples",
+      "sourceImageIndex": 1,
+      "verdict": {
+        "label": "Neutral",
+        "level": "neutral"
+      },
+      "comparisonSentence": "Plain white rice provides basic glycemic energy without the hidden saturated fats or high sodium found in processed noodle and coconut dishes.",
+      "message": "Plain white rice delivers necessary carbohydrates without adding unwanted fats or excessive sodium. However, given your current carbohydrate surplus (263.3g), portion control is essential. Limit your intake to a modest half-portion to prevent compounding your daily caloric excess.",
+      "boundingBox2D": [
+        602,
+        103,
+        617,
+        450
+      ],
+      "servingWeightGrams": 150,
+      "averageNutrientsPer100g": {
+        "calories": 130,
+        "protein": 2.7,
+        "totalFat": 0.3,
+        "saturatedFat": 0.1,
+        "carbohydrates": 28,
+        "sugar": 0.1,
+        "totalFibre": 0.4,
+        "sodium": 5,
+        "addedSugar": 0,
+        "transFat": 0
+      },
+      "items": [
+        "Nasi Putih"
+      ]
+    },
+    {
+      "groupName": "Tier 6 - Moderate Caution: Spicy Sambal, Balado Relishes & Bitter Beans",
+      "sourceImageIndex": 0,
+      "verdict": {
+        "label": "Neutral",
+        "level": "neutral"
+      },
+      "comparisonSentence": "These flavorful chili relishes and bitter beans add thermogenic spices and antioxidants, but oil and sodium additions require moderate consumption.",
+      "message": "Sambal and balado condiments introduce robust flavors, antioxidants, and capsaicin, yet they are typically prepared with added cooking oils and sodium. They fit moderately into a diet if portion sizes are strictly controlled. Use sparingly as a condiment rather than a main dish component.",
+      "boundingBox2D": [
+        131,
+        103,
+        210,
+        330
+      ],
+      "servingWeightGrams": 50,
+      "averageNutrientsPer100g": {
+        "calories": 185,
+        "protein": 3.5,
+        "totalFat": 14,
+        "saturatedFat": 2.1,
+        "carbohydrates": 12,
+        "sugar": 4.5,
+        "totalFibre": 3.2,
+        "sodium": 650,
+        "addedSugar": 2,
+        "transFat": 0
+      },
+      "items": [
+        "Kerupuk Mie + Bumbu Kacang",
+        "Asinan Buah Bogor",
+        "Asinan Sayur Rujak Pengantin",
+        "Pencok Kacang",
+        "Pencok Kacang+Ketimun",
+        "Pencok Ceker",
+        "Pencok Tahu/Tempe",
+        "Pencok Kepala",
+        "Pencok Kulit",
+        "Pencok Ampla/Usus/Ati",
+        "Karedok Ala Pencok 89",
+        "Jengkol Pencok",
+        "Jengkol Balado",
+        "Jengkol Semur",
+        "Jengkol Goreng",
+        "Terong Balado",
+        "Kol Goreng",
+        "Pete Goreng/Bakar/Mentah"
+      ]
+    },
+    {
+      "groupName": "Tier 7 - Elevated Risk: Coconut Rice, Fried Carbs & Savory Stir-Fried Seafood/Meats",
+      "sourceImageIndex": 0,
+      "verdict": {
+        "label": "Warning",
+        "level": "warning"
+      },
+      "comparisonSentence": "These coconut-infused and stir-fried protein dishes significantly elevate saturated fat and sodium levels, worsening existing metabolic surpluses.",
+      "message": "Coconut milk (santan) and stir-frying oils drastically increase saturated fat content, directly aggravating your 27.7g saturated fat surplus. Combined with high sodium from seafood and soy seasonings, these dishes threaten cardiovascular stability. If consumed, share a single portion and avoid adding extra oily side dishes.",
+      "boundingBox2D": [
+        617,
+        103,
+        771,
+        450
+      ],
+      "servingWeightGrams": 200,
+      "averageNutrientsPer100g": {
+        "calories": 210,
+        "protein": 9.5,
+        "totalFat": 12.5,
+        "saturatedFat": 6.8,
+        "carbohydrates": 16,
+        "sugar": 1.2,
+        "totalFibre": 1.2,
+        "sodium": 720,
+        "addedSugar": 1,
+        "transFat": 0
+      },
+      "items": [
+        "Nasi Uduk",
+        "Nasi Bakar Cakalang",
+        "Nasi Bakar Ayam + Teri Medan",
+        "Nasi Bakar Ayam Cumi Cabe Ijo",
+        "Nasi Goreng Ayam",
+        "Nasi Goreng Ikan Asin",
+        "Nasi Goreng Pete",
+        "Nasi Goreng Ati/Ampla",
+        "Nasi Goreng Ala Pencok 89",
+        "Tumis Udang Balado",
+        "Tumis Udang + Pete Bumbu Balado",
+        "Tumis Cumi Balado",
+        "Tumis Cumi + Pete Bumbu Balado",
+        "Tumis Peda",
+        "Tumis Peda + Pete",
+        "Tumis Cue",
+        "Tumis Cue + Pete",
+        "Pepes Peda Mix Pete",
+        "Telur Dadar"
+      ]
+    },
+    {
+      "groupName": "Tier 8 - Elevated Risk: Organ Meats & Fried Offal Skewers",
+      "sourceImageIndex": 0,
+      "verdict": {
+        "label": "Warning",
+        "level": "warning"
+      },
+      "comparisonSentence": "Organ meats and fried offal skewer options pack high dietary cholesterol and saturated fats, undermining your lipid and caloric targets.",
+      "message": "Offal and fried skewers concentrate high amounts of saturated fats and dietary cholesterol, further straining your metabolic profile. They offer little redeeming fiber while contributing heavily to your calorie excess. Skip these organ meats entirely in favor of lean, un-fried whole fish options.",
+      "boundingBox2D": [
+        170,
+        535,
+        215,
+        880
+      ],
+      "servingWeightGrams": 100,
+      "averageNutrientsPer100g": {
+        "calories": 260,
+        "protein": 18,
+        "totalFat": 19.5,
+        "saturatedFat": 7.2,
+        "carbohydrates": 2,
+        "sugar": 0.5,
+        "totalFibre": 0.2,
+        "sodium": 680,
+        "addedSugar": 0,
+        "transFat": 0
+      },
+      "items": [
+        "Sate Usus",
+        "Sate Ati-Ampla",
+        "Sate Kulit"
+      ]
+    },
+    {
+      "groupName": "Tier 9 - High Risk: Deep-Fried Poultry / Meat Packages & Skewers",
+      "sourceImageIndex": 0,
+      "verdict": {
+        "label": "Warning",
+        "level": "warning"
+      },
+      "comparisonSentence": "These deep-fried meal packages combine high caloric loads with oxidized fats and heavy sodium, severely conflicting with your metabolic recovery goals.",
+      "message": "Deep-frying processes subject cooking oils to extreme heat, generating trans-fats and lipid peroxides that increase systemic inflammation. These meal sets combine fried meats with coconut rice and salted components, pushing your sodium beyond 3000mg and exacerbating caloric surpluses. Avoid these complete sets.",
+      "boundingBox2D": [
+        238,
+        138,
+        573,
+        915
+      ],
+      "servingWeightGrams": 350,
+      "averageNutrientsPer100g": {
+        "calories": 290,
+        "protein": 16.5,
+        "totalFat": 18,
+        "saturatedFat": 5.5,
+        "carbohydrates": 18.5,
+        "sugar": 1,
+        "totalFibre": 1.8,
+        "sodium": 850,
+        "addedSugar": 1.5,
+        "transFat": 0.1
+      },
+      "items": [
+        "Paket Burung Puyuh (Nasi + Burung Puyuh + Sayur Asem + Tempe + Tahu)",
+        "Paket Uduk Burung Puyuh (Nasi Uduk + Burung Puyuh + Sayur Asem + Tempe + Tahu)",
+        "Paket Ayam (Nasi + Ayam Goreng/Bakar + Sayur Asem + Tahu + Tempe)",
+        "Paket Uduk Ayam (Nasi Uduk + Ayam Goreng/Bakar + Sayur Asem Tahu + Tempe)",
+        "Paket Empal (Nasi + Daging Empal + Sayur Asem + Tahu + Tempe)",
+        "Paket Uduk Empal (Nasi Uduk + Daging Empal + Sayur Asem + Tahu)",
+        "Paket Bebek (Nasi + Bebek Goreng + Sayur Asem + Tahu + Tempe)",
+        "Paket Uduk Bebek (Nasi Uduk + Bebek Goreng + Sayur Asem + Tahu + Tempe)",
+        "Paket Lele (Nasi + Lele Goreng 2 Pcs + Sayur Asem + Tahu + Tempe)",
+        "Paket Uduk Lele (Nasi Uduk + Lele Goreng 2 Pcs + Sayur Asem + Tahu + Tempe)",
+        "Paket Kembung (Nasi + Ikan Kembung + Sayur Asem + Tahu + Tempe)",
+        "Paket Uduk Kembung (Nasi Uduk + Ikan Kembung + Sayur Asem + Tahu + Tempe)",
+        "Paket Mujair (Nasi + Ikan Mujair Goreng + Sayur Asem + Tahu + Tempe)",
+        "Paket Uduk Mujair (Nasi Uduk + Ikan Mujair Goreng + Sayur Asem + Tahu + Tempe)",
+        "Paket Nila (Nasi + Ikan Nila Goreng + Sayur Asem + Tahu + Tempe)",
+        "Paket Uduk Nila (Nasi Uduk + Ikan Nila Goreng + Sayur Asem + Tahu + Tempe)",
+        "Ayam Goreng Cabe Kering",
+        "Ayam Geprek Selera Pedas",
+        "Pencok Ayam Goreng/Bakar",
+        "Pencok Daging Empal",
+        "Pencok Ikan Nila Goreng",
+        "Pencok Ikan Mujair Goreng",
+        "Pencok Lele Goreng",
+        "Pencok Ikan Kembung",
+        "Pencok Bebek Goreng Presto",
+        "Pencok Burung Puyuh",
+        "Sate Taichan Juara"
+      ]
+    },
+    {
+      "groupName": "Tier 10 - Severe Alert: Highly Salted Cured Proteins",
+      "sourceImageIndex": 1,
+      "verdict": {
+        "label": "Alert",
+        "level": "alert"
+      },
+      "comparisonSentence": "These heavily salted and cured fish options present an extreme sodium hazard that directly threatens hypertensive control and fluid balance.",
+      "message": "Cured and salted fish items contain extremely concentrated sodium levels that will immediately jeopardize your blood pressure and worsen your 3000mg sodium surplus. Even in small portions, they trigger acute fluid retention. Strictly avoid all salted fish dishes on this menu.",
+      "boundingBox2D": [
+        521,
+        103,
+        570,
+        875
+      ],
+      "servingWeightGrams": 80,
+      "averageNutrientsPer100g": {
+        "calories": 210,
+        "protein": 24,
+        "totalFat": 10.5,
+        "saturatedFat": 2.5,
+        "carbohydrates": 1,
+        "sugar": 0,
+        "totalFibre": 0,
+        "sodium": 2400,
+        "addedSugar": 0,
+        "transFat": 0
+      },
+      "items": [
+        "Cumi Asin Goreng",
+        "Ikan Asin Peda Cabe Pencok",
+        "Ikan Teri Jengki Sambal Pencok",
+        "Ikan Asin Sepat",
+        "Ikan Asin Jambal",
+        "Ikan Asin Gabus"
+      ]
+    },
+    {
+      "groupName": "Tier 11 - Severe Alert: Ultra-Processed Spicy Starches & Noodles",
+      "sourceImageIndex": 1,
+      "verdict": {
+        "label": "Alert",
+        "level": "alert"
+      },
+      "comparisonSentence": "Processed instant starches and spicy seblak dishes deliver empty calories, heavy sodium, and refined carbs, posing severe metabolic risks.",
+      "message": "Seblak and processed noodle dishes consist of refined starches, palm oil, and high-sodium flavor packets that trigger rapid glycemic spikes and worsen your carbohydrate surplus. They offer zero meaningful fiber while driving systemic inflammation. Exclude these items entirely from your meal selection.",
+      "boundingBox2D": [
+        786,
+        78,
+        871,
+        310
+      ],
+      "servingWeightGrams": 250,
+      "averageNutrientsPer100g": {
+        "calories": 240,
+        "protein": 5,
+        "totalFat": 11,
+        "saturatedFat": 4.5,
+        "carbohydrates": 31,
+        "sugar": 2.5,
+        "totalFibre": 0.8,
+        "sodium": 1100,
+        "addedSugar": 1,
+        "transFat": 0.2
+      },
+      "items": [
+        "Seblak Complete",
+        "Seblak Ceker",
+        "Seblak Sea Food",
+        "Seblak Ciret Viral",
+        "Mie Ayam Original",
+        "Mie Ayam/Ceker/Bakso/Pangsits"
+      ]
+    },
+    {
+      "groupName": "Tier 12 - Severe Alert: Sweet Confectionery & Porridges",
+      "sourceImageIndex": 1,
+      "verdict": {
+        "label": "Alert",
+        "level": "alert"
+      },
+      "comparisonSentence": "These sugar-laden desserts and porridges directly sabotage your 45g added sugar surplus and aggravate insulin resistance.",
+      "message": "Traditional sweet porridges and desserts are packed with refined sugars and coconut milk, directly violating your 45g added sugar surplus and worsening metabolic strain. They provide rapid empty calories with no nutritional compensation. Reject all dessert and sweet porridge options.",
+      "boundingBox2D": [
+        815,
+        495,
+        910,
+        785
+      ],
+      "servingWeightGrams": 200,
+      "averageNutrientsPer100g": {
+        "calories": 195,
+        "protein": 3.2,
+        "totalFat": 5,
+        "saturatedFat": 3.8,
+        "carbohydrates": 35,
+        "sugar": 18.5,
+        "totalFibre": 1,
+        "sodium": 150,
+        "addedSugar": 16,
+        "transFat": 0
+      },
+      "items": [
+        "Bubur Ayam",
+        "Bubur Sum Sum/Ketan Hitam/Kacang",
+        "Bubur/Singkong Thai/Kolang Kaling"
+      ]
+    }
+  ]
+}

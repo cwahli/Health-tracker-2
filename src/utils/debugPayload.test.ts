@@ -594,5 +594,177 @@ describe('debugPayload', () => {
     });
     expect(tree.dispatches).toEqual([]);
   });
+
+  it('renders all sections and derivations matching Golden Meal specifications for meal logs', () => {
+    const md = buildDebugMarkdownReport({
+      jobId: 'job_golden_parity_meal01',
+      status: 'awaiting_user',
+      pack: 'food',
+      mode: 'new_log',
+      patientContext: '=== NUTRITIONAL TARGET STATUS ===\n3 days avg: Sat fat (27.7g - 38% over), Calorie (2500kcal - 39% over), Sodium (3000mg - 30% over), Protein (100g - 17% under), Carbohydrates (263.3g - 32% over), Total Fibre (22.3g - 26% under), Potassium (2100mg), Soluble Fibre (3.5g), Added Sugar (45g - 50% over), Trans Fat (0.1g)',
+      pendingFoodLog: {
+        name: 'Sop Daging Sapi + Oatmeal',
+        weightGrams: 1785,
+        nutrients: {
+          calories: 4240.6,
+          protein: 125,
+          carbohydrates: 637.4,
+          totalFat: 116,
+          saturatedFat: 20.2,
+          transFat: 0.1,
+          addedSugar: 39,
+          sodium: 925,
+          totalFibre: 76,
+          omega3: 2.5,
+          solubleFibre: 24.5,
+          iodine: 8,
+          thiamine: 4.83,
+        },
+        dishes: [
+          {
+            dishName: 'Sop Daging Sapi',
+            estimatedWeightGrams: 450,
+            cookingMethod: 'boiled',
+            sourceImageIndex: 1,
+            boundingBox2D: [80, 120, 920, 880],
+            nutrients: { calories: 194, protein: 24, carbohydrates: 10, totalFat: 5.5, sodium: 480 },
+            foods: [
+              {
+                foodName: 'Daging Sapi',
+                weightGrams: 80,
+                nutrients: { protein: 20.6, saturatedFat: 2, totalFat: 4.8, sodium: 60, carbohydrates: 0 },
+              },
+              {
+                foodName: 'Wortel',
+                weightGrams: 50,
+                nutrients: { protein: 0.5, saturatedFat: 0, totalFat: 0.2, sodium: 35, carbohydrates: 4.8 },
+              },
+            ],
+          },
+          {
+            dishName: 'Oatmeal',
+            estimatedWeightGrams: 35,
+            packGrams: 805,
+            packageLabelText: 'Takaran Saji 35 g, 23 sajian per Kemasan',
+            sourceImageIndex: 0,
+            nutrients: { calories: 3450, protein: 92, carbohydrates: 500, totalFat: 90, sodium: 0 },
+            foods: [
+              {
+                foodName: 'Oatmeal',
+                weightGrams: 35,
+                packGrams: 805,
+                packageLabelText: 'Takaran Saji 35 g, 23 sajian per Kemasan',
+                nutrients: { protein: 4, saturatedFat: 0.5, totalFat: 4, sodium: 0, carbohydrates: 23 },
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    // 1. Header ledger line
+    expect(md).toContain('- **Shown ledger:** 4240.6 kcal · 1785 g · 2 dishes');
+
+    // 2. Personalized clinical usage table
+    expect(md).toContain('## 🎯 User Nutritional Allowance & Personalized Clinical Usage');
+    expect(md).toContain('| Profile Allowance Key | 3-Day Average | Baseline Budget | Status & Surplus/Deficit | Active Usage & Clinical Guidance |');
+    expect(md).toContain('| **Calorie** | 2500kcal | 1,800 kcal | **+39% over** |');
+    expect(md).toContain('| **Sat fat** | 27.7g | 20.0 g | **+38% over** |');
+
+    // 3. Vision Scout with constituent ingredients
+    expect(md).toContain('## 🔍 Vision Scout Results (2 item(s) detected)');
+    expect(md).toContain('Daging Sapi (80g); Wortel (50g)');
+    expect(md).toContain('### 🥗 Itemized Constituent Ingredients & Stickers (3)');
+    expect(md).toContain('| Sop Daging Sapi | Daging Sapi | 80g | #1 | — | P: 20.6g, C: 0g, F: 4.8g, Na: 60mg |');
+
+    // 4. Component items breakdown & constituent receipts
+    expect(md).toContain('### Component Items Breakdown & Constituent Receipts');
+    expect(md).toContain('| **Sop Daging Sapi** | **450g** | **194** | **24g** | **10g** | **5.5g** | **480mg** |');
+    expect(md).toContain('| └─ Daging Sapi | 80g |');
+    expect(md).toContain('| **🏆 SHOWN MEAL TOTAL** | **1785g** | **4240.6** | **125g** | **637.4g** | **116g** | **925mg** | ledger total |');
+
+    // 5. Mathematical & thermodynamic validations
+    expect(md).toContain('### 🔬 Mathematical & Thermodynamic Validation');
+    expect(md).toContain('- **Caloric Density:** 2.38 kcal/g');
+    expect(md).toContain('- **Unsaturated fat:** 95.7 g · **Salt:** 2.35 g');
+
+    // 6. Comprehensive nutrient values
+    expect(md).toContain('### 📋 Comprehensive Nutrient Values');
+    expect(md).toContain('| Omega-3 | 2.5 g |');
+    expect(md).toContain('| Soluble Fibre | 24.5 g |');
+    expect(md).toContain('| Iodine | 8 mcg |');
+    expect(md).toContain('| Thiamine (B1) | 4.83 mg |');
+  });
+
+  it('renders Mode D comparison sections matching Golden Meal 03 specifications', () => {
+    const md = buildDebugMarkdownReport({
+      jobId: 'job_golden_parity_meal03_compare',
+      status: 'succeeded',
+      pack: 'food',
+      mode: 'compare',
+      comparisonData: {
+        summary: 'Comparing 2 bakery options. Whole wheat provides superior fiber.',
+        recommendedOption: 'Whole Wheat Loaf',
+        items: [
+          {
+            name: 'Whole Wheat Loaf',
+            brand: 'SayBread',
+            tier: 1,
+            sourceImageIndex: 0,
+            servingSize: '1 slice (40g)',
+            hasNutritionLabel: true,
+            perServing: { calories: 100, protein: 4, totalFat: 1.5, carbohydrates: 18, sugar: 2, sodium: 150 },
+          },
+          {
+            name: 'Chocolate Croissant',
+            brand: 'SayBread',
+            tier: 4,
+            sourceImageIndex: 0,
+            servingSize: '1 piece (80g)',
+            hasNutritionLabel: true,
+            perServing: { calories: 340, protein: 5, totalFat: 19, carbohydrates: 38, sugar: 15, sodium: 320 },
+          },
+        ],
+        groups: [
+          {
+            groupName: 'Lean Whole Grains vs Sweet Pastries',
+            verdict: { label: 'Prefer High Fiber Grain', level: 'good' },
+            comparisonSentence: 'Whole wheat loaf delivers 4x the dietary fiber with 1/10th the saturated fat.',
+            message: 'Whole wheat loaf fits your active calorie target.',
+            orderingTip: 'Request untoasted or without added margarine spread.',
+            boundingBox2D: [100, 150, 800, 850],
+            scoutItemIndices: [0, 1],
+            averageNutrients: { calories: 220, protein: 4.5, saturatedFat: 5, addedSugar: 8.5, sodium: 235 },
+            averageNutrientsPer100g: { calories: 275, protein: 5.6, saturatedFat: 6.25, addedSugar: 10.6, sodium: 293 },
+          },
+        ],
+      },
+    });
+
+    // 1. Header line for comparison
+    expect(md).toContain('- **Shown comparison:** 2 extracted items across 1 macro clusters (<=10% variance)');
+
+    // 2. Evaluated items table
+    expect(md).toContain('## 🔍 Evaluated Items & Product OCR Extraction (2 item(s) detected)');
+    expect(md).toContain('| [1] | Whole Wheat Loaf | SayBread | Tier 1 | #0 | 1 slice (40g) | ✅ OCR Locked | 100 | 4g | 1.5g | 18g | 2g | 150mg |');
+    expect(md).toContain('| [2] | Chocolate Croissant | SayBread | Tier 4 | #0 | 1 piece (80g) | ✅ OCR Locked | 340 | 5g | 19g | 38g | 15g | 320mg |');
+
+    // 3. Comparison groups breakdown
+    expect(md).toContain('## 📊 Comparison Groups & Nutritional Allowance Breakdown (1 groups formed)');
+    expect(md).toContain('### Group 1: Lean Whole Grains vs Sweet Pastries');
+    expect(md).toContain('- **Clinical Verdict:** `Prefer High Fiber Grain` (good)');
+    expect(md).toContain('- **Comparison:** Whole wheat loaf delivers 4x the dietary fiber with 1/10th the saturated fat.');
+    expect(md).toContain('- **Clinical Advice:** Whole wheat loaf fits your active calorie target.');
+    expect(md).toContain('- **Ordering Tip:** Request untoasted or without added margarine spread.');
+    expect(md).toContain('- **Quadrant Bounding Box:** `[100, 150, 800, 850]`');
+
+    // 4. Mathematical validation
+    expect(md).toContain('## 🔬 Mathematical & Thermodynamic Validation');
+    expect(md).toContain('1. **Macro Variance Clustering Strictness (<=10% Rule):**');
+    expect(md).toContain('3. **Derived Invariants (Pure TypeScript):**');
+
+    // 5. Recommendation narrative
+    expect(md).toContain('**Top Recommended Option:** `Whole Wheat Loaf`');
+  });
 });
 

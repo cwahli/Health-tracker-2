@@ -1,0 +1,184 @@
+{
+  "allExtractedDishes": [
+    "Happy Tos Tortilla Chips Corn Chips (Yellow) / Happy Tos Tortilla Chips Corn Chips",
+    "Happy Tos Tortilla Chips Corn Chips (Pink/Red) / Happy Tos Tortilla Chips Corn Chips",
+    "Happy Tos Tortilla Chips (Green Foil) / Happy Tos Tortilla Chips",
+    "Oishi Popcorn Caramel / Oishi Caramel Popcorn",
+    "Chitato Lite Potato Chips / Chitato Lite Potato Chips",
+    "Lays Potato Chips Nori Seaweed / Lays Seaweed Flavor Potato Chips",
+    "Japota Potato Chips / Japota Potato Chips",
+    "Jetz Tortilla Snack / Jetz Corn Snack",
+    "Happy Tos Tortilla Chips (Red/Green) / Happy Tos Tortilla Chips",
+    "Happy Tos Tortilla Chips (Blue) / Happy Tos Tortilla Chips",
+    "Happy Tos Tortilla Chips (Yellow/Red) / Happy Tos Tortilla Chips",
+    "Qtela Singkong Original / Qtela Cassava Chips Original",
+    "Lays Wavy Potato Chips / Lays Wavy Potato Chips",
+    "Qtela Snack Tempe / Qtela Tempe Chips",
+    "Doritos Roasted Corn / Doritos Roasted Corn Tortilla Chips",
+    "Doritos Nacho Cheese / Doritos Nacho Cheese Tortilla Chips",
+    "Oishi Pachos Tortilla Chips / Oishi Pachos Tortilla Chips",
+    "Oishi Pachos Tortilla Chips (Red) / Oishi Pachos Tortilla Chips",
+    "Qtela Family Pack Barbeque / Qtela Cassava Chips BBQ Family Pack",
+    "Qtela Family Pack Balado / Qtela Cassava Chips Balado Family Pack",
+    "Qtela Cassava Chips Rumput Laut / Qtela Cassava Chips Seaweed",
+    "Chuba Cassava Chips / Chuba Cassava Chips",
+    "Chuba Cassava Chips (Small) / Chuba Cassava Chips",
+    "Chubi Cassava Chips / Chubi Cassava Chips",
+    "Kuby Cassava Chips / Kuby Cassava Chips",
+    "Cimil Cassava Chips / Cimil Cassava Chips",
+    "GunBee Layers / GunBee Snack",
+    "Chiki Twist / Chiki Twist Snack",
+    "Tostos Tortilla Chips / Tostos Tortilla Chips",
+    "Tostos Tortilla Chips (Small) / Tostos Tortilla Chips",
+    "Chimi Cassava Chips / Chimi Cassava Chips",
+    "Chimi Cassava Chips (Small) / Chimi Cassava Chips",
+    "Chimi Balado Cassava Chips / Chimi Balado Cassava Chips",
+    "Crunchy Corn Tornado / Crunchy Corn Snack",
+    "O Oppa Wonhae Snack / Oppa Wonhae Korean Snack",
+    "Oppa Wonhae Snack (Green) / Oppa Wonhae Korean Snack",
+    "Taro Net Seaweed / Taro Net Potato & Cassava Snack",
+    "Taro Net BBQ / Taro Net BBQ Snack",
+    "Taro Net Potato / Taro Net Potato Snack",
+    "Chiki Twist Cheese / Chiki Twist Cheese Snack"
+  ],
+  "_internalReasoning": "The user presents a convenience store shelf laden with ultra-processed snack foods (crisps, tortilla chips, extruded corn snacks). The patient's 3-day averages show high calorie (2500 kcal, +39%), saturated fat (27.7g, +38%), sodium (3000mg, +30%), carbohydrates (263.3g, +32%), and added sugar (45g, +50%), alongside fiber and protein deficits. All items on this shelf consist of processed refined starches, high saturated/trans fats, and massive sodium loads. They are clustered by macro-profile (extruded puffed corn snacks vs fried tortilla/cassava chips vs potato crisps). All are classified as warning/alert due to the patient's severe surplus profile.",
+  "comparisonTitle": "Convenience Store Snack Shelf Assessment",
+  "comparisonType": "shelf_selection",
+  "summary": "Every single option on this shelf represents ultra-processed, calorie-dense snack foods high in sodium, refined carbohydrates, and saturated fats. Given your existing surpluses in calories (+39%), sodium (+30%), saturated fat (+38%), and added sugars (+50%), consuming any of these snacks will exacerbate metabolic strain. If a snack must be selected, lighter baked or mildly seasoned options with lower total fat per serving are slightly less detrimental, though all should be strictly limited.",
+  "recommendedOption": "Chitato Lite Potato Chips / Chitato Lite Potato Chips",
+  "groups": [
+    {
+      "groupName": "Tier 3 - Warning: Lighter Potato & Cassava Crisps",
+      "sourceImageIndex": 0,
+      "verdict": {
+        "label": "High Sodium & Refined Carbs",
+        "level": "warning"
+      },
+      "comparisonSentence": "These thinner-cut potato and cassava crisps offer marginally lower fat densities compared to heavy tortilla chips, but still contribute excess sodium and refined carbohydrates.",
+      "message": "Your profile demonstrates significant surpluses in sodium (3000mg) and calories. While these lighter crisps contain slightly less saturated fat than heavy corn snacks, they remain high in sodium and lack dietary fiber. If you choose to indulge, restrict portion size to a single small bag and pair with water to mitigate sodium retention.",
+      "boundingBox2D": [
+        95,
+        500,
+        340,
+        990
+      ],
+      "servingWeightGrams": 60,
+      "averageNutrientsPer100g": {
+        "calories": 520,
+        "protein": 5.5,
+        "totalFat": 30,
+        "saturatedFat": 12,
+        "carbohydrates": 58,
+        "sugar": 2,
+        "totalFibre": 3,
+        "sodium": 650,
+        "addedSugar": 1,
+        "transFat": 0.1
+      },
+      "items": [
+        "Chitato Lite Potato Chips / Chitato Lite Potato Chips",
+        "Lays Potato Chips Nori Seaweed / Lays Seaweed Flavor Potato Chips",
+        "Japota Potato Chips / Japota Potato Chips",
+        "Lays Wavy Potato Chips / Lays Wavy Potato Chips",
+        "Qtela Singkong Original / Qtela Cassava Chips Original",
+        "Qtela Family Pack Barbeque / Qtela Cassava Chips BBQ Family Pack",
+        "Qtela Family Pack Balado / Qtela Cassava Chips Balado Family Pack",
+        "Qtela Cassava Chips Rumput Laut / Qtela Cassava Chips Seaweed",
+        "Chuba Cassava Chips / Chuba Cassava Chips",
+        "Chuba Cassava Chips (Small) / Chuba Cassava Chips",
+        "Chubi Cassava Chips / Chubi Cassava Chips",
+        "Kuby Cassava Chips / Kuby Cassava Chips",
+        "Cimil Cassava Chips / Cimil Cassava Chips",
+        "Chimi Cassava Chips / Chimi Cassava Chips",
+        "Chimi Cassava Chips (Small) / Chimi Cassava Chips",
+        "Chimi Balado Cassava Chips / Chimi Balado Cassava Chips"
+      ]
+    },
+    {
+      "groupName": "Tier 4 - Alert: Fried Tortilla & Corn Chips",
+      "sourceImageIndex": 0,
+      "verdict": {
+        "label": "Excess Saturated Fat & Calories",
+        "level": "alert"
+      },
+      "comparisonSentence": "These heavy tortilla and corn chips deliver the highest saturated fat and calorie loads among the options, directly worsening your active surpluses.",
+      "message": "These items are deep-fried in saturated oils and heavily salted, compounding your 38% surplus in saturated fat and 30% surplus in sodium. They offer negligible protein or fiber while accelerating caloric intake. Avoid these options entirely to protect cardiovascular health and support your dietary targets.",
+      "boundingBox2D": [
+        100,
+        0,
+        590,
+        600
+      ],
+      "servingWeightGrams": 75,
+      "averageNutrientsPer100g": {
+        "calories": 540,
+        "protein": 6,
+        "totalFat": 32,
+        "saturatedFat": 14,
+        "carbohydrates": 56,
+        "sugar": 3,
+        "totalFibre": 4,
+        "sodium": 720,
+        "addedSugar": 2,
+        "transFat": 0.2
+      },
+      "items": [
+        "Happy Tos Tortilla Chips Corn Chips (Yellow) / Happy Tos Tortilla Chips Corn Chips",
+        "Happy Tos Tortilla Chips Corn Chips (Pink/Red) / Happy Tos Tortilla Chips Corn Chips",
+        "Happy Tos Tortilla Chips (Green Foil) / Happy Tos Tortilla Chips",
+        "Oishi Popcorn Caramel / Oishi Caramel Popcorn",
+        "Jetz Tortilla Snack / Jetz Corn Snack",
+        "Happy Tos Tortilla Chips (Red/Green) / Happy Tos Tortilla Chips",
+        "Happy Tos Tortilla Chips (Blue) / Happy Tos Tortilla Chips",
+        "Happy Tos Tortilla Chips (Yellow/Red) / Happy Tos Tortilla Chips",
+        "Qtela Snack Tempe / Qtela Tempe Chips",
+        "Doritos Roasted Corn / Doritos Roasted Corn Tortilla Chips",
+        "Doritos Nacho Cheese / Doritos Nacho Cheese Tortilla Chips",
+        "Oishi Pachos Tortilla Chips / Oishi Pachos Tortilla Chips",
+        "Oishi Pachos Tortilla Chips (Red) / Oishi Pachos Tortilla Chips",
+        "Tostos Tortilla Chips / Tostos Tortilla Chips",
+        "Tostos Tortilla Chips (Small) / Tostos Tortilla Chips"
+      ]
+    },
+    {
+      "groupName": "Tier 4 - Alert: Extruded Puffed Snacks & Flavored Grids",
+      "sourceImageIndex": 0,
+      "verdict": {
+        "label": "High Sodium & Refined Starches",
+        "level": "alert"
+      },
+      "comparisonSentence": "These extruded puffed snacks feature ultra-processed refined starches and high sodium levels that fail to address your dietary fiber and protein deficits.",
+      "message": "Extruded snacks undergo severe thermal processing, resulting in rapidly digested starches that spike blood glucose while offering high sodium counts. This clashes directly with your metabolic profile. Skip this section and prioritize whole-food proteins and high-fiber vegetables instead.",
+      "boundingBox2D": [
+        600,
+        0,
+        1000,
+        1000
+      ],
+      "servingWeightGrams": 50,
+      "averageNutrientsPer100g": {
+        "calories": 500,
+        "protein": 4.5,
+        "totalFat": 26,
+        "saturatedFat": 10,
+        "carbohydrates": 62,
+        "sugar": 5,
+        "totalFibre": 1.5,
+        "sodium": 800,
+        "addedSugar": 4,
+        "transFat": 0.1
+      },
+      "items": [
+        "GunBee Layers / GunBee Snack",
+        "Chiki Twist / Chiki Twist Snack",
+        "Crunchy Corn Tornado / Crunchy Corn Snack",
+        "O Oppa Wonhae Snack / Oppa Wonhae Korean Snack",
+        "Oppa Wonhae Snack (Green) / Oppa Wonhae Korean Snack",
+        "Taro Net Seaweed / Taro Net Potato & Cassava Snack",
+        "Taro Net BBQ / Taro Net BBQ Snack",
+        "Taro Net Potato / Taro Net Potato Snack",
+        "Chiki Twist Cheese / Chiki Twist Cheese Snack"
+      ]
+    }
+  ]
+}

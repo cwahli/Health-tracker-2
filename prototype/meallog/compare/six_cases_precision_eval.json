@@ -3,193 +3,102 @@
     "setNum": 1,
     "id": "set1",
     "name": "Set 1: Bakery Shelf & SilverQueen Chocolate",
-    "itemCount": 6,
-    "groupCount": 3,
-    "translatedCount": 3,
-    "groupsWithNutrients": 3,
-    "groupsWith100g": 3,
-    "recommended": "SilverQueen Milk Chocolate with Cashews / SilverQueen Susu Cokelat dengan Kacang Mede",
-    "durationMs": 15629,
+    "itemCount": 9,
+    "groupCount": 2,
+    "translatedCount": 2,
+    "groupsWith100g": 2,
+    "recommended": "Say Bread - Double Cheese Bread / Double Cheese Bread",
+    "durationMs": 6016,
     "data": {
-      "_internalReasoning": "Evaluated SilverQueen chocolate and Say Bread bakery items considering user profile data with excess saturated fat, calories, sodium, and added sugar.",
-      "comparisonTitle": "Comparison of Retail Confectionery and Bakery Items",
-      "comparisonType": "shelf_selection",
-      "summary": "The evaluated shelf items consist entirely of processed confectionery and refined bakery goods high in added sugars, saturated fats, and refined carbohydrates. Given your current nutritional excesses in saturated fat, calories, and added sugar, both chocolate and sweet pastries should be consumed sparingly or avoided to prevent further metabolic strain.",
-      "items": [
-        {
-          "name": "SilverQueen Milk Chocolate with Cashews / SilverQueen Susu Cokelat dengan Kacang Mede",
-          "tier": 3,
-          "sourceImageIndex": 0,
-          "hasNutritionLabel": true,
-          "servingSize": "20g",
-          "servingsPerPack": "2.5"
-        },
-        {
-          "name": "Say Bread - Polo Keju / Cheese Polo Bun",
-          "tier": 3,
-          "sourceImageIndex": 2,
-          "hasNutritionLabel": false
-        },
-        {
-          "name": "Say Bread - Polo Cokelat / Chocolate Polo Bun",
-          "tier": 3,
-          "sourceImageIndex": 2,
-          "hasNutritionLabel": false
-        },
-        {
-          "name": "Say Bread - Choco Topping Pie",
-          "tier": 4,
-          "sourceImageIndex": 2,
-          "hasNutritionLabel": false
-        },
-        {
-          "name": "Say Bread - Cheese Topping Pie",
-          "tier": 4,
-          "sourceImageIndex": 2,
-          "hasNutritionLabel": false
-        },
-        {
-          "name": "Say Bread - Double Cheese Bread",
-          "tier": 4,
-          "sourceImageIndex": 2,
-          "hasNutritionLabel": false
-        }
+      "allExtractedDishes": [
+        "SilverQueen Milk Chocolate with Cashews 52g",
+        "SilverQueen Cashew Chocolate Bar 62g",
+        "Magnum Pistachio Ice Cream Bar",
+        "Kinder Joy Egg",
+        "Say Bread - Polo Cokelat / Chocolate Polo Bread",
+        "Say Bread - Polo Keju / Cheese Polo Bread",
+        "Say Bread - Choco Topping Pie",
+        "Say Bread - Cheese Topping Pie",
+        "Say Bread - Double Cheese Bread"
       ],
+      "_internalReasoning": "Patient profile shows severe surpluses in calories (+39%), saturated fat (+38%), sodium (+30%), added sugar (+50%), and carbohydrates (+32%), alongside deficits in protein (-17%) and fiber (-26%). Exhaustive extraction covered all chocolate items, ice cream, children's treats, and bakery items across the 3 images. Grouped strictly by macro variance <=10%. Confectionery and sweet bakery items dominate the images, all presenting severe risks of aggravating added sugar, saturated fat, and caloric surpluses without providing adequate protein or fiber. They are ranked descending from least harmful to highest physiological hazard.",
+      "comparisonTitle": "Retail Confectionery & Bakery Selection",
+      "comparisonType": "shelf_selection",
+      "summary": "The evaluated options consist entirely of high-sugar, high-fat confectionery and ultra-processed baked goods. Given your active surpluses in calories, saturated fat, and added sugar, plus deficits in protein and fiber, none of these items support your clinical targets. Frequent consumption will worsen metabolic strain. If an indulgence is unavoidable, select single-portion items and strictly limit frequency.",
+      "recommendedOption": "Say Bread - Double Cheese Bread / Double Cheese Bread",
       "groups": [
         {
-          "groupName": "Tier 3: Portion-Controlled Nut Confectionery",
-          "scoutItemIndices": [
-            0
-          ],
-          "boundingBox2D": [
-            0,
-            0,
-            1000,
-            530
-          ],
+          "groupName": "Tier 3 - Warning: Dense Cheese and Chocolate Baked Breads",
+          "sourceImageIndex": 2,
           "verdict": {
-            "label": "Moderate Portion Confectionery Warning",
+            "label": "High Calorie & Refined Carbs",
             "level": "warning"
           },
-          "comparisonSentence": "This milk chocolate bar provides a lower single-serving calorie load compared to large bakery pastries, but remains exceptionally dense in added sugars and saturated fats.",
-          "message": "SilverQueen Milk Chocolate with Cashews offers some healthy fats and protein from cashews, but it is heavily loaded with added sugar and saturated fat. Given your 50 percent surplus in added sugar and 38 percent surplus in saturated fat over the last three days, consuming this item actively worsens your metabolic targets. If consumed, strict portion control to a single 20g serving is required.",
-          "averageNutrients": {
-            "calories": 110,
-            "protein": 2,
-            "totalFat": 7,
-            "saturatedFat": 3.5,
-            "carbohydrates": 10,
-            "sugar": 6,
-            "totalFibre": 0.5,
-            "sodium": 20,
-            "addedSugar": 5,
-            "potassium": 80,
-            "solubleFibre": 0.2,
-            "transFat": 0
-          },
-          "averageNutrientsPer100g": {
-            "calories": 550,
-            "protein": 10,
-            "totalFat": 35,
-            "saturatedFat": 17.5,
-            "carbohydrates": 50,
-            "sugar": 30,
-            "totalFibre": 2.5,
-            "sodium": 100
-          },
-          "orderingTip": "Limit consumption strictly to one 20g serving per occasion and avoid pairing with other sugary foods."
-        },
-        {
-          "groupName": "Tier 3: Sweet Bakery Buns and Pastries",
-          "scoutItemIndices": [
-            1,
-            2
-          ],
+          "comparisonSentence": "These baked breads provide slightly lower added sugar than pure candy bars but still deliver heavy refined carbohydrates and saturated fats.",
+          "message": "These items contribute to your existing carbohydrate (+32%) and calorie surpluses while lacking dietary fiber. While offering trace protein, the refined flour and fat content undermine your metabolic goals. Actionable ordering tip: Avoid sweet bakery items entirely; if choosing bread, opt for high-fiber whole-grain varieties elsewhere.",
           "boundingBox2D": [
-            0,
-            530,
-            500,
-            1000
+            650,
+            20,
+            960,
+            990
           ],
-          "verdict": {
-            "label": "High Refined Carbohydrate Caution",
-            "level": "warning"
-          },
-          "comparisonSentence": "These sweet bakery buns deliver moderate caloric density compared to heavy cheese pastries, but still contribute excess refined carbohydrates and sugars.",
-          "message": "The Polo Cokelat and Polo Keju buns provide comforting textures and moderate protein, yet they rely on refined wheat flour and added sugars that exacerbate your 32 percent carbohydrate surplus. While they contain lower saturated fat than the double-cheese varieties, their rapid glycemic impact offers minimal dietary fiber, working against your current fibre deficit.",
-          "averageNutrients": {
-            "calories": 290,
-            "protein": 6.5,
-            "totalFat": 10,
-            "saturatedFat": 4.5,
-            "carbohydrates": 42,
-            "sugar": 14,
-            "totalFibre": 1.5,
-            "sodium": 280,
-            "addedSugar": 12,
-            "potassium": 110,
-            "solubleFibre": 0.3,
-            "transFat": 0.1
-          },
+          "servingWeightGrams": 90,
           "averageNutrientsPer100g": {
-            "calories": 360,
-            "protein": 8,
-            "totalFat": 12.5,
-            "saturatedFat": 5.6,
-            "carbohydrates": 52.5,
-            "sugar": 17.5,
-            "totalFibre": 1.9,
-            "sodium": 350
-          },
-          "orderingTip": "Share the bun with a companion or pair it with a zero-sugar beverage to moderate glycemic load."
-        },
-        {
-          "groupName": "Tier 4: High Saturated Fat & Sodium Bakery Items",
-          "scoutItemIndices": [
-            3,
-            4,
-            5
-          ],
-          "boundingBox2D": [
-            500,
-            0,
-            1000,
-            1000
-          ],
-          "verdict": {
-            "label": "Severe Saturated Fat and Calorie Alert",
-            "level": "alert"
-          },
-          "comparisonSentence": "Unlike smaller confectionery bars or light buns, these heavy cheese and chocolate pies push calorie, sodium, and saturated fat levels into severe metabolic excess.",
-          "message": "The chocolate pies, cheese topping pies, and double cheese bread combine excessive saturated fats from heavy dairy and hydrogenated oils with significant sodium loads. Because you are already 38 percent over your saturated fat limit and 30 percent over your sodium limit over the last 3 days, these items present an acute metabolic risk and should be strictly avoided.",
-          "averageNutrients": {
             "calories": 380,
-            "protein": 8.5,
-            "totalFat": 18,
-            "saturatedFat": 9.5,
-            "carbohydrates": 46,
+            "protein": 8,
+            "totalFat": 16,
+            "saturatedFat": 8,
+            "carbohydrates": 52,
             "sugar": 18,
-            "totalFibre": 1.2,
-            "sodium": 420,
+            "totalFibre": 2,
+            "sodium": 350,
             "addedSugar": 15,
-            "potassium": 130,
-            "solubleFibre": 0.2,
             "transFat": 0.2
           },
-          "averageNutrientsPer100g": {
-            "calories": 440,
-            "protein": 10,
-            "totalFat": 21,
-            "saturatedFat": 11,
-            "carbohydrates": 53,
-            "sugar": 21,
-            "totalFibre": 1.4,
-            "sodium": 490
+          "items": [
+            "Say Bread - Polo Cokelat / Chocolate Polo Bread",
+            "Say Bread - Polo Keju / Cheese Polo Bread",
+            "Say Bread - Choco Topping Pie",
+            "Say Bread - Cheese Topping Pie",
+            "Say Bread - Double Cheese Bread"
+          ]
+        },
+        {
+          "groupName": "Tier 4 - Alert: Sugar-Dense Chocolate Bars and Confectionery",
+          "sourceImageIndex": 0,
+          "verdict": {
+            "label": "Severe Added Sugar & Saturated Fat",
+            "level": "alert"
           },
-          "orderingTip": "Avoid purchasing these heavy cheese and chocolate varieties; opt for whole grain, unsweetened alternatives instead."
+          "comparisonSentence": "These confectionery items directly exacerbate your 50% added sugar surplus and 38% saturated fat surplus.",
+          "message": "Products like SilverQueen chocolate and Kinder Joy combine high levels of added sugars and saturated fats with negligible fiber and protein. They will severely aggravate your caloric and glycemic loads. Actionable ordering tip: Completely bypass candy aisles and replace sweet cravings with whole fresh fruit to boost your daily fiber intake.",
+          "boundingBox2D": [
+            0,
+            0,
+            990,
+            880
+          ],
+          "servingWeightGrams": 52,
+          "averageNutrientsPer100g": {
+            "calories": 535,
+            "protein": 7.5,
+            "totalFat": 30.5,
+            "saturatedFat": 15,
+            "carbohydrates": 57,
+            "sugar": 51,
+            "totalFibre": 3,
+            "sodium": 100,
+            "addedSugar": 45,
+            "transFat": 0.5
+          },
+          "items": [
+            "SilverQueen Milk Chocolate with Cashews 52g",
+            "SilverQueen Cashew Chocolate Bar 62g",
+            "Magnum Pistachio Ice Cream Bar",
+            "Kinder Joy Egg"
+          ]
         }
-      ],
-      "recommendedOption": "SilverQueen Milk Chocolate with Cashews / SilverQueen Susu Cokelat dengan Kacang Mede"
+      ]
     }
   },
   {
@@ -197,1986 +106,1197 @@
     "id": "set2",
     "name": "Set 2: 4 Reference Snack & Pack Nutrition Labels",
     "itemCount": 4,
-    "groupCount": 2,
+    "groupCount": 4,
     "translatedCount": 4,
-    "groupsWithNutrients": 2,
-    "groupsWith100g": 2,
-    "recommended": "Soft Bread (Blue Package) / Roti Lembut Bungkus Biru",
-    "durationMs": 22891,
+    "groupsWith100g": 4,
+    "recommended": "Blue Pack Bread / Soft Bread (120 kcal per serving)",
+    "durationMs": 7885,
     "data": {
-      "_internalReasoning": "Evaluated 4 packaged bread products with nutrition facts, comparing per 100g and per serving values against user's high calorie, fat, sodium, and carb profile.",
-      "comparisonTitle": "Packaged Bakery Product Nutritional Evaluation & Comparison",
-      "comparisonType": "nutrition_labels",
-      "summary": "Comparing four packaged bread products shows significant variations in calorie and macronutrient density. Lower sugar and controlled serving sizes rank better against the user's high calorie and carbohydrate profile, while products higher in saturated fat and sodium receive cautionary ratings.",
-      "items": [
-        {
-          "name": "Soft Bread (Blue Package) / Roti Lembut Bungkus Biru",
-          "tier": 2,
-          "sourceImageIndex": 3,
-          "hasNutritionLabel": true,
-          "servingSize": "44g",
-          "servingsPerPack": "5 Saji / Servings per pack"
-        },
-        {
-          "name": "Green Package Snack Bread / Roti Kemasan Hijau Kecil",
-          "tier": 2,
-          "sourceImageIndex": 0,
-          "hasNutritionLabel": true,
-          "servingSize": "23g",
-          "servingsPerPack": "6 Saji / Servings per pack"
-        },
-        {
-          "name": "Yellow Package Bread Variant 1 / Roti Manis Kuning Varian 1",
-          "tier": 3,
-          "sourceImageIndex": 2,
-          "hasNutritionLabel": true,
-          "servingSize": "75g",
-          "servingsPerPack": "2 Saji / Servings per pack"
-        },
-        {
-          "name": "Yellow Package Bread Variant 2 / Roti Manis Kuning Varian 2",
-          "tier": 3,
-          "sourceImageIndex": 1,
-          "hasNutritionLabel": true,
-          "servingSize": "80g",
-          "servingsPerPack": "3 Saji / Servings per pack"
-        }
+      "allExtractedDishes": [
+        "Green Pack Snack / Green Pack Snack (90 kcal per serving)",
+        "Yellow Pack Bread / Multiseed Bread (250 kcal per serving)",
+        "Yellow-Green Pack Pastry / Sarikaya Pastry (250 kcal per serving)",
+        "Blue Pack Bread / Soft Bread (120 kcal per serving)"
       ],
+      "_internalReasoning": "Extracted 4 packaged snack/bread items from the nutrition labels provided across the 4 images. Grouped them based on estimated per-100g nutrient profiles into separate tiers according to calorie density, added/total sugars, and sodium levels relative to the patient's excess calories, saturated fat, sodium, and added sugar targets.",
+      "comparisonTitle": "Packaged Bakery & Snack Nutritional Labels Comparison",
+      "comparisonType": "nutrition_labels",
+      "summary": "Reviewing these 4 packaged items reveals varying degrees of calorie density, sodium, and sugar content. Given your surplus in calories, saturated fat, sodium, and added sugars alongside a fiber deficit, selecting lower-calorie and lower-sugar options is paramount. The Blue Pack Bread offers the most controlled glycemic and energy load among the choices, while higher-calorie items demand strict portion limits.",
+      "recommendedOption": "Blue Pack Bread / Soft Bread (120 kcal per serving)",
       "groups": [
         {
-          "groupName": "Tier 2 - Moderate Calorie & Controlled Portion Bakery Items",
-          "scoutItemIndices": [
-            0,
-            1
-          ],
-          "boundingBox2D": [
-            0,
-            0,
-            1000,
-            1000
-          ],
+          "groupName": "Tier 1 - Safest Choice: Controlled Energy Bakery Items",
+          "sourceImageIndex": 3,
           "verdict": {
-            "label": "Moderate Calorie and Portion Control",
-            "level": "neutral"
+            "label": "Lowest Calorie & Sodium",
+            "level": "good"
           },
-          "comparisonSentence": "These products offer significantly lower per-serving calories and lower sodium compared to the larger yellow-packaged pastries.",
-          "message": "These options provide moderate energy and manageable sodium levels per serving, making them easier to fit into a calorie-restricted plan. However, they remain refined carbohydrate sources with limited dietary fiber. Portion control remains essential to avoid aggravating existing carbohydrate and calorie surpluses.",
-          "averageNutrients": {
-            "calories": 105,
-            "protein": 3,
-            "totalFat": 2.7,
-            "saturatedFat": 1.2,
-            "carbohydrates": 18,
+          "comparisonSentence": "Compared to heavier multi-seed or pastry options, this item provides a much lower calorie and sodium load per 100g, helping mitigate your active calorie and sodium surpluses.",
+          "message": "This soft bread formulation presents a more manageable caloric and sodium density than the heavier pastry choices. While it lacks substantial dietary fiber to address your deficit, keeping the portion modest prevents exacerbating your daily calorie surplus. Order or select this option when you need a controlled carbohydrate base, and pair it with fresh vegetables or lean protein to boost fiber and satiety.",
+          "boundingBox2D": [
+            290,
+            15,
+            910,
+            980
+          ],
+          "servingWeightGrams": 44,
+          "averageNutrientsPer100g": {
+            "calories": 273,
+            "protein": 9.1,
+            "totalFat": 5.7,
+            "saturatedFat": 3.4,
+            "carbohydrates": 47.7,
             "sugar": 4.5,
-            "totalFibre": 1,
-            "sodium": 85,
-            "addedSugar": 4,
-            "potassium": 95,
-            "solubleFibre": 0.3,
+            "totalFibre": 2,
+            "sodium": 341,
+            "addedSugar": 3,
             "transFat": 0
           },
-          "averageNutrientsPer100g": {
-            "calories": 270,
-            "protein": 7.5,
-            "totalFat": 6.5,
-            "saturatedFat": 3,
-            "carbohydrates": 45,
-            "sugar": 10,
-            "totalFibre": 2.2,
-            "sodium": 220
-          },
-          "orderingTip": "Consume only a single pre-portioned serving to manage daily carbohydrate and calorie intake."
+          "items": [
+            "Blue Pack Bread / Soft Bread (120 kcal per serving)"
+          ]
         },
         {
-          "groupName": "Tier 3 - Higher Calorie & Sodium Bakery Items",
-          "scoutItemIndices": [
-            2,
-            3
-          ],
+          "groupName": "Tier 2 - Neutral Choice: Moderate Calorie Snack Packs",
+          "sourceImageIndex": 0,
+          "verdict": {
+            "label": "Moderate Energy Density",
+            "level": "neutral"
+          },
+          "comparisonSentence": "This snack pack has a moderate calorie density per 100g that sits between the lightest bread and heavy pastries, requiring careful portion management.",
+          "message": "This green-packaged snack offers moderate per-serving energy but packs a concentrated sugar load relative to its small size, contributing to your added sugar surplus. Enjoy strictly as a single designated serving rather than grazing, and balance it with high-fiber whole foods to stabilize blood glucose.",
           "boundingBox2D": [
+            350,
             0,
-            0,
-            1000,
+            760,
             1000
           ],
-          "verdict": {
-            "label": "High Sodium and Calorie Caution",
-            "level": "warning"
-          },
-          "comparisonSentence": "Unlike the smaller portions in the neutral group, these items carry considerably higher sodium counts and saturated fat loads.",
-          "message": "These bakery products present elevated energy density, higher saturated fat, and substantial sodium levels that compound existing dietary excesses. While they offer modest protein, the higher total carbohydrate and added sugar content will exacerbate glycemic loads and calorie surpluses if consumed frequently.",
-          "averageNutrients": {
-            "calories": 250,
-            "protein": 3.5,
-            "totalFat": 6.5,
-            "saturatedFat": 3.7,
-            "carbohydrates": 40,
-            "sugar": 28.5,
+          "servingWeightGrams": 23,
+          "averageNutrientsPer100g": {
+            "calories": 391,
+            "protein": 4.3,
+            "totalFat": 13,
+            "saturatedFat": 4.3,
+            "carbohydrates": 65.2,
+            "sugar": 30.4,
             "totalFibre": 1.5,
-            "sodium": 227,
+            "sodium": 87,
             "addedSugar": 20,
-            "potassium": 120,
-            "solubleFibre": 0.4,
             "transFat": 0
           },
-          "averageNutrientsPer100g": {
-            "calories": 325,
-            "protein": 4.5,
-            "totalFat": 8.5,
-            "saturatedFat": 4.8,
-            "carbohydrates": 52,
-            "sugar": 35,
-            "totalFibre": 2,
-            "sodium": 300
+          "items": [
+            "Green Pack Snack / Green Pack Snack (90 kcal per serving)"
+          ]
+        },
+        {
+          "groupName": "Tier 3 - Warning: High Calorie & Saturated Fat Pastries",
+          "sourceImageIndex": 1,
+          "verdict": {
+            "label": "High Saturated Fat & Sodium",
+            "level": "warning"
           },
-          "orderingTip": "Pair with a protein source or consume half a portion to mitigate blood sugar spikes."
+          "comparisonSentence": "Unlike lighter breads, this multiseed loaf carries a significant sodium and total fat burden that conflicts with your active sodium and saturated fat surpluses.",
+          "message": "This multiseed bread provides some structural fiber, but its elevated sodium and total fat content make it less ideal given your 3000mg sodium baseline and saturated fat surplus. Consume in strict moderation, and avoid adding high-sodium spreads to keep your cardiovascular parameters in check.",
+          "boundingBox2D": [
+            250,
+            10,
+            930,
+            990
+          ],
+          "servingWeightGrams": 80,
+          "averageNutrientsPer100g": {
+            "calories": 313,
+            "protein": 3.8,
+            "totalFat": 8.8,
+            "saturatedFat": 3.8,
+            "carbohydrates": 50,
+            "sugar": 47.5,
+            "totalFibre": 3,
+            "sodium": 412.5,
+            "addedSugar": 35,
+            "transFat": 0
+          },
+          "items": [
+            "Yellow Pack Bread / Multiseed Bread (250 kcal per serving)"
+          ]
+        },
+        {
+          "groupName": "Tier 4 - Alert: Energy-Dense Sweet Fillings",
+          "sourceImageIndex": 2,
+          "verdict": {
+            "label": "Elevated Sugars & Fats",
+            "level": "alert"
+          },
+          "comparisonSentence": "This pastry option delivers heavy saturated fats and sugars per 100g, directly worsening your active calorie, sugar, and saturated fat surpluses.",
+          "message": "Featuring rich fillings and higher total fats, this sarikaya pastry significantly pushes past your daily calorie and saturated fat allowances while contributing negligible fiber. Avoid making this a routine choice; if consumed, limit to a tiny fraction of a serving and pair with unsweetened green tea.",
+          "boundingBox2D": [
+            270,
+            0,
+            950,
+            1000
+          ],
+          "servingWeightGrams": 75,
+          "averageNutrientsPer100g": {
+            "calories": 333,
+            "protein": 0,
+            "totalFat": 8,
+            "saturatedFat": 6,
+            "carbohydrates": 56,
+            "sugar": 25.3,
+            "totalFibre": 1,
+            "sodium": 166.7,
+            "addedSugar": 20,
+            "transFat": 0
+          },
+          "items": [
+            "Yellow-Green Pack Pastry / Sarikaya Pastry (250 kcal per serving)"
+          ]
         }
-      ],
-      "recommendedOption": "Soft Bread (Blue Package) / Roti Lembut Bungkus Biru"
+      ]
     }
   },
   {
     "setNum": 3,
     "id": "set3",
     "name": "Set 3: Restaurant Menu Pages (Sambal Bakar Pencok)",
-    "itemCount": 95,
+    "itemCount": 100,
     "groupCount": 4,
-    "translatedCount": 95,
-    "groupsWithNutrients": 4,
+    "translatedCount": 100,
     "groupsWith100g": 4,
-    "recommended": "SAYUR ASEM / Tamarind Vegetable Soup",
-    "durationMs": 22308,
+    "recommended": "Sayur Asem / Tamarind Vegetable Soup",
+    "durationMs": 16529,
     "data": {
-      "_internalReasoning": "Extracted all visible menu items across both images, categorized into ranked groups based on nutritional quality and alignment with the user's nutritional targets, ensuring zero orphaned items and strict adherence to the output schema.",
-      "comparisonTitle": "Menu Item Evaluation and Nutritional Comparison",
-      "comparisonType": "menu_items",
-      "summary": "Evaluation of Sambal Bakar Pencok 89 menu items. Clear broths, fresh vegetables, and boiled/steamed dishes are ranked safest to help control sodium and calorie surpluses, while deep-fried sets, salted fish, and heavy sambal dishes are categorized into warning and alert groups due to excess sodium, saturated fats, and fried oil load.",
-      "items": [
-        {
-          "name": "SAYUR ASEM / Tamarind Vegetable Soup",
-          "tier": 1,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "LALAPAN REBUS (LABU+KANGKUNG+KCG PJG) / Boiled Vegetables with Chayote, Water Spinach, and Long Beans",
-          "tier": 1,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "KANGKUNG REBUS / Boiled Water Spinach",
-          "tier": 1,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "ASINAN BUAH BOGOR / Bogor Fruit Pickles",
-          "tier": 1,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "ASINAN SAYUR RUJAK PENGANTIN / Bride's Vegetable and Fruit Salad",
-          "tier": 1,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "NASI PUTIH / Plain White Rice",
-          "tier": 2,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "NASI UDUK / Coconut Rice",
-          "tier": 2,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "TUMIS KANGKUNG / CAH TERASI / Stir-Fried Water Spinach with Shrimp Paste",
-          "tier": 2,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "TUMIS CAISIM / Stir-Fried Mustard Greens",
-          "tier": 2,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "TUMIS SAWI PUTIH / Stir-Fried Napa Cabbage",
-          "tier": 2,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "TUMIS TOGE / Stir-Fried Bean Sprouts",
-          "tier": 2,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "TUMIS ONCOM / Stir-Fried Fermented Soybean Cake",
-          "tier": 2,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "PEPES TAHU / Steamed Tofu in Banana Leaf",
-          "tier": 2,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "TELUR DADAR / Omelette",
-          "tier": 2,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "SOTO BETAWI DAGING SAPI / AYAM KAMPUNG / Betawi Beef or Free-Range Chicken Soto Soup",
-          "tier": 2,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "SAYUR SOP CEKER / Chicken Feet Vegetable Soup",
-          "tier": 2,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "SOP AYAM KAMPUNG / DAGING SAPI / Free-Range Chicken or Beef Soup",
-          "tier": 2,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "RUJAK KANGKUNG / PLECING KANGKUNG / Spicy Water Spinach Salad",
-          "tier": 2,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "TUMIS GENJER ALA PENCOK 89 / Stir-Fried Limnocharis Flava",
-          "tier": 2,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "TUMIS SAWI PUTIH + TELOR / Stir-Fried Napa Cabbage with Egg",
-          "tier": 2,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "TUMIS TOGE + IKAN ASIN / Stir-Fried Bean Sprouts with Salted Fish",
-          "tier": 3,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "TUMIS UDANG BALADO / Stir-Fried Shrimp in Chili Sauce",
-          "tier": 3,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "TUMIS UDANG + PETE BUMBU BALADO / Stir-Fried Shrimp with Stink Beans in Chili",
-          "tier": 3,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "TUMIS CUMI BALADO / Stir-Fried Squid in Chili Sauce",
-          "tier": 3,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "TUMIS CUMI + PETE BUMBU BALADO / Stir-Fried Squid with Stink Beans in Chili",
-          "tier": 3,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "TUMIS PEDA / Stir-Fried Salted Peda Mackerel",
-          "tier": 3,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "TUMIS PEDA + PETE / Stir-Fried Salted Peda Mackerel with Stink Beans",
-          "tier": 3,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "TUMIS CUE / Stir-Fried Tuna",
-          "tier": 3,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "TUMIS CUE + PETE / Stir-Fried Tuna with Stink Beans",
-          "tier": 3,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "JENGKOL PENCOK/PORSI / Stink Bean Pencok Portion",
-          "tier": 3,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "JENGKOL BALADO/PORSI / Stink Bean Balado Portion",
-          "tier": 3,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "JENGKOL SEMUR/PORSI / Braised Stink Bean Portion",
-          "tier": 3,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "JENGKOL GORENG/PORSI / Fried Stink Bean Portion",
-          "tier": 3,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "SATE TAICHAN JUARA (SELERAS PEDAS)/PORSI / Champion Taichan Chicken Satay Portion",
-          "tier": 3,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "TERONG BALADO / Fried Eggplant in Chili Sauce",
-          "tier": 3,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "KOL GORENG / Fried Cabbage",
-          "tier": 3,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "TAHU ACAK (SELERAS PEDAS BY REQUEST) / Mixed Tofu with Spicy Sauce",
-          "tier": 3,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "PEPES PEDA MIX PETE / Steamed Mackerel and Stink Beans in Banana Leaf",
-          "tier": 3,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "PETE GORENG/BAKAR/MENTAH / Fried, Grilled, or Raw Stink Beans",
-          "tier": 3,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "KERUPUK MIE + BUMBU KACANG / Noodle Crackers with Peanut Sauce",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "SATE USUS / Intestine Satay",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "SATE ATI-AMPLA / Liver and Gizzard Satay",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "SATE KULIT / Chicken Skin Satay",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "KAREDOK ALA PENCOK 89 / Raw Vegetable Salad with Peanut Sauce",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PAKET BURUNG PUYUH / Quail Meal Set (Nasi + Burung Puyuh + Sayur Asem + Tempe + Tahu)",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PAKET UDUK BURUNG PUYUH / Coconut Rice Quail Meal Set",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PAKET AYAM / Chicken Meal Set",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PAKET UDUK AYAM / Coconut Rice Chicken Meal Set",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PAKET EMPAL / Beef Empal Meal Set",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PAKET UDUK EMPAL / Coconut Rice Beef Empal Meal Set",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PAKET BEBEK / Duck Meal Set",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PAKET UDUK BEBEK / Coconut Rice Duck Meal Set",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PAKET LELE / Catfish Meal Set",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PAKET UDUK LELE / Coconut Rice Catfish Meal Set",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PAKET KEMBUNG / Mackerel Meal Set",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PAKET UDUK KEMBUNG / Coconut Rice Mackerel Meal Set",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PAKET MUJAIR / Tilapia Meal Set",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PAKET UDUK MUJAIR / Coconut Rice Tilapia Meal Set",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PAKET NILA / Nile Tilapia Meal Set",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PAKET UDUK NILA / Coconut Rice Nile Tilapia Meal Set",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "IKAN ASIN GORENG / Fried Salted Fish",
-          "tier": 4,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "IKAN ASIN PEDA CABE PENCOK / Salted Peda Mackerel with Chili Pencok",
-          "tier": 4,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "IKAN TERI JENGKI SAMBAL PENCOK / Salted Anchovy with Pencok Chili",
-          "tier": 4,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "IKAN ASIN SEPAT / Salted Sepat Fish",
-          "tier": 4,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "IKAN ASIN JAMBAL / Salted Jambal Fish",
-          "tier": 4,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "IKAN ASIN GABUS / Salted Snakehead Fish",
-          "tier": 4,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "PENCOK KACANG / Peanut Pencok",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PENCOK KACANG+KETIMUN / Peanut Pencok with Cucumber",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "AYAM GORENG CABE KERING / Fried Chicken with Dried Chili",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PENCOK CEKER / Chicken Feet Pencok",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PENCOK TAHU/TEMPE / Tofu and Tempeh Pencok",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "AYAM GEPREK SELERA PEDAS / Spicy Smashed Fried Chicken",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PENCOK KEPALA / Head Pencok",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PENCOK KULIT / Chicken Skin Pencok",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PENCOK AMPLA/USUS/ATI / Giblet, Intestine, and Liver Pencok",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PENCOK AYAM GORENG/BAKAR / Fried or Grilled Chicken Pencok",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PENCOK DAGING EMPAL / Beef Empal Pencok",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PENCOK IKAN NILA GORENG / Fried Nile Tilapia Pencok",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PENCOK IKAN MUJAIR GORENG / Fried Tilapia Pencok",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PENCOK LELE GORENG / Fried Catfish Pencok",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PENCOK IKAN KEMBUNG / Mackerel Pencok",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PENCOK BEBEK GORENG PRESTO / Pressure-Cooked Fried Duck Pencok",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "PENCOK BURUNG PUYUH / Quail Pencok",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "NASI BAKAR CAKALANG / Grilled Cakalang Tuna Rice",
-          "tier": 4,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "NASI BAKAR AYAM + TERI MEDAN / Grilled Chicken Rice with Medan Anchovies",
-          "tier": 4,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "NASI BAKAR CUMI CABE IJO / Grilled Squid Rice with Green Chili",
-          "tier": 4,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "NASI GORENG AYAM / Fried Rice with Chicken",
-          "tier": 4,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "NASI GORENG IKAN ASIN / Fried Rice with Salted Fish",
-          "tier": 4,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "NASI GORENG PETE / Fried Rice with Stink Beans",
-          "tier": 4,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "NASI GORENG ATI/AMPLA / Fried Rice with Liver and Gizzard",
-          "tier": 4,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "NASI GORENG ALA PENCOK 89 / Pencok 89 Special Fried Rice",
-          "tier": 4,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "SEBLAK COMPLETE / Complete Spicy Wet Crackers",
-          "tier": 4,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "SEBLAK CEKER / Chicken Feet Seblak",
-          "tier": 4,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "SEBLAK SEA FOOD / Seafood Seblak",
-          "tier": 4,
-          "sourceImageIndex": 1
-        },
-        {
-          "name": "SEBLAK KROET VIRAL / Viral Seblak Crackers",
-          "tier": 4,
-          "sourceImageIndex": 1
-        }
+      "allExtractedDishes": [
+        "Kerupuk Mie + Bumbu Kacang / Noodle Crackers with Peanut Sauce",
+        "Asinan Buah Bogor / Bogor Fruit Pickle",
+        "Asinan Sayur Rujak Pengantin / Bride's Vegetable Salad Pickle",
+        "Sate Usus / Intestine Satay",
+        "Sate Ati-Ampla / Liver-Gizzard Satay",
+        "Sate Kulit / Skin Satay",
+        "Paket Burung Puyuh / Quail Meal Set (Nasi + Burung Puyuh + Sayur Asem + Tempe + Tahu)",
+        "Paket Uduk Burung Puyuh / Quail Uduk Meal Set (Nasi Uduk + Burung Puyuh + Sayur Asem + Tempe + Tahu)",
+        "Paket Ayam / Chicken Meal Set (Nasi + Ayam Goreng/Bakar + Sayur Asem + Tahu + Tempe)",
+        "Paket Uduk Ayam / Chicken Uduk Meal Set (Nasi Uduk + Ayam Goreng/Bakar + Sayur Asem Tahu + Tempe)",
+        "Paket Empal / Beef Empal Meal Set (Nasi + Daging Empal + Sayur Asem + Tahu + Tempe)",
+        "Paket Uduk Empal / Beef Empal Uduk Meal Set (Nasi Uduk + Daging Empal + Sayur Asem + Tahu)",
+        "Paket Bebek / Duck Meal Set (Nasi + Bebek Goreng + Sayur Asem + Tahu + Tempe)",
+        "Paket Uduk Bebek / Duck Uduk Meal Set (Nasi Uduk + Bebek Goreng + Sayur Asem + Tahu + Tempe)",
+        "Paket Lele / Catfish Meal Set (Nasi + Lele Goreng 2 Pcs + Sayur Asem + Tahu + Tempe)",
+        "Paket Uduk Lele / Catfish Uduk Meal Set (Nasi Uduk + Lele Goreng 2 Pcs + Sayur Asem + Tahu + Tempe)",
+        "Paket Kembung / Mackerel Meal Set (Nasi + Ikan Kembung + Sayur Asem + Tahu + Tempe)",
+        "Paket Uduk Kembung / Mackerel Uduk Meal Set (Nasi Uduk + Ikan Kembung + Sayur Asem + Tahu + Tempe)",
+        "Paket Mujair / Tilapia Meal Set (Nasi + Ikan Mujair Goreng + Sayur Asem + Tahu + Tempe)",
+        "Paket Uduk Mujair / Tilapia Uduk Meal Set (Nasi Uduk + Ikan Mujair Goreng + Sayur Asem + Tahu + Tempe)",
+        "Paket Nila / Nile Tilapia Meal Set (Nasi + Ikan Nila Goreng + Sayur Asem + Tahu + Tempe)",
+        "Paket Uduk Nila / Nile Tilapia Uduk Meal Set (Nasi Uduk + Ikan Nila Goreng + Sayur Asem + Tahu + Tempe)",
+        "Pencok Kacang / Peanut Pencok",
+        "Pencok Kacang + Ketimun / Peanut Pencok + Cucumber",
+        "Ayam Goreng Cabe Kering / Fried Chicken with Dry Chili",
+        "Pencok Ceker / Chicken Feet Pencok",
+        "Pencok Tahu/Tempe / Tofu/Tempeh Pencok",
+        "Ayam Geprek Selera Pedas / Spicy Crushed Fried Chicken",
+        "Pencok Kepala / Head Pencok",
+        "Pencok Kulit / Skin Pencok",
+        "Pencok Ampla/Usus/Ati / Gizzard/Intestine/Liver Pencok",
+        "Karedok Ala Pencok 89 / Pencok 89 Style Karedok",
+        "Pencok Ayam Goreng/Bakar / Fried/Grilled Chicken Pencok",
+        "Pencok Daging Empal / Beef Empal Pencok",
+        "Pencok Ikan Nila Goreng / Fried Nile Tilapia Pencok",
+        "Pencok Ikan Mujair Goreng / Fried Tilapia Pencok",
+        "Pencok Lele Goreng / Fried Catfish Pencok",
+        "Pencok Ikan Kembung / Mackerel Pencok",
+        "Pencok Bebek Goreng Presto / Pressure Fried Duck Pencok",
+        "Pencok Burung Puyuh / Quail Pencok",
+        "Jengkol Pencok / Pencok Jengkol Bean",
+        "Jengkol Balado / Balado Jengkol Bean",
+        "Jengkol Semur / Stewed Jengkol Bean",
+        "Jengkol Goreng / Fried Jengkol Bean",
+        "Sate Taichan Juara / Champion Taichan Satay",
+        "Tumis Kangkung / Cah Terasi / Stir-Fried Water Spinach with Shrimp Paste",
+        "Tumis Caisim / Stir-Fried Mustard Greens",
+        "Tumis Genjer Ala Pencok '89 / Pencok 89 Style Genjer Stir-Fry",
+        "Tumis Sawi Putih / Stir-Fried Napa Cabbage",
+        "Tumis Sawi Putih + Telor / Stir-Fried Napa Cabbage with Egg",
+        "Tumis Toge / Stir-Fried Bean Sprouts",
+        "Tumis Toge + Ikan Asin / Stir-Fried Bean Sprouts with Salted Fish",
+        "Tumis Oncom / Stir-Fried Oncom",
+        "Tumis Udang Balado / Stir-Fried Shrimp Balado",
+        "Tumis Udang + Pete Bumbu Balado / Shrimp & Stink Bean Balado",
+        "Tumis Cumi Balado / Squid Balado",
+        "Tumis Cumi + Pete Bumbu Balado / Squid & Stink Bean Balado",
+        "Tumis Peda / Stir-Fried Peda Fish",
+        "Tumis Peda + Pete / Stir-Fried Peda Fish with Stink Bean",
+        "Tumis Cue / Stir-Fried Cue Fish",
+        "Tumis Cue + Pete / Stir-Fried Cue Fish with Stink Bean",
+        "Sop Ayam Kampung / Daging Sapi / Free-Range Chicken or Beef Soup",
+        "Soto Betawi Daging Sapi / Ayam Kampung / Betawi Beef or Chicken Soup",
+        "Sayur Sop Ceker / Chicken Feet Vegetable Soup",
+        "Sayur Asem / Tamarind Vegetable Soup",
+        "Rujak Kangkung / Plecing Kangkung / Spicy Water Spinach Salad",
+        "Kangkung Rebus / Boiled Water Spinach",
+        "Lalapan Rebus / Boiled Fresh Vegetable Platter",
+        "Terong Balado / Balado Eggplant",
+        "Kol Goreng / Fried Cabbage",
+        "Tahu Acak / Crushed Tofu",
+        "Pepes Tahu / Steamed Tofu in Banana Leaf",
+        "Pepes Peda Mix Pete / Steamed Peda Fish & Stink Bean",
+        "Pete Goreng/Bakar/Mentah / Fried, Grilled or Raw Stink Bean",
+        "Telur Dadar / Omelette",
+        "Cumi Asin Goreng / Fried Salted Squid",
+        "Ikan Asin Peda Cabe Pencok / Salted Peda Fish with Chili Pencok",
+        "Ikan Teri Jengki Sambal Pencok / Jengki Anchovy with Pencok Sambal",
+        "Ikan Asin Sepat / Salted Sepat Fish",
+        "Ikan Asin Jambal / Salted Jambal Fish",
+        "Ikan Asin Gabus / Salted Snakehead Fish",
+        "Nasi Putih / Plain White Rice",
+        "Nasi Uduk / Coconut Rice",
+        "Nasi Bakar Cakalang / Grilled Skipjack Tuna Rice",
+        "Nasi Bakar Ayam + Teri Medan / Grilled Chicken & Medan Anchovy Rice",
+        "Nasi Bakar Cumi Cabe Ijo / Grilled Squid Green Chili Rice",
+        "Nasi Goreng Ayam / Chicken Fried Rice",
+        "Nasi Goreng Ikan Asin / Salted Fish Fried Rice",
+        "Nasi Goreng Pete / Stink Bean Fried Rice",
+        "Nasi Goreng Ati/Ampla / Liver/Gizzard Fried Rice",
+        "Nasi Goreng Ala Pencok 89 / Pencok 89 Style Fried Rice",
+        "Seblak Complete / Complete Seblak",
+        "Seblak Ceker / Chicken Feet Seblak",
+        "Seblak Sea Food / Seafood Seblak",
+        "Seblak Oret Viral / Viral Oret Seblak",
+        "Bubur Ayam / Chicken Porridge",
+        "Mie Ayam Original / Original Chicken Noodle",
+        "Mie Ayam/Ceker/Bakso/Pangsiter / Chicken Noodle with Feet, Meatball & Wonton",
+        "Bubur Sum Sum/Ketan Hitam/Kacang / Coconut Rice Porridge / Black Glutinous Rice / Peanut Porridge",
+        "Bubur/Singkong Thai/Kolang Kaling / Thai Porridge, Cassava & Palm Fruit Dessert"
       ],
+      "_internalReasoning": "The menu offers a wide variety of Indonesian dishes ranging from clean vegetable soups and steamed items to heavily deep-fried meal sets, salted fish, internal organs, and gelatinized ultra-processed starch (Seblak). The patient has high saturated fat (+38%), high sodium (+30%), high calories (+39%), and high added sugar (+45%), alongside fiber and protein deficits. Groups are meticulously separated to isolate clean vegetable/soup items (Tier 1) from moderate stir-fries, deep-fried meal sets, offal, salted fish, and high-fat/sodium ultra-processed seblak/fried rice (Tier 4).",
+      "comparisonTitle": "Sambal Bakar Pencok 89 Menu Evaluation",
+      "comparisonType": "menu_items",
+      "summary": "Your current review shows critical surpluses in calories (+39%), saturated fat (+38%), sodium (+30%), and added sugar (+45%), alongside fiber and protein deficits. Avoid deep-fried meal sets, salted fish, and seblak which worsen sodium and lipid loads. Prioritize tamarind vegetable soup, fresh boiled greens, and lean steamed items.",
+      "recommendedOption": "Sayur Asem / Tamarind Vegetable Soup",
       "groups": [
         {
-          "groupName": "Tier 1 - Safest Choice: Clear Soups & Boiled Vegetables",
-          "scoutItemIndices": [
-            0,
-            1,
-            2,
-            3,
-            4
-          ],
-          "boundingBox2D": [
-            150,
-            120,
-            230,
-            930
-          ],
+          "groupName": "Tier 1 - Safest Choice: Low-Sodium Tamarind Broths & Boiled Vegetables",
+          "sourceImageIndex": 1,
           "verdict": {
-            "label": "Lowest Calorie & Sodium Options",
+            "label": "Lowest Sodium & High Fiber",
             "level": "good"
           },
-          "comparisonSentence": "These boiled vegetables and clear soups offer the lowest calorie and saturated fat levels on the menu, helping mitigate your calorie surplus.",
-          "message": "These clear broths and boiled vegetable dishes provide essential fiber and micronutrients with minimal fat and moderate sodium, perfectly addressing your low fiber intake while keeping saturated fat low. Enjoy these as safe starters to meet your daily fiber goals without worsening your calorie surplus.",
-          "averageNutrients": {
-            "calories": 90,
-            "protein": 3,
-            "totalFat": 1,
-            "saturatedFat": 0.2,
-            "carbohydrates": 16,
-            "sugar": 5,
-            "totalFibre": 4.5,
-            "sodium": 280,
-            "addedSugar": 1,
-            "potassium": 350,
-            "solubleFibre": 1.2,
-            "transFat": 0
-          },
-          "averageNutrientsPer100g": {
-            "calories": 45,
-            "protein": 1.5,
-            "totalFat": 0.5,
-            "saturatedFat": 0.1,
-            "carbohydrates": 8,
-            "sugar": 2.5,
-            "totalFibre": 2.2,
-            "sodium": 140
-          },
-          "orderingTip": "Order without added sweet sauces or excess oil dressings."
-        },
-        {
-          "groupName": "Tier 2 - Moderate Choice: Lean Soups, Steamed Tofu & Light Stir-Fries",
-          "scoutItemIndices": [
-            5,
-            6,
-            7,
-            8,
-            9,
-            10,
-            11,
-            12,
-            13,
-            14,
-            15,
-            16,
-            17,
-            18,
-            19
-          ],
-          "boundingBox2D": [
-            250,
-            110,
-            500,
-            900
-          ],
-          "verdict": {
-            "label": "Balanced Protein & Moderate Sodium",
-            "level": "neutral"
-          },
-          "comparisonSentence": "Compared to deep-fried meal sets, these steamed and lightly sautéed dishes provide better protein balance with moderate calorie loads.",
-          "message": "This group supplies vital protein from lean sources and steamed tofu, helping you reach your 100g protein target. While sodium and fat remain at moderate levels, monitor your portion sizes of coconut rice (Nasi Uduk) to avoid excessive carbohydrate and calorie stacking.",
-          "averageNutrients": {
-            "calories": 320,
-            "protein": 18,
-            "totalFat": 12,
-            "saturatedFat": 3.5,
-            "carbohydrates": 35,
-            "sugar": 4,
-            "totalFibre": 2.5,
-            "sodium": 550,
-            "addedSugar": 1.5,
-            "potassium": 300,
-            "solubleFibre": 0.8,
-            "transFat": 0
-          },
-          "averageNutrientsPer100g": {
-            "calories": 140,
-            "protein": 8,
-            "totalFat": 5,
-            "saturatedFat": 1.5,
-            "carbohydrates": 15,
-            "sugar": 1.8,
-            "totalFibre": 1.1,
-            "sodium": 240
-          },
-          "orderingTip": "Opt for plain white rice over coconut rice and request low sodium in stir-fries."
-        },
-        {
-          "groupName": "Tier 3 - Warning Choice: Fried Meal Sets, Balado & Peanut Dishes",
-          "scoutItemIndices": [
-            20,
-            21,
-            22,
-            23,
-            24,
-            25,
-            26,
-            27,
-            28,
-            29,
-            30,
-            31,
-            32,
-            33,
-            34,
-            35,
-            36,
-            37,
-            38,
-            39,
-            40,
-            41,
-            42,
-            43,
-            44,
-            45,
-            46,
-            47,
-            48,
-            49,
-            50,
-            51,
-            52,
-            53,
-            54,
-            55,
-            56,
-            57,
-            58,
-            59,
-            60
-          ],
+          "comparisonSentence": "Unlike deep-fried meal sets, these water-based broths and steamed vegetables provide zero added trans fat and help correct your fiber deficit while keeping sodium manageable.",
+          "message": "These clear soups and boiled greens deliver essential plant fiber and potassium without the heavy saturated fats or excess sodium challenging your recent targets. Order the Sayur Asem or boiled lalapan as a starter to fill your fiber gap before considering lean proteins.",
           "boundingBox2D": [
             380,
-            100,
-            750,
-            920
+            110,
+            495,
+            400
           ],
-          "verdict": {
-            "label": "High Saturated Fat & Sodium Caution",
-            "level": "warning"
-          },
-          "comparisonSentence": "These fried meal sets and balado dishes significantly exceed your daily saturated fat and calorie targets compared to steamed alternatives.",
-          "message": "While these protein-rich meal sets support your daily protein goal, deep-frying and rich chili oils introduce substantial saturated fats and sodium, aggravating your current surpluses. Balance these carefully or share portions to limit excess caloric intake.",
-          "averageNutrients": {
-            "calories": 720,
-            "protein": 32,
-            "totalFat": 35,
-            "saturatedFat": 11,
-            "carbohydrates": 65,
-            "sugar": 7,
-            "totalFibre": 3,
-            "sodium": 1100,
-            "addedSugar": 3,
-            "potassium": 400,
-            "solubleFibre": 1,
-            "transFat": 0.1
-          },
+          "servingWeightGrams": 300,
           "averageNutrientsPer100g": {
-            "calories": 260,
-            "protein": 11.5,
-            "totalFat": 12.5,
-            "saturatedFat": 3.9,
-            "carbohydrates": 23.5,
-            "sugar": 2.5,
-            "totalFibre": 1.1,
-            "sodium": 390
+            "calories": 40,
+            "protein": 2,
+            "totalFat": 0.8,
+            "saturatedFat": 0.2,
+            "carbohydrates": 7.5,
+            "sugar": 3,
+            "totalFibre": 3.5,
+            "sodium": 280,
+            "addedSugar": 1,
+            "transFat": 0
           },
-          "orderingTip": "Ask for grilled preparation instead of deep-fried, and request sambal served on the side."
+          "items": [
+            "Sayur Asem / Tamarind Vegetable Soup",
+            "Kangkung Rebus / Boiled Water Spinach",
+            "Lalapan Rebus (Labu+Kangkung+Kcg Pjg) / Boiled Fresh Vegetable Platter",
+            "Rujak Kangkung / Plecing Kangkung / Spicy Water Spinach Salad",
+            "Asinan Buah Bogor / Bogor Fruit Pickle",
+            "Asinan Sayur Rujak Pengantin / Bride's Vegetable Salad Pickle"
+          ]
         },
         {
-          "groupName": "Tier 4 - Alert Choice: Salted Fish, Heavy Pencok, Fried Rice & Seblak",
-          "scoutItemIndices": [
-            61,
-            62,
-            63,
-            64,
-            65,
-            66,
-            67,
-            68,
-            69,
-            70,
-            71,
-            72,
-            73,
-            74,
-            75,
-            76,
-            77,
-            78,
-            79,
-            80,
-            81,
-            82,
-            83,
-            84,
-            85,
-            86,
-            87,
-            88,
-            89,
-            90,
-            91,
-            92,
-            93,
-            94
-          ],
-          "boundingBox2D": [
-            710,
-            80,
-            980,
-            950
-          ],
+          "groupName": "Tier 2 - Neutral Choice: Lean Steamed Proteins & Simple Vegetable Stir-Fries",
+          "sourceImageIndex": 1,
           "verdict": {
-            "label": "Severe Sodium & Saturated Fat Alert",
+            "label": "Moderate Protein & Controlled Oil",
+            "level": "neutral"
+          },
+          "comparisonSentence": "These items provide moderate protein to address your deficit without the excessive batter-frying oil found in standard meal sets.",
+          "message": "Steamed parcels and light vegetable sautés offer moderate protein and fiber, though cooking oils require portion mindfulness given your calorie surplus. Pair a steamed tofu pepes with boiled greens to boost protein without pushing your saturated fat higher.",
+          "boundingBox2D": [
+            235,
+            130,
+            360,
+            780
+          ],
+          "servingWeightGrams": 200,
+          "averageNutrientsPer100g": {
+            "calories": 95,
+            "protein": 7,
+            "totalFat": 5,
+            "saturatedFat": 1,
+            "carbohydrates": 6,
+            "sugar": 2,
+            "totalFibre": 2.2,
+            "sodium": 390,
+            "addedSugar": 1,
+            "transFat": 0
+          },
+          "items": [
+            "Tumis Kangkung / Cah Terasi / Stir-Fried Water Spinach with Shrimp Paste",
+            "Tumis Caisim / Stir-Fried Mustard Greens",
+            "Tumis Genjer Ala Pencok '89 / Pencok 89 Style Genjer Stir-Fry",
+            "Tumis Sawi Putih / Stir-Fried Napa Cabbage",
+            "Tumis Sawi Putih + Telor / Stir-Fried Napa Cabbage with Egg",
+            "Tumis Toge / Stir-Fried Bean Sprouts",
+            "Tumis Toge + Ikan Asin / Stir-Fried Bean Sprouts with Salted Fish",
+            "Tumis Oncom / Stir-Fried Oncom",
+            "Sop Ayam Kampung / Daging Sapi / Free-Range Chicken or Beef Soup",
+            "Sayur Sop Ceker / Chicken Feet Vegetable Soup",
+            "Pepes Tahu / Steamed Tofu in Banana Leaf",
+            "Tahu Acak / Crushed Tofu",
+            "Telur Dadar / Omelette"
+          ]
+        },
+        {
+          "groupName": "Tier 3 - Warning: Deep-Fried Meal Sets, Offal, Salted Fish & Rich Balado",
+          "sourceImageIndex": 0,
+          "verdict": {
+            "label": "High Saturated Fat & Sodium",
+            "level": "warning"
+          },
+          "comparisonSentence": "These deep-fried proteins and salted fish dishes severely aggravate your active saturated fat and sodium surpluses.",
+          "message": "Immersion frying and heavily salted preserved fish introduce oxidized lipids and high sodium loads that directly worsen your 3-day surpluses. If dining here, skip the fried meal sets entirely and avoid processed offal or salted fish.",
+          "boundingBox2D": [
+            185,
+            125,
+            580,
+            920
+          ],
+          "servingWeightGrams": 350,
+          "averageNutrientsPer100g": {
+            "calories": 210,
+            "protein": 14,
+            "totalFat": 12.5,
+            "saturatedFat": 4.5,
+            "carbohydrates": 10,
+            "sugar": 1,
+            "totalFibre": 1.2,
+            "sodium": 750,
+            "addedSugar": 1.5,
+            "transFat": 0.1
+          },
+          "items": [
+            "Kerupuk Mie + Bumbu Kacang / Noodle Crackers with Peanut Sauce",
+            "Sate Usus / Intestine Satay",
+            "Sate Ati-Ampla / Liver-Gizzard Satay",
+            "Sate Kulit / Skin Satay",
+            "Paket Burung Puyuh / Quail Meal Set (Nasi + Burung Puyuh + Sayur Asem + Tempe + Tahu)",
+            "Paket Uduk Burung Puyuh / Quail Uduk Meal Set (Nasi Uduk + Burung Puyuh + Sayur Asem + Tempe + Tahu)",
+            "Paket Ayam / Chicken Meal Set (Nasi + Ayam Goreng/Bakar + Sayur Asem + Tahu + Tempe)",
+            "Paket Uduk Ayam / Chicken Uduk Meal Set (Nasi Uduk + Ayam Goreng/Bakar + Sayur Asem Tahu + Tempe)",
+            "Paket Empal / Beef Empal Meal Set (Nasi + Daging Empal + Sayur Asem + Tahu + Tempe)",
+            "Paket Uduk Empal / Beef Empal Uduk Meal Set (Nasi Uduk + Daging Empal + Sayur Asem + Tahu)",
+            "Paket Bebek / Duck Meal Set (Nasi + Bebek Goreng + Sayur Asem + Tahu + Tempe)",
+            "Paket Uduk Bebek / Duck Uduk Meal Set (Nasi Uduk + Bebek Goreng + Sayur Asem + Tahu + Tempe)",
+            "Paket Lele / Catfish Meal Set (Nasi + Lele Goreng 2 Pcs + Sayur Asem + Tahu + Tempe)",
+            "Paket Uduk Lele / Catfish Uduk Meal Set (Nasi Uduk + Lele Goreng 2 Pcs + Sayur Asem + Tahu + Tempe)",
+            "Paket Kembung / Mackerel Meal Set (Nasi + Ikan Kembung + Sayur Asem + Tahu + Tempe)",
+            "Paket Uduk Kembung / Mackerel Uduk Meal Set (Nasi Uduk + Ikan Kembung + Sayur Asem + Tahu + Tempe)",
+            "Paket Mujair / Tilapia Meal Set (Nasi + Ikan Mujair Goreng + Sayur Asem + Tahu + Tempe)",
+            "Paket Uduk Mujair / Tilapia Uduk Meal Set (Nasi Uduk + Ikan Mujair Goreng + Sayur Asem + Tahu + Tempe)",
+            "Paket Nila / Nile Tilapia Meal Set (Nasi + Ikan Nila Goreng + Sayur Asem + Tahu + Tempe)",
+            "Paket Uduk Nila / Nile Tilapia Uduk Meal Set (Nasi Uduk + Ikan Nila Goreng + Sayur Asem + Tahu + Tempe)",
+            "Pencok Kacang / Peanut Pencok",
+            "Pencok Kacang + Ketimun / Peanut Pencok + Cucumber",
+            "Ayam Goreng Cabe Kering / Fried Chicken with Dry Chili",
+            "Pencok Ceker / Chicken Feet Pencok",
+            "Pencok Tahu/Tempe / Tofu/Tempeh Pencok",
+            "Ayam Geprek Selera Pedas / Spicy Crushed Fried Chicken",
+            "Pencok Kepala / Head Pencok",
+            "Pencok Kulit / Skin Pencok",
+            "Pencok Ampla/Usus/Ati / Gizzard/Intestine/Liver Pencok",
+            "Karedok Ala Pencok 89 / Pencok 89 Style Karedok",
+            "Pencok Ayam Goreng/Bakar / Fried/Grilled Chicken Pencok",
+            "Pencok Daging Empal / Beef Empal Pencok",
+            "Pencok Ikan Nila Goreng / Fried Nile Tilapia Pencok",
+            "Pencok Ikan Mujair Goreng / Fried Tilapia Pencok",
+            "Pencok Lele Goreng / Fried Catfish Pencok",
+            "Pencok Ikan Kembung / Mackerel Pencok",
+            "Pencok Bebek Goreng Presto / Pressure Fried Duck Pencok",
+            "Pencok Burung Puyuh / Quail Pencok",
+            "Jengkol Pencok / Pencok Jengkol Bean",
+            "Jengkol Balado / Balado Jengkol Bean",
+            "Jengkol Semur / Stewed Jengkol Bean",
+            "Jengkol Goreng / Fried Jengkol Bean",
+            "Sate Taichan Juara / Champion Taichan Satay",
+            "Tumis Udang Balado / Stir-Fried Shrimp Balado",
+            "Tumis Udang + Pete Bumbu Balado / Shrimp & Stink Bean Balado",
+            "Tumis Cumi Balado / Squid Balado",
+            "Tumis Cumi + Pete Bumbu Balado / Squid & Stink Bean Balado",
+            "Tumis Peda / Stir-Fried Peda Fish",
+            "Tumis Peda + Pete / Stir-Fried Peda Fish with Stink Bean",
+            "Tumis Cue / Stir-Fried Cue Fish",
+            "Tumis Cue + Pete / Stir-Fried Cue Fish with Stink Bean",
+            "Soto Betawi Daging Sapi / Ayam Kampung / Betawi Beef or Chicken Soup",
+            "Terong Balado / Balado Eggplant",
+            "Kol Goreng / Fried Cabbage",
+            "Pepes Peda Mix Pete / Steamed Peda Fish & Stink Bean",
+            "Pete Goreng/Bakar/Mentah / Fried, Grilled or Raw Stink Bean",
+            "Cumi Asin Goreng / Fried Salted Squid",
+            "Ikan Asin Peda Cabe Pencok / Salted Peda Fish with Chili Pencok",
+            "Ikan Teri Jengki Sambal Pencok / Jengki Anchovy with Pencok Sambal",
+            "Ikan Asin Sepat / Salted Sepat Fish",
+            "Ikan Asin Jambal / Salted Jambal Fish",
+            "Ikan Asin Gabus / Salted Snakehead Fish"
+          ]
+        },
+        {
+          "groupName": "Tier 4 - Alert: Ultra-Processed Starch (Seblak), Fried Rice & Sweet Desserts",
+          "sourceImageIndex": 1,
+          "verdict": {
+            "label": "Extreme Sodium, Calories & Sugar",
             "level": "alert"
           },
-          "comparisonSentence": "Compared to all other options, these salted fish dishes, fried rices, and seblaks deliver extreme sodium and saturated fat loads that severely worsen your health metrics.",
-          "message": "These items present an extreme metabolic load due to very high sodium levels from salted fish, heavy fried crackers, and dense oils. Consuming these will heavily aggravate your existing sodium and saturated fat surpluses, posing severe risks for blood pressure and cardiovascular strain.",
-          "averageNutrients": {
-            "calories": 850,
-            "protein": 28,
-            "totalFat": 42,
-            "saturatedFat": 15,
-            "carbohydrates": 88,
-            "sugar": 9,
-            "totalFibre": 2,
-            "sodium": 1800,
-            "addedSugar": 4,
-            "potassium": 320,
-            "solubleFibre": 0.7,
+          "comparisonSentence": "Unlike clean vegetable dishes, these gelatinized starch stews and sweet desserts push your calorie, sodium, and added sugar surpluses into critical alert territory.",
+          "message": "Gelatinized starch dishes (Seblak) and sweet desserts deliver high glycemic loads and massive sodium spikes that directly clash with your active metabolic profile. Strictly avoid this section to prevent exacerbating your calorie and sodium surges.",
+          "boundingBox2D": [
+            780,
+            55,
+            920,
+            920
+          ],
+          "servingWeightGrams": 300,
+          "averageNutrientsPer100g": {
+            "calories": 250,
+            "protein": 5,
+            "totalFat": 11,
+            "saturatedFat": 3.8,
+            "carbohydrates": 32,
+            "sugar": 12,
+            "totalFibre": 1,
+            "sodium": 950,
+            "addedSugar": 10,
             "transFat": 0.2
           },
-          "averageNutrientsPer100g": {
-            "calories": 310,
-            "protein": 10,
-            "totalFat": 15.2,
-            "saturatedFat": 5.4,
-            "carbohydrates": 32,
-            "sugar": 3.3,
-            "totalFibre": 0.7,
-            "sodium": 650
-          },
-          "orderingTip": "Strictly avoid salted fish and seblak dishes, and limit fried rice portions to prevent severe sodium spikes."
+          "items": [
+            "Nasi Putih / Plain White Rice",
+            "Nasi Uduk / Coconut Rice",
+            "Nasi Bakar Cakalang / Grilled Skipjack Tuna Rice",
+            "Nasi Bakar Ayam + Teri Medan / Grilled Chicken & Medan Anchovy Rice",
+            "Nasi Bakar Cumi Cabe Ijo / Grilled Squid Green Chili Rice",
+            "Nasi Goreng Ayam / Chicken Fried Rice",
+            "Nasi Goreng Ikan Asin / Salted Fish Fried Rice",
+            "Nasi Goreng Pete / Stink Bean Fried Rice",
+            "Nasi Goreng Ati/Ampla / Liver/Gizzard Fried Rice",
+            "Nasi Goreng Ala Pencok 89 / Pencok 89 Style Fried Rice",
+            "Seblak Complete / Complete Seblak",
+            "Seblak Ceker / Chicken Feet Seblak",
+            "Seblak Sea Food / Seafood Seblak",
+            "Seblak Oret Viral / Viral Oret Seblak",
+            "Bubur Ayam / Chicken Porridge",
+            "Mie Ayam Original / Original Chicken Noodle",
+            "Mie Ayam/Ceker/Bakso/Pangsiter / Chicken Noodle with Feet, Meatball & Wonton",
+            "Bubur Sum Sum/Ketan Hitam/Kacang / Coconut Rice Porridge / Black Glutinous Rice / Peanut Porridge",
+            "Bubur/Singkong Thai/Kolang Kaling / Thai Porridge, Cassava & Palm Fruit Dessert"
+          ]
         }
-      ],
-      "recommendedOption": "SAYUR ASEM / Tamarind Vegetable Soup"
+      ]
     }
   },
   {
     "setNum": 4,
     "id": "set4",
     "name": "Set 4: Juice & Beverage List",
-    "itemCount": 28,
+    "itemCount": 31,
     "groupCount": 4,
-    "translatedCount": 28,
-    "groupsWithNutrients": 4,
+    "translatedCount": 31,
     "groupsWith100g": 4,
-    "recommended": "KOPI / Black Coffee",
-    "durationMs": 9401,
+    "recommended": "Es Kelapa Muda / Young Coconut Water",
+    "durationMs": 7951,
     "data": {
-      "_internalReasoning": "Extracted all beverage menu items from the Cafe Crisna menu, grouped by nutritional density and sugar content, and ranked strictly based on the user's high calorie, added sugar, and sodium deviations.",
-      "comparisonTitle": "Cafe Crisna Beverage Menu Evaluation",
-      "comparisonType": "menu_items",
-      "summary": "The beverage menu consists heavily of sweetened iced drinks, fruit juices, and dessert soups loaded with added sugars and calories. Pure water, plain teas, and unsweetened juices rank best, while condensed milk and syrup-laden dessert bowls pose severe metabolic risks for a user already exceeding added sugar and calorie limits.",
-      "items": [
-        {
-          "name": "KOPI / Black Coffee",
-          "tier": 1,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "ES TEH MANIS / Sweet Iced Tea",
-          "tier": 2,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "WEDANG JAHE / Ginger Warm Drink",
-          "tier": 2,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "JUS ALPUKAT / Avocado Juice",
-          "tier": 2,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "JUS MELON / Melon Juice",
-          "tier": 2,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "JUS JERUK / Orange Juice",
-          "tier": 2,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "ES KELAPA MUDA / Young Coconut Water",
-          "tier": 2,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "JUS KEDONDONG / Ambarella Juice",
-          "tier": 2,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "JUS SIRSAK / Soursop Juice",
-          "tier": 2,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "ES LECI JELLY / Lychee Jelly Ice",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "ES BANGO AGER ITEM / Black Grass Jelly Ice",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "ES MOCTAIL RENBOW / Rainbow Mocktail Ice",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "ES LECI YAKULT / Lychee Yakult Ice",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "ES LECI KELAPA / Lychee Coconut Ice",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "ES NIPIS JELY SELASIH / Lime Jelly Basil Seed Ice",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "ES LEMON JELY SELASIH / Lemon Jelly Basil Seed Ice",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "ES KUWUT BALI / Bali Kuwut Ice",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "ES KUWUT NANAS / Pineapple Kuwut Ice",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "ES VIRGIN MOJITO / Virgin Mojito",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "JUS MANGGA / Mango Juice",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "JUS DURIAN / Durian Juice",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "JUS PISANG / Banana Smoothie",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "ES JERUK KELAPA / Orange Coconut Ice",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "ES CAMPUR / Mixed Ice Dessert",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "ES ALPUKAT KOCOK / Whipped Avocado Ice",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "ES TELER ALPUKAT / Teler Avocado Ice",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "ES TELER DURIAN / Teler Durian Ice",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "SOP BUAH / Fruit Soup Dessert",
-          "tier": 4,
-          "sourceImageIndex": 0
-        }
+      "allExtractedDishes": [
+        "Es Leci Jelly / Lychee Jelly Ice",
+        "Es Bango Ager Item / Black Grass Jelly Ice",
+        "Es Moctail Renbow / Rainbow Mocktail Ice",
+        "Es Teh Manis / Sweet Iced Tea",
+        "Wedang Jahe / Ginger Warm Drink",
+        "Kopi / Coffee",
+        "Jus Alpukat / Avocado Juice",
+        "Jus Melon / Melon Juice",
+        "Es Leci Yakult / Lychee Yakult Ice",
+        "Es Leci Kelapa / Lychee Coconut Ice",
+        "Es Nipis Jely Selasih / Lime Jelly Basil Seed Ice",
+        "Es Lemon Jely Selasih / Lemon Jelly Basil Seed Ice",
+        "Es Kuwut Bali / Balinese Kuwut Ice",
+        "Es Kuwut Nanas / Pineapple Kuwut Ice",
+        "Es Virgin Mojito / Virgin Mojito Ice",
+        "Es Jeruk / Orange Ice",
+        "Es Kelapa Muda / Young Coconut Water",
+        "Es Jeruk Kelapa / Orange Coconut Ice",
+        "Es Campur / Mixed Fruit Ice Dessert",
+        "Es Alpukat Kocok / Whipped Avocado Ice",
+        "Es Teler Alpukat / Avocado Teler Ice",
+        "Es Teler Durian / Durian Teler Ice",
+        "Sop Buah / Fruit Soup Dessert",
+        "Jus Buah Merah / Red Fruit Juice",
+        "Jus Pir / Pear Juice",
+        "Jus Mangga / Mango Juice",
+        "Jus Durian / Durian Fruit Juice",
+        "Jus Kedondong / Ambarella Fruit Juice",
+        "Jus Sirsak / Soursop Juice",
+        "Jus Pisang / Banana Smoothie",
+        "Es Jeruk / Orange Juice"
       ],
+      "_internalReasoning": "Exhaustively extracted all 31 beverage and dessert items from the Café Crisna menu board across 4 rows. Grouped them strictly by macro variance (<=10%) into plain unsweetened/moderately sweetened coconut water, whole fruit juices with natural fiber and sugars, sweetened mocktails/teas with moderate sugar, and heavy condensed milk/coconut milk desserts loaded with added sugars and saturated fats. Since the user has major excesses in calories (+39%), added sugars (+50%), saturated fat (+38%), and sodium, while lacking fiber (-26%), the plain coconut water and light fruit options are prioritized to avoid high added sugar and saturated fat surges. High-calorie coconut-milk desserts and sugary syrups are isolated to warning tiers.",
+      "comparisonTitle": "Cafe Crisna Beverage and Dessert Menu",
+      "comparisonType": "menu_items",
+      "summary": "This menu features various juices, iced mocktails, and rich tropical milk desserts. Given your high added sugar (+50%), saturated fat (+38%), and calorie surplus (+2500 kcal), avoid rich coconut milk desserts like Es Teler and Es Campur which worsen your lipid and caloric targets. Instead, opt for unsweetened young coconut water or light fruit juices without heavy syrups to manage sugar intake while supporting potassium levels.",
+      "recommendedOption": "Es Kelapa Muda / Young Coconut Water",
       "groups": [
         {
-          "groupName": "Tier 1 - Safest Choice: Unsweetened Hot Beverage",
-          "scoutItemIndices": [
-            0
-          ],
-          "boundingBox2D": [
-            110,
-            630,
-            290,
-            750
-          ],
+          "groupName": "Tier 1 - Safest Choice: Unsweetened Hydrating Coconut Water",
+          "sourceImageIndex": 0,
           "verdict": {
-            "label": "Safest Zero-Sugar Option",
+            "label": "Lowest Added Sugar & Fat",
             "level": "good"
           },
-          "comparisonSentence": "Unlike the sugary fruit soups and iced desserts, black coffee provides zero added sugar and minimal calories.",
-          "message": "Black coffee is the absolute safest beverage choice on this menu, containing virtually zero calories, carbohydrates, and added sugars. It delivers healthy antioxidants without spiking your glucose levels or worsening your current calorie and sugar surplus. Enjoy it plain to keep your metabolic targets on track.",
-          "averageNutrients": {
-            "calories": 5,
-            "protein": 0.3,
-            "totalFat": 0,
-            "saturatedFat": 0,
-            "carbohydrates": 0.8,
-            "sugar": 0,
-            "totalFibre": 0,
-            "sodium": 5,
+          "comparisonSentence": "This plain natural beverage avoids the heavy added sugars and saturated fats found in milk-based desserts.",
+          "message": "With your added sugar and saturated fat significantly over target, plain young coconut water provides natural hydration and potassium without spiking blood glucose or adding empty calories. Order it fresh without added simple syrup or condensed milk to keep your daily surplus under control.",
+          "boundingBox2D": [
+            570,
+            170,
+            770,
+            310
+          ],
+          "servingWeightGrams": 300,
+          "averageNutrientsPer100g": {
+            "calories": 20,
+            "protein": 0.5,
+            "totalFat": 0.2,
+            "saturatedFat": 0.1,
+            "carbohydrates": 4.5,
+            "sugar": 3.5,
+            "totalFibre": 1,
+            "sodium": 25,
             "addedSugar": 0,
-            "potassium": 110,
-            "solubleFibre": 0,
             "transFat": 0
           },
-          "averageNutrientsPer100g": {
-            "calories": 2,
-            "protein": 0.2,
-            "totalFat": 0,
-            "saturatedFat": 0,
-            "carbohydrates": 0.4,
-            "sugar": 0,
-            "totalFibre": 0,
-            "sodium": 2
-          },
-          "orderingTip": "Order plain with no added sugar, milk, or syrups."
+          "items": [
+            "Es Kelapa Muda / Young Coconut Water"
+          ]
         },
         {
-          "groupName": "Tier 2 - Moderate Choice: Fresh Fruit Juices & Teas",
-          "scoutItemIndices": [
-            1,
-            2,
-            3,
-            4,
-            5,
-            6,
-            7,
-            8
-          ],
-          "boundingBox2D": [
-            115,
-            410,
-            770,
-            840
-          ],
+          "groupName": "Tier 2 - Neutral Choice: Fresh Whole Fruit Juices",
+          "sourceImageIndex": 0,
           "verdict": {
-            "label": "Moderate Natural Sugars",
+            "label": "Natural Vitamins & Dietary Fibre",
             "level": "neutral"
           },
-          "comparisonSentence": "While lower in refined syrups than dessert soups, these juices and teas still contribute moderate natural fruit sugars.",
-          "message": "Fresh fruit juices and warm ginger drinks offer vitamins, potassium, and hydration, though natural fruit sugars can still impact glucose control. Given your current 50% surplus in added sugars, consume these in moderation without adding extra table sugar or simple syrups.",
-          "averageNutrients": {
-            "calories": 120,
-            "protein": 1.5,
-            "totalFat": 2.5,
-            "saturatedFat": 0.4,
-            "carbohydrates": 24,
-            "sugar": 18,
-            "totalFibre": 2,
-            "sodium": 15,
-            "addedSugar": 5,
-            "potassium": 280,
-            "solubleFibre": 0.5,
+          "comparisonSentence": "These whole fruit juices supply natural fiber and micronutrients compared to refined syrups, though they still contribute natural fruit sugars.",
+          "message": "Your fiber intake is low (-26%), making whole fruit blends beneficial, but be mindful of natural fruit sugars contributing to your carbohydrate surplus. Request your juice prepared with minimal or no added liquid sugar to protect your metabolic targets.",
+          "boundingBox2D": [
+            780,
+            50,
+            990,
+            880
+          ],
+          "servingWeightGrams": 350,
+          "averageNutrientsPer100g": {
+            "calories": 52,
+            "protein": 0.7,
+            "totalFat": 0.3,
+            "saturatedFat": 0.1,
+            "carbohydrates": 13,
+            "sugar": 10.5,
+            "totalFibre": 2.2,
+            "sodium": 5,
+            "addedSugar": 2,
             "transFat": 0
           },
-          "averageNutrientsPer100g": {
-            "calories": 50,
-            "protein": 0.6,
-            "totalFat": 1,
-            "saturatedFat": 0.2,
-            "carbohydrates": 10,
-            "sugar": 7.5,
-            "totalFibre": 0.8,
-            "sodium": 6
-          },
-          "orderingTip": "Request half-sugar or no added syrup when ordering fruit juices."
+          "items": [
+            "Jus Alpukat / Avocado Juice",
+            "Jus Melon / Melon Juice",
+            "Jus Buah Merah / Red Fruit Juice",
+            "Jus Pir / Pear Juice",
+            "Jus Mangga / Mango Juice",
+            "Jus Durian / Durian Fruit Juice",
+            "Jus Kedondong / Ambarella Fruit Juice",
+            "Jus Sirsak / Soursop Juice",
+            "Jus Pisang / Banana Smoothie",
+            "Es Jeruk / Orange Juice"
+          ]
         },
         {
-          "groupName": "Tier 3 - Caution Choice: Sweetened Mocktails & Syrups",
-          "scoutItemIndices": [
-            9,
-            10,
-            11,
-            12,
-            13,
-            14,
-            15,
-            16,
-            17,
-            18,
-            19,
-            20,
-            21
-          ],
-          "boundingBox2D": [
-            110,
-            10,
-            970,
-            950
-          ],
+          "groupName": "Tier 3 - Warning Choice: Sweetened Iced Teas and Jelly Mocktails",
+          "sourceImageIndex": 0,
           "verdict": {
-            "label": "High Added Sugar Caution",
+            "label": "High Added Sugars & Syrups",
             "level": "warning"
           },
-          "comparisonSentence": "These sweetened mocktails and rich fruit smoothies contain significantly higher sugar loads than plain juices.",
-          "message": "These refreshing iced beverages and mocktails rely heavily on flavored syrups, jellies, and sweetened bases. Because you are already 50% over your daily added sugar target, consuming these drinks will exacerbate metabolic strain and push your daily caloric surplus even higher.",
-          "averageNutrients": {
-            "calories": 210,
-            "protein": 2,
-            "totalFat": 3.5,
-            "saturatedFat": 1.2,
-            "carbohydrates": 44,
-            "sugar": 35,
-            "totalFibre": 1.5,
-            "sodium": 40,
-            "addedSugar": 25,
-            "potassium": 220,
-            "solubleFibre": 0.4,
-            "transFat": 0
-          },
-          "averageNutrientsPer100g": {
-            "calories": 75,
-            "protein": 0.7,
-            "totalFat": 1.2,
-            "saturatedFat": 0.4,
-            "carbohydrates": 16,
-            "sugar": 12.5,
-            "totalFibre": 0.5,
-            "sodium": 14
-          },
-          "orderingTip": "Ask to minimize syrup pumps and skip sweetened jellies."
-        },
-        {
-          "groupName": "Tier 4 - Alert Choice: Condensed Milk Dessert Soups",
-          "scoutItemIndices": [
-            22,
-            23,
-            24,
-            25,
-            26,
-            27
-          ],
+          "comparisonSentence": "These options contain concentrated liquid sweeteners that directly worsen your 50% added sugar surplus.",
+          "message": "Containing flavored syrups, jellies, and cane sugar, these drinks conflict with your active carbohydrate and added sugar surpluses. If ordering, explicitly request 'less sweet' or unsweetened tea varieties to avoid unnecessary caloric density.",
           "boundingBox2D": [
-            560,
-            175,
-            720,
+            110,
+            0,
+            530,
             950
           ],
-          "verdict": {
-            "label": "Severe Sugar & Calorie Alert",
-            "level": "alert"
-          },
-          "comparisonSentence": "Unlike plain coffee, these decadent dessert soups combine condensed milk, syrups, and heavy fats, triggering severe metabolic overload.",
-          "message": "Dessert beverages like Es Campur and Es Teler are calorie-dense nutritional traps loaded with sweetened condensed milk, coconut milk, and sugary syrups. Given that your 3-day averages show a 39% calorie surplus and 50% added sugar excess, consuming these heavy treats will severely undermine your health goals.",
-          "averageNutrients": {
-            "calories": 380,
-            "protein": 5,
-            "totalFat": 14,
-            "saturatedFat": 9.5,
-            "carbohydrates": 58,
-            "sugar": 45,
-            "totalFibre": 3,
-            "sodium": 85,
-            "addedSugar": 38,
-            "potassium": 350,
-            "solubleFibre": 0.8,
+          "servingWeightGrams": 350,
+          "averageNutrientsPer100g": {
+            "calories": 65,
+            "protein": 0.2,
+            "totalFat": 0.1,
+            "saturatedFat": 0,
+            "carbohydrates": 16.5,
+            "sugar": 15,
+            "totalFibre": 0.5,
+            "sodium": 10,
+            "addedSugar": 12,
             "transFat": 0
           },
-          "averageNutrientsPer100g": {
-            "calories": 135,
-            "protein": 1.8,
-            "totalFat": 5,
-            "saturatedFat": 3.4,
-            "carbohydrates": 20.5,
-            "sugar": 16,
-            "totalFibre": 1.1,
-            "sodium": 30
+          "items": [
+            "Es Leci Jelly / Lychee Jelly Ice",
+            "Es Bango Ager Item / Black Grass Jelly Item",
+            "Es Moctail Renbow / Rainbow Mocktail Ice",
+            "Es Teh Manis / Sweet Iced Tea",
+            "Wedang Jahe / Ginger Warm Drink",
+            "Kopi / Coffee",
+            "Es Leci Yakult / Lychee Yakult Ice",
+            "Es Leci Kelapa / Lychee Coconut Ice",
+            "Es Nipis Jely Selasih / Lime Jelly Basil Seed Ice",
+            "Es Lemon Jely Selasih / Lemon Jelly Basil Seed Ice",
+            "Es Kuwut Bali / Balinese Kuwut Ice",
+            "Es Kuwut Nanas / Pineapple Kuwut Ice",
+            "Es Virgin Mojito / Virgin Mojito Ice",
+            "Es Jeruk / Orange Ice",
+            "Es Jeruk Kelapa / Orange Coconut Ice"
+          ]
+        },
+        {
+          "groupName": "Tier 4 - Alert Choice: Heavy Condensed Milk and Coconut Milk Desserts",
+          "sourceImageIndex": 0,
+          "verdict": {
+            "label": "Excessive Saturated Fat & Calories",
+            "level": "alert"
           },
-          "orderingTip": "Avoid entirely or share with multiple people if consumed."
+          "comparisonSentence": "These rich dessert bowls combine heavy saturated fats from coconut milk and condensed milk with extreme added sugar loads, severely violating your daily surplus limits.",
+          "message": "With saturated fat already 38% over target and calories 39% high, these heavy desserts will exacerbate your metabolic strain. Completely avoid items like Es Teler and Es Campur to protect your cardiovascular health.",
+          "boundingBox2D": [
+            570,
+            430,
+            710,
+            960
+          ],
+          "servingWeightGrams": 400,
+          "averageNutrientsPer100g": {
+            "calories": 115,
+            "protein": 1.8,
+            "totalFat": 5.5,
+            "saturatedFat": 4.5,
+            "carbohydrates": 15,
+            "sugar": 14,
+            "totalFibre": 1.5,
+            "sodium": 35,
+            "addedSugar": 12,
+            "transFat": 0
+          },
+          "items": [
+            "Es Campur / Mixed Fruit Ice Dessert",
+            "Es Alpukat Kocok / Whipped Avocado Ice",
+            "Es Teler Alpukat / Avocado Teler Ice",
+            "Es Teler Durian / Durian Teler Ice",
+            "Sop Buah / Fruit Soup Dessert"
+          ]
         }
-      ],
-      "recommendedOption": "KOPI / Black Coffee"
+      ]
     }
   },
   {
     "setNum": 5,
     "id": "set5",
     "name": "Set 5: Indonesian Street Food & Seafood Menu Banner",
-    "itemCount": 57,
-    "groupCount": 3,
-    "translatedCount": 57,
-    "groupsWithNutrients": 3,
-    "groupsWith100g": 3,
-    "recommended": "NILA BAKAR / GR + NASI / Grilled or Fried Tilapia with Rice",
-    "durationMs": 13270,
+    "itemCount": 59,
+    "groupCount": 5,
+    "translatedCount": 59,
+    "groupsWith100g": 5,
+    "recommended": "IKAN NILA GARANG ASEM + NASI / Tilapia in Tangy Broth with Rice",
+    "durationMs": 14613,
     "data": {
-      "_internalReasoning": "Extracted all visible menu items and categorized them into 5 distinct groups based on macro variance and user nutritional targets.",
-      "comparisonTitle": "Menu Item Nutritional Comparison and Evaluation",
-      "comparisonType": "menu_items",
-      "summary": "This evaluation compares grilled fish, chicken, rice, noodle, and seafood dishes based on your intake targets. Grilled protein and fish dishes offer the best balance of protein without excess sugar or trans fats, while fried rice, noodles, and seblak dishes contribute significantly to carbohydrate, calorie, and sodium overages.",
-      "items": [
-        {
-          "name": "NILA BAKAR / GR + NASI / Grilled or Fried Tilapia with Rice",
-          "tier": 2,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "BAWAL BAKAR / GR + NASI / Grilled or Fried Pomfret with Rice",
-          "tier": 2,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "BANDENG BAKAR / GR + NASI / Grilled or Fried Milkfish with Rice",
-          "tier": 2,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "TONGKOL BAKAR / GR + NASI / Grilled or Fried Mackerel Tuna with Rice",
-          "tier": 2,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "CUE BAKAR / GR + NASI / Grilled or Fried Cue Fish with Rice",
-          "tier": 2,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "GURAME BAKAR / GORENG + NASI / Grilled or Fried Giant Gourami with Rice",
-          "tier": 2,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "IKAN QUE BAKAR / GR + NASI / Grilled or Fried Que Fish with Rice",
-          "tier": 2,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "BARONANG BAKAR / GR + NASI / Grilled or Fried Rabbitfish with Rice",
-          "tier": 2,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "AYAM BAKAR + NASI / Grilled Chicken with Rice",
-          "tier": 2,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "AYAM BAKAR SAMBEL / Grilled Chicken with Sambal",
-          "tier": 2,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "LAMPUNG + NASI / Lampung Style Chicken with Rice",
-          "tier": 2,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "AYAM BAKAR SAMBEL IJO + NASI / Grilled Chicken with Green Chili Sambal and Rice",
-          "tier": 2,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "GURAME ASAM MANIS + NASI / Giant Gourami in Sweet and Sour Sauce with Rice",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "GURAME VILET ASAM MANIS + NASI / Giant Gourami Fillet in Sweet and Sour Sauce with Rice",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "IKAN BAWAL ASEM MANIS + NASI / Pomfret in Sweet and Sour Fish Soup with Rice",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "IKAN NILA GARANG ASEM + NASI / Tilapia in Spicy Sour Broth with Rice",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "AYAM GARANG ASEM + NASI / Chicken in Spicy Sour Broth with Rice",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "TONGKOL GARANG ASEM + NASI / Mackerel Tuna in Spicy Sour Broth with Rice",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "GURAME GARANG ASEM + NASI / Giant Gourami in Spicy Sour Broth with Rice",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "AYAM MERCON + NASI / Firecracker Spicy Chicken with Rice",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "TONGKOL SUIR PETE + NASI / Shredded Mackerel Tuna with Stink Beans and Rice",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "TONGKOL SUIR JENGKOL + NASI / Shredded Mackerel Tuna with Jengkol Beans and Rice",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "AYAM GORENG SAMBEL / Fried Chicken with Sambal",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "AYAM ASAM MANIS + NASI / Chicken in Sweet and Sour Sauce with Rice",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "AYAM GORENG GEPREK TEPUNG + NASI / Crispy Smashed Fried Chicken with Rice",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "AYAM GORENG SAMBEL IJO + NASI / Fried Chicken with Green Chili Sambal and Rice",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "AYAM GORENG SAMBEL JUDES / Fried Chicken with Fierce Spicy Sambal",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "NASI GORENG SEAFOOD / Seafood Fried Rice",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "NASI GORENG SPESIAL / Special Fried Rice",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "NASI GORENG PETE / Fried Rice with Stink Beans",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "NASI GORENG JENGKOL / Fried Rice with Jengkol Beans",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "NASI GORENG SOSIS / Fried Rice with Sausage",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "NASI GORENG BAKSO / Fried Rice with Meatballs",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "NASI GORENG KORNET / Fried Rice with Corned Beef",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "NASI GORENG TELOR DADAR / Fried Rice with Omelette",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "NASI GORENG AYAM / Chicken Fried Rice",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "SEBLAK COBEK VIRAL / Viral Stone Mortar Seblak Spicy Crackers",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "SEBLAK SEAFOOD / Seafood Seblak Spicy Crackers",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "SEBLAK CEKER / Chicken Feet Seblak Spicy Crackers",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "CEKER MERCON / Firecracker Spicy Chicken Feet",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "MIE TEK - TEK KUAH / Broth Mie Tek-Tek Noodles",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "MIE TEK - TEK SOSIS / Mie Tek-Tek Noodles with Sausage",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "MIE TEK - TEK BAKSO / Mie Tek-Tek Noodles with Meatballs",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "MIE TEK - TEK KORNET / Mie Tek-Tek Noodles with Corned Beef",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "MIE TEK - TEK SEAFOOD / Seafood Mie Tek-Tek Noodles",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "KWETIAU GORENG BAKSO SOSIS / Fried Flat Rice Noodles with Meatballs and Sausage",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "KWETIAU GORENG SEAFOOD / Seafood Fried Flat Rice Noodles",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "KWETIAU KUAH SOSIS BAKSO / Flat Rice Noodle Soup with Sausage and Meatballs",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "KWETIAU SPECIAL / Special Flat Rice Noodles",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "KWETIAU AYAM / Chicken Flat Rice Noodles",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "MIE TEK - TEK SPECIAL / Special Mie Tek-Tek Noodles",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "MIE TEK - TEK AYAM / Chicken Mie Tek-Tek Noodles",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "SEAFOOD TUMPAH / Spilled Mixed Seafood Platter",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "CUMI GORENG TEPUNG + NASI / Crispy Fried Squid with Rice",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "CUMI GORENG TEPUNG / Crispy Fried Squid",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "ASAM MANIS + NASI / Sweet and Sour Fish with Rice",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "CUMI SAOS ASAM MANIS / Squid in Sweet and Sour Sauce",
-          "tier": 4,
-          "sourceImageIndex": 0
-        }
+      "allExtractedDishes": [
+        "NILA BAKAR / GR + NASI / Grilled or Fried Tilapia with Rice",
+        "BAWAL BAKAR / GR + NASI / Grilled or Fried Pomfret with Rice",
+        "BANDENG BAKAR / GR + NASI / Grilled or Fried Milkfish with Rice",
+        "TONGKOL BAKAR / GR + NASI / Grilled or Fried Tuna with Rice",
+        "CUE BAKAR / GR + NASI / Grilled or Fried Cue Fish with Rice",
+        "GURAME BAKAR / GORENG + NASI / Grilled or Fried Carp with Rice",
+        "GURAME ASAM MANIS + NASI / Sweet and Sour Carp with Rice",
+        "GURAME VILET ASAM MANIS + NASI / Sweet and Sour Carp Fillet with Rice",
+        "IKAN QUE BAKAR / GR + NASI / Grilled or Fried Que Fish with Rice",
+        "BARONANG BAKAR / GR + NASI / Grilled or Fried Rabbitfish with Rice",
+        "IKAN BAWAL ASEM MANIS + NASI / Sweet and Sour Pomfret with Rice",
+        "IKAN NILA GARANG ASEM + NASI / Tilapia in Tangy Broth with Rice",
+        "AYAM GARANG ASEM + NASI / Chicken in Tangy Broth with Rice",
+        "TONGKOL GARANG ASEM + NASI / Tuna in Tangy Broth with Rice",
+        "GURAME GARANG ASEM + NASI / Carp in Tangy Broth with Rice",
+        "AYAM MERCON + NASI / Spicy Chilli Chicken with Rice",
+        "TONGKOL SUIR PETE + NASI / Shredded Tuna with Stink Beans and Rice",
+        "TONGKOL SUIR JENGKOL + NASI / Shredded Tuna with Jengkol Beans and Rice",
+        "AYAM BAKAR + NASI / Grilled Chicken with Rice",
+        "AYAM BAKAR SAMBEL / Grilled Chicken with Sambal",
+        "LAMPUNG + NASI / Lampung Style Chicken with Rice",
+        "AYAM GORENG SAMBEL / Fried Chicken with Sambal",
+        "LAMPUNG + NASI / Lampung Style Chicken with Rice",
+        "AYAM ASAM MANIS + NASI / Sweet and Sour Chicken with Rice",
+        "AYAM GORENG GEPREK TEPUNG + NASI / Crispy Smashed Fried Chicken with Rice",
+        "AYAM BAKAR SAMBEL IJO + NASI / Grilled Chicken with Green Chilli and Rice",
+        "AYAM GORENG SAMBEL IJO + NASI / Fried Chicken with Green Chilli and Rice",
+        "AYAM GORENG SAMBEL JUDES / Spicy Fried Chicken with Judes Sambal",
+        "ASINAN DAN RUJAK / Pickled Fruit and Rujak Salad",
+        "NASI GORENG SEAFOOD / Seafood Fried Rice",
+        "NASI GORENG SPESIAL / Special Fried Rice",
+        "NASI GORENG PETE / Fried Rice with Stink Beans",
+        "NASI GORENG JENGKOL / Fried Rice with Jengkol Beans",
+        "NASI GORENG SOSIS / Sausage Fried Rice",
+        "NASI GORENG BAKSO / Meatball Fried Rice",
+        "NASI GORENG KORNET / Corned Beef Fried Rice",
+        "NASI GORENG TELOR DADAR / Fried Rice with Omelette",
+        "NASI GORENG AYAM / Chicken Fried Rice",
+        "SEBLAK COBEK VIRAL / Viral Stone-Ground Seblak",
+        "SEBLAK SEAFOOD / Seafood Seblak",
+        "SEBLAK CEKER / Chicken Feet Seblak",
+        "CEKER MERCON / Spicy Chilli Chicken Feet",
+        "MIE TEK - TEK KUAH / Brothy Tek-Tek Noodles",
+        "MIE TEK - TEK SOSIS / Tek-Tek Noodles with Sausage",
+        "MIE TEK - TEK BAKSO / Tek-Tek Noodles with Meatballs",
+        "MIE TEK - TEK KORNET / Tek-Tek Noodles with Corned Beef",
+        "MIE TEK - TEK SEAFOOD / Seafood Tek-Tek Noodles",
+        "KWETIAU GORENG BAKSO SOSIS / Fried Flat Noodles with Meatballs and Sausage",
+        "KWETIAU GORENG SEAFOOD / Seafood Fried Flat Noodles",
+        "KWETIAU KUAH SOSIS BAKSO / Brothy Flat Noodles with Sausage and Meatballs",
+        "KWETIAU SPECIAL / Special Flat Noodles",
+        "KWETIAU AYAM / Chicken Flat Noodles",
+        "MIE TEK - TEK SPECIAL / Special Tek-Tek Noodles",
+        "MIE TEK - TEK AYAM / Chicken Tek-Tek Noodles",
+        "SEAFOOD TUMPAH / Spilled Seafood Platter",
+        "CUMI GORENG TEPUNG + NASI / Crispy Fried Squid with Rice",
+        "CUMI GORENG TEPUNG / Crispy Fried Squid",
+        "ASAM MANIS + NASI / Sweet and Sour Dish with Rice",
+        "CUMI SAOS ASAM MANIS / Squid in Sweet and Sour Sauce"
       ],
+      "_internalReasoning": "Exhaustively extracted 58 distinct menu items across fish, chicken, rice, seblak, and noodle categories. Clustered into 5 distinct groups based on macro variance <=10%, separating water-poached broths from whole grilled fish, fried meal sets, ultra-processed starch/seblak dishes, and high-sodium stir-fried/fried rice items. The patient presents with high sodium (3000mg), saturated fat surpluses (27.7g), added sugars (45g), and low protein/fibre. Group 1 (Garang Asem broths) provides lean whole protein, antioxidant polyphenols, and lower sodium/fat than fried options, best matching clinical goals.",
+      "comparisonTitle": "Indonesian Seafood & Poultry Restaurant Menu",
+      "comparisonType": "menu_items",
+      "summary": "The evaluated menu offers diverse Indonesian dishes featuring fish, poultry, fried rice, and seblak. Given your current surpluses in sodium (3000mg), saturated fat (27.7g), and added sugar, combined with deficits in protein and total fibre, your optimal choices are clear. Opt for whole fish or chicken prepared in tangy clear broths (Garang Asem) to secure high-quality protein and cardioprotective marine omega-3s while avoiding the extreme sodium and trans fats found in seblak, fried noodles, and deep-fried meal sets.",
+      "recommendedOption": "IKAN NILA GARANG ASEM + NASI / Tilapia in Tangy Broth with Rice",
       "groups": [
         {
-          "groupName": "Tier 2 - Grilled Fish and Chicken Dishes",
-          "scoutItemIndices": [
-            0,
-            1,
-            2,
-            3,
-            4,
-            5,
-            6,
-            7,
-            8,
-            9,
-            10,
-            11
-          ],
-          "boundingBox2D": [
-            134,
-            46,
-            850,
-            575
-          ],
+          "groupName": "Tier 1 - Safest Choice: Tangy Poached Broths & Grilled Whole Fish",
+          "sourceImageIndex": 0,
           "verdict": {
-            "label": "Moderate Protein Choice",
-            "level": "neutral"
+            "label": "Cardioprotective Protein & Low Fat",
+            "level": "good"
           },
-          "comparisonSentence": "These grilled fish and chicken options provide cleaner protein sources with significantly less saturated fat and carbohydrate overload compared to the fried noodle and fried rice dishes.",
-          "message": "Grilled fish and chicken options help close your protein deficit while keeping added sugar minimal. However, portion sizes and accompanying rice can elevate carbohydrates and sodium. Balance your meal by prioritizing the lean fish protein and moderating the rice portion to stay aligned with your daily targets.",
-          "averageNutrients": {
-            "calories": 480,
-            "protein": 34,
-            "totalFat": 12,
-            "saturatedFat": 3,
-            "carbohydrates": 45,
-            "sugar": 3,
-            "totalFibre": 2,
-            "sodium": 550,
-            "addedSugar": 1,
-            "potassium": 420,
-            "solubleFibre": 0.5,
+          "comparisonSentence": "These whole fish and clear broth options deliver clean marine omega-3s and high protein without compounding your saturated fat and sodium surpluses.",
+          "message": "These dishes provide lean protein and beneficial omega-3 fatty acids while keeping saturated fats low, directly counterbalancing your protein deficit without worsening your 38% saturated fat surplus. When ordering, request your fish grilled or poached with minimal added salt, and pair it with an extra portion of steamed greens to bridge your fibre gap.",
+          "boundingBox2D": [
+            135,
+            50,
+            590,
+            550
+          ],
+          "servingWeightGrams": 350,
+          "averageNutrientsPer100g": {
+            "calories": 115,
+            "protein": 14.5,
+            "totalFat": 3.8,
+            "saturatedFat": 0.9,
+            "carbohydrates": 7,
+            "sugar": 1.2,
+            "totalFibre": 1.5,
+            "sodium": 380,
+            "addedSugar": 0.5,
             "transFat": 0
           },
-          "averageNutrientsPer100g": {
-            "calories": 165,
-            "protein": 14.5,
-            "totalFat": 5.1,
-            "saturatedFat": 1.3,
-            "carbohydrates": 15,
-            "sugar": 1,
-            "totalFibre": 0.8,
-            "sodium": 220
-          },
-          "orderingTip": "Request grilled preparation without sweet soy glaze and ask for half portions of white rice to control carbohydrates."
+          "items": [
+            "NILA BAKAR / GR + NASI / Grilled or Fried Tilapia with Rice",
+            "BAWAL BAKAR / GR + NASI / Grilled or Fried Pomfret with Rice",
+            "BANDENG BAKAR / GR + NASI / Grilled or Fried Milkfish with Rice",
+            "TONGKOL BAKAR / GR + NASI / Grilled or Fried Tuna with Rice",
+            "CUE BAKAR / GR + NASI / Grilled or Fried Cue Fish with Rice",
+            "GURAME BAKAR / GORENG + NASI / Grilled or Fried Carp with Rice",
+            "IKAN QUE BAKAR / GR + NASI / Grilled or Fried Que Fish with Rice",
+            "BARONANG BAKAR / GR + NASI / Grilled or Fried Rabbitfish with Rice",
+            "IKAN NILA GARANG ASEM + NASI / Tilapia in Tangy Broth with Rice",
+            "AYAM GARANG ASEM + NASI / Chicken in Tangy Broth with Rice",
+            "TONGKOL GARANG ASEM + NASI / Tuna in Tangy Broth with Rice",
+            "GURAME GARANG ASEM + NASI / Grilled or Fried Carp with Rice",
+            "AYAM BAKAR + NASI / Grilled Chicken with Rice",
+            "AYAM BAKAR SAMBEL / Grilled Chicken with Sambal",
+            "LAMPUNG + NASI / Lampung Style Chicken with Rice",
+            "AYAM BAKAR SAMBEL IJO + NASI / Grilled Chicken with Green Chilli and Rice"
+          ]
         },
         {
-          "groupName": "Tier 3 - Spicy and Sour Broths and Fried Poultry",
-          "scoutItemIndices": [
-            12,
-            13,
-            14,
-            15,
-            16,
-            17,
-            18,
-            19,
-            20,
-            21,
-            22,
-            23,
-            24,
-            25,
-            26
-          ],
-          "boundingBox2D": [
-            145,
-            48,
-            920,
-            580
-          ],
+          "groupName": "Tier 2 - Neutral Choice: Sweet, Sour & Spiced Poultry & Seafood Sets",
+          "sourceImageIndex": 0,
           "verdict": {
-            "label": "Sodium and Fat Caution",
+            "label": "Moderate Protein, Higher Sugar & Sodium",
+            "level": "neutral"
+          },
+          "comparisonSentence": "These sweet and sour or sambal-laden sets introduce hidden sugars and moderate sodium that require careful portion control.",
+          "message": "While these dishes supply necessary protein, the added sweet and sour sauces and spicy pastes contribute to your 50% added sugar surplus and elevate sodium levels. Order these only if you can scrape away excess sauce, and ensure you do not consume the entire portion of white rice provided to manage carbohydrate loads.",
+          "boundingBox2D": [
+            210,
+            50,
+            930,
+            550
+          ],
+          "servingWeightGrams": 320,
+          "averageNutrientsPer100g": {
+            "calories": 145,
+            "protein": 12,
+            "totalFat": 5.5,
+            "saturatedFat": 1.5,
+            "carbohydrates": 14,
+            "sugar": 4.5,
+            "totalFibre": 1,
+            "sodium": 520,
+            "addedSugar": 3.5,
+            "transFat": 0
+          },
+          "items": [
+            "GURAME ASAM MANIS + NASI / Sweet and Sour Carp with Rice",
+            "GURAME VILET ASAM MANIS + NASI / Sweet and Sour Carp Fillet with Rice",
+            "IKAN BAWAL ASEM MANIS + NASI / Sweet and Sour Pomfret with Rice",
+            "AYAM MERCON + NASI / Spicy Chilli Chicken with Rice",
+            "TONGKOL SUIR PETE + NASI / Shredded Tuna with Stink Beans and Rice",
+            "TONGKOL SUIR JENGKOL + NASI / Shredded Tuna with Jengkol Beans and Rice",
+            "AYAM GORENG SAMBEL / Fried Chicken with Sambal",
+            "LAMPUNG + NASI / Lampung Style Chicken with Rice",
+            "AYAM ASAM MANIS + NASI / Sweet and Sour Chicken with Rice",
+            "AYAM GORENG SAMBEL IJO + NASI / Fried Chicken with Green Chilli and Rice",
+            "AYAM GORENG SAMBEL JUDES / Spicy Fried Chicken with Judes Sambal",
+            "ASINAN DAN RUJAK / Pickled Fruit and Rujak Salad",
+            "ASAM MANIS + NASI / Sweet and Sour Dish with Rice",
+            "CUMI SAOS ASAM MANIS / Squid in Sweet and Sour Sauce"
+          ]
+        },
+        {
+          "groupName": "Tier 3 - Warning Choice: Deep-Fried Batter & Rich Seafood Platters",
+          "sourceImageIndex": 0,
+          "verdict": {
+            "label": "High Saturated Fat & Oxidized Lipids",
             "level": "warning"
           },
-          "comparisonSentence": "Compared to simple grilled selections, these sweet-and-sour and fried items introduce substantial added sugars, oxidized frying oils, and higher sodium loads.",
-          "message": "These dishes offer good protein content but come with trade-offs in sodium and hidden sugars from sweet-and-sour sauces or frying fats. Given your existing sodium and calorie overages, consume these cautiously and avoid drinking the broth or adding extra condiments.",
-          "averageNutrients": {
-            "calories": 620,
-            "protein": 32,
-            "totalFat": 24,
-            "saturatedFat": 7.5,
-            "carbohydrates": 65,
-            "sugar": 12,
-            "totalFibre": 2.5,
-            "sodium": 920,
-            "addedSugar": 8,
-            "potassium": 380,
-            "solubleFibre": 0.6,
+          "comparisonSentence": "The deep-frying batters and rich platters severely aggravate your saturated fat surplus and add excessive lipid peroxides.",
+          "message": "Deep-frying batters absorb large quantities of cooking oils, heavily compounding your 38% saturated fat surplus and contributing to cardiovascular strain. Avoid these battered squid and fried chicken sets entirely to protect your lipid profile, opting instead for a non-fried grilled fish alternative.",
+          "boundingBox2D": [
+            780,
+            580,
+            1000,
+            1000
+          ],
+          "servingWeightGrams": 300,
+          "averageNutrientsPer100g": {
+            "calories": 195,
+            "protein": 11,
+            "totalFat": 11.2,
+            "saturatedFat": 3.8,
+            "carbohydrates": 12,
+            "sugar": 1,
+            "totalFibre": 0.8,
+            "sodium": 650,
+            "addedSugar": 0.5,
             "transFat": 0.1
           },
-          "averageNutrientsPer100g": {
-            "calories": 210,
-            "protein": 11,
-            "totalFat": 8.2,
-            "saturatedFat": 2.5,
-            "carbohydrates": 22,
-            "sugar": 4,
-            "totalFibre": 0.8,
-            "sodium": 310
-          },
-          "orderingTip": "Ask for sambal and sauces served on the side so you can strictly control sugar and sodium intake."
+          "items": [
+            "AYAM GORENG GEPREK TEPUNG + NASI / Crispy Smashed Fried Chicken with Rice",
+            "SEAFOOD TUMPAH / Spilled Seafood Platter",
+            "CUMI GORENG TEPUNG + NASI / Crispy Fried Squid with Rice",
+            "CUMI GORENG TEPUNG / Crispy Fried Squid"
+          ]
         },
         {
-          "groupName": "Tier 4 - Fried Rice, Noodles, and Heavy Seafood Platters",
-          "scoutItemIndices": [
-            27,
-            28,
-            29,
-            30,
-            31,
-            32,
-            33,
-            34,
-            35,
-            36,
-            37,
-            38,
-            39,
-            40,
-            41,
-            42,
-            43,
-            44,
-            45,
-            46,
-            47,
-            48,
-            49,
-            50,
-            51,
-            52,
-            53,
-            54,
-            55,
-            56
-          ],
-          "boundingBox2D": [
-            140,
-            615,
-            990,
-            995
-          ],
+          "groupName": "Tier 3 - Warning Choice: Fried Rice & Stir-Fried Noodle Dishes",
+          "sourceImageIndex": 0,
           "verdict": {
-            "label": "High Calorie & Sodium Alert",
+            "label": "Excessive Sodium & Refined Carbohydrates",
+            "level": "warning"
+          },
+          "comparisonSentence": "These heavy noodle and fried rice dishes dramatically exceed your sodium and carbohydrate targets while offering minimal fibre.",
+          "message": "Fried rice and seasoned noodle dishes are heavily laden with sodium-rich soy sauces, oils, and processed meats, worsening your 3000mg sodium and carbohydrate surpluses. Skip these items to prevent acute blood pressure spikes, and request a vegetable-heavy clear soup if you need a comforting warm dish.",
+          "boundingBox2D": [
+            160,
+            580,
+            850,
+            1000
+          ],
+          "servingWeightGrams": 400,
+          "averageNutrientsPer100g": {
+            "calories": 180,
+            "protein": 6.5,
+            "totalFat": 7.5,
+            "saturatedFat": 2.2,
+            "carbohydrates": 22,
+            "sugar": 2.5,
+            "totalFibre": 1.2,
+            "sodium": 820,
+            "addedSugar": 1,
+            "transFat": 0
+          },
+          "items": [
+            "NASI GORENG SEAFOOD / Seafood Fried Rice",
+            "NASI GORENG SPESIAL / Special Fried Rice",
+            "NASI GORENG PETE / Fried Rice with Stink Beans",
+            "NASI GORENG JENGKOL / Fried Rice with Jengkol Beans",
+            "NASI GORENG SOSIS / Sausage Fried Rice",
+            "NASI GORENG BAKSO / Meatball Fried Rice",
+            "NASI GORENG KORNET / Corned Beef Fried Rice",
+            "NASI GORENG TELOR DADAR / Fried Rice with Omelette",
+            "NASI GORENG AYAM / Chicken Fried Rice",
+            "MIE TEK - TEK KUAH / Brothy Tek-Tek Noodles",
+            "MIE TEK - TEK SOSIS / Tek-Tek Noodles with Sausage",
+            "MIE TEK - TEK BAKSO / Tek-Tek Noodles with Meatballs",
+            "MIE TEK - TEK KORNET / Tek-Tek Noodles with Corned Beef",
+            "MIE TEK - TEK SEAFOOD / Seafood Tek-Tek Noodles",
+            "KWETIAU GORENG BAKSO SOSIS / Fried Flat Noodles with Meatballs and Sausage",
+            "KWETIAU GORENG SEAFOOD / Seafood Fried Flat Noodles",
+            "KWETIAU KUAH SOSIS BAKSO / Brothy Flat Noodles with Sausage and Meatballs",
+            "KWETIAU SPECIAL / Special Flat Noodles",
+            "KWETIAU AYAM / Chicken Flat Noodles",
+            "MIE TEK - TEK SPECIAL / Special Tek-Tek Noodles",
+            "MIE TEK - TEK AYAM / Chicken Tek-Tek Noodles"
+          ]
+        },
+        {
+          "groupName": "Tier 4 - Alert Choice: Ultra-Processed Starch Seblak & Offal",
+          "sourceImageIndex": 0,
+          "verdict": {
+            "label": "High Sodium, Offal & Gelatinized Starches",
             "level": "alert"
           },
-          "comparisonSentence": "Unlike cleaner protein dishes, this group drastically worsens your current calorie, sodium, and carbohydrate overages due to deep frying, refined starches, and heavy sodium seasonings.",
-          "message": "These carbohydrate-dense fried rice, noodle, and seblak dishes severely exacerbate your current caloric, sodium, and carbohydrate surpluses. While they deliver quick energy, they lack sufficient dietary fiber and push saturated fats and sodium well beyond safe thresholds, increasing metabolic strain.",
-          "averageNutrients": {
-            "calories": 780,
-            "protein": 18,
-            "totalFat": 32,
-            "saturatedFat": 11,
-            "carbohydrates": 105,
-            "sugar": 9,
-            "totalFibre": 1.8,
-            "sodium": 1350,
-            "addedSugar": 5,
-            "potassium": 250,
-            "solubleFibre": 0.3,
-            "transFat": 0.2
-          },
+          "comparisonSentence": "Seblak and spicy offal dishes present severe physiological hazards with extreme sodium and gelatinized starches that violate all clinical targets.",
+          "message": "Seblak features ultra-processed gelatinized tapioca crackers cooked in highly salted, spicy oils alongside processed offal, posing a severe hazard to your sodium and metabolic health. Strictly avoid this entire category to protect your cardiovascular system from extreme sodium loads and inflammatory lipid peroxides.",
+          "boundingBox2D": [
+            430,
+            580,
+            610,
+            1000
+          ],
+          "servingWeightGrams": 350,
           "averageNutrientsPer100g": {
-            "calories": 270,
-            "protein": 6.2,
-            "totalFat": 11,
-            "saturatedFat": 3.8,
-            "carbohydrates": 36,
-            "sugar": 3.1,
-            "totalFibre": 0.6,
-            "sodium": 460
+            "calories": 190,
+            "protein": 5.5,
+            "totalFat": 8.5,
+            "saturatedFat": 2.8,
+            "carbohydrates": 24,
+            "sugar": 1.5,
+            "totalFibre": 0.9,
+            "sodium": 950,
+            "addedSugar": 0.5,
+            "transFat": 0.1
           },
-          "orderingTip": "Avoid these items entirely or share a single portion with multiple people to limit carbohydrate and sodium spikes."
+          "items": [
+            "SEBLAK COBEK VIRAL / Viral Stone-Ground Seblak",
+            "SEBLAK SEAFOOD / Seafood Seblak",
+            "SEBLAK CEKER / Chicken Feet Seblak",
+            "CEKER MERCON / Spicy Chilli Chicken Feet"
+          ]
         }
-      ],
-      "recommendedOption": "NILA BAKAR / GR + NASI / Grilled or Fried Tilapia with Rice"
+      ]
     }
   },
   {
     "setNum": 6,
     "id": "set6",
-    "name": "Set 6: Supermarket Chip Aisle Shelf (50+ Items)",
-    "itemCount": 14,
+    "name": "Set 6: Supermarket Chip Aisle Shelf",
+    "itemCount": 40,
     "groupCount": 3,
-    "translatedCount": 12,
-    "groupsWithNutrients": 3,
+    "translatedCount": 40,
     "groupsWith100g": 3,
-    "recommended": "Oishi Popcorn Caramel / Oishi Caramel Popcorn",
-    "durationMs": 8382,
+    "recommended": "Chitato Lite Potato Chips / Chitato Lite Potato Chips",
+    "durationMs": 22590,
     "data": {
-      "_internalReasoning": "Evaluated the shelf snack assortment and extracted all visible products, grouping them by nutritional profile and packaging size to align with user targets.",
-      "comparisonTitle": "Retail Snack Aisle Comparative Evaluation",
-      "comparisonType": "shelf_selection",
-      "summary": "The shelf assortment consists entirely of ultra-processed, calorie-dense, and sodium-heavy snacks. Smaller portion-controlled pouches and baked variants offer slight moderation for caloric limits, while large family-size bags heavily exacerbate sodium and saturated fat overages.",
-      "items": [
-        {
-          "name": "Oishi Popcorn Caramel / Oishi Caramel Popcorn",
-          "tier": 2,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "Chitato Lite Rumput Laut / Chitato Lite Seaweed",
-          "tier": 2,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "Lays Rumput Laut / Lays Seaweed",
-          "tier": 2,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "Happy Tos Tortilla Chips Hijau / Happy Tos Green Tortilla Chips",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "Happy Tos Tortilla Chips Merah / Happy Tos Red Tortilla Chips",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "Japota Rumput Laut / Japota Seaweed",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "Jetz Snack Stick / Jetz Stick Snack",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "Qtela Singkong Original / Qtela Cassava Original",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "Lays Way / Lays Way Snack",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "Doritas Nacho Cheese",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "Panchos Traditional Tortilla Chips",
-          "tier": 3,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "Qtela Family Pack Barbeque / Qtela BBQ Family Pack",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "Qtela Family Pack Balado / Qtela Balado Family Pack",
-          "tier": 4,
-          "sourceImageIndex": 0
-        },
-        {
-          "name": "Chiki Twist / Chiki Twist Snack",
-          "tier": 4,
-          "sourceImageIndex": 0
-        }
+      "allExtractedDishes": [
+        "Happy Tos Tortilla Chips Corn Chips (Yellow) / Happy Tos Tortilla Chips Corn Chips",
+        "Happy Tos Tortilla Chips Corn Chips (Pink/Red) / Happy Tos Tortilla Chips Corn Chips",
+        "Happy Tos Tortilla Chips (Green Foil) / Happy Tos Tortilla Chips",
+        "Oishi Popcorn Caramel / Oishi Caramel Popcorn",
+        "Chitato Lite Potato Chips / Chitato Lite Potato Chips",
+        "Lays Potato Chips Nori Seaweed / Lays Seaweed Flavor Potato Chips",
+        "Japota Potato Chips / Japota Potato Chips",
+        "Jetz Tortilla Snack / Jetz Corn Snack",
+        "Happy Tos Tortilla Chips (Red/Green) / Happy Tos Tortilla Chips",
+        "Happy Tos Tortilla Chips (Blue) / Happy Tos Tortilla Chips",
+        "Happy Tos Tortilla Chips (Yellow/Red) / Happy Tos Tortilla Chips",
+        "Qtela Singkong Original / Qtela Cassava Chips Original",
+        "Lays Wavy Potato Chips / Lays Wavy Potato Chips",
+        "Qtela Snack Tempe / Qtela Tempe Chips",
+        "Doritos Roasted Corn / Doritos Roasted Corn Tortilla Chips",
+        "Doritos Nacho Cheese / Doritos Nacho Cheese Tortilla Chips",
+        "Oishi Pachos Tortilla Chips / Oishi Pachos Tortilla Chips",
+        "Oishi Pachos Tortilla Chips (Red) / Oishi Pachos Tortilla Chips",
+        "Qtela Family Pack Barbeque / Qtela Cassava Chips BBQ Family Pack",
+        "Qtela Family Pack Balado / Qtela Cassava Chips Balado Family Pack",
+        "Qtela Cassava Chips Rumput Laut / Qtela Cassava Chips Seaweed",
+        "Chuba Cassava Chips / Chuba Cassava Chips",
+        "Chuba Cassava Chips (Small) / Chuba Cassava Chips",
+        "Chubi Cassava Chips / Chubi Cassava Chips",
+        "Kuby Cassava Chips / Kuby Cassava Chips",
+        "Cimil Cassava Chips / Cimil Cassava Chips",
+        "GunBee Layers / GunBee Snack",
+        "Chiki Twist / Chiki Twist Snack",
+        "Tostos Tortilla Chips / Tostos Tortilla Chips",
+        "Tostos Tortilla Chips (Small) / Tostos Tortilla Chips",
+        "Chimi Cassava Chips / Chimi Cassava Chips",
+        "Chimi Cassava Chips (Small) / Chimi Cassava Chips",
+        "Chimi Balado Cassava Chips / Chimi Balado Cassava Chips",
+        "Crunchy Corn Tornado / Crunchy Corn Snack",
+        "O Oppa Wonhae Snack / Oppa Wonhae Korean Snack",
+        "Oppa Wonhae Snack (Green) / Oppa Wonhae Korean Snack",
+        "Taro Net Seaweed / Taro Net Potato & Cassava Snack",
+        "Taro Net BBQ / Taro Net BBQ Snack",
+        "Taro Net Potato / Taro Net Potato Snack",
+        "Chiki Twist Cheese / Chiki Twist Cheese Snack"
       ],
+      "_internalReasoning": "The user presents a convenience store shelf laden with ultra-processed snack foods (crisps, tortilla chips, extruded corn snacks). The patient's 3-day averages show high calorie (2500 kcal, +39%), saturated fat (27.7g, +38%), sodium (3000mg, +30%), carbohydrates (263.3g, +32%), and added sugar (45g, +50%), alongside fiber and protein deficits. All items on this shelf consist of processed refined starches, high saturated/trans fats, and massive sodium loads. They are clustered by macro-profile (extruded puffed corn snacks vs fried tortilla/cassava chips vs potato crisps). All are classified as warning/alert due to the patient's severe surplus profile.",
+      "comparisonTitle": "Convenience Store Snack Shelf Assessment",
+      "comparisonType": "shelf_selection",
+      "summary": "Every single option on this shelf represents ultra-processed, calorie-dense snack foods high in sodium, refined carbohydrates, and saturated fats. Given your existing surpluses in calories (+39%), sodium (+30%), saturated fat (+38%), and added sugars (+50%), consuming any of these snacks will exacerbate metabolic strain. If a snack must be selected, lighter baked or mildly seasoned options with lower total fat per serving are slightly less detrimental, though all should be strictly limited.",
+      "recommendedOption": "Chitato Lite Potato Chips / Chitato Lite Potato Chips",
       "groups": [
         {
-          "groupName": "Tier 2 - Moderate Portion-Controlled Snacks",
-          "scoutItemIndices": [
-            0,
-            1,
-            2
-          ],
-          "boundingBox2D": [
-            90,
-            380,
-            350,
-            1000
-          ],
+          "groupName": "Tier 3 - Warning: Lighter Potato & Cassava Crisps",
+          "sourceImageIndex": 0,
           "verdict": {
-            "label": "Moderate Portion Caution",
-            "level": "neutral"
+            "label": "High Sodium & Refined Carbs",
+            "level": "warning"
           },
-          "comparisonSentence": "These lighter snack options offer better caloric and sodium control than large family-size packs, though they still lack essential fiber and protein.",
-          "message": "These items present a moderate nutritional profile with lower absolute sodium and calorie counts per single session compared to massive family bags. While they still contribute to your carbohydrate load and lack adequate dietary fiber, selecting these smaller or baked formats helps mitigate your active calorie and sodium overages.",
-          "averageNutrients": {
-            "calories": 140,
-            "protein": 2,
-            "totalFat": 7,
-            "saturatedFat": 2.5,
-            "carbohydrates": 18,
-            "sugar": 3,
-            "totalFibre": 1,
-            "sodium": 180,
-            "addedSugar": 2,
-            "potassium": 120,
-            "solubleFibre": 0.5,
-            "transFat": 0
-          },
+          "comparisonSentence": "These thinner-cut potato and cassava crisps offer marginally lower fat densities compared to heavy tortilla chips, but still contribute excess sodium and refined carbohydrates.",
+          "message": "Your profile demonstrates significant surpluses in sodium (3000mg) and calories. While these lighter crisps contain slightly less saturated fat than heavy corn snacks, they remain high in sodium and lack dietary fiber. If you choose to indulge, restrict portion size to a single small bag and pair with water to mitigate sodium retention.",
+          "boundingBox2D": [
+            95,
+            500,
+            340,
+            990
+          ],
+          "servingWeightGrams": 60,
           "averageNutrientsPer100g": {
-            "calories": 500,
-            "protein": 6,
-            "totalFat": 25,
-            "saturatedFat": 9,
-            "carbohydrates": 64,
-            "sugar": 10,
-            "totalFibre": 3.5,
-            "sodium": 650
+            "calories": 520,
+            "protein": 5.5,
+            "totalFat": 30,
+            "saturatedFat": 12,
+            "carbohydrates": 58,
+            "sugar": 2,
+            "totalFibre": 3,
+            "sodium": 650,
+            "addedSugar": 1,
+            "transFat": 0.1
           },
-          "orderingTip": "Strictly consume only single-serving portions and pair with water or unsweetened tea."
+          "items": [
+            "Chitato Lite Potato Chips / Chitato Lite Potato Chips",
+            "Lays Potato Chips Nori Seaweed / Lays Seaweed Flavor Potato Chips",
+            "Japota Potato Chips / Japota Potato Chips",
+            "Lays Wavy Potato Chips / Lays Wavy Potato Chips",
+            "Qtela Singkong Original / Qtela Cassava Chips Original",
+            "Qtela Family Pack Barbeque / Qtela Cassava Chips BBQ Family Pack",
+            "Qtela Family Pack Balado / Qtela Cassava Chips Balado Family Pack",
+            "Qtela Cassava Chips Rumput Laut / Qtela Cassava Chips Seaweed",
+            "Chuba Cassava Chips / Chuba Cassava Chips",
+            "Chuba Cassava Chips (Small) / Chuba Cassava Chips",
+            "Chubi Cassava Chips / Chubi Cassava Chips",
+            "Kuby Cassava Chips / Kuby Cassava Chips",
+            "Cimil Cassava Chips / Cimil Cassava Chips",
+            "Chimi Cassava Chips / Chimi Cassava Chips",
+            "Chimi Cassava Chips (Small) / Chimi Cassava Chips",
+            "Chimi Balado Cassava Chips / Chimi Balado Cassava Chips"
+          ]
         },
         {
-          "groupName": "Tier 3 - Standard Fried Tortilla & Potato Chips",
-          "scoutItemIndices": [
-            3,
-            4,
-            5,
-            6,
-            7,
-            8,
-            9,
-            10
-          ],
+          "groupName": "Tier 4 - Alert: Fried Tortilla & Corn Chips",
+          "sourceImageIndex": 0,
+          "verdict": {
+            "label": "Excess Saturated Fat & Calories",
+            "level": "alert"
+          },
+          "comparisonSentence": "These heavy tortilla and corn chips deliver the highest saturated fat and calorie loads among the options, directly worsening your active surpluses.",
+          "message": "These items are deep-fried in saturated oils and heavily salted, compounding your 38% surplus in saturated fat and 30% surplus in sodium. They offer negligible protein or fiber while accelerating caloric intake. Avoid these options entirely to protect cardiovascular health and support your dietary targets.",
           "boundingBox2D": [
             100,
             0,
-            680,
-            1000
+            590,
+            600
           ],
-          "verdict": {
-            "label": "High Sodium and Fat Warning",
-            "level": "warning"
-          },
-          "comparisonSentence": "Standard fried chips exceed daily sodium and fat thresholds more severely than portion-controlled snacks, pushing your metabolic targets further off track.",
-          "message": "These standard fried chips contribute significant sodium and saturated fats, directly worsening your current 30% sodium surplus and high calorie intake. They lack protein and dietary fiber, providing empty carbohydrates and refined oils that hinder your daily nutritional goals.",
-          "averageNutrients": {
-            "calories": 280,
-            "protein": 3,
-            "totalFat": 15,
-            "saturatedFat": 6,
-            "carbohydrates": 32,
-            "sugar": 2,
-            "totalFibre": 1.5,
-            "sodium": 380,
-            "addedSugar": 1,
-            "potassium": 180,
-            "solubleFibre": 0.5,
-            "transFat": 0
-          },
+          "servingWeightGrams": 75,
           "averageNutrientsPer100g": {
-            "calories": 530,
+            "calories": 540,
             "protein": 6,
-            "totalFat": 30,
-            "saturatedFat": 12,
-            "carbohydrates": 60,
-            "sugar": 4,
-            "totalFibre": 3,
-            "sodium": 720
-          },
-          "orderingTip": "Avoid purchasing large multi-serving bags to prevent accidental overconsumption of sodium and fats."
-        },
-        {
-          "groupName": "Tier 4 - Ultra-Processed & Large Family Pack Snacks",
-          "scoutItemIndices": [
-            11,
-            12,
-            13
-          ],
-          "boundingBox2D": [
-            350,
-            550,
-            820,
-            1000
-          ],
-          "verdict": {
-            "label": "Severe Caloric & Sodium Alert",
-            "level": "alert"
-          },
-          "comparisonSentence": "Family-size packs and heavy ultra-processed snacks deliver extreme loads of sodium and saturated fat, severely violating your daily nutritional limits.",
-          "message": "These large-format family packs and ultra-processed snacks are heavily detrimental given your current nutritional status, which already features significant surpluses in calories, sodium, and added sugars. Consuming these items will heavily aggravate your metabolic risk factors and derail your dietary recovery targets.",
-          "averageNutrients": {
-            "calories": 550,
-            "protein": 5,
             "totalFat": 32,
             "saturatedFat": 14,
+            "carbohydrates": 56,
+            "sugar": 3,
+            "totalFibre": 4,
+            "sodium": 720,
+            "addedSugar": 2,
+            "transFat": 0.2
+          },
+          "items": [
+            "Happy Tos Tortilla Chips Corn Chips (Yellow) / Happy Tos Tortilla Chips Corn Chips",
+            "Happy Tos Tortilla Chips Corn Chips (Pink/Red) / Happy Tos Tortilla Chips Corn Chips",
+            "Happy Tos Tortilla Chips (Green Foil) / Happy Tos Tortilla Chips",
+            "Oishi Popcorn Caramel / Oishi Caramel Popcorn",
+            "Jetz Tortilla Snack / Jetz Corn Snack",
+            "Happy Tos Tortilla Chips (Red/Green) / Happy Tos Tortilla Chips",
+            "Happy Tos Tortilla Chips (Blue) / Happy Tos Tortilla Chips",
+            "Happy Tos Tortilla Chips (Yellow/Red) / Happy Tos Tortilla Chips",
+            "Qtela Snack Tempe / Qtela Tempe Chips",
+            "Doritos Roasted Corn / Doritos Roasted Corn Tortilla Chips",
+            "Doritos Nacho Cheese / Doritos Nacho Cheese Tortilla Chips",
+            "Oishi Pachos Tortilla Chips / Oishi Pachos Tortilla Chips",
+            "Oishi Pachos Tortilla Chips (Red) / Oishi Pachos Tortilla Chips",
+            "Tostos Tortilla Chips / Tostos Tortilla Chips",
+            "Tostos Tortilla Chips (Small) / Tostos Tortilla Chips"
+          ]
+        },
+        {
+          "groupName": "Tier 4 - Alert: Extruded Puffed Snacks & Flavored Grids",
+          "sourceImageIndex": 0,
+          "verdict": {
+            "label": "High Sodium & Refined Starches",
+            "level": "alert"
+          },
+          "comparisonSentence": "These extruded puffed snacks feature ultra-processed refined starches and high sodium levels that fail to address your dietary fiber and protein deficits.",
+          "message": "Extruded snacks undergo severe thermal processing, resulting in rapidly digested starches that spike blood glucose while offering high sodium counts. This clashes directly with your metabolic profile. Skip this section and prioritize whole-food proteins and high-fiber vegetables instead.",
+          "boundingBox2D": [
+            600,
+            0,
+            1000,
+            1000
+          ],
+          "servingWeightGrams": 50,
+          "averageNutrientsPer100g": {
+            "calories": 500,
+            "protein": 4.5,
+            "totalFat": 26,
+            "saturatedFat": 10,
             "carbohydrates": 62,
-            "sugar": 8,
-            "totalFibre": 2,
-            "sodium": 750,
-            "addedSugar": 5,
-            "potassium": 220,
-            "solubleFibre": 0.5,
+            "sugar": 5,
+            "totalFibre": 1.5,
+            "sodium": 800,
+            "addedSugar": 4,
             "transFat": 0.1
           },
-          "averageNutrientsPer100g": {
-            "calories": 560,
-            "protein": 5,
-            "totalFat": 33,
-            "saturatedFat": 15,
-            "carbohydrates": 63,
-            "sugar": 8,
-            "totalFibre": 2,
-            "sodium": 780
-          },
-          "orderingTip": "Bypass large family formats entirely and replace with whole food snacks containing higher fiber and protein."
+          "items": [
+            "GunBee Layers / GunBee Snack",
+            "Chiki Twist / Chiki Twist Snack",
+            "Crunchy Corn Tornado / Crunchy Corn Snack",
+            "O Oppa Wonhae Snack / Oppa Wonhae Korean Snack",
+            "Oppa Wonhae Snack (Green) / Oppa Wonhae Korean Snack",
+            "Taro Net Seaweed / Taro Net Potato & Cassava Snack",
+            "Taro Net BBQ / Taro Net BBQ Snack",
+            "Taro Net Potato / Taro Net Potato Snack",
+            "Chiki Twist Cheese / Chiki Twist Cheese Snack"
+          ]
         }
-      ],
-      "recommendedOption": "Oishi Popcorn Caramel / Oishi Caramel Popcorn"
+      ]
     }
   }
 ]

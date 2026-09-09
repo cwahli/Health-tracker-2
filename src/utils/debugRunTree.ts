@@ -107,6 +107,7 @@ export interface CanonicalRunTree {
   extractedData?: any;
   /** Clinical/health-coach report output (medical pack verification). */
   report?: any;
+  comparisonData?: any;
 }
 
 /** Determines which operational pack this run belongs to */
@@ -780,6 +781,7 @@ export function buildCanonicalRunTree(input: DebugReportInput): CanonicalRunTree
       : input.backendLogs,
     extractedData: input.extractedData,
     report: (input as any).report,
+    comparisonData: input.comparisonData || (input as any).result?.comparisonData || (input as any).result?.comparison || null,
   };
 
   // Evaluate contracts on the populated tree

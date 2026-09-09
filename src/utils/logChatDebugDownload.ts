@@ -68,9 +68,10 @@ export async function downloadJobDebugReport(args: {
   const lastUserAction = w.__lastUserAction || (args.inputText ? { action: 'chat_submit', prompt: args.inputText, timestamp: new Date().toISOString() } : undefined);
 
   const pendingFoodLog = msg?.data?.pendingFoodLog || msg?.pendingFoodLog || job?.result?.pendingFoodLog;
-  const scoutItems = msg?.data?.scoutItems || msg?.data?.agentResult?.scoutItems || job?.result?.scoutItems;
+  const scoutItems = msg?.data?.scoutItems || msg?.data?.agentResult?.scoutItems || job?.result?.scoutItems || pendingFoodLog?.dishes || job?.result?.dishes;
   const rawScout = msg?.data?.rawScout || msg?.data?.agentResult?.rawScout || job?.result?.rawScout;
   const receiptTable = msg?.data?.pendingFoodLog?.receiptTable || msg?.data?.receiptTable || job?.result?.receiptTable || job?.result?.pendingFoodLog?.receiptTable;
+  const comparisonData = msg?.data?.comparison || msg?.data?.comparisonData || msg?.data?.agentResult?.comparison || job?.result?.comparison || job?.result?.comparisonData || (job as any)?.clean_result?.comparison;
 
   let initialBackendLogs =
     extractLogString(msg?.data?.agentResult?.backendLogs) ||
@@ -274,6 +275,8 @@ export async function downloadJobDebugReport(args: {
       scoutItems,
       rawScout,
       receiptTable,
+      comparisonData,
+      patientContext: job?.result?.patientContext || msg?.data?.patientContext,
       error: job?.error?.message || msg?.data?.error || msg?.data?.originalError || (msg?.isError || msg?.agentUnavailable ? msg?.content : undefined),
       lastUserAction: lastUserAction || job?.result?.lastUserAction || w.__lastUserAction,
       sessionEvents: getSessionLog(resolvedJobId).length > 0

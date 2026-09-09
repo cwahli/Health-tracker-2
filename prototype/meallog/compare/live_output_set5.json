@@ -1,0 +1,284 @@
+{
+  "allExtractedDishes": [
+    "NILA BAKAR / GR + NASI / Grilled or Fried Tilapia with Rice",
+    "BAWAL BAKAR / GR + NASI / Grilled or Fried Pomfret with Rice",
+    "BANDENG BAKAR / GR + NASI / Grilled or Fried Milkfish with Rice",
+    "TONGKOL BAKAR / GR + NASI / Grilled or Fried Tuna with Rice",
+    "CUE BAKAR / GR + NASI / Grilled or Fried Cue Fish with Rice",
+    "GURAME BAKAR / GORENG + NASI / Grilled or Fried Carp with Rice",
+    "GURAME ASAM MANIS + NASI / Sweet and Sour Carp with Rice",
+    "GURAME VILET ASAM MANIS + NASI / Sweet and Sour Carp Fillet with Rice",
+    "IKAN QUE BAKAR / GR + NASI / Grilled or Fried Que Fish with Rice",
+    "BARONANG BAKAR / GR + NASI / Grilled or Fried Rabbitfish with Rice",
+    "IKAN BAWAL ASEM MANIS + NASI / Sweet and Sour Pomfret with Rice",
+    "IKAN NILA GARANG ASEM + NASI / Tilapia in Tangy Broth with Rice",
+    "AYAM GARANG ASEM + NASI / Chicken in Tangy Broth with Rice",
+    "TONGKOL GARANG ASEM + NASI / Tuna in Tangy Broth with Rice",
+    "GURAME GARANG ASEM + NASI / Carp in Tangy Broth with Rice",
+    "AYAM MERCON + NASI / Spicy Chilli Chicken with Rice",
+    "TONGKOL SUIR PETE + NASI / Shredded Tuna with Stink Beans and Rice",
+    "TONGKOL SUIR JENGKOL + NASI / Shredded Tuna with Jengkol Beans and Rice",
+    "AYAM BAKAR + NASI / Grilled Chicken with Rice",
+    "AYAM BAKAR SAMBEL / Grilled Chicken with Sambal",
+    "LAMPUNG + NASI / Lampung Style Chicken with Rice",
+    "AYAM GORENG SAMBEL / Fried Chicken with Sambal",
+    "LAMPUNG + NASI / Lampung Style Chicken with Rice",
+    "AYAM ASAM MANIS + NASI / Sweet and Sour Chicken with Rice",
+    "AYAM GORENG GEPREK TEPUNG + NASI / Crispy Smashed Fried Chicken with Rice",
+    "AYAM BAKAR SAMBEL IJO + NASI / Grilled Chicken with Green Chilli and Rice",
+    "AYAM GORENG SAMBEL IJO + NASI / Fried Chicken with Green Chilli and Rice",
+    "AYAM GORENG SAMBEL JUDES / Spicy Fried Chicken with Judes Sambal",
+    "ASINAN DAN RUJAK / Pickled Fruit and Rujak Salad",
+    "NASI GORENG SEAFOOD / Seafood Fried Rice",
+    "NASI GORENG SPESIAL / Special Fried Rice",
+    "NASI GORENG PETE / Fried Rice with Stink Beans",
+    "NASI GORENG JENGKOL / Fried Rice with Jengkol Beans",
+    "NASI GORENG SOSIS / Sausage Fried Rice",
+    "NASI GORENG BAKSO / Meatball Fried Rice",
+    "NASI GORENG KORNET / Corned Beef Fried Rice",
+    "NASI GORENG TELOR DADAR / Fried Rice with Omelette",
+    "NASI GORENG AYAM / Chicken Fried Rice",
+    "SEBLAK COBEK VIRAL / Viral Stone-Ground Seblak",
+    "SEBLAK SEAFOOD / Seafood Seblak",
+    "SEBLAK CEKER / Chicken Feet Seblak",
+    "CEKER MERCON / Spicy Chilli Chicken Feet",
+    "MIE TEK - TEK KUAH / Brothy Tek-Tek Noodles",
+    "MIE TEK - TEK SOSIS / Tek-Tek Noodles with Sausage",
+    "MIE TEK - TEK BAKSO / Tek-Tek Noodles with Meatballs",
+    "MIE TEK - TEK KORNET / Tek-Tek Noodles with Corned Beef",
+    "MIE TEK - TEK SEAFOOD / Seafood Tek-Tek Noodles",
+    "KWETIAU GORENG BAKSO SOSIS / Fried Flat Noodles with Meatballs and Sausage",
+    "KWETIAU GORENG SEAFOOD / Seafood Fried Flat Noodles",
+    "KWETIAU KUAH SOSIS BAKSO / Brothy Flat Noodles with Sausage and Meatballs",
+    "KWETIAU SPECIAL / Special Flat Noodles",
+    "KWETIAU AYAM / Chicken Flat Noodles",
+    "MIE TEK - TEK SPECIAL / Special Tek-Tek Noodles",
+    "MIE TEK - TEK AYAM / Chicken Tek-Tek Noodles",
+    "SEAFOOD TUMPAH / Spilled Seafood Platter",
+    "CUMI GORENG TEPUNG + NASI / Crispy Fried Squid with Rice",
+    "CUMI GORENG TEPUNG / Crispy Fried Squid",
+    "ASAM MANIS + NASI / Sweet and Sour Dish with Rice",
+    "CUMI SAOS ASAM MANIS / Squid in Sweet and Sour Sauce"
+  ],
+  "_internalReasoning": "Exhaustively extracted 58 distinct menu items across fish, chicken, rice, seblak, and noodle categories. Clustered into 5 distinct groups based on macro variance <=10%, separating water-poached broths from whole grilled fish, fried meal sets, ultra-processed starch/seblak dishes, and high-sodium stir-fried/fried rice items. The patient presents with high sodium (3000mg), saturated fat surpluses (27.7g), added sugars (45g), and low protein/fibre. Group 1 (Garang Asem broths) provides lean whole protein, antioxidant polyphenols, and lower sodium/fat than fried options, best matching clinical goals.",
+  "comparisonTitle": "Indonesian Seafood & Poultry Restaurant Menu",
+  "comparisonType": "menu_items",
+  "summary": "The evaluated menu offers diverse Indonesian dishes featuring fish, poultry, fried rice, and seblak. Given your current surpluses in sodium (3000mg), saturated fat (27.7g), and added sugar, combined with deficits in protein and total fibre, your optimal choices are clear. Opt for whole fish or chicken prepared in tangy clear broths (Garang Asem) to secure high-quality protein and cardioprotective marine omega-3s while avoiding the extreme sodium and trans fats found in seblak, fried noodles, and deep-fried meal sets.",
+  "recommendedOption": "IKAN NILA GARANG ASEM + NASI / Tilapia in Tangy Broth with Rice",
+  "groups": [
+    {
+      "groupName": "Tier 1 - Safest Choice: Tangy Poached Broths & Grilled Whole Fish",
+      "sourceImageIndex": 0,
+      "verdict": {
+        "label": "Cardioprotective Protein & Low Fat",
+        "level": "good"
+      },
+      "comparisonSentence": "These whole fish and clear broth options deliver clean marine omega-3s and high protein without compounding your saturated fat and sodium surpluses.",
+      "message": "These dishes provide lean protein and beneficial omega-3 fatty acids while keeping saturated fats low, directly counterbalancing your protein deficit without worsening your 38% saturated fat surplus. When ordering, request your fish grilled or poached with minimal added salt, and pair it with an extra portion of steamed greens to bridge your fibre gap.",
+      "boundingBox2D": [
+        135,
+        50,
+        590,
+        550
+      ],
+      "servingWeightGrams": 350,
+      "averageNutrientsPer100g": {
+        "calories": 115,
+        "protein": 14.5,
+        "totalFat": 3.8,
+        "saturatedFat": 0.9,
+        "carbohydrates": 7,
+        "sugar": 1.2,
+        "totalFibre": 1.5,
+        "sodium": 380,
+        "addedSugar": 0.5,
+        "transFat": 0
+      },
+      "items": [
+        "NILA BAKAR / GR + NASI / Grilled or Fried Tilapia with Rice",
+        "BAWAL BAKAR / GR + NASI / Grilled or Fried Pomfret with Rice",
+        "BANDENG BAKAR / GR + NASI / Grilled or Fried Milkfish with Rice",
+        "TONGKOL BAKAR / GR + NASI / Grilled or Fried Tuna with Rice",
+        "CUE BAKAR / GR + NASI / Grilled or Fried Cue Fish with Rice",
+        "GURAME BAKAR / GORENG + NASI / Grilled or Fried Carp with Rice",
+        "IKAN QUE BAKAR / GR + NASI / Grilled or Fried Que Fish with Rice",
+        "BARONANG BAKAR / GR + NASI / Grilled or Fried Rabbitfish with Rice",
+        "IKAN NILA GARANG ASEM + NASI / Tilapia in Tangy Broth with Rice",
+        "AYAM GARANG ASEM + NASI / Chicken in Tangy Broth with Rice",
+        "TONGKOL GARANG ASEM + NASI / Tuna in Tangy Broth with Rice",
+        "GURAME GARANG ASEM + NASI / Grilled or Fried Carp with Rice",
+        "AYAM BAKAR + NASI / Grilled Chicken with Rice",
+        "AYAM BAKAR SAMBEL / Grilled Chicken with Sambal",
+        "LAMPUNG + NASI / Lampung Style Chicken with Rice",
+        "AYAM BAKAR SAMBEL IJO + NASI / Grilled Chicken with Green Chilli and Rice"
+      ]
+    },
+    {
+      "groupName": "Tier 2 - Neutral Choice: Sweet, Sour & Spiced Poultry & Seafood Sets",
+      "sourceImageIndex": 0,
+      "verdict": {
+        "label": "Moderate Protein, Higher Sugar & Sodium",
+        "level": "neutral"
+      },
+      "comparisonSentence": "These sweet and sour or sambal-laden sets introduce hidden sugars and moderate sodium that require careful portion control.",
+      "message": "While these dishes supply necessary protein, the added sweet and sour sauces and spicy pastes contribute to your 50% added sugar surplus and elevate sodium levels. Order these only if you can scrape away excess sauce, and ensure you do not consume the entire portion of white rice provided to manage carbohydrate loads.",
+      "boundingBox2D": [
+        210,
+        50,
+        930,
+        550
+      ],
+      "servingWeightGrams": 320,
+      "averageNutrientsPer100g": {
+        "calories": 145,
+        "protein": 12,
+        "totalFat": 5.5,
+        "saturatedFat": 1.5,
+        "carbohydrates": 14,
+        "sugar": 4.5,
+        "totalFibre": 1,
+        "sodium": 520,
+        "addedSugar": 3.5,
+        "transFat": 0
+      },
+      "items": [
+        "GURAME ASAM MANIS + NASI / Sweet and Sour Carp with Rice",
+        "GURAME VILET ASAM MANIS + NASI / Sweet and Sour Carp Fillet with Rice",
+        "IKAN BAWAL ASEM MANIS + NASI / Sweet and Sour Pomfret with Rice",
+        "AYAM MERCON + NASI / Spicy Chilli Chicken with Rice",
+        "TONGKOL SUIR PETE + NASI / Shredded Tuna with Stink Beans and Rice",
+        "TONGKOL SUIR JENGKOL + NASI / Shredded Tuna with Jengkol Beans and Rice",
+        "AYAM GORENG SAMBEL / Fried Chicken with Sambal",
+        "LAMPUNG + NASI / Lampung Style Chicken with Rice",
+        "AYAM ASAM MANIS + NASI / Sweet and Sour Chicken with Rice",
+        "AYAM GORENG SAMBEL IJO + NASI / Fried Chicken with Green Chilli and Rice",
+        "AYAM GORENG SAMBEL JUDES / Spicy Fried Chicken with Judes Sambal",
+        "ASINAN DAN RUJAK / Pickled Fruit and Rujak Salad",
+        "ASAM MANIS + NASI / Sweet and Sour Dish with Rice",
+        "CUMI SAOS ASAM MANIS / Squid in Sweet and Sour Sauce"
+      ]
+    },
+    {
+      "groupName": "Tier 3 - Warning Choice: Deep-Fried Batter & Rich Seafood Platters",
+      "sourceImageIndex": 0,
+      "verdict": {
+        "label": "High Saturated Fat & Oxidized Lipids",
+        "level": "warning"
+      },
+      "comparisonSentence": "The deep-frying batters and rich platters severely aggravate your saturated fat surplus and add excessive lipid peroxides.",
+      "message": "Deep-frying batters absorb large quantities of cooking oils, heavily compounding your 38% saturated fat surplus and contributing to cardiovascular strain. Avoid these battered squid and fried chicken sets entirely to protect your lipid profile, opting instead for a non-fried grilled fish alternative.",
+      "boundingBox2D": [
+        780,
+        580,
+        1000,
+        1000
+      ],
+      "servingWeightGrams": 300,
+      "averageNutrientsPer100g": {
+        "calories": 195,
+        "protein": 11,
+        "totalFat": 11.2,
+        "saturatedFat": 3.8,
+        "carbohydrates": 12,
+        "sugar": 1,
+        "totalFibre": 0.8,
+        "sodium": 650,
+        "addedSugar": 0.5,
+        "transFat": 0.1
+      },
+      "items": [
+        "AYAM GORENG GEPREK TEPUNG + NASI / Crispy Smashed Fried Chicken with Rice",
+        "SEAFOOD TUMPAH / Spilled Seafood Platter",
+        "CUMI GORENG TEPUNG + NASI / Crispy Fried Squid with Rice",
+        "CUMI GORENG TEPUNG / Crispy Fried Squid"
+      ]
+    },
+    {
+      "groupName": "Tier 3 - Warning Choice: Fried Rice & Stir-Fried Noodle Dishes",
+      "sourceImageIndex": 0,
+      "verdict": {
+        "label": "Excessive Sodium & Refined Carbohydrates",
+        "level": "warning"
+      },
+      "comparisonSentence": "These heavy noodle and fried rice dishes dramatically exceed your sodium and carbohydrate targets while offering minimal fibre.",
+      "message": "Fried rice and seasoned noodle dishes are heavily laden with sodium-rich soy sauces, oils, and processed meats, worsening your 3000mg sodium and carbohydrate surpluses. Skip these items to prevent acute blood pressure spikes, and request a vegetable-heavy clear soup if you need a comforting warm dish.",
+      "boundingBox2D": [
+        160,
+        580,
+        850,
+        1000
+      ],
+      "servingWeightGrams": 400,
+      "averageNutrientsPer100g": {
+        "calories": 180,
+        "protein": 6.5,
+        "totalFat": 7.5,
+        "saturatedFat": 2.2,
+        "carbohydrates": 22,
+        "sugar": 2.5,
+        "totalFibre": 1.2,
+        "sodium": 820,
+        "addedSugar": 1,
+        "transFat": 0
+      },
+      "items": [
+        "NASI GORENG SEAFOOD / Seafood Fried Rice",
+        "NASI GORENG SPESIAL / Special Fried Rice",
+        "NASI GORENG PETE / Fried Rice with Stink Beans",
+        "NASI GORENG JENGKOL / Fried Rice with Jengkol Beans",
+        "NASI GORENG SOSIS / Sausage Fried Rice",
+        "NASI GORENG BAKSO / Meatball Fried Rice",
+        "NASI GORENG KORNET / Corned Beef Fried Rice",
+        "NASI GORENG TELOR DADAR / Fried Rice with Omelette",
+        "NASI GORENG AYAM / Chicken Fried Rice",
+        "MIE TEK - TEK KUAH / Brothy Tek-Tek Noodles",
+        "MIE TEK - TEK SOSIS / Tek-Tek Noodles with Sausage",
+        "MIE TEK - TEK BAKSO / Tek-Tek Noodles with Meatballs",
+        "MIE TEK - TEK KORNET / Tek-Tek Noodles with Corned Beef",
+        "MIE TEK - TEK SEAFOOD / Seafood Tek-Tek Noodles",
+        "KWETIAU GORENG BAKSO SOSIS / Fried Flat Noodles with Meatballs and Sausage",
+        "KWETIAU GORENG SEAFOOD / Seafood Fried Flat Noodles",
+        "KWETIAU KUAH SOSIS BAKSO / Brothy Flat Noodles with Sausage and Meatballs",
+        "KWETIAU SPECIAL / Special Flat Noodles",
+        "KWETIAU AYAM / Chicken Flat Noodles",
+        "MIE TEK - TEK SPECIAL / Special Tek-Tek Noodles",
+        "MIE TEK - TEK AYAM / Chicken Tek-Tek Noodles"
+      ]
+    },
+    {
+      "groupName": "Tier 4 - Alert Choice: Ultra-Processed Starch Seblak & Offal",
+      "sourceImageIndex": 0,
+      "verdict": {
+        "label": "High Sodium, Offal & Gelatinized Starches",
+        "level": "alert"
+      },
+      "comparisonSentence": "Seblak and spicy offal dishes present severe physiological hazards with extreme sodium and gelatinized starches that violate all clinical targets.",
+      "message": "Seblak features ultra-processed gelatinized tapioca crackers cooked in highly salted, spicy oils alongside processed offal, posing a severe hazard to your sodium and metabolic health. Strictly avoid this entire category to protect your cardiovascular system from extreme sodium loads and inflammatory lipid peroxides.",
+      "boundingBox2D": [
+        430,
+        580,
+        610,
+        1000
+      ],
+      "servingWeightGrams": 350,
+      "averageNutrientsPer100g": {
+        "calories": 190,
+        "protein": 5.5,
+        "totalFat": 8.5,
+        "saturatedFat": 2.8,
+        "carbohydrates": 24,
+        "sugar": 1.5,
+        "totalFibre": 0.9,
+        "sodium": 950,
+        "addedSugar": 0.5,
+        "transFat": 0.1
+      },
+      "items": [
+        "SEBLAK COBEK VIRAL / Viral Stone-Ground Seblak",
+        "SEBLAK SEAFOOD / Seafood Seblak",
+        "SEBLAK CEKER / Chicken Feet Seblak",
+        "CEKER MERCON / Spicy Chilli Chicken Feet"
+      ]
+    }
+  ]
+}

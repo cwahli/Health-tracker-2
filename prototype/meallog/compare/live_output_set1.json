@@ -1,0 +1,91 @@
+{
+  "allExtractedDishes": [
+    "SilverQueen Milk Chocolate with Cashews 52g",
+    "SilverQueen Cashew Chocolate Bar 62g",
+    "Magnum Pistachio Ice Cream Bar",
+    "Kinder Joy Egg",
+    "Say Bread - Polo Cokelat / Chocolate Polo Bread",
+    "Say Bread - Polo Keju / Cheese Polo Bread",
+    "Say Bread - Choco Topping Pie",
+    "Say Bread - Cheese Topping Pie",
+    "Say Bread - Double Cheese Bread"
+  ],
+  "_internalReasoning": "Patient profile shows severe surpluses in calories (+39%), saturated fat (+38%), sodium (+30%), added sugar (+50%), and carbohydrates (+32%), alongside deficits in protein (-17%) and fiber (-26%). Exhaustive extraction covered all chocolate items, ice cream, children's treats, and bakery items across the 3 images. Grouped strictly by macro variance <=10%. Confectionery and sweet bakery items dominate the images, all presenting severe risks of aggravating added sugar, saturated fat, and caloric surpluses without providing adequate protein or fiber. They are ranked descending from least harmful to highest physiological hazard.",
+  "comparisonTitle": "Retail Confectionery & Bakery Selection",
+  "comparisonType": "shelf_selection",
+  "summary": "The evaluated options consist entirely of high-sugar, high-fat confectionery and ultra-processed baked goods. Given your active surpluses in calories, saturated fat, and added sugar, plus deficits in protein and fiber, none of these items support your clinical targets. Frequent consumption will worsen metabolic strain. If an indulgence is unavoidable, select single-portion items and strictly limit frequency.",
+  "recommendedOption": "Say Bread - Double Cheese Bread / Double Cheese Bread",
+  "groups": [
+    {
+      "groupName": "Tier 3 - Warning: Dense Cheese and Chocolate Baked Breads",
+      "sourceImageIndex": 2,
+      "verdict": {
+        "label": "High Calorie & Refined Carbs",
+        "level": "warning"
+      },
+      "comparisonSentence": "These baked breads provide slightly lower added sugar than pure candy bars but still deliver heavy refined carbohydrates and saturated fats.",
+      "message": "These items contribute to your existing carbohydrate (+32%) and calorie surpluses while lacking dietary fiber. While offering trace protein, the refined flour and fat content undermine your metabolic goals. Actionable ordering tip: Avoid sweet bakery items entirely; if choosing bread, opt for high-fiber whole-grain varieties elsewhere.",
+      "boundingBox2D": [
+        650,
+        20,
+        960,
+        990
+      ],
+      "servingWeightGrams": 90,
+      "averageNutrientsPer100g": {
+        "calories": 380,
+        "protein": 8,
+        "totalFat": 16,
+        "saturatedFat": 8,
+        "carbohydrates": 52,
+        "sugar": 18,
+        "totalFibre": 2,
+        "sodium": 350,
+        "addedSugar": 15,
+        "transFat": 0.2
+      },
+      "items": [
+        "Say Bread - Polo Cokelat / Chocolate Polo Bread",
+        "Say Bread - Polo Keju / Cheese Polo Bread",
+        "Say Bread - Choco Topping Pie",
+        "Say Bread - Cheese Topping Pie",
+        "Say Bread - Double Cheese Bread"
+      ]
+    },
+    {
+      "groupName": "Tier 4 - Alert: Sugar-Dense Chocolate Bars and Confectionery",
+      "sourceImageIndex": 0,
+      "verdict": {
+        "label": "Severe Added Sugar & Saturated Fat",
+        "level": "alert"
+      },
+      "comparisonSentence": "These confectionery items directly exacerbate your 50% added sugar surplus and 38% saturated fat surplus.",
+      "message": "Products like SilverQueen chocolate and Kinder Joy combine high levels of added sugars and saturated fats with negligible fiber and protein. They will severely aggravate your caloric and glycemic loads. Actionable ordering tip: Completely bypass candy aisles and replace sweet cravings with whole fresh fruit to boost your daily fiber intake.",
+      "boundingBox2D": [
+        0,
+        0,
+        990,
+        880
+      ],
+      "servingWeightGrams": 52,
+      "averageNutrientsPer100g": {
+        "calories": 535,
+        "protein": 7.5,
+        "totalFat": 30.5,
+        "saturatedFat": 15,
+        "carbohydrates": 57,
+        "sugar": 51,
+        "totalFibre": 3,
+        "sodium": 100,
+        "addedSugar": 45,
+        "transFat": 0.5
+      },
+      "items": [
+        "SilverQueen Milk Chocolate with Cashews 52g",
+        "SilverQueen Cashew Chocolate Bar 62g",
+        "Magnum Pistachio Ice Cream Bar",
+        "Kinder Joy Egg"
+      ]
+    }
+  ]
+}

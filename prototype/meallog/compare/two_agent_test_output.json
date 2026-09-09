@@ -1,0 +1,775 @@
+{
+  "comparisonTitle": "Clinical Evaluation of Menu Options for High LDL and High HbA1c",
+  "comparisonType": "menu_items",
+  "summary": "This menu evaluation categorizes 100 Indonesian dishes into strict <=10% macro-variance clusters to address the patient's elevated LDL cholesterol, high HbA1c, and associated surpluses in saturated fat, calories, sodium, and added sugar, alongside fiber and protein deficits. The selections prioritize unrefined whole foods, steamed preparations, and marine omega-3s while isolating oxidized deep-frying fats, sodium-dense cured proteins, and gelatinized starches.",
+  "recommendedOption": "SOP AYAM KAMPUNG / DAGING SAPI / FREE-RANGE CHICKEN / BEEF SOUP",
+  "groups": [
+    {
+      "groupName": "Tier 1 - Safest Choice: Clear / Water-Poached Soups & Broths",
+      "sourceImageIndex": 1,
+      "verdict": {
+        "label": "Optimal Choice",
+        "level": "good"
+      },
+      "comparisonSentence": "Unlike deep-fried or coconut-infused dishes, these clear broths provide high hydration and minimal saturated fats, directly supporting LDL reduction without aggravating glycemic load.",
+      "message": "These clear, water-poached soups and broths help combat your sodium and calorie surpluses while providing lean protein to bridge your protein deficit. They avoid the lipid peroxides found in fried alternatives. Order the free-range chicken or beef soup, and request reduced salt to protect your cardiovascular health.",
+      "boundingBox2D": [
+        381,
+        118,
+        430,
+        866
+      ],
+      "servingWeightGrams": 250,
+      "averageNutrientsPer100g": {
+        "calories": 35,
+        "protein": 5.2,
+        "totalFat": 1.5,
+        "saturatedFat": 0.4,
+        "carbohydrates": 1.2,
+        "sugar": 0.4,
+        "totalFibre": 0.5,
+        "sodium": 220,
+        "addedSugar": 0,
+        "transFat": 0
+      },
+      "items": [
+        "SOP AYAM KAMPUNG / DAGING SAPI / FREE-RANGE CHICKEN / BEEF SOUP",
+        "SOTO BETAWI DAGING SAPI / AYAM KAMPUNG / BETAWI BEEF / FREE-RANGE CHICKEN SOTO",
+        "SAYUR SOP CEKER / CHICKEN FEET SOUP",
+        "SAYUR ASEM / TAMARIND VEGETABLE SOUP"
+      ]
+    },
+    {
+      "groupName": "Tier 2 - Good Choice: Boiled Vegetables & Fresh Lalapan",
+      "sourceImageIndex": 1,
+      "verdict": {
+        "label": "Cardioprotective",
+        "level": "good"
+      },
+      "comparisonSentence": "Compared to oil-drenched stir-fries, these boiled greens deliver essential dietary fiber and potassium with zero added lipids, helping correct your fibre deficit and blood pressure.",
+      "message": "Boiled vegetables and raw plant foods provide vital soluble and insoluble fibers that slow carbohydrate absorption, assisting in HbA1c control while binding LDL cholesterol in the gut. They contain no added oils or sugars. Order a large portion of boiled water spinach or raw lalapan, but skip heavy peanut sauces.",
+      "boundingBox2D": [
+        431,
+        118,
+        489,
+        866
+      ],
+      "servingWeightGrams": 150,
+      "averageNutrientsPer100g": {
+        "calories": 25,
+        "protein": 2.1,
+        "totalFat": 0.3,
+        "saturatedFat": 0.1,
+        "carbohydrates": 4.5,
+        "sugar": 1.5,
+        "totalFibre": 3.2,
+        "sodium": 45,
+        "addedSugar": 0,
+        "transFat": 0
+      },
+      "items": [
+        "RUJAK KANGKUNG/PLECING KANGKUNG / WATER SPINACH RUJAK/PLECING",
+        "KANGKUNG REBUS / BOILED WATER SPINACH",
+        "LALAPAN REBUS (LABU+KANGKUNG+KCG PJG) / BOILED FRESH VEGETABLES (CHAYOTE+WATER SPINACH+LONG BEAN)",
+        "PETE GORENG/BAKAR/MENTAH / FRIED/GRILLED/RAW BITTER BEAN"
+      ]
+    },
+    {
+      "groupName": "Tier 3 - Good Choice: Steamed Whole Plant Proteins & Pepes",
+      "sourceImageIndex": 1,
+      "verdict": {
+        "label": "High Protein & Low Fat",
+        "level": "good"
+      },
+      "comparisonSentence": "Unlike deep-fried tofu, these banana leaf-steamed plant proteins offer lean isoflavones and amino acids without absorbing thermal degradation oils.",
+      "message": "Steamed plant proteins supply high-quality amino acids to address your protein deficit without adding saturated fats or increasing your LDL cholesterol. Banana leaf wrapping imparts flavor without excess oil. Choose the plain tofu pepes, and ask for minimal salt during preparation.",
+      "boundingBox2D": [
+        431,
+        118,
+        489,
+        866
+      ],
+      "servingWeightGrams": 120,
+      "averageNutrientsPer100g": {
+        "calories": 95,
+        "protein": 8.5,
+        "totalFat": 5.2,
+        "saturatedFat": 0.8,
+        "carbohydrates": 4.1,
+        "sugar": 1,
+        "totalFibre": 2,
+        "sodium": 180,
+        "addedSugar": 0,
+        "transFat": 0
+      },
+      "items": [
+        "PEPES TAHU / TOFU PEPES",
+        "PEPES PEDA MIX PETE / PEDA FISH MIX BITTER BEAN PEPES"
+      ]
+    },
+    {
+      "groupName": "Tier 4 - Neutral Choice: Stir-Fried Greens & Non-Starchy Veggies",
+      "sourceImageIndex": 1,
+      "verdict": {
+        "label": "Moderate Oil Intake",
+        "level": "neutral"
+      },
+      "comparisonSentence": "While rich in micronutrients and fiber, these wok-tossed dishes introduce cooking oils and sometimes shrimp paste, requiring portion mindfulness compared to water-boiled options.",
+      "message": "Stir-fried vegetables supply beneficial antioxidants and dietary fiber, but the cooking oils and occasional salted fish or shrimp paste contribute to your saturated fat and sodium surpluses. Select simple garlic stir-fries like kangkung or toge, and ask the chef to use half the usual oil.",
+      "boundingBox2D": [
+        243,
+        128,
+        363,
+        860
+      ],
+      "servingWeightGrams": 150,
+      "averageNutrientsPer100g": {
+        "calories": 85,
+        "protein": 3.5,
+        "totalFat": 6,
+        "saturatedFat": 1.2,
+        "carbohydrates": 5,
+        "sugar": 2,
+        "totalFibre": 2.5,
+        "sodium": 380,
+        "addedSugar": 0,
+        "transFat": 0
+      },
+      "items": [
+        "TUMIS KANGKUNG/CAH TERASI / SAUTEED WATER SPINACH/SHRIMP PASTE",
+        "TUMIS CAISIM / SAUTEED MUSTARD GREENS",
+        "TUMIS GENJER ALA PENCOK '89 / SAUTEED LIMNOCHARIS ALA PENCOK '89",
+        "TUMIS SAWI PUTIH / SAUTEED CHINESE CABBAGE",
+        "TUMIS SAWI PUTIH + TELOR / SAUTEED CHINESE CABBAGE + EGG",
+        "TUMIS TOGE / SAUTEED BEAN SPROUTS",
+        "TUMIS TOGE + IKAN ASIN / SAUTEED BEAN SPROUTS + SALTED FISH",
+        "TUMIS ONCOM / SAUTEED ONCOM",
+        "TUMIS UDANG BALADO / BALADO SAUTEED SHRIMP",
+        "TUMIS UDANG + PETE BUMBU BALADO / SAUTEED SHRIMP + BITTER BEAN BALADO",
+        "TUMIS CUMI BALADO / BALADO SAUTEED SQUID",
+        "TUMIS CUMI + PETE BUMBU BALADO / SAUTEED SQUID + BITTER BEAN BALADO",
+        "TUMIS PEDA / SAUTEED PEDA FISH",
+        "TUMIS PEDA + PETE / SAUTEED PEDA FISH + BITTER BEAN",
+        "TUMIS CUE / SAUTEED CUE FISH",
+        "TUMIS CUE + PETE / SAUTEED CUE FISH + BITTER BEANS"
+      ]
+    },
+    {
+      "groupName": "Tier 5 - Neutral Choice: Plain Carbohydrate Staples",
+      "sourceImageIndex": 1,
+      "verdict": {
+        "label": "Glycemic Management",
+        "level": "neutral"
+      },
+      "comparisonSentence": "Unlike fried rices or coconut rices, plain white rice offers a controlled glycemic vehicle without hidden fats, though portion control remains vital for HbA1c control.",
+      "message": "Plain white rice is free of saturated fats and added sugars, making it easier to manage your caloric surplus compared to specialty rices. However, its refined nature impacts blood glucose. Request a half-portion size to better manage your HbA1c targets.",
+      "boundingBox2D": [
+        584,
+        103,
+        620,
+        780
+      ],
+      "servingWeightGrams": 150,
+      "averageNutrientsPer100g": {
+        "calories": 130,
+        "protein": 2.7,
+        "totalFat": 0.3,
+        "saturatedFat": 0.1,
+        "carbohydrates": 28,
+        "sugar": 0.1,
+        "totalFibre": 0.4,
+        "sodium": 5,
+        "addedSugar": 0,
+        "transFat": 0
+      },
+      "items": [
+        "NASI PUTIH / PLAIN RICE"
+      ]
+    },
+    {
+      "groupName": "Tier 6 - Warning Choice: Lean Grilled / Steamed Whole Fish",
+      "sourceImageIndex": 0,
+      "verdict": {
+        "label": "Cardioprotective Omega-3s",
+        "level": "warning"
+      },
+      "comparisonSentence": "While these whole fish options provide vital marine omega-3s (EPA/DHA) superior to land meats, their package meals include fried components that elevate saturated fats and sodium.",
+      "message": "Whole fish provides cardioprotective omega-3 fatty acids that benefit your lipid profile, but these menu packages bundle fried tempeh, tofu, and rich rice, exacerbating your calorie and saturated fat surpluses. Order the fish package with grilled preparation and ask to substitute plain rice for the uduk rice.",
+      "boundingBox2D": [
+        435,
+        115,
+        567,
+        920
+      ],
+      "servingWeightGrams": 250,
+      "averageNutrientsPer100g": {
+        "calories": 185,
+        "protein": 16.5,
+        "totalFat": 9.5,
+        "saturatedFat": 2.8,
+        "carbohydrates": 8,
+        "sugar": 0.5,
+        "totalFibre": 1,
+        "sodium": 480,
+        "addedSugar": 0,
+        "transFat": 0.1
+      },
+      "items": [
+        "PAKET KEMBUNG / MACKEREL PACKAGE (NASI + IKAN KEMBUNG + SAYUR ASEM + TAHU + TEMPE)",
+        "PAKET UDUK KEMBUNG / UDUK RICE MACKEREL PACKAGE (NASI UDUK + IKAN KEMBUNG + SAYUR ASEM+TAHU)",
+        "PAKET MUJAIR / TILAPIA PACKAGE (NASI + IKAN MUJAIR GORENG + SAYUR ASEM + TAHU + TEMPE)",
+        "PAKET UDUK MUJAIR / UDUK RICE TILAPIA PACKAGE (NASI UDUK + IKAN MUJAIR GORENG + SAYUR ASEM + TAHU + TEMPE)",
+        "PAKET NILA / NILE TILAPIA PACKAGE (NASI + IKAN NILA GORENG + SAYUR ASEM + TAHU + TEMPE)",
+        "PAKET UDUK NILA / UDUK RICE NILE TILAPIA PACKAGE (NASI UDUK + IKAN NILA GORENG + SAYUR ASEM + TAHU + TEMPE)",
+        "PAKET LELE / CATFISH PACKAGE (NASI + LELE GORENG 2 PCS + SAYUR ASEM+TAHU + TEMPE)",
+        "PAKET UDUK LELE / UDUK RICE CATFISH PACKAGE (NASI UDUK + LELE GORENG 2 PCS + SAYUR ASEM+ TAHU + TEMPE)"
+      ]
+    },
+    {
+      "groupName": "Tier 7 - Warning Choice: Coconut Rice & Fried Carb Dishes",
+      "sourceImageIndex": 1,
+      "verdict": {
+        "label": "High Saturated Fat & Glycemic Load",
+        "level": "warning"
+      },
+      "comparisonSentence": "Unlike plain rice, coconut milk (santan) and frying oils in these dishes deliver high levels of saturated fatty acids and rapid-digest starches, aggravating both LDL and HbA1c.",
+      "message": "Coconut rice and fried carbohydrate staples introduce substantial saturated fats from coconut milk and thermal oils, directly worsening your high LDL and calorie surpluses while accelerating glycemic spikes. Avoid these dishes entirely or strictly select plain unseasoned grains.",
+      "boundingBox2D": [
+        584,
+        103,
+        767,
+        780
+      ],
+      "servingWeightGrams": 200,
+      "averageNutrientsPer100g": {
+        "calories": 210,
+        "protein": 4.5,
+        "totalFat": 11,
+        "saturatedFat": 6.5,
+        "carbohydrates": 25,
+        "sugar": 1,
+        "totalFibre": 1.2,
+        "sodium": 520,
+        "addedSugar": 0,
+        "transFat": 0.1
+      },
+      "items": [
+        "NASI UDUK / UDUK RICE",
+        "NASI BAKAR CAKALANG / GRILLED SKIPJACK TUNA RICE",
+        "NASI BAKAR AYAM + TERI MEDAN / GRILLED CHICKEN + MEDAN ANCHOVY RICE",
+        "NASI BAKAR AYAM CUMI CABE IJO / GRILLED CHICKEN SQUID GREEN CHILI RICE",
+        "NASI GORENG AYAM (PEDAS BY REQUEST) / FRIED CHICKEN RICE (SPICY BY REQUEST)",
+        "NASI GORENG IKAN ASIN (BY REQUEST) / SALTED FISH FRIED RICE (BY REQUEST)",
+        "NASI GORENG PETE (BY REQUEST) / BITTER BEAN FRIED RICE (BY REQUEST)",
+        "NASI GORENG ATI/AMPLA (BY REQUEST) / LIVER/GIZZARD FRIED RICE (BY REQUEST)",
+        "NASI GORENG ALA PENCOK 89 (BY REQUEST) / ALA PENCOK 89 FRIED RICE (BY REQUEST)"
+      ]
+    },
+    {
+      "groupName": "Tier 8 - Warning Choice: Spicy Sambal & Pencok Relishes",
+      "sourceImageIndex": 0,
+      "verdict": {
+        "label": "Hidden Sodium & Oils",
+        "level": "warning"
+      },
+      "comparisonSentence": "Compared to raw vegetables, these sambals and pencoks incorporate added oils, roasted peanuts, and heavy sodium, compounding your cardiovascular risk factors.",
+      "message": "Spicy sambals and pencok relishes add significant sodium and hidden fats from roasted peanuts and cooking oils, working against your sodium and calorie targets. If you enjoy spicy flavors, request fresh raw chili paste on the side without added oil or sugar.",
+      "boundingBox2D": [
+        617,
+        74,
+        917,
+        706
+      ],
+      "servingWeightGrams": 80,
+      "averageNutrientsPer100g": {
+        "calories": 220,
+        "protein": 6,
+        "totalFat": 16,
+        "saturatedFat": 2.5,
+        "carbohydrates": 12,
+        "sugar": 3.5,
+        "totalFibre": 3,
+        "sodium": 650,
+        "addedSugar": 1,
+        "transFat": 0
+      },
+      "items": [
+        "PENCOK KACANG / PEANUT PENCOK",
+        "PENCOK KACANG+KETIMUN / PEANUT+CUCUMBER PENCOK",
+        "AYAM GORENG CABE KERING / FRIED CHICKEN WITH DRIED CHILI",
+        "PENCOK CEKER / CHICKEN FEET PENCOK",
+        "PENCOK TAHU/TEMPE / TOFU/TEMPEH PENCOK",
+        "AYAM GEPREK SELERA PEDAS / SPICY TASTE GEPREK CHICKEN",
+        "PENCOK KEPALA / HEAD PENCOK",
+        "PENCOK KULIT / SKIN PENCOK",
+        "PENCOK AMPLA/USUS/ATI / GIZZARD/INTESTINE/LIVER PENCOK",
+        "KAREDOK ALA PENCOK 89 / KAREDOK ALA PENCOK 89",
+        "PENCOK AYAM GORENG/BAKAR / FRIED/GRILLED CHICKEN PENCOK (SAMBAL PENCOK/ BAKAR)",
+        "PENCOK DAGING EMPAL / EMPAL BEEF PENCOK (SAMBAL PENCOK/ BAKAR)",
+        "PENCOK IKAN NILA GORENG / FRIED NILE TILAPIA PENCOK (SAMBAL PENCOK/ BAKAR)",
+        "PENCOK IKAN MUJAIR GORENG / FRIED TILAPIA PENCOK (SAMBAL PENCOK/ BAKAR)",
+        "PENCOK LELE GORENG / FRIED CATFISH PENCOK (SAMBAL PENCOK/ BAKAR)",
+        "PENCOK IKAN KEMBUNG / MACKEREL PENCOK (SAMBAL PENCOK/ BAKAR)",
+        "PENCOK BEBEK GORENG PRESTO / PRESTO FRIED DUCK PENCOK (SAMBAL PENCOK/ BAKAR)",
+        "PENCOK BURUNG PUYUH / QUAIL BIRD PENCOK (SAMBAL PENCOK/ BAKAR)",
+        "TERONG BALADO / BALADO EGGPLANT",
+        "KOL GORENG / FRIED CABBAGE",
+        "TAHU ACAK (SELERA PEDAS BY REQUEST) / ACAK TOFU (SPICY TASTE BY REQUEST)"
+      ]
+    },
+    {
+      "groupName": "Tier 9 - Alert Choice: Deep-Fried Poultry & Meat Packages",
+      "sourceImageIndex": 0,
+      "verdict": {
+        "label": "High Saturated Fat & Oxidized Lipids",
+        "level": "alert"
+      },
+      "comparisonSentence": "Unlike steamed dishes, deep-fried poultry and meats introduce high levels of saturated fat and oxidized lipid peroxides that directly aggravate your elevated LDL cholesterol.",
+      "message": "Deep-fried poultry, duck, beef empal, and quail packages deliver a heavy load of saturated fats and calories, severely worsening your active LDL and caloric surpluses. Avoid these fried packages entirely; if animal protein is needed, opt for grilled, unglazed alternatives.",
+      "boundingBox2D": [
+        233,
+        140,
+        423,
+        915
+      ],
+      "servingWeightGrams": 300,
+      "averageNutrientsPer100g": {
+        "calories": 280,
+        "protein": 18,
+        "totalFat": 19,
+        "saturatedFat": 6.8,
+        "carbohydrates": 10,
+        "sugar": 0.5,
+        "totalFibre": 1,
+        "sodium": 590,
+        "addedSugar": 0,
+        "transFat": 0.2
+      },
+      "items": [
+        "PAKET BURUNG PUYUH / QUIL BIRD PACKAGE (NASI + BURUNG PUYUH + SAYUR ASEM + TEMPE + TAHU)",
+        "PAKET UDUK BURUNG PUYUH / UDUK RICE QUAIL BIRD PACKAGE (NASI UDUK + BURUNG PUYUH + SAYUR ASEM + TEMPE + TAHU)",
+        "PAKET AYAM / CHICKEN PACKAGE (NASI + AYAM GORENG/BAKAR+SAYUR ASEM+TAHU +TEMPE)",
+        "PAKET UDUK AYAM / UDUK RICE CHICKEN PACKAGE (NASI UDUK+ AYAM GORENG/BAKAR + SAYUR ASEM TAHU + TEMPE)",
+        "PAKET EMPAL / EMPAL BEEF PACKAGE (NASI + DAGING EMPAL + SAYUR ASEM + TAHU + TEMPE)",
+        "PAKET UDUK EMPAL / UDUK RICE EMPAL PACKAGE (NASI UDUK + DAGING EMPAL+SAYUR ASEM+TAHU",
+        "PAKET BEBEK / DUCK PACKAGE (NASI +BEBEK GORENG + SAYUR ASEM + TAHU + TEMPE)",
+        "PAKET UDUK BEBEK / UDUK RICE DUCK PACKAGE (NASI UDUK + BEBEK GORENG + SAYUR ASEM + TAHU + TEMPE)"
+      ]
+    },
+    {
+      "groupName": "Tier 10 - Alert Choice: Highly Salted Cured Proteins",
+      "sourceImageIndex": 1,
+      "verdict": {
+        "label": "Extreme Sodium Load",
+        "level": "alert"
+      },
+      "comparisonSentence": "Compared to fresh proteins, these heavily salted and dried fish and dogfruit dishes introduce massive sodium surpluses that threaten cardiovascular stability.",
+      "message": "These highly salted cured proteins and preserved dogfruits contribute an extreme amount of sodium, directly conflicting with your 3000mg sodium surplus and elevating hypertension risks. Eliminate these items from your selection entirely to protect vascular function.",
+      "boundingBox2D": [
+        131,
+        137,
+        567,
+        874
+      ],
+      "servingWeightGrams": 100,
+      "averageNutrientsPer100g": {
+        "calories": 210,
+        "protein": 22,
+        "totalFat": 11.5,
+        "saturatedFat": 3.2,
+        "carbohydrates": 5,
+        "sugar": 1,
+        "totalFibre": 1.5,
+        "sodium": 1450,
+        "addedSugar": 0,
+        "transFat": 0.1
+      },
+      "items": [
+        "JENGKOL PENCOK / PENCOK DOGFRUIT",
+        "JENGKOL BALADO / BALADO DOGFRUIT",
+        "JENGKOL SEMUR / BRAISED DOGFRUIT",
+        "JENGKOL GORENG / FRIED DOGFRUIT",
+        "CUMI ASIN GORENG / FRIED SALTED SQUID",
+        "IKAN ASIN PEDA CABE PENCOK / PEDA SALTED FISH PENCOK CHILI",
+        "IKAN TERI JENGKI SAMBAL PENCOK / JENGKI ANCHOVY SAMBAL PENCOK",
+        "IKAN ASIN SEPAT / SEPAT SALTED FISH",
+        "IKAN ASIN JAMBAL / JAMBAL SALTED FISH",
+        "IKAN ASIN GABUS / GABUS SALTED FISH"
+      ]
+    },
+    {
+      "groupName": "Tier 11 - Alert Choice: Organ Meats & Fried Offal",
+      "sourceImageIndex": 0,
+      "verdict": {
+        "label": "High Cholesterol & Saturated Fat",
+        "level": "alert"
+      },
+      "comparisonSentence": "Unlike lean fish or plant proteins, organ meats and skin skewers pack massive dietary cholesterol and saturated fats, severely aggravating your high LDL status.",
+      "message": "Organ meats and fried offal skewers contain concentrated levels of dietary cholesterol and saturated fats that will directly spike your already elevated LDL cholesterol. Strictly avoid these items to prevent further cardiovascular strain.",
+      "boundingBox2D": [
+        178,
+        140,
+        225,
+        880
+      ],
+      "servingWeightGrams": 90,
+      "averageNutrientsPer100g": {
+        "calories": 290,
+        "protein": 19,
+        "totalFat": 22,
+        "saturatedFat": 8.5,
+        "carbohydrates": 2,
+        "sugar": 0.2,
+        "totalFibre": 0.2,
+        "sodium": 520,
+        "addedSugar": 0,
+        "transFat": 0.2
+      },
+      "items": [
+        "SATE USUS / INTESTINE SATE",
+        "SATE ATI-AMPLA / LIVER-GIZZARD SATE",
+        "SATE KULIT / SKIN SATE",
+        "SATE TAICHAN JUARA (SELERA PEDAS) / CHAMPION TAICHAN SATE (SPICY TASTE)"
+      ]
+    },
+    {
+      "groupName": "Tier 12 - Alert Choice: Ultra-Processed Spicy Starches (Seblak)",
+      "sourceImageIndex": 1,
+      "verdict": {
+        "label": "Gelatinized Starches & High Sodium",
+        "level": "alert"
+      },
+      "comparisonSentence": "Unlike whole fiber sources, these ultra-processed seblak dishes combine gelatinized starches with intense chili oils and sodium, spiking both blood glucose and cardiovascular risk.",
+      "message": "Seblak varieties feature ultra-processed gelatinized starches and high sodium levels that cause rapid glycemic excursions, directly worsening your high HbA1c and sodium surpluses. Avoid these entirely.",
+      "boundingBox2D": [
+        804,
+        78,
+        866,
+        311
+      ],
+      "servingWeightGrams": 250,
+      "averageNutrientsPer100g": {
+        "calories": 240,
+        "protein": 5,
+        "totalFat": 12,
+        "saturatedFat": 4,
+        "carbohydrates": 29,
+        "sugar": 2.5,
+        "totalFibre": 1,
+        "sodium": 980,
+        "addedSugar": 1,
+        "transFat": 0.1
+      },
+      "items": [
+        "SEBLAK COMPLETE / COMPLETE SEBLAK",
+        "SEBLAK CEKER / CHICKEN FEET SEBLAK",
+        "SEBLAK SEA FOOD / SEAFOOD SEBLAK",
+        "SEBLAK CRIT VIRAL / VIRAL CRIT SEBLAK"
+      ]
+    },
+    {
+      "groupName": "Tier 13 - Alert Choice: Sweet Confectionery, Porridges & Desserts",
+      "sourceImageIndex": 1,
+      "verdict": {
+        "label": "High Added Sugar & Refined Carbs",
+        "level": "alert"
+      },
+      "comparisonSentence": "Compared to fiber-rich whole fruits, these sweet porridges and iced desserts introduce massive added sugars that directly impair glycemic control.",
+      "message": "Sweet confectionery, porridges, and iced sugar desserts deliver high amounts of added sugars and refined carbohydrates, severely violating your added sugar surplus and worsening HbA1c control. Skip dessert items completely.",
+      "boundingBox2D": [
+        795,
+        397,
+        909,
+        873
+      ],
+      "servingWeightGrams": 200,
+      "averageNutrientsPer100g": {
+        "calories": 230,
+        "protein": 3.5,
+        "totalFat": 6,
+        "saturatedFat": 4.5,
+        "carbohydrates": 42,
+        "sugar": 22,
+        "totalFibre": 0.8,
+        "sodium": 110,
+        "addedSugar": 18,
+        "transFat": 0
+      },
+      "items": [
+        "ASINAN BUAH BOGOR / BOGOR FRUIT PICKLES",
+        "ASINAN SAYUR RUJAK PENGANTIN / BRIDE RUJAK VEGETABLE PICKLES",
+        "TELUR DADAR / OMELET",
+        "BUBUR AYAM / CHICKEN PORRIDGE",
+        "MIE AYAM ORIGINAL / ORIGINAL CHICKEN NOODLE",
+        "MIE AYAM/CEKER/BAKSO/PANGSIT / CHICKEN/FEET/MEATBALL/WONTON NOODLE",
+        "BUBUR SUM SUM/KETAN HITAM/KACANG / SUM SUM PORRIDGE/BLACK STICKY RICE/PEANUT",
+        "ES HONG KONG THAI/KOLANG KALING / HONG KONG THAI ICE/SUGAR PALM FRUIT"
+      ]
+    }
+  ],
+  "menuSections": [
+    {
+      "sectionTitle": "APPETIZERS / SIDE DISHES",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        178,
+        140,
+        225,
+        880
+      ],
+      "items": [
+        "KERUPUK MIE + BUMBU KACANG / NOODLE CRACKERS + PEANUT SAUCE",
+        "ASINAN BUAH BOGOR / BOGOR FRUIT PICKLES",
+        "ASINAN SAYUR RUJAK PENGANTIN / BRIDE RUJAK VEGETABLE PICKLES",
+        "SATE USUS / INTESTINE SATE",
+        "SATE ATI-AMPLA / LIVER-GIZZARD SATE",
+        "SATE KULIT / SKIN SATE"
+      ]
+    },
+    {
+      "sectionTitle": "BEST SELLER",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        233,
+        140,
+        281,
+        911
+      ],
+      "items": [
+        "PAKET BURUNG PUYUH / QUIL BIRD PACKAGE (NASI + BURUNG PUYUH + SAYUR ASEM + TEMPE + TAHU)",
+        "PAKET UDUK BURUNG PUYUH / UDUK RICE QUAIL BIRD PACKAGE (NASI UDUK + BURUNG PUYUH + SAYUR ASEM + TEMPE + TAHU)"
+      ]
+    },
+    {
+      "sectionTitle": "PAKET HEMAT",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        316,
+        122,
+        423,
+        915
+      ],
+      "items": [
+        "PAKET AYAM / CHICKEN PACKAGE (NASI + AYAM GORENG/BAKAR+SAYUR ASEM+TAHU +TEMPE)",
+        "PAKET UDUK AYAM / UDUK RICE CHICKEN PACKAGE (NASI UDUK+ AYAM GORENG/BAKAR + SAYUR ASEM TAHU + TEMPE)",
+        "PAKET EMPAL / EMPAL BEEF PACKAGE (NASI + DAGING EMPAL + SAYUR ASEM + TAHU + TEMPE)",
+        "PAKET UDUK EMPAL / UDUK RICE EMPAL PACKAGE (NASI UDUK + DAGING EMPAL+SAYUR ASEM+TAHU",
+        "PAKET BEBEK / DUCK PACKAGE (NASI +BEBEK GORENG + SAYUR ASEM + TAHU + TEMPE)",
+        "PAKET UDUK BEBEK / UDUK RICE DUCK PACKAGE (NASI UDUK + BEBEK GORENG + SAYUR ASEM + TAHU + TEMPE)"
+      ]
+    },
+    {
+      "sectionTitle": "PAKET HEMAT IKAN",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        435,
+        115,
+        567,
+        920
+      ],
+      "items": [
+        "PAKET LELE / CATFISH PACKAGE (NASI + LELE GORENG 2 PCS + SAYUR ASEM+TAHU + TEMPE)",
+        "PAKET UDUK LELE / UDUK RICE CATFISH PACKAGE (NASI UDUK + LELE GORENG 2 PCS + SAYUR ASEM+ TAHU + TEMPE)",
+        "PAKET KEMBUNG / MACKEREL PACKAGE (NASI + IKAN KEMBUNG + SAYUR ASEM + TAHU + TEMPE)",
+        "PAKET UDUK KEMBUNG / UDUK RICE MACKEREL PACKAGE (NASI UDUK + IKAN KEMBUNG + SAYUR ASEM+TAHU + TEMPE)",
+        "PAKET MUJAIR / TILAPIA PACKAGE (NASI + IKAN MUJAIR GORENG + SAYUR ASEM + TAHU + TEMPE)",
+        "PAKET UDUK MUJAIR / UDUK RICE TILAPIA PACKAGE (NASI UDUK + IKAN MUJAIR GORENG + SAYUR ASEM + TAHU + TEMPE)",
+        "PAKET NILA / NILE TILAPIA PACKAGE (NASI + IKAN NILA GORENG + SAYUR ASEM + TAHU + TEMPE)",
+        "PAKET UDUK NILA / UDUK RICE NILE TILAPIA PACKAGE (NASI UDUK + IKAN NILA GORENG + SAYUR ASEM + TAHU + TEMPE)"
+      ]
+    },
+    {
+      "sectionTitle": "PENCOK",
+      "sourceImageIndex": 0,
+      "boundingBox2D": [
+        617,
+        74,
+        917,
+        706
+      ],
+      "items": [
+        "PENCOK KACANG / PEANUT PENCOK",
+        "PENCOK KACANG+KETIMUN / PEANUT+CUCUMBER PENCOK",
+        "AYAM GORENG CABE KERING / FRIED CHICKEN WITH DRIED CHILI",
+        "PENCOK CEKER / CHICKEN FEET PENCOK",
+        "PENCOK TAHU/TEMPE / TOFU/TEMPEH PENCOK",
+        "AYAM GEPREK SELERA PEDAS / SPICY TASTE GEPREK CHICKEN",
+        "PENCOK KEPALA / HEAD PENCOK",
+        "PENCOK KULIT / SKIN PENCOK",
+        "PENCOK AMPLA/USUS/ATI / GIZZARD/INTESTINE/LIVER PENCOK",
+        "KAREDOK ALA PENCOK 89 / KAREDOK ALA PENCOK 89",
+        "PENCOK AYAM GORENG/BAKAR / FRIED/GRILLED CHICKEN PENCOK (SAMBAL PENCOK/ BAKAR)",
+        "PENCOK DAGING EMPAL / EMPAL BEEF PENCOK (SAMBAL PENCOK/ BAKAR)",
+        "PENCOK IKAN NILA GORENG / FRIED NILE TILAPIA PENCOK (SAMBAL PENCOK/ BAKAR)",
+        "PENCOK IKAN MUJAIR GORENG / FRIED TILAPIA PENCOK (SAMBAL PENCOK/ BAKAR)",
+        "PENCOK LELE GORENG / FRIED CATFISH PENCOK (SAMBAL PENCOK/ BAKAR)",
+        "PENCOK IKAN KEMBUNG / MACKEREL PENCOK (SAMBAL PENCOK/ BAKAR)",
+        "PENCOK BEBEK GORENG PRESTO / PRESTO FRIED DUCK PENCOK (SAMBAL PENCOK/ BAKAR)",
+        "PENCOK BURUNG PUYUH / QUAIL BIRD PENCOK (SAMBAL PENCOK/ BAKAR)"
+      ]
+    },
+    {
+      "sectionTitle": "JENGKOL",
+      "sourceImageIndex": 1,
+      "boundingBox2D": [
+        131,
+        137,
+        182,
+        655
+      ],
+      "items": [
+        "JENGKOL PENCOK / PENCOK DOGFRUIT",
+        "JENGKOL BALADO / BALADO DOGFRUIT",
+        "JENGKOL SEMUR / BRAISED DOGFRUIT",
+        "JENGKOL GORENG / FRIED DOGFRUIT"
+      ]
+    },
+    {
+      "sectionTitle": "SATE",
+      "sourceImageIndex": 1,
+      "boundingBox2D": [
+        207,
+        138,
+        219,
+        467
+      ],
+      "items": [
+        "SATE TAICHAN JUARA (SELERA PEDAS) / CHAMPION TAICHAN SATE (SPICY TASTE)"
+      ]
+    },
+    {
+      "sectionTitle": "TUMISAN",
+      "sourceImageIndex": 1,
+      "boundingBox2D": [
+        243,
+        128,
+        363,
+        860
+      ],
+      "items": [
+        "TUMIS KANGKUNG/CAH TERASI / SAUTEED WATER SPINACH/SHRIMP PASTE",
+        "TUMIS CAISIM / SAUTEED MUSTARD GREENS",
+        "TUMIS GENJER ALA PENCOK '89 / SAUTEED LIMNOCHARIS ALA PENCOK '89",
+        "TUMIS SAWI PUTIH / SAUTEED CHINESE CABBAGE",
+        "TUMIS SAWI PUTIH + TELOR / SAUTEED CHINESE CABBAGE + EGG",
+        "TUMIS TOGE / SAUTEED BEAN SPROUTS",
+        "TUMIS TOGE + IKAN ASIN / SAUTEED BEAN SPROUTS + SALTED FISH",
+        "TUMIS ONCOM / SAUTEED ONCOM",
+        "TUMIS UDANG BALADO / BALADO SAUTEED SHRIMP",
+        "TUMIS UDANG + PETE BUMBU BALADO / SAUTEED SHRIMP + BITTER BEAN BALADO",
+        "TUMIS CUMI BALADO / BALADO SAUTEED SQUID",
+        "TUMIS CUMI + PETE BUMBU BALADO / SAUTEED SQUID + BITTER BEAN BALADO",
+        "TUMIS PEDA / SAUTEED PEDA FISH",
+        "TUMIS PEDA + PETE / SAUTEED PEDA FISH + BITTER BEAN",
+        "TUMIS CUE / SAUTEED CUE FISH",
+        "TUMIS CUE + PETE / SAUTEED CUE FISH + BITTER BEANS"
+      ]
+    },
+    {
+      "sectionTitle": "SAYURAN",
+      "sourceImageIndex": 1,
+      "boundingBox2D": [
+        381,
+        118,
+        489,
+        866
+      ],
+      "items": [
+        "SOP AYAM KAMPUNG / DAGING SAPI / FREE-RANGE CHICKEN / BEEF SOUP",
+        "SOTO BETAWI DAGING SAPI / AYAM KAMPUNG / BETAWI BEEF / FREE-RANGE CHICKEN SOTO",
+        "SAYUR SOP CEKER / CHICKEN FEET SOUP",
+        "SAYUR ASEM / TAMARIND VEGETABLE SOUP",
+        "RUJAK KANGKUNG/PLECING KANGKUNG / WATER SPINACH RUJAK/PLECING",
+        "KANGKUNG REBUS / BOILED WATER SPINACH",
+        "LALAPAN REBUS (LABU+KANGKUNG+KCG PJG) / BOILED FRESH VEGETABLES (CHAYOTE+WATER SPINACH+LONG BEAN)",
+        "TERONG BALADO / BALADO EGGPLANT",
+        "KOL GORENG / FRIED CABBAGE",
+        "TAHU ACAK (SELERA PEDAS BY REQUEST) / ACAK TOFU (SPICY TASTE BY REQUEST)",
+        "PEPES TAHU / TOFU PEPES",
+        "PEPES PEDA MIX PETE / PEDA FISH MIX BITTER BEAN PEPES",
+        "PETE GORENG/BAKAR/MENTAH / FRIED/GRILLED/RAW BITTER BEAN",
+        "TELUR DADAR / OMELET"
+      ]
+    },
+    {
+      "sectionTitle": "IKAN ASIN",
+      "sourceImageIndex": 1,
+      "boundingBox2D": [
+        508,
+        110,
+        567,
+        874
+      ],
+      "items": [
+        "CUMI ASIN GORENG / FRIED SALTED SQUID",
+        "IKAN ASIN PEDA CABE PENCOK / PEDA SALTED FISH PENCOK CHILI",
+        "IKAN TERI JENGKI SAMBAL PENCOK / JENGKI ANCHOVY SAMBAL PENCOK",
+        "IKAN ASIN SEPAT / SEPAT SALTED FISH",
+        "IKAN ASIN JAMBAL / JAMBAL SALTED FISH",
+        "IKAN ASIN GABUS / GABUS SALTED FISH"
+      ]
+    },
+    {
+      "sectionTitle": "NASI",
+      "sourceImageIndex": 1,
+      "boundingBox2D": [
+        584,
+        103,
+        767,
+        780
+      ],
+      "items": [
+        "NASI PUTIH / PLAIN RICE",
+        "NASI UDUK / UDUK RICE",
+        "NASI BAKAR CAKALANG / GRILLED SKIPJACK TUNA RICE",
+        "NASI BAKAR AYAM + TERI MEDAN / GRILLED CHICKEN + MEDAN ANCHOVY RICE",
+        "NASI BAKAR AYAM CUMI CABE IJO / GRILLED CHICKEN SQUID GREEN CHILI RICE",
+        "NASI GORENG AYAM (PEDAS BY REQUEST) / FRIED CHICKEN RICE (SPICY BY REQUEST)",
+        "NASI GORENG IKAN ASIN (BY REQUEST) / SALTED FISH FRIED RICE (BY REQUEST)",
+        "NASI GORENG PETE (BY REQUEST) / BITTER BEAN FRIED RICE (BY REQUEST)",
+        "NASI GORENG ATI/AMPLA (BY REQUEST) / LIVER/GIZZARD FRIED RICE (BY REQUEST)",
+        "NASI GORENG ALA PENCOK 89 (BY REQUEST) / ALA PENCOK 89 FRIED RICE (BY REQUEST)"
+      ]
+    },
+    {
+      "sectionTitle": "MENU TAMBAHAN",
+      "sourceImageIndex": 1,
+      "boundingBox2D": [
+        795,
+        397,
+        909,
+        873
+      ],
+      "items": [
+        "BUBUR AYAM / CHICKEN PORRIDGE",
+        "MIE AYAM ORIGINAL / ORIGINAL CHICKEN NOODLE",
+        "MIE AYAM/CEKER/BAKSO/PANGSIT / CHICKEN/FEET/MEATBALL/WONTON NOODLE",
+        "BUBUR SUM SUM/KETAN HITAM/KACANG / SUM SUM PORRIDGE/BLACK STICKY RICE/PEANUT",
+        "ES HONG KONG THAI/KOLANG KALING / HONG KONG THAI ICE/SUGAR PALM FRUIT"
+      ]
+    },
+    {
+      "sectionTitle": "SEBLAK",
+      "sourceImageIndex": 1,
+      "boundingBox2D": [
+        804,
+        78,
+        866,
+        311
+      ],
+      "items": [
+        "SEBLAK COMPLETE / COMPLETE SEBLAK",
+        "SEBLAK CEKER / CHICKEN FEET SEBLAK",
+        "SEBLAK SEA FOOD / SEAFOOD SEBLAK",
+        "SEBLAK CRIT VIRAL / VIRAL CRIT SEBLAK"
+      ]
+    }
+  ],
+  "_meta": {
+    "agent1DurationMs": 16021,
+    "agent2DurationMs": 19930,
+    "totalDurationMs": 35951,
+    "totalDishesExtracted": 100,
+    "totalDishesGrouped": 99
+  }
+}

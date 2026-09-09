@@ -6,7 +6,7 @@ import {
   scoutOnlyCompareSystemInstruction,
   buildScoutComparePrompt,
   scoutOnlyCompareResponseSchema,
-} from "./scout_only_compare_instructions.ts";
+} from "./scout_only_compare_instructions.js";
 
 dotenv.config();
 
@@ -88,7 +88,7 @@ const sixTestCases: TestCase[] = [
   {
     id: "set6",
     setNum: 6,
-    name: "Set 6: Supermarket Chip Aisle Shelf (50+ Items)",
+    name: "Set 6: Supermarket Chip Aisle Shelf",
     kind: "shelf_selection",
     files: [
       "set6_supermarket_chip_aisle_shelf.jpg",
@@ -113,10 +113,25 @@ function loadImages(files: string[]) {
   });
 }
 
+function deriveServingNutrients(per100g: Record<string, number>, weightGrams: number): Record<string, number> {
+  const serving: Record<string, number> = {};
+  const factor = (weightGrams || 100) / 100;
+  for (const [k, v] of Object.entries(per100g)) {
+    if (typeof v === "number") {
+      if (k === "sodium" || k === "calories") {
+        serving[k] = Math.round(v * factor);
+      } else {
+        serving[k] = Math.round(v * factor * 10) / 10;
+      }
+    }
+  }
+  return serving;
+}
+
 async function runSixCasesBenchmark() {
   console.log("==========================================================================================");
   console.log("SCOUT-ONLY COMPARE BENCHMARK: EVALUATING ALL 6 PROTOTYPE CASES");
-  console.log("Testing: Bilingual Names, Normalized 100g Metrics, Sub-Item Sorting & Estimated Nutrients");
+  console.log("Testing: Streamlined Schema-First Architecture (Groups[].items, <=10% macro variance)");
   console.log("Model: gemini-3.5-flash-lite");
   console.log("==========================================================================================\n");
 
@@ -131,22 +146,7 @@ async function runSixCasesBenchmark() {
     const startTime = Date.now();
     const imageParts = loadImages(tc.files);
 
-    const mockPatientContext = {
-      remainingAllowance: {
-        saturatedFat: "27.7g - 38% over",
-        calories: "2500kcal - 39% over",
-        sodium: "3000mg - 30% over",
-        protein: "100g - 17% under",
-        carbohydrates: "263.3g - 32% over",
-        totalFibre: "22.3g - 26% under",
-        potassium: "2100mg",
-        solubleFibre: "3.5g",
-        addedSugar: "45g - 50% over",
-        transFat: "0.1g"
-      }
-    };
-
-    const promptText = buildScoutComparePrompt(tc.userPrompt, imageParts.length, mockPatientContext);
+    const promptText = buildScoutComparePrompt(tc.userPrompt, imageParts.length);
     const contents = [...imageParts, { text: promptText }];
 
     console.log(`Sending to Gemini 3.5 Flash Lite...`);
@@ -158,6 +158,7 @@ async function runSixCasesBenchmark() {
         temperature: 0.1,
         responseMimeType: "application/json",
         responseSchema: scoutOnlyCompareResponseSchema,
+        maxOutputTokens: 8192,
       },
     });
 
@@ -170,70 +171,52 @@ async function runSixCasesBenchmark() {
       continue;
     }
 
-    const items = json.items || [];
     const groups = json.groups || [];
+    const extractedDishes = Array.isArray(json.allExtractedDishes) ? json.allExtractedDishes : [];
+    // Extract all items from groups
+    const groupItems: string[] = groups.flatMap((g: any) =>
+      Array.isArray(g.items) ? g.items.map((it: any) => typeof it === "string" ? it : it.name) : []
+    );
+    const rootItems = json.items || [];
+    const allItems = extractedDishes.length > 0 ? extractedDishes : (groupItems.length > 0 ? groupItems : rootItems);
 
     // Quality metrics analysis
-    const itemsWithTranslations = items.filter((it: any) => typeof it.name === "string" && it.name.includes("/"));
-    const itemsWith100g = items.filter((it: any) => it.per100g && typeof it.per100g.calories === "number");
+    const itemsWithTranslations = allItems.filter((name: string) => typeof name === "string" && name.includes("/"));
     const groupsWith100g = groups.filter((g: any) => g.averageNutrientsPer100g && typeof g.averageNutrientsPer100g.calories === "number");
-    const groupsWithNutrients = groups.filter((g: any) => g.averageNutrients && typeof g.averageNutrients.calories === "number");
-
-    // Check sub-item sorting in scoutItemIndices
-    let subItemsSortedCount = 0;
-    groups.forEach((g: any) => {
-      const indices = g.scoutItemIndices || [];
-      if (indices.length <= 1) {
-        subItemsSortedCount++;
-      } else {
-        let sorted = true;
-        for (let i = 0; i < indices.length - 1; i++) {
-          const tA = items[indices[i]]?.tier ?? 2;
-          const tB = items[indices[i + 1]]?.tier ?? 2;
-          if (tA > tB) { sorted = false; break; }
-        }
-        if (sorted) subItemsSortedCount++;
-      }
-    });
 
     console.log(`\n⏱️ Duration: ${durationMs}ms`);
     console.log(`📊 Comparison Title: "${json.comparisonTitle}"`);
     console.log(`🏆 Recommended: "${json.recommendedOption}"`);
-    console.log(`📦 Extracted Items: ${items.length}`);
-    console.log(`🌐 Bilingual Translated Items: ${itemsWithTranslations.length}/${items.length} (${Math.round((itemsWithTranslations.length / (items.length || 1)) * 100)}%)`);
-    console.log(`⚖️ Items with per100g: ${itemsWith100g.length}/${items.length}`);
-    console.log(`🏷️ Groups Formed: ${groups.length}`);
-    console.log(`🥗 Groups with Non-Null Serving Nutrients: ${groupsWithNutrients.length}/${groups.length}`);
+    console.log(`📦 Total Extracted Dishes in Groups: ${groupItems.length}`);
+    console.log(`🌐 Bilingual Translated Items: ${itemsWithTranslations.length}/${allItems.length} (${Math.round((itemsWithTranslations.length / (allItems.length || 1)) * 100)}%)`);
+    console.log(`🏷️ Groups Formed (<=10% Macro Variance): ${groups.length}`);
     console.log(`📏 Groups with Normalized 100g Nutrients: ${groupsWith100g.length}/${groups.length}`);
-    console.log(`🔢 Groups with Sorted Sub-Items: ${subItemsSortedCount}/${groups.length}`);
-
-    // Print sample items
-    console.log(`\nSample Extracted Dishes/Products:`);
-    items.slice(0, 5).forEach((it: any, idx: number) => {
-      console.log(`  ${idx + 1}. [Tier ${it.tier}] "${it.name}"`);
-    });
-    if (items.length > 5) {
-      console.log(`  ... and ${items.length - 5} more items`);
-    }
 
     // Print groups
     console.log(`\nComparison Groups & Normalized Densities:`);
     groups.forEach((g: any, idx: number) => {
-      const srv = g.averageNutrients ? `${g.averageNutrients.calories} kcal, ${g.averageNutrients.sugar ?? "—"}g sugar, ${g.averageNutrients.sodium ?? "—"}mg Na` : "N/A";
-      const n100 = g.averageNutrientsPer100g ? `${g.averageNutrientsPer100g.calories} kcal/100g, ${g.averageNutrientsPer100g.sugar ?? "—"}g sugar/100g, ${g.averageNutrientsPer100g.totalFat ?? "—"}g fat/100g` : "N/A";
-      console.log(`  Rank ${idx + 1}: "${g.groupName}" [${g.verdict?.level?.toUpperCase()}] - "${g.verdict?.label}" (${g.scoutItemIndices?.length || 0} items)`);
-      console.log(`     Serving: ${srv} | Normalized: ${n100}`);
+      const derived = (g.averageNutrientsPer100g && g.servingWeightGrams) ? deriveServingNutrients(g.averageNutrientsPer100g, g.servingWeightGrams) : null;
+      const srv = derived ? `${derived.calories} kcal, ${derived.protein ?? "—"}g P, ${derived.saturatedFat ?? "—"}g SatF, ${derived.sodium ?? "—"}mg Na` : "N/A";
+      const n100 = g.averageNutrientsPer100g ? `${g.averageNutrientsPer100g.calories} kcal/100g, ${g.averageNutrientsPer100g.protein ?? "—"}g P, ${g.averageNutrientsPer100g.saturatedFat ?? "—"}g SatF` : "N/A";
+      const itemsList = Array.isArray(g.items) ? g.items : [];
+      console.log(`  Rank ${idx + 1}: "${g.groupName}" [${g.verdict?.level?.toUpperCase()}] - "${g.verdict?.label}" (${itemsList.length} items, photo #${g.sourceImageIndex ?? 0})`);
+      console.log(`     Serving (${g.servingWeightGrams}g): ${srv} | Per 100g: ${n100}`);
       console.log(`     Comparative: "${g.comparisonSentence}"`);
+      console.log(`     Message (Combined Guidance & Tip): "${g.message}"`);
+      console.log(`     Items (${itemsList.length}): ${itemsList.slice(0, 3).map((it: any) => typeof it === 'string' ? it : it.name).join("; ")}${itemsList.length > 3 ? ` ... and ${itemsList.length - 3} more` : ""}`);
     });
+
+    // Save individual output
+    const caseOutPath = path.join(process.cwd(), "prototype", "meallog", "compare", `live_output_set${tc.setNum}.json`);
+    fs.writeFileSync(caseOutPath, JSON.stringify(json, null, 2));
 
     results.push({
       setNum: tc.setNum,
       id: tc.id,
       name: tc.name,
-      itemCount: items.length,
+      itemCount: groupItems.length,
       groupCount: groups.length,
       translatedCount: itemsWithTranslations.length,
-      groupsWithNutrients: groupsWithNutrients.length,
       groupsWith100g: groupsWith100g.length,
       recommended: json.recommendedOption,
       durationMs,
@@ -241,7 +224,7 @@ async function runSixCasesBenchmark() {
     });
   }
 
-  // Save report
+  // Save full report
   const outPath = path.join(process.cwd(), "prototype", "meallog", "compare", "six_cases_precision_eval.json");
   fs.writeFileSync(outPath, JSON.stringify(results, null, 2));
   console.log(`\n💾 Saved detailed 6-case precision evaluation to: ${outPath}`);
@@ -251,7 +234,7 @@ async function runSixCasesBenchmark() {
   console.log("==========================================================================================");
   results.forEach(r => {
     console.log(`Set ${r.setNum}: ${r.name}`);
-    console.log(`  Items: ${r.itemCount} | Groups: ${r.groupCount} | Translated: ${r.translatedCount} | Non-Null Nutrients: ${r.groupsWithNutrients}/${r.groupCount} | 100g Normalized: ${r.groupsWith100g}/${r.groupCount}`);
+    console.log(`  Items in Groups: ${r.itemCount} | Groups: ${r.groupCount} | Translated: ${r.translatedCount} | 100g Normalized: ${r.groupsWith100g}/${r.groupCount}`);
     console.log(`  Recommended: "${r.recommended}" | Latency: ${r.durationMs}ms`);
   });
   console.log("==========================================================================================\n");

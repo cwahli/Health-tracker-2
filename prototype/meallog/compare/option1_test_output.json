@@ -1,0 +1,394 @@
+{
+  "menuSections": [
+    {
+      "sectionTitle": "MENU UTAMA / SATE & ASINAN (Page 1 Top)",
+      "items": [
+        "KERUPUK MIE + BUMBU KACANG / NOODLE CRACKERS WITH PEANUT SAUCE",
+        "ASINAN BUAH BOGOR / BOGOR FRUIT PICKLES",
+        "ASINAN SAYUR RUJAK PENGANTIN / BRIDE RUJAK VEGETABLE PICKLES",
+        "SATE USUS / INTESTINE SKEWERS",
+        "SATE ATI-AMPLA / LIVER-GIZZARD SKEWERS",
+        "SATE KULIT / SKIN SKEWERS"
+      ]
+    },
+    {
+      "sectionTitle": "BEST SELLER (Page 1)",
+      "items": [
+        "PAKET BURUNG PUYUH (NASI + BURUNG PUYUH + SAYUR ASEM + TEMPE + TAHU) / QUAIL SET (RICE + QUAIL + TAMARIND SOUP + TEMPEH + TOFU)",
+        "PAKET UDUK BURUNG PUYUH (NASI UDUK + BURUNG PUYUH + SAYUR ASEM + TEMPE + TAHU) / UDUK RICE QUAIL SET"
+      ]
+    },
+    {
+      "sectionTitle": "PAKET HEMAT (Page 1)",
+      "items": [
+        "PAKET AYAM (NASI + AYAM GORENG/BAKAR+SAYUR ASEM+TAHU +TEMPE) / CHICKEN SET",
+        "PAKET UDUK AYAM (NASI UDUK+ AYAM GORENG/BAKAR + SAYUR ASEM TAHU + TEMPE) / UDUK CHICKEN SET",
+        "PAKET EMPAL (NASI + DAGING EMPAL + SAYUR ASEM + TAHU + TEMPE) / BEEF EMPAL SET",
+        "PAKET UDUK EMPAL (NASI UDUK + DAGING EMPAL+SAYUR ASEM+TAHU) / UDUK BEEF EMPAL SET",
+        "PAKET BEBEK (NASI +BEBEK GORENG + SAYUR ASEM + TAHU + TEMPE) / DUCK SET",
+        "PAKET UDUK BEBEK (NASI UDUK + BEBEK GORENG + SAYUR ASEM + TAHU + TEMPE) / UDUK DUCK SET"
+      ]
+    },
+    {
+      "sectionTitle": "PAKET HEMAT IKAN (Page 1)",
+      "items": [
+        "PAKET LELE (NASI + LELE GORENG 2 PCS + SAYUR ASEM+TAHU + TEMPE) / CATFISH SET",
+        "PAKET UDUK LELE (NASI UDUK + LELE GORENG 2 PCS + SAYUR ASEM + TAHU + TEMPE) / UDUK CATFISH SET",
+        "PAKET KEMBUNG (NASI + IKAN KEMBUNG + SAYUR ASEM + TAHU + TEMPE) / MACKEREL SET",
+        "PAKET UDUK KEMBUNG (NASI UDUK + IKAN KEMBUNG + SAYUR ASEM+TAHU + TEMPE) / UDUK MACKEREL SET",
+        "PAKET MUJAIR (NASI + IKAN MUJAIR GORENG + SAYUR ASEM + TAHU + TEMPE) / TILAPIA SET",
+        "PAKET UDUK MUJAIR (NASI UDUK + IKAN MUJAIR GORENG + SAYUR ASEM + TAHU + TEMPE) / UDUK TILAPIA SET",
+        "PAKET NILA (NASI + IKAN NILA GORENG + SAYUR ASEM + TAHU + TEMPE) / NILE TILAPIA SET",
+        "PAKET UDUK NILA (NASI UDUK + IKAN NILA GORENG + SAYUR ASEM + TAHU + TEMPE) / UDUK NILE TILAPIA SET"
+      ]
+    },
+    {
+      "sectionTitle": "PENCOK (Page 1 Bottom)",
+      "items": [
+        "PENCOK KACANG / PEANUT PENCOK",
+        "PENCOK KACANG+KETIMUN / PEANUT CUCUMBER PENCOK",
+        "AYAM GORENG CABE KERING / DRIED CHILI FRIED CHICKEN",
+        "PENCOK CEKER / CHICKEN FEET PENCOK",
+        "PENCOK TAHU/TEMPE/PORSI (ISI 3) / TOFU/TEMPEH PENCOK PORTION",
+        "AYAM GEPREK SELERA PEDAS / SPICY CRUSHED CHICKEN",
+        "PENCOK KEPALA/PORSI (ISI 3) / HEAD PENCOK PORTION",
+        "PENCOK KULIT/PORSI / SKIN PENCOK PORTION",
+        "PENCOK AMPLA/USUS/ATI / GIZZARD/INTESTINE/LIVER PENCOK",
+        "KAREDOK ALA PENCOK 89 / PENCOK 89 STYLE KAREDOK",
+        "PENCOK AYAM GORENG/BAKAR (SAMBAL PENCOK/BAKAR) / FRIED/GRILLED CHICKEN PENCOK",
+        "PENCOK DAGING EMPAL (SAMBAL PENCOK/BAKAR) / EMPAL BEEF PENCOK",
+        "PENCOK IKAN NILA GORENG (SAMBAL PENCOK/BAKAR) / FRIED NILE TILAPIA PENCOK",
+        "PENCOK IKAN MUJAIR GORENG (SAMBAL PENCOK/BAKAR) / FRIED TILAPIA PENCOK",
+        "PENCOK LELE GORENG(2 PCS) (SAMBAL PENCOK/BAKAR) / FRIED CATFISH PENCOK",
+        "PENCOK IKAN KEMBUNG (SAMBAL PENCOK/BAKAR) / MACKEREL PENCOK",
+        "PENCOK BEBEK GORENG PRESTO (SAMBAL PENCOK/BAKAR) / PRESTO FRIED DUCK PENCOK",
+        "PENCOK BURUNG PUYUH (SAMBAL PENCOK/BAKAR) / QUAIL PENCOK"
+      ]
+    },
+    {
+      "sectionTitle": "JENGKOL (Page 2 Top)",
+      "items": [
+        "JENGKOL PENCOK/PORSI / ARCHED BEAN PENCOK",
+        "JENGKOL BALADO/PORSI / ARCHED BEAN BALADO",
+        "JENGKOL SEMUR/PORSI / ARCHED BEAN STEW",
+        "JENGKOL GORENG/PORSI / FRIED ARCHED BEAN"
+      ]
+    },
+    {
+      "sectionTitle": "SATE (Page 2 Top)",
+      "items": [
+        "SATE TAICHAN JUARA (SELERA PEDAS)/PORSI / CHAMPION TAICHAN SKEWERS"
+      ]
+    },
+    {
+      "sectionTitle": "TUMISAN (Page 2)",
+      "items": [
+        "TUMIS KANGKUNG/CAH TERASI / STIR-FRIED WATER SPINACH WITH SHRIMP PASTE",
+        "TUMIS CAISIM / STIR-FRIED MUSTARD GREENS",
+        "TUMIS GENJER ALA PENCOK '89 / STIR-FRIED LIMNOCHARIS",
+        "TUMIS SAWI PUTIH / STIR-FRIED NAPA CABBAGE",
+        "TUMIS SAWI PUTIH + TELOR / STIR-FRIED NAPA CABBAGE WITH EGG",
+        "TUMIS TOGE / STIR-FRIED BEAN SPROUTS",
+        "TUMIS TOGE + IKAN ASIN / STIR-FRIED BEAN SPROUTS WITH SALTED FISH",
+        "TUMIS ONCOM / STIR-FRIED FERMENTED ONCOM",
+        "TUMIS UDANG BALADO / STIR-FRIED SHRIMP IN BALADO",
+        "TUMIS UDANG + PETE BUMBU BALADO / STIR-FRIED SHRIMP AND BITTER BEAN BALADO",
+        "TUMIS CUMI BALADO / STIR-FRIED SQUID BALADO",
+        "TUMIS CUMI + PETE BUMBU BALADO / STIR-FRIED SQUID AND BITTER BEAN BALADO",
+        "TUMIS PEDA / STIR-FRIED PEDA FISH",
+        "TUMIS PEDA + PETE / STIR-FRIED PEDA FISH WITH BITTER BEAN",
+        "TUMIS CUE / STIR-FRIED TUNA CUE",
+        "TUMIS CUE + PETE / STIR-FRIED TUNA CUE WITH BITTER BEAN"
+      ]
+    },
+    {
+      "sectionTitle": "SAYURAN (Page 2)",
+      "items": [
+        "SOP AYAM KAMPUNG / DAGING SAPI / FREE-RANGE CHICKEN / BEEF SOUP",
+        "SOTO BETAWI DAGING SAPI / AYAM KAMPUNG / BETAWI BEEF / CHICKEN SOTO",
+        "SAYUR SOP CEKER / CHICKEN FOOT SOUP",
+        "SAYUR ASEM / TAMARIND VEGETABLE SOUP",
+        "RUJAK KANGKUNG/PLECING KANGKUNG / WATER SPINACH SALAD",
+        "KANGKUNG REBUS / BOILED WATER SPINACH",
+        "LALAPAN REBUS (LABU+KANGKUNG+KCG PJG) / BOILED FRESH VEGETABLES",
+        "TERONG BALADO / EGGPLANT BALADO",
+        "KOL GORENG / FRIED CABBAGE",
+        "TAHU ACAK (SELERA PEDAS BY REQUEST) / CRISPY TOFU FRITTER",
+        "PEPES TAHU / STEAMED TOFU IN BANANA LEAF",
+        "PEPES PEDA MIX PETE / STEAMED PEDA FISH WITH BITTER BEAN",
+        "PETE GORENG/BAKAR/MENTAH / FRIED / GRILLED / RAW BITTER BEAN",
+        "TELUR DADAR / OMELET"
+      ]
+    },
+    {
+      "sectionTitle": "IKAN ASIN (Page 2)",
+      "items": [
+        "CUMI ASIN GORENG / FRIED SALTED SQUID",
+        "IKAN ASIN PEDA CABE PENCOK / SALTED PEDA CHILI PENCOK",
+        "IKAN TERI JENGKI SAMBAL PENCOK / ANCHOVY PENCOK",
+        "IKAN ASIN SEPAT / SALTED SEPAT FISH",
+        "IKAN ASIN JAMBAL / SALTED JAMBAL FISH",
+        "IKAN ASIN GABUS / SALTED SNAKEHEAD FISH"
+      ]
+    },
+    {
+      "sectionTitle": "NASI (Page 2)",
+      "items": [
+        "NASI PUTIH / PLAIN RICE",
+        "NASI UDUK / COCONUT RICE",
+        "NASI BAKAR CAKALANG / GRILLED TUNA RICE",
+        "NASI BAKAR AYAM + TERI MEDAN / GRILLED CHICKEN AND ANCHOVY RICE",
+        "NASI BAKAR AYAM CUMI CABE IJO / GRILLED CHICKEN SQUID GREEN CHILI RICE",
+        "NASI GORENG AYAM (PEDAS BY REQUEST) / CHICKEN FRIED RICE",
+        "NASI GORENG IKAN ASIN (BY REQUEST) / SALTED FISH FRIED RICE",
+        "NASI GORENG PETE (BY REQUEST) / PETE FRIED RICE",
+        "NASI GORENG ATI/AMPLA (BY REQUEST) / LIVER GIZZARD FRIED RICE",
+        "NASI GORENG ALA PENCOK 89 (BY REQUEST) / PENCOK 89 FRIED RICE"
+      ]
+    },
+    {
+      "sectionTitle": "MENU TAMBAHAN (Page 2 Bottom)",
+      "items": [
+        "SEBLAK COMPLETE / COMPLETE SEBLAK",
+        "SEBLAK CEKER / CHICKEN FOOT SEBLAK",
+        "SEBLAK SEA FOOD / SEAFOOD SEBLAK",
+        "SEBLAK PEDAS VIRAL / VIRAL SPICY SEBLAK",
+        "BUBUR AYAM / CHICKEN PORRIDGE",
+        "MIE AYAM ORIGINAL / ORIGINAL CHICKEN NOODLES",
+        "MIE AYAM/CEKER/BAKSO/PANGSIT / CHICKEN NOODLES WITH TOPPINGS",
+        "BUBUR SUM SUM/KETAN HITAM/KACANG / PORRIDGE DESSERT",
+        "BUBUR/SIN KONG THAI/KOLANG KALING / SWEET DESSERT"
+      ]
+    }
+  ],
+  "comparisonTitle": "Sambal Bakar Pencok 89 Menu Evaluation",
+  "comparisonType": "menu_items",
+  "summary": "Evaluating Sambal Bakar Pencok 89 requires careful navigation given your 39% calorie surplus, 38% saturated fat excess, 30% sodium elevation, and 50% added sugar surplus. Many set meals and deep-fried dishes exacerbate saturated fat and sodium. Prioritize steamed or clear broth items featuring marine Omega-3s while strictly avoiding deep-fried items, ultra-processed gelatinized starches like seblak, and sweetened desserts.",
+  "recommendedOption": "SAYUR ASEM / TAMARIND VEGETABLE SOUP",
+  "groups": [
+    {
+      "groupName": "Tier 1 - Safest Choice: Tangy Broths & Boiled Vegetables",
+      "sourceImageIndex": 1,
+      "verdict": {
+        "label": "Optimal Low-Calorie Broth Choice",
+        "level": "good"
+      },
+      "comparisonSentence": "Unlike heavy deep-fried meal packages, these low-fat vegetable soups and boiled greens provide essential fiber and hydration without adding to your 38% saturated fat surplus.",
+      "message": "These clear vegetable preparations offer valuable dietary fiber (combatting your 26% fiber deficit) with minimal saturated fat and sodium, aligning perfectly with your surplus reduction goals. Order the Tamarind Vegetable Soup alongside plain steamed rice to maintain satiety without triggering your calorie and fat limits.",
+      "boundingBox2D": [
+        380,
+        100,
+        495,
+        450
+      ],
+      "servingWeightGrams": 250,
+      "averageNutrientsPer100g": {
+        "calories": 35,
+        "protein": 1.5,
+        "totalFat": 0.5,
+        "saturatedFat": 0.1,
+        "carbohydrates": 7,
+        "sugar": 3,
+        "totalFibre": 3.5,
+        "sodium": 280,
+        "addedSugar": 0,
+        "transFat": 0
+      },
+      "items": [
+        "SAYUR ASEM / TAMARIND VEGETABLE SOUP",
+        "KANGKUNG REBUS / BOILED WATER SPINACH",
+        "LALAPAN REBUS (LABU+KANGKUNG+KCG PJG) / BOILED FRESH VEGETABLES"
+      ]
+    },
+    {
+      "groupName": "Tier 2 - Moderate Choice: Clear Soups & Lean Steamed Proteins",
+      "sourceImageIndex": 1,
+      "verdict": {
+        "label": "Moderate Protein with Moderate Sodium",
+        "level": "neutral"
+      },
+      "comparisonSentence": "Compared to fried duck or chicken sets, these clear chicken or beef soups provide high-quality protein to resolve your 17% protein deficit with significantly lower lipid peroxides.",
+      "message": "These clear broths help address your protein deficit while keeping saturated fats lower than deep-fried alternatives. However, monitor the sodium content closely since your 3-day average is already 30% high. Request your broth with reduced salt and enjoy alongside plain rice.",
+      "boundingBox2D": [
+        380,
+        100,
+        440,
+        450
+      ],
+      "servingWeightGrams": 300,
+      "averageNutrientsPer100g": {
+        "calories": 65,
+        "protein": 7.5,
+        "totalFat": 3,
+        "saturatedFat": 1,
+        "carbohydrates": 2,
+        "sugar": 0.5,
+        "totalFibre": 0.5,
+        "sodium": 450,
+        "addedSugar": 0,
+        "transFat": 0
+      },
+      "items": [
+        "SOP AYAM KAMPUNG / DAGING SAPI / FREE-RANGE CHICKEN / BEEF SOUP",
+        "SOTO BETAWI DAGING SAPI / AYAM KAMPUNG / BETAWI BEEF / CHICKEN SOTO",
+        "SAYUR SOP CEKER / CHICKEN FOOT SOUP",
+        "PEPES TAHU / STEAMED TOFU IN BANANA LEAF",
+        "RUJAK KANGKUNG/PLECING KANGKUNG / WATER SPINACH SALAD"
+      ]
+    },
+    {
+      "groupName": "Tier 3 - Warning: Fried Sets, Stir-fries & Salted Fish",
+      "sourceImageIndex": 0,
+      "verdict": {
+        "label": "High Sodium and Saturated Fat Risk",
+        "level": "warning"
+      },
+      "comparisonSentence": "Unlike fresh vegetable broths, these fried combo sets and salted fish dishes deliver excessive sodium and oxidized frying oils that worsen your current surpluses.",
+      "message": "These menu items compound your elevated sodium and saturated fat levels through deep-frying and heavy seasoning. If you choose an animal protein set, discard the crispy skin, skip the coconut rice (Nasi Uduk), and limit added chili pastes to protect your metabolic profile.",
+      "boundingBox2D": [
+        230,
+        100,
+        580,
+        900
+      ],
+      "servingWeightGrams": 350,
+      "averageNutrientsPer100g": {
+        "calories": 210,
+        "protein": 12,
+        "totalFat": 12.5,
+        "saturatedFat": 4.5,
+        "carbohydrates": 14,
+        "sugar": 1,
+        "totalFibre": 1,
+        "sodium": 720,
+        "addedSugar": 0,
+        "transFat": 0.1
+      },
+      "items": [
+        "KERUPUK MIE + BUMBU KACANG / NOODLE CRACKERS WITH PEANUT SAUCE",
+        "ASINAN BUAH BOGOR / BOGOR FRUIT PICKLES",
+        "ASINAN SAYUR RUJAK PENGANTIN / BRIDE RUJAK VEGETABLE PICKLES",
+        "SATE USUS / INTESTINE SKEWERS",
+        "SATE ATI-AMPLA / LIVER-GIZZARD SKEWERS",
+        "SATE KULIT / SKIN SKEWERS",
+        "PAKET BURUNG PUYUH (NASI + BURUNG PUYUH + SAYUR ASEM + TEMPE + TAHU) / QUAIL SET (RICE + QUAIL + TAMARIND SOUP + TEMPEH + TOFU)",
+        "PAKET UDUK BURUNG PUYUH (NASI UDUK + BURUNG PUYUH + SAYUR ASEM + TEMPE + TAHU) / UDUK RICE QUAIL SET",
+        "PAKET AYAM (NASI + AYAM GORENG/BAKAR+SAYUR ASEM+TAHU +TEMPE) / CHICKEN SET",
+        "PAKET UDUK AYAM (NASI UDUK+ AYAM GORENG/BAKAR + SAYUR ASEM TAHU + TEMPE) / UDUK CHICKEN SET",
+        "PAKET EMPAL (NASI + DAGING EMPAL + SAYUR ASEM + TAHU + TEMPE) / BEEF EMPAL SET",
+        "PAKET UDUK EMPAL (NASI UDUK + DAGING EMPAL+SAYUR ASEM+TAHU) / UDUK BEEF EMPAL SET",
+        "PAKET BEBEK (NASI +BEBEK GORENG + SAYUR ASEM + TAHU + TEMPE) / DUCK SET",
+        "PAKET UDUK BEBEK (NASI UDUK + BEBEK GORENG + SAYUR ASEM + TAHU + TEMPE) / UDUK DUCK SET",
+        "PAKET LELE (NASI + LELE GORENG 2 PCS + SAYUR ASEM+TAHU + TEMPE) / CATFISH SET",
+        "PAKET UDUK LELE (NASI UDUK + LELE GORENG 2 PCS + SAYUR ASEM + TAHU + TEMPE) / UDUK CATFISH SET",
+        "PAKET KEMBUNG (NASI + IKAN KEMBUNG + SAYUR ASEM + TAHU + TEMPE) / MACKEREL SET",
+        "PAKET UDUK KEMBUNG (NASI UDUK + IKAN KEMBUNG + SAYUR ASEM+TAHU + TEMPE) / UDUK MACKEREL SET",
+        "PAKET MUJAIR (NASI + IKAN MUJAIR GORENG + SAYUR ASEM + TAHU + TEMPE) / TILAPIA SET",
+        "PAKET UDUK MUJAIR (NASI UDUK + IKAN MUJAIR GORENG + SAYUR ASEM + TAHU + TEMPE) / UDUK TILAPIA SET",
+        "PAKET NILA (NASI + IKAN NILA GORENG + SAYUR ASEM + TAHU + TEMPE) / NILE TILAPIA SET",
+        "PAKET UDUK NILA (NASI UDUK + IKAN NILA GORENG + SAYUR ASEM + TAHU + TEMPE) / UDUK NILE TILAPIA SET",
+        "PENCOK KACANG / PEANUT PENCOK",
+        "PENCOK KACANG+KETIMUN / PEANUT CUCUMBER PENCOK",
+        "AYAM GORENG CABE KERING / DRIED CHILI FRIED CHICKEN",
+        "PENCOK CEKER / CHICKEN FEET PENCOK",
+        "PENCOK TAHU/TEMPE/PORSI (ISI 3) / TOFU/TEMPEH PENCOK PORTION",
+        "AYAM GEPREK SELERA PEDAS / SPICY CRUSHED CHICKEN",
+        "PENCOK KEPALA/PORSI (ISI 3) / HEAD PENCOK PORTION",
+        "PENCOK KULIT/PORSI / SKIN PENCOK PORTION",
+        "PENCOK AMPLA/USUS/ATI / GIZZARD/INTESTINE/LIVER PENCOK",
+        "KAREDOK ALA PENCOK 89 / PENCOK 89 STYLE KAREDOK",
+        "PENCOK AYAM GORENG/BAKAR (SAMBAL PENCOK/BAKAR) / FRIED/GRILLED CHICKEN PENCOK",
+        "PENCOK DAGING EMPAL (SAMBAL PENCOK/BAKAR) / EMPAL BEEF PENCOK",
+        "PENCOK IKAN NILA GORENG (SAMBAL PENCOK/BAKAR) / FRIED NILE TILAPIA PENCOK",
+        "PENCOK IKAN MUJAIR GORENG (SAMBAL PENCOK/BAKAR) / FRIED TILAPIA PENCOK",
+        "PENCOK LELE GORENG(2 PCS) (SAMBAL PENCOK/BAKAR) / FRIED CATFISH PENCOK",
+        "PENCOK IKAN KEMBUNG (SAMBAL PENCOK/BAKAR) / MACKEREL PENCOK",
+        "PENCOK BEBEK GORENG PRESTO (SAMBAL PENCOK/BAKAR) / PRESTO FRIED DUCK PENCOK",
+        "PENCOK BURUNG PUYUH (SAMBAL PENCOK/BAKAR) / QUAIL PENCOK",
+        "JENGKOL PENCOK/PORSI / ARCHED BEAN PENCOK",
+        "JENGKOL BALADO/PORSI / ARCHED BEAN BALADO",
+        "JENGKOL SEMUR/PORSI / ARCHED BEAN STEW",
+        "JENGKOL GORENG/PORSI / FRIED ARCHED BEAN",
+        "SATE TAICHAN JUARA (SELERA PEDAS)/PORSI / CHAMPION TAICHAN SKEWERS",
+        "TUMIS KANGKUNG/CAH TERASI / STIR-FRIED WATER SPINACH WITH SHRIMP PASTE",
+        "TUMIS CAISIM / STIR-FRIED MUSTARD GREENS",
+        "TUMIS GENJER ALA PENCOK '89 / STIR-FRIED LIMNOCHARIS",
+        "TUMIS SAWI PUTIH / STIR-FRIED NAPA CABBAGE",
+        "TUMIS SAWI PUTIH + TELOR / STIR-FRIED NAPA CABBAGE WITH EGG",
+        "TUMIS TOGE / STIR-FRIED BEAN SPROUTS",
+        "TUMIS TOGE + IKAN ASIN / STIR-FRIED BEAN SPROUTS WITH SALTED FISH",
+        "TUMIS ONCOM / STIR-FRIED FERMENTED ONCOM",
+        "TUMIS UDANG BALADO / STIR-FRIED SHRIMP IN BALADO",
+        "TUMIS UDANG + PETE BUMBU BALADO / STIR-FRIED SHRIMP AND BITTER BEAN BALADO",
+        "TUMIS CUMI BALADO / STIR-FRIED SQUID BALADO",
+        "TUMIS CUMI + PETE BUMBU BALADO / STIR-FRIED SQUID AND BITTER BEAN BALADO",
+        "TUMIS PEDA / STIR-FRIED PEDA FISH",
+        "TUMIS PEDA + PETE / STIR-FRIED PEDA FISH WITH BITTER BEAN",
+        "TUMIS CUE / STIR-FRIED TUNA CUE",
+        "TUMIS CUE + PETE / STIR-FRIED TUNA CUE WITH BITTER BEAN",
+        "TERONG BALADO / EGGPLANT BALADO",
+        "KOL GORENG / FRIED CABBAGE",
+        "TAHU ACAK (SELERA PEDAS BY REQUEST) / CRISPY TOFU FRITTER",
+        "PEPES PEDA MIX PETE / STEAMED PEDA FISH WITH BITTER BEAN",
+        "PETE GORENG/BAKAR/MENTAH / FRIED / GRILLED / RAW BITTER BEAN",
+        "TELUR DADAR / OMELET",
+        "CUMI ASIN GORENG / FRIED SALTED SQUID",
+        "IKAN ASIN PEDA CABE PENCOK / SALTED PEDA CHILI PENCOK",
+        "IKAN TERI JENGKI SAMBAL PENCOK / ANCHOVY PENCOK",
+        "IKAN ASIN SEPAT / SALTED SEPAT FISH",
+        "IKAN ASIN JAMBAL / SALTED JAMBAL FISH",
+        "IKAN ASIN GABUS / SALTED SNAKEHEAD FISH",
+        "NASI PUTIH / PLAIN RICE",
+        "NASI UDUK / COCONUT RICE",
+        "NASI BAKAR CAKALANG / GRILLED TUNA RICE",
+        "NASI BAKAR AYAM + TERI MEDAN / GRILLED CHICKEN AND ANCHOVY RICE",
+        "NASI BAKAR AYAM CUMI CABE IJO / GRILLED CHICKEN SQUID GREEN CHILI RICE",
+        "NASI GORENG AYAM (PEDAS BY REQUEST) / CHICKEN FRIED RICE",
+        "NASI GORENG IKAN ASIN (BY REQUEST) / SALTED FISH FRIED RICE",
+        "NASI GORENG PETE (BY REQUEST) / PETE FRIED RICE",
+        "NASI GORENG ATI/AMPLA (BY REQUEST) / LIVER GIZZARD FRIED RICE",
+        "NASI GORENG ALA PENCOK 89 (BY REQUEST) / PENCOK 89 FRIED RICE"
+      ]
+    },
+    {
+      "groupName": "Tier 4 - Alert: Ultra-processed Starches & Sweet Desserts",
+      "sourceImageIndex": 1,
+      "verdict": {
+        "label": "Severe Calorie and Sugar Hazard",
+        "level": "alert"
+      },
+      "comparisonSentence": "Unlike clear broths, these gelatinized starch dishes (seblak) and sweet dessert porridges trigger massive glycemic spikes and directly aggravate your 50% added sugar and calorie surpluses.",
+      "message": "These dishes present extreme nutritional hazards containing refined starches, palm oils, and added sugars that severely violate your calorie and added sugar targets. Completely avoid seblak and sweet porridges. If dining here, stick strictly to clear vegetable soups with plain white rice and water.",
+      "boundingBox2D": [
+        780,
+        50,
+        920,
+        900
+      ],
+      "servingWeightGrams": 300,
+      "averageNutrientsPer100g": {
+        "calories": 240,
+        "protein": 4,
+        "totalFat": 10,
+        "saturatedFat": 3.5,
+        "carbohydrates": 35,
+        "sugar": 12,
+        "totalFibre": 1,
+        "sodium": 850,
+        "addedSugar": 10,
+        "transFat": 0.2
+      },
+      "items": [
+        "SEBLAK COMPLETE / COMPLETE SEBLAK",
+        "SEBLAK CEKER / CHICKEN FOOT SEBLAK",
+        "SEBLAK SEA FOOD / SEAFOOD SEBLAK",
+        "SEBLAK PEDAS VIRAL / VIRAL SPICY SEBLAK",
+        "BUBUR AYAM / CHICKEN PORRIDGE",
+        "MIE AYAM ORIGINAL / ORIGINAL CHICKEN NOODLES",
+        "MIE AYAM/CEKER/BAKSO/PANGSIT / CHICKEN NOODLES WITH TOPPINGS",
+        "BUBUR SUM SUM/KETAN HITAM/KACANG / PORRIDGE DESSERT",
+        "BUBUR/SIN KONG THAI/KOLANG KALING / SWEET DESSERT"
+      ]
+    }
+  ]
+}
