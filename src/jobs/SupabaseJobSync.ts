@@ -6,8 +6,8 @@ import { JobStore, isStalePriorTurn, mealSnapshotKey } from './JobStore';
 import { AgentJob } from './types';
 import { toPendingFoodLog } from '../mealBuild/adapters';
 
-// [FreeTier] thin clean_result
-let isDirectClientSupabaseDisabled = false;
+// [FreeTier] thin clean_result - direct client Supabase calls disabled in favor of D1 backend routes
+let isDirectClientSupabaseDisabled = true;
 
 const backendDeleteTried = new Set<string>();
 
@@ -363,8 +363,8 @@ export function initSupabaseJobSync(userId?: string): () => void {
     }
   }, 8000);
 
-  if (!isSupabaseConfigured) {
-    console.log('[SupabaseJobSync] Supabase not configured, realtime job sync disabled');
+  if (!isSupabaseConfigured || isDirectClientSupabaseDisabled) {
+    console.log('[SupabaseJobSync] Supabase direct client/realtime disabled, relying on background polling');
     return () => clearInterval(fallbackPollInterval);
   }
 
@@ -716,7 +716,7 @@ export async function deleteJobFromBackend(
       body: JSON.stringify({ jobId, userId: effectiveUserId }),
     }).catch(() => {});
 
-    if (isSupabaseConfigured && supabase) {
+    if (isSupabaseConfigured && supabase && !isDirectClientSupabaseDisabled) {
       try {
         await supabase.from('agent_jobs').delete().eq('id', jobId);
       } catch (_) {}

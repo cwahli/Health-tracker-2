@@ -112,7 +112,36 @@ export function resolveMealImageCandidates(input: {
   push(input.messageImageUrl);
   if (Array.isArray(input.imageUrls)) input.imageUrls.forEach(push);
   if (Array.isArray(input.messageImageUrls)) input.messageImageUrls.forEach(push);
-  return out;
+  return uniqueMealImageUrls(out);
+}
+
+/**
+ * Collapse the same photo under different hosts (r2.dev vs /photos/ vs signed API).
+ * Force Pull used exact-string Set and showed one meal twice.
+ */
+export function uniqueMealImageUrls(urls: Array<string | null | undefined>): string[] {
+  const durable: string[] = [];
+  const ephemeral: string[] = [];
+  const seenDurable = new Set<string>();
+  const seenEph = new Set<string>();
+  for (const u of urls) {
+    const norm = normalizeMealImageUrl(u);
+    if (!norm) continue;
+    const isEph = norm.startsWith('data:') || norm.startsWith('blob:');
+    if (isEph) {
+      if (seenEph.has(norm)) continue;
+      seenEph.add(norm);
+      ephemeral.push(norm);
+      continue;
+    }
+    const key = photoKeyFromUrl(norm) || photoKeyFromUrl(u) || norm.split('?')[0];
+    if (seenDurable.has(key)) continue;
+    seenDurable.add(key);
+    durable.push(norm);
+  }
+  // After log/upload the same capture exists as data: AND /photos/key — keep durable only.
+  if (durable.length > 0) return durable;
+  return ephemeral;
 }
 
 /**

@@ -135,7 +135,7 @@ import { runCleanupMigration } from './utils/migrationTask';
 import { supabase, isSupabaseConfigured, cleanupAuthUrlParams } from './utils/supabaseClient';
 import { syncLogsWithTimeBuckets, fetchAllConsolidatedLogs, subscribeToSupabaseLogs, upsertProfileToSupabase, mergeByRecency, mergeActions, mergeBenefits, mergeFoodIdeas, mergeReports, mergeProfiles, mergeBiomarkerHistory, mergeDeleteMaps, supabaseRowToFoodLog, supabaseRowToBiomarkerLog } from "./utils/syncUtils";
 import { mergeFoodLogsDeduped, rehydrateFoodImagesFromDonors, foodLogFingerprint } from "./utils/foodLogDedupe";
-import { isUsableImageUrl } from "./utils/foodImageSources";
+import { isUsableImageUrl, uniqueMealImageUrls } from "./utils/foodImageSources";
 import { sanitizeBiomarkerHistoryOnLoad } from "./utils/biomarkers";
 import { recalibrateProfileOverlays } from "./utils/biomarkerLifecycle";
 import type { SanitizeProposal } from "./utils/dataSanitize";
@@ -954,8 +954,9 @@ export default function App() {
         normalized,
         profileRef.current || profile
       );
-      if (fixedCount > 0) {
-        console.log(`[BiomarkerSanitize] Flagged ${fixedCount} improbable unit-scale value(s) — not auto-rewritten`);
+      if (fixedCount > 0 && !(window as any).__biomarkerSanitizeLogged) {
+        (window as any).__biomarkerSanitizeLogged = true;
+        console.debug(`[BiomarkerSanitize] Flagged ${fixedCount} improbable unit-scale value(s) — not auto-rewritten`);
       }
       return cleaned as BiomarkerLog[];
     };
@@ -2618,12 +2619,12 @@ export default function App() {
                         imageUrls: v2ImageUrls,
                       };
                     } else {
-                      const mergedUrls = Array.from(new Set([
+                      const mergedUrls = uniqueMealImageUrls([
                         ...(existingMap.imageUrls || []),
                         ...v2ImageUrls,
                         existingMap.imageUrl,
                         v2ImageUrl
-                      ])).filter(isUsableImageUrl);
+                      ]);
                       
                       imageMap[f.id] = {
                         imageUrl: existingMap.imageUrl || v2ImageUrl || mergedUrls[0],
@@ -3031,12 +3032,12 @@ export default function App() {
                 const serverHasImage = isUsableImageUrl(serverItem.imageUrl);
                 const localUrls = (existingLocal.imageUrls || []).filter(isUsableImageUrl);
                 const serverUrls = (serverItem.imageUrls || []).filter(isUsableImageUrl);
-                const combinedUrls = Array.from(new Set([
+                const combinedUrls = uniqueMealImageUrls([
                   ...localUrls,
                   ...serverUrls,
                   existingLocal.imageUrl,
                   serverItem.imageUrl
-                ])).filter(isUsableImageUrl);
+                ]);
                 foodUnionMap.set(serverItem.id, {
                   ...serverItem,
                   ...existingLocal,

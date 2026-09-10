@@ -376,6 +376,29 @@ describe('F-8.10 shard 25 — scout call args', () => {
     expect(args.maxOutputTokens).toBe(8192);
     expect(args.imagePayloads).toEqual([]);
   });
+
+  it('compare uses the compare pack and schema, not the meal-log pack', () => {
+    const log = buildScoutCallArgs({ engine: undefined, language: 'en', scoutPromptText: 'P', imagePayloads: [], isCompare: false });
+    const compare = buildScoutCallArgs({ engine: undefined, language: 'en', scoutPromptText: 'P', imagePayloads: [], isCompare: true });
+    expect(compare.systemInstruction).not.toEqual(log.systemInstruction);
+    expect(compare.systemInstruction).toContain('EVALUATION ONLY');
+    expect(compare.systemInstruction).not.toMatch(/hierarchical schema with weightGrams/);
+    expect(compare.responseSchema.required).toContain('allExtractedDishes');
+    expect(compare.responseSchema.required).not.toContain('dishes');
+    expect(log.responseSchema.required).toContain('dishes');
+    expect(log.responseSchema.properties.allExtractedDishes).toBeUndefined();
+  });
+
+  it('passes assembled nutrition targets into the live LLM call, not only debug', () => {
+    const suffix = '=== NUTRITIONAL TARGET STATUS ===\n1 days avg: Calorie (1800kcal)';
+    const args = buildScoutCallArgs({
+      engine: undefined, language: 'en', scoutPromptText: 'P', imagePayloads: [], isCompare: true,
+      systemInstruction: `COMPARE-PACK\n${suffix}`,
+    });
+    expect(args.systemInstruction).toContain('NUTRITIONAL TARGET STATUS');
+    expect(args.systemInstruction).toContain('1800kcal');
+    expect(args.responseSchema.required).toContain('allExtractedDishes');
+  });
 });
 
 describe('F-8.10 shard 29 — scout retry loop (stubbed LLM)', () => {

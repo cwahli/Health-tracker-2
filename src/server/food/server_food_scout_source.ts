@@ -871,6 +871,8 @@ export interface ScoutCallArgs {
   scoutPromptText: string;
   imagePayloads: any;
   isCompare?: boolean;
+  /** Full system instruction already assembled (targets + personalization). If omitted, the raw log/compare pack is used. */
+  systemInstruction?: string;
 }
 
 /**
@@ -878,12 +880,13 @@ export interface ScoutCallArgs {
  * runFoodAnalyze. The SSE onStream hookup stays inline (res-bound).
  */
 export function buildScoutCallArgs(args: ScoutCallArgs): Record<string, any> {
-  const { engine, language, scoutPromptText, imagePayloads, isCompare } = args;
+  const { engine, language, scoutPromptText, imagePayloads, isCompare, systemInstruction } = args;
+  const pack = isCompare
+    ? withScoutLanguage(scoutOnlyCompareSystemInstruction, language)
+    : withScoutLanguage(scoutSystemInstruction, language);
   return {
     modelId: (typeof engine === 'object' ? engine?.name || engine?.model : engine) || "gemini-3.5-flash-lite",
-    systemInstruction: isCompare
-      ? withScoutLanguage(scoutOnlyCompareSystemInstruction, language)
-      : withScoutLanguage(scoutSystemInstruction, language),
+    systemInstruction: systemInstruction || pack,
     promptText: scoutPromptText,
     imagePayloads,
     responseMimeType: "application/json",
@@ -905,6 +908,7 @@ export interface ScoutRetryArgs {
   scoutPromptText: string;
   imagePayloads: any;
   isCompare: boolean;
+  systemInstruction?: string;
   message?: string;
   maxAttempts?: number;
   callUnifiedLLM: (args: any) => Promise<any>;
@@ -925,7 +929,7 @@ export async function runScoutRetryLoop(args: ScoutRetryArgs): Promise<{
   lastScoutErr: any;
 }> {
   const {
-    engine, language, scoutPromptText, imagePayloads, isCompare, message,
+    engine, language, scoutPromptText, imagePayloads, isCompare, systemInstruction, message,
     maxAttempts = 3, callUnifiedLLM, sleep, onLog, onStreamChunk,
   } = args;
   
@@ -954,7 +958,7 @@ export async function runScoutRetryLoop(args: ScoutRetryArgs): Promise<{
         onLog(`[Vision Scout] Retrying LLM call (Attempt ${attempts} of ${maxAttempts}) using engine ${currentEngine}...`);
       }
       
-      const callArgs: any = buildScoutCallArgs({ engine: currentEngine, language, scoutPromptText, imagePayloads, isCompare });
+      const callArgs: any = buildScoutCallArgs({ engine: currentEngine, language, scoutPromptText, imagePayloads, isCompare, systemInstruction });
       if (onStreamChunk) callArgs.onStream = onStreamChunk;
 
       const scoutOutput = await callUnifiedLLM(callArgs);

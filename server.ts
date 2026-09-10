@@ -37,6 +37,7 @@ import sharp from 'sharp';
 import { pushTranslationsToSheets, pullTranslationsFromSheets } from './server_translations';
 import { buildFoodAnalyzeInstruction, buildModeAReviewInstruction, buildModeAEditInstruction, buildModeDCompareInstruction, buildModeDEditInstruction, } from './agents/index.js';
 import { ensureFoodCatalogSchema, resetFoodCatalogSchemaEnsure } from "./server_food_catalog_schema.js";
+import { ensureD1Schema } from "./server_d1_schema.js";
 import { reconcileIngredientsToComponents } from './server_vision_scout.js';
 import { resolveInternalFood, resolveDishCache, upsertFoodItemCandidate, upsertFoodAlias, upsertDishCacheCandidate, recordFoodObservation, recordSyncEvent, normalizeFoodKey, normalizeDishKey, getCatalogSyncStatus, mergeFoodCatalogItems, quarantineAtwaterFailures, checkAtwaterValidity, getFallbackCategoryProfile } from './server_food_catalog.js';
 import { sanitizeDishTitle, cleanupDuplicateBrandMenuItems, isGroceryBrandSync, selfCleanBrandDatabase, isUnofficialOrCompositeDish } from './serverBrandMenu.js';
@@ -3769,6 +3770,8 @@ async function startServer() {
   ensureFoodCatalogSchema().then((r) => {
     if (!r.ok) console.error('[CatalogSchema] ensure on boot failed:', r.method, r.error);
   }).catch(() => {});
+
+  ensureD1Schema().catch(() => {});
 
   // Warm up database brand cache and trigger initial database self-cleaning maintenance if configured
   import('./supabaseAdmin.js').then(({ isSupabaseConfigured, supabaseAdmin }) => {

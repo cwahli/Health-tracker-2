@@ -1,33 +1,25 @@
-# Output templates (IMPACT · SELF-CHECK · GATE)
+# Output templates (SPEC · SELF-CHECK · GATE)
 
-Paste these before declaring COMPLETE on **L/X** **code** work.  
-Skip IMPACT entirely for questions, prototype reviews, and doc-only edits.  
+Paste GATE / SELF-CHECK before declaring COMPLETE on **L/X** **code** work.  
+Skip the spec entirely for questions, prototype reviews, and Class S.  
 Do not invent a free-form STATUS that skips gates. Do not `npm test`.
+
+**L/X IMPACT is a file, not a chat paste.** Specify writes `specs/active/<ID>.md` (`status: draft`). Human locks it. Implementer does not edit it. Full process + worked example: `LOCKED_SPEC_PROCESS.md`. Template: `specs/TEMPLATE.md`.
 
 ---
 
 ## IMPACT (before coding L/X)
 
-```text
-IMPACT
-class: S | M | L | X
-layer: food-calc | job-session | ui-paint | serve-mode | other
-goal: <one sentence>
-files: [list that will change]
-paths: [e.g. Mode A | Mode D | Edit | agent1…agent5 | food sync | bio sync | N/A + reason]
-fields/contracts: [keys or tombstones that must remain]
-domain docs read: [food-calc | biomarkers | sync | none]
-out of scope: [explicit]
-risk if wrong: <one sentence>
-plan:
-  - …
-  - …
-  - …
-```
+Do **not** paste the old IMPACT block into chat — it dies with the session.
 
-If the debug file already has the new numbers and the card does not: **class `STALE_TURN`**, **layer job-session**. Prove Vite vs `dist/` (`index.html` → `/src/main.tsx` vs hashed `/assets/index-*.js`) before patching. Do not touch job-lifecycle files from a food-calc IMPACT unless those files are listed **and** `JobSession.contract.test.ts` is in the same commit.
+1. Specify (read-only except the spec file) copies `specs/TEMPLATE.md` → `specs/active/<ID>.md`, `status: draft`.
+2. Human sets `status: locked` (or says “lock &lt;ID&gt;”).
+3. Implement patches **only** `allowed_files`. `frozen_files` stay empty-diff.
+4. COMPLETE includes `node scripts/assert-spec-diff.mjs <ID>` exit 0.
 
-If IMPACT reveals larger scope than the user asked: **stop and report** — do not silently expand.
+If the debug file already has the new numbers and the card does not: **class `STALE_TURN`**, **layer job-session** — that ID’s spec must name job-lifecycle files **and** `JobSession.contract.test.ts` in `gate`. Do not touch those files from a food-calc spec.
+
+If Specify’s Allowed list is larger than the user asked: **stop and report** — do not silently expand.
 
 ---
 
@@ -55,7 +47,7 @@ Self-check allows submission to gates. It does **not** allow COMPLETE.
 GATE LOG
 tsc:     exit ?   (npx tsc --noEmit)
 vitest:  exit ?   (list exact files/patterns)
-assert:  exit ?   (list exact scripts)
+assert:  exit ?   (list exact scripts, including node scripts/assert-spec-diff.mjs <ID>)
 notes:   <sibling paths verified / known-broken link>
 ```
 
@@ -67,7 +59,7 @@ Copy real exit codes. “Tests passed” without names = FAIL.
 
 ```text
 COMPLETE
-IMPACT: <filled>
+spec: specs/active/<ID>.md (locked, unchanged)
 SELF-CHECK: all boxes
 GATE LOG: all exit 0
 paths: <verified list>

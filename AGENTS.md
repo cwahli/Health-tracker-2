@@ -13,15 +13,17 @@
 3. **Tests only if you changed application code** (`src/`, `server.ts`, `server_*.ts`, `agents/`, `supabase/`). Docs, reviews, and prototype-log reads: **run nothing**. Never `npm test` (~97 files). Named row from `docs/agent/DOMAIN_REGRESSION_MAP.md` only.
 4. **Do not edit** `AGENTS.md` or `docs/agent/**` unless the human asked for a process change. Confirmation in §3 is for **edits**, not reads.
 5. **Follow `plan/ROADMAP.md`.** There is no `studio/` pack folder. “Work on the roadmap” = **Current work**, then the next open ID. Do not invent a pack file. Do not mix F-9.5 (`App.tsx`) with F-10.
-6. **i18n (durable).** User-visible UI copy goes in `src/utils/translations.ts`. `en` is the source of truth; `id` must have the same keys (parity test). New languages: add a locale and fill keys; missing keys fall back to English. Agent system instructions must include `userProfile.language` and tell the model to write **user-visible answers** in that language (JSON keys, nutrient codes, biomarker keys stay English). Do not hardcode English chrome in new UI.
+6. **Journey:** `docs/agent/JOURNEY.md`. Planner → Guard → **go** → Builder → Guard. Reviewer only after a second Guard fail or if asked — writes `specs/learnings/`, never standing/Guard/`src/` in that turn. **promote** = new packet. Standing: `docs/agent/standing.json` (do not drop rows to pass). Unattended night runs: only `scripts/discover-gated-work.mjs` items (must have a gate). Class S and questions skip.
+7. **i18n (durable).** User-visible UI copy goes in `src/utils/translations.ts`. `en` is the source of truth; `id` must have the same keys (parity test). New languages: add a locale and fill keys; missing keys fall back to English. Agent system instructions must include `userProfile.language` and tell the model to write **user-visible answers** in that language (JSON keys, nutrient codes, biomarker keys stay English). Do not hardcode English chrome in new UI.
 
 ```text
-plan/ROADMAP.md  = remaining work (the only execute file)
-AI_HANDOVER.md   = short WIP board (update freely)
+plan/ROADMAP.md     = remaining work (the only execute file)
+AI_HANDOVER.md      = short WIP board (update freely)
+specs/active/<ID>   = locked contract for this ID (durable memory)
 AGENTS + docs/agent = process (protected to EDIT)
 ```
 
-**GitHub:** Commit/push allowed after COMPLETE (`tsc` + named gates). AI Studio remains a valid ship path, not the only one.
+**Surfaces (same graph):** AI Studio, Antigravity (Gemini), Grok here. Shared memory is **git** + `specs/` + `standing.json`, not the chat. Antigravity also reads `GEMINI.md` and `.agents/rules/journey.md` (pointers only). After COMPLETE (`tsc` + named gates + Guard), commit/push from any surface.
 
 ---
 
@@ -31,6 +33,9 @@ AGENTS + docs/agent = process (protected to EDIT)
 |------|-------------------|
 | Status | `AI_HANDOVER.md` (**header only**) |
 | What to build | `plan/ROADMAP.md` matching ID |
+| “review / improve / journey” | `docs/agent/JOURNEY.md` + `.agents/skills/{planner,builder,guard,reviewer}/SKILL.md`. Wait for **go**. |
+| What went wrong / improve process | Reviewer skill → `specs/learnings/`. **promote** to grow standing, not to weaken Guard. |
+| Standing (must-keep) | `docs/agent/standing.json` · `node scripts/journey-guard.mjs` |
 | Food create / F-10 | `plan/FOOD.md` **Process** (stop at the module table) + `docs/agent/domains/food-calc.md` §1–1d |
 | Food identity / catalog | `plan/FOOD.md` Part A + `FALSE_FRIEND` playbook — **not** F-1/F-2 USDA |
 | Job session / preview vs debug (`STALE_TURN`) | `docs/agent/domains/sync.md` jobs + ROADMAP F-9.5 |

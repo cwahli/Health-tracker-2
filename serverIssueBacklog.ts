@@ -14,6 +14,7 @@ import type { Express, Request, Response } from 'express';
 import crypto from 'crypto';
 import { normalizeChainKey } from './serverBrandMenu.js';
 import { assignMissingPublicNs, hydrateWorkItem, lastCommit, publicId } from './src/utils/bugWorkItem';
+import { isD1Configured, d1Query } from './server_d1.js';
 
 export async function uploadBacklogPayloadToR2(id: string, payload: any, customKey?: string): Promise<string> {
   try {
@@ -373,6 +374,24 @@ async function loadBugTagsWithLinks(supabaseAdmin: any) {
   let tags: any[] = [];
   let links: any[] = [];
   try {
+    if (isD1Configured()) {
+      const tRes = await d1Query(
+        "SELECT id, created_at, title, title_key, category, status, resolution_note, whats_still_open, comments, resolved_at, work_item FROM issue_tags WHERE status IN ('to_fix', 'in_progress', 'fixed') ORDER BY created_at DESC LIMIT 200"
+      );
+      const tagRows = tRes.results || [];
+      tags = (tagRows || []).map((t: any) => ({
+        ...t,
+        category: t.category || 'foodcart',
+        whats_still_open: t.whats_still_open || '',
+      }));
+      if (tags.length > 0) {
+        const placeholders = tags.map(() => '?').join(', ');
+        const lRes = await d1Query(`SELECT tag_id, issue_id FROM issue_tag_links WHERE tag_id IN (${placeholders})`, tags.map((t: any) => t.id));
+        links = lRes.results || [];
+      }
+      return { tags, links };
+    }
+
     let { data: tagRows, error: tErr } = await supabaseAdmin
       .from('issue_tags')
       .select('id, created_at, title, title_key, category, status, resolution_note, whats_still_open, comments, resolved_at, work_item')
@@ -434,11 +453,16 @@ export function registerIssueBacklogRoutes(app: Express, deps: IssueBacklogDeps 
       return;
     }
     try {
-      const { supabaseAdmin } = await import('./supabaseAdmin.js');
-
       let issues: any[] | null = null;
       let iErr: any = null;
-      {
+
+      if (isD1Configured()) {
+        const r = await d1Query(
+          'SELECT id, created_at, status, issue_type, severity, country_code, chain_key, dish_query, context, source_url, user_note, resolution_note, ever_tagged FROM issue_backlog ORDER BY created_at DESC LIMIT 200'
+        );
+        issues = r.results || [];
+      } else {
+        const { supabaseAdmin } = await import('./supabaseAdmin.js');
         const r = await supabaseAdmin
           .from('issue_backlog')
           .select(
@@ -461,7 +485,10 @@ export function registerIssueBacklogRoutes(app: Express, deps: IssueBacklogDeps 
           iErr = r2.error;
         }
       }
-      if (iErr) return res.status(500).json({ error: iErr.message });
+      if (iErr) {
+        console.warn('[BugTracker Overview] Fetch warning, falling back to empty:', iErr.message);
+        issues = [];
+      }
 
       if (issues && Array.isArray(issues)) {
         // We removed fetchPayloadFromR2 in the overview endpoint to fix a massive 
@@ -469,6 +496,7 @@ export function registerIssueBacklogRoutes(app: Express, deps: IssueBacklogDeps 
         // resulting in 4-second latency. The frontend should only fetch payload on-demand.
       }
 
+      const supabaseAdmin = !isD1Configured() ? (await import('./supabaseAdmin.js')).supabaseAdmin : null;
       const { tags, links } = await loadBugTagsWithLinks(supabaseAdmin);
       const issuesById = new Map((issues || []).map((i: any) => [i.id, i]));
 
@@ -495,7 +523,11 @@ export function registerIssueBacklogRoutes(app: Express, deps: IssueBacklogDeps 
         const hit = bugTags.find((t: any) => t.id === row.id);
         if (hit) hit.work_item = row.item;
         try {
-          await supabaseAdmin.from('issue_tags').update({ work_item: row.item }).eq('id', row.id);
+          if (isD1Configured()) {
+            await d1Query('UPDATE issue_tags SET work_item = ? WHERE id = ?', [row.item, row.id]);
+          } else if (supabaseAdmin) {
+            await supabaseAdmin.from('issue_tags').update({ work_item: row.item }).eq('id', row.id);
+          }
         } catch {
           /* column missing — numbers still returned this request */
         }

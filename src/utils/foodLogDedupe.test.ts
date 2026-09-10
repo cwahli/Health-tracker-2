@@ -99,6 +99,26 @@ describe('rehydrateFoodImagesFromDonors', () => {
     const out = rehydrateFoodImagesFromDonors(targets, donors);
     expect(out[0].imageUrl).toBe('https://cdn.example.com/meal.jpg');
   });
+
+  it('does not append a donor photo when the target already has one', () => {
+    const targets = [
+      yolk({
+        id: 'cloud-new',
+        imageUrl: 'https://cdn.example.com/mine.jpg',
+        imageUrls: ['https://cdn.example.com/mine.jpg'],
+      }),
+    ];
+    const donors = [
+      yolk({
+        id: 'local-old',
+        imageUrl: 'https://cdn.example.com/other.jpg',
+        imageUrls: ['https://cdn.example.com/other.jpg'],
+      }),
+    ];
+    const out = rehydrateFoodImagesFromDonors(targets, donors);
+    expect(out[0].imageUrls).toEqual(['https://cdn.example.com/mine.jpg']);
+    expect(out[0].imageUrls).not.toContain('https://cdn.example.com/other.jpg');
+  });
 });
 
 describe('soft name merge (YOLK variants)', () => {
@@ -121,6 +141,28 @@ describe('soft name merge (YOLK variants)', () => {
     const result = mergeFoodLogsDeduped([a], [b]);
     expect(result).toHaveLength(1);
     expect(result[0].imageUrl).toBe('https://cdn.example.com/yolk.jpg');
+  });
+
+  it('pickBetter does not keep r2 + proxy as two slides', () => {
+    const a: any = {
+      id: 'same',
+      name: 'Tofu Beef',
+      date: '2026-09-10',
+      nutrients: { calories: 400 },
+      imageUrl: 'https://pub-xxx.r2.dev/photos/job_tofu.jpg',
+      imageUrls: ['https://pub-xxx.r2.dev/photos/job_tofu.jpg'],
+      updated_at: 1,
+    };
+    const b: any = {
+      ...a,
+      imageUrl: '/photos/job_tofu.jpg',
+      imageUrls: ['/photos/job_tofu.jpg'],
+      updated_at: 2,
+    };
+    const result = mergeFoodLogsDeduped([a], [b]);
+    expect(result).toHaveLength(1);
+    expect(result[0].imageUrls).toHaveLength(1);
+    expect(result[0].imageUrls[0]).toBe('/photos/job_tofu.jpg');
   });
 
   it('collapses identical oatmeal / honi with date format drift', () => {

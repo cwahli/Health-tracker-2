@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ImageIcon, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
-  normalizeMealImageUrl,
   nextPhotoFallbackUrl,
   photoKeyFromUrl,
+  uniqueMealImageUrls,
 } from '../utils/foodImageSources';
 import { t, interpolate } from '../utils/i18n';
 
@@ -23,17 +23,10 @@ export default function ImageSlider({
   deferUntilVisible = true,
   language,
 }: ImageSliderProps) {
-  const rawList = (Array.isArray(images) ? [...images] : []);
-  if (singleImage && typeof singleImage === 'string' && !rawList.includes(singleImage)) {
-    rawList.unshift(singleImage);
-  }
   const allImages = useMemo(
-    () =>
-      rawList
-        .map((img) => normalizeMealImageUrl(img))
-        .filter((img): img is string => typeof img === 'string' && img.trim().length > 0),
+    () => uniqueMealImageUrls([...(Array.isArray(images) ? images : []), singleImage]),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [JSON.stringify(rawList)]
+    [JSON.stringify(images), singleImage]
   );
 
   const [orientations, setOrientations] = useState<Record<string, 'portrait' | 'landscape'>>({});

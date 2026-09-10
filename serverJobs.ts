@@ -1,5 +1,7 @@
 import { uploadPhotoToR2, uploadPhotosToR2, uploadDebugPayloadToR2 } from './src/utils/r2Storage';
 // [FreeTier] thin clean_result
+import { isD1Configured } from './server_d1.js';
+import { d1UpsertJob, d1UpdateJob, d1GetStuckJobs } from './server_db_d1.js';
 import { supabaseAdmin, isSupabaseConfigured as isSupabaseAdminConfigured } from './supabaseAdmin';
 import { supabase, isSupabaseConfigured } from './src/utils/supabaseClient';
 import { remainingQuotaCooldownMs, nextGeminiFallbackEngine } from './server_gemini_retry.js';
@@ -201,8 +203,36 @@ export async function recoverInterruptedServerJobs(): Promise<number> {
       }
     }
 
-    // 2. Check Supabase running jobs if configured
-    if (isSupabaseConfigured && isSupabaseAdminConfigured) {
+    // 2. Check D1 or Supabase running jobs if configured
+    if (isD1Configured()) {
+      try {
+        const stuckJobs = await d1GetStuckJobs(180000);
+        for (const dbJob of stuckJobs) {
+          if (!inMemoryServerJobs.has(dbJob.id)) {
+            console.log(`[ServerJobs Worker] Recovering D1 job ${dbJob.id}...`);
+            inMemoryServerJobs.set(dbJob.id, {
+              ...dbJob,
+              status: 'running',
+              status_message: 'Resuming analysis after process restart...',
+              updated_at: new Date().toISOString()
+            });
+            recoveredCount++;
+
+            submitServerJob({
+              jobId: dbJob.id,
+              userId: dbJob.user_id,
+              kind: dbJob.kind,
+              mode: dbJob.mode,
+              text: (dbJob as any).input_snapshot?.message || dbJob.clean_result?.text || '',
+              imageUrls: dbJob.photo_url ? [dbJob.photo_url] : [],
+              activeMeal: dbJob.clean_result?.mealBuild || dbJob.clean_result?.pendingFoodLog
+            }).catch(e => console.error(`[ServerJobs Worker] Error resuming D1 job ${dbJob.id}:`, e));
+          }
+        }
+      } catch (d1Err) {
+        console.error('[ServerJobs Worker] Failed to query stuck jobs from D1:', d1Err);
+      }
+    } else if (isSupabaseConfigured && isSupabaseAdminConfigured) {
       const { data: stuckJobs, error } = await supabaseAdmin
         .from('agent_jobs')
         .select('id, user_id, kind, mode, status, progress_percent, status_message, photo_url, updated_at, clean_result')
@@ -336,10 +366,18 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           debug_url: initialJobRecord.debug_url,
           updated_at: initialJobRecord.updated_at
         };
-        const { error } = await supabaseAdmin.from('agent_jobs').upsert(dbRecord, { onConflict: 'id' });
-        if (error) {
-          console.error('[ServerJobs] initial upsert failed:', error);
-          initialUpsertError = `[ServerJobs] initial upsert failed: ${error.message || JSON.stringify(error)}`;
+        if (isD1Configured()) {
+          const d1Res = await d1UpsertJob(dbRecord);
+          if (!d1Res.success) {
+            console.error('[ServerJobs] initial D1 upsert failed:', d1Res.error);
+            initialUpsertError = `[ServerJobs] initial D1 upsert failed: ${d1Res.error}`;
+          }
+        } else if (isSupabaseConfigured && isSupabaseAdminConfigured) {
+          const { error } = await supabaseAdmin.from('agent_jobs').upsert(dbRecord, { onConflict: 'id' });
+          if (error) {
+            console.error('[ServerJobs] initial upsert failed:', error);
+            initialUpsertError = `[ServerJobs] initial upsert failed: ${error.message || JSON.stringify(error)}`;
+          }
         }
       } catch (e: any) {
         console.error('[ServerJobs] initial upsert threw:', e);
@@ -386,7 +424,13 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
       const now = Date.now();
       if (now - lastProgressUpdate > progressThrottleMs) {
         lastProgressUpdate = now;
-        if (isSupabaseConfigured) {
+        if (isD1Configured()) {
+          void d1UpdateJob(jobId, {
+            progress_percent: progress,
+            status_message: message,
+            photo_url: photoUrl || null,
+          }).catch(e => console.error('[ServerJobs] Failed to update progress in D1:', e));
+        } else if (isSupabaseConfigured) {
           try {
             const { error } = await supabaseAdmin.from('agent_jobs').update({
               progress_percent: progress,
@@ -796,12 +840,20 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
             console.error('[ServerJobs] R2 save for portion clarify failed:', r2Err);
           }
 
-          await supabaseAdmin.from('agent_jobs').update({
-            status: 'awaiting_user',
-            status_message: finalData.message || 'Please clarify portion sizes.',
-            clean_result: lightweightFinalData, // contains lightweight R2 reference
-            updated_at: new Date().toISOString()
-          }).eq('id', jobId);
+          if (isD1Configured()) {
+            await d1UpdateJob(jobId, {
+              status: 'awaiting_user',
+              status_message: finalData.message || 'Please clarify portion sizes.',
+              clean_result: lightweightFinalData,
+            });
+          } else if (isSupabaseConfigured) {
+            await supabaseAdmin.from('agent_jobs').update({
+              status: 'awaiting_user',
+              status_message: finalData.message || 'Please clarify portion sizes.',
+              clean_result: lightweightFinalData, // contains lightweight R2 reference
+              updated_at: new Date().toISOString()
+            }).eq('id', jobId);
+          }
         }
         return;
       }
@@ -1154,17 +1206,31 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
             console.error('[ServerJobs] R2 save for success failed:', r2Err);
           }
 
-          const { error: supaErr } = await supabaseAdmin.from('agent_jobs').update({
-            status: 'succeeded',
-            progress_percent: 100,
-            status_message: 'Analysis complete',
-            photo_url: photoUrl || null,
-            debug_url: cleanResult.debugUrl || null,
-            clean_result: lightweightResult, // lightweight R2 reference in DB!
-            updated_at: new Date().toISOString(),
-          }).eq('id', jobId);
-          if (supaErr) {
-            console.error('[ServerJobs] Failed to update success state in Supabase:', supaErr);
+          if (isD1Configured()) {
+            const d1Res = await d1UpdateJob(jobId, {
+              status: 'succeeded',
+              progress_percent: 100,
+              status_message: 'Analysis complete',
+              photo_url: photoUrl || null,
+              debug_url: cleanResult.debugUrl || null,
+              clean_result: lightweightResult,
+            });
+            if (!d1Res.success) {
+              console.error('[ServerJobs] Failed to update success state in D1:', d1Res.error);
+            }
+          } else if (isSupabaseConfigured) {
+            const { error: supaErr } = await supabaseAdmin.from('agent_jobs').update({
+              status: 'succeeded',
+              progress_percent: 100,
+              status_message: 'Analysis complete',
+              photo_url: photoUrl || null,
+              debug_url: cleanResult.debugUrl || null,
+              clean_result: lightweightResult, // lightweight R2 reference in DB!
+              updated_at: new Date().toISOString(),
+            }).eq('id', jobId);
+            if (supaErr) {
+              console.error('[ServerJobs] Failed to update success state in Supabase:', supaErr);
+            }
           }
         }
 
@@ -1278,7 +1344,19 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
       }
       releaseUserJobLock(userId, jobId);
 
-      if (isSupabaseConfigured) {
+      if (isD1Configured()) {
+        try {
+          await d1UpdateJob(jobId, {
+            status: 'failed',
+            status_message: abortReason || 'Server analysis failed',
+            photo_url: photoUrl || null,
+            debug_url: errorCleanResult.debugUrl || null,
+            clean_result: errorCleanResult,
+          });
+        } catch (uErr) {
+          console.error('[ServerJobs] Failed to update error state in D1:', uErr);
+        }
+      } else if (isSupabaseConfigured) {
         try {
           await supabaseAdmin.from('agent_jobs').update({
             status: 'failed',

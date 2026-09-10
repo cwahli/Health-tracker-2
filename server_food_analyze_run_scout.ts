@@ -1,6 +1,7 @@
 import { AnalyzeRunContext } from './server_food_analyze_run_types.js';
 import { runScoutRetryLoop, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries, logScoutImageInventory, applyWeightModShortcut, applySkipScoutShortcut, buildScoutFailureError, mapCompareItemsToScoutItems } from './src/server/food/server_food_scout_source.js';
 import { scoutSystemInstruction, buildVisualScoutPrompt, buildScoutPersonalizationBlock } from './agents/scoutInstructions.js';
+import { scoutOnlyCompareSystemInstruction, buildScoutComparePrompt } from './prototype/meallog/compare/scout_only_compare_instructions.js';
 import { withScoutLanguage } from './src/utils/i18n.js';
 import { formatLockedSlotsForPrompt } from './server_edit_patch_ledger.js';
 import { buildNutritionTargetStatus, pickExplicitTargets } from './src/utils/nutritionTargetStatus.js';
@@ -57,18 +58,24 @@ export async function executeScoutPhase(ctx: AnalyzeRunContext): Promise<void> {
           const mealDate = (ctx.isModifySession && ctx.activeMeal?.date) ? ctx.activeMeal.date : (ctx.imageDates?.[0] ? ctx.imageDates[0].split('T')[0] : new Date().toISOString().split('T')[0]);
           scoutPromptText = `The user is modifying/refining an existing logged meal.\n` + `MEAL DATE: ${mealDate}\n` + `User modification instruction: "${(ctx.message || '').trim()}".\n` + `Prior Meal Dishes: ${priorSummary}.\n` + (lockPrompt || '') + `\n` + `CRITICAL INSTRUCTIONS FOR MODIFICATION:\n` + `1. TARGETED UPDATE (DISH OR SUBITEM): Output only modified or new items. Support action "replace" | "add" | "delete" at dish or foods[] subitem level.\n` + `- For new or edited dishes: populate full nutrients amount (protein, carbs, fat, sodium, sugar, fibre) the same way you populate a new item.\n` + `- For dishes: set dish action "replace" | "add" | "delete" with replacesDish and/or targetDishIndex. Always include sourceImageIndex.\n` + `- For subitems/components inside a dish: in foods[], set action "replace" | "add" | "delete", replacesFood, full nutrients, and sourceImageIndex.\n` + `2. FULL NUTRIENT VALUES: Always provide complete, accurate nutrients for any new or edited dish or food component.\n` + `3. SEPARATE DISHES: Keep distinct plated items, sides, and beverages as separate distinct dishes in dishes[]. Never merge drinks into food dishes.\n` + `4. CLINICAL ADVICE & NARRATIVE: Provide an updated direct 35-70 word clinicalAdvice in 2nd person ("You got...") on the FULL updated meal (all dishes at their locked weights — never just the edited item). Lead with the most significant finding: flag plainly any nutrient far over budget and compounding against the 7-day average, state the health impact, then one actionable next step/movement.`;
         } else {
-          scoutPromptText = buildVisualScoutPrompt(ctx.message || '', imageCount, ctx.userSelectedMode === 'compare');
+          scoutPromptText = ctx.userSelectedMode === 'compare'
+            ? buildScoutComparePrompt(ctx.message || '', imageCount)
+            : buildVisualScoutPrompt(ctx.message || '', imageCount, false);
         }
         const scoutPersonalization = buildScoutPersonalizationBlock({ biomarkersNeedingImprovement: ctx.biomarkersNeedingImprovement });
         const nutritionTargetStatus = buildNutritionTargetStatus({ logs: ctx.req.body.foodLogs, targets: pickExplicitTargets(ctx.req.body.dailyNutrientTargets), todayStr: getCurrentDateInTimezone(ctx.userProfile?.timezone) });
-        const resolvedScoutSystemInstruction = withScoutLanguage(scoutSystemInstruction, ctx.userProfile?.language) + (scoutPersonalization ? `\n${scoutPersonalization}` : '') + (nutritionTargetStatus ? `\n${nutritionTargetStatus}` : '');
+        const resolvedScoutSystemInstruction = (ctx.userSelectedMode === 'compare'
+          ? withScoutLanguage(scoutOnlyCompareSystemInstruction, ctx.userProfile?.language)
+          : withScoutLanguage(scoutSystemInstruction, ctx.userProfile?.language))
+          + (scoutPersonalization ? `\n${scoutPersonalization}` : '')
+          + (nutritionTargetStatus ? `\n${nutritionTargetStatus}` : '');
         ctx.scoutInstructionForDebug = { systemInstruction: resolvedScoutSystemInstruction, userPrompt: scoutPromptText };
         ctx.sendLog('scout_instruction', 'scout', `Vision Scout Instruction dispatched (model: ${ctx.engine || "gemini-3.5-flash-lite"}). Prompt length: ${scoutPromptText.length} chars — see [UnifiedLLM-Prompt:scout] below for full text.`);
         ctx.sendLog('scout_system_instruction', 'scout', `Vision Scout System Instruction dispatched (model: ${ctx.engine || "gemini-3.5-flash-lite"}) — see [UnifiedLLM-Prompt:scout] below for full text.`);
         ctx.addDebugLog(`[Vision Scout] Running Stage 3 lightweight vision scout with retry protection...`);
         let { scoutResult, lastScoutErr } = await runScoutRetryLoop({
           engine: ctx.engine, language: ctx.userProfile?.language, scoutPromptText, imagePayloads: ctx.imagePayloads,
-          isCompare: ctx.userSelectedMode === 'compare', message: ctx.message, callUnifiedLLM: ctx.callUnifiedLLM,
+          isCompare: ctx.userSelectedMode === 'compare', systemInstruction: resolvedScoutSystemInstruction, message: ctx.message, callUnifiedLLM: ctx.callUnifiedLLM,
           sleep: (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms)), onLog: ctx.addDebugLog,
           onStreamChunk: (chunk: string, isThought?: boolean) => {
             if (ctx.isStream && ctx.hasSentHeaders) {

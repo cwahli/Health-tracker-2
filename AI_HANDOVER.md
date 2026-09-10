@@ -1,8 +1,8 @@
 # AI_HANDOVER
 
 ## Status
-- **F-8.10 and F-10.2 COMPLETE**: Split the monolithic `server_food_analyze_run.ts` (3,800 lines) into isolated modular shards: `scout`, `precalc`, `dietitian`, `finalize`, and `setup`. Types are standardized in `server_food_analyze_run_types.ts`. All TypeScript errors from the refactor are resolved, and the `server_food_analyze_single_path.test.ts` regression suite is passing.
-- **Next**: Moving forward with `plan/ROADMAP.md` as instructed. 
+- **Cloudflare D1 Database Transition COMPLETE**: Migrated application database tables (`agent_jobs`, `food_logs`, `biomarker_logs`, `profiles`, bug tracker fallback tables) from Supabase to Cloudflare D1 (SQLite) with R2 for blobs/photos ($0 egress forever). All server routes (`/api/sync/supabase-pull`, `/api/sync/supabase-push`, `/api/sync/food-log-detail`, `/api/jobs/*`) now seamlessly persist to D1. Direct client Supabase fallback disabled to prevent quota lockouts. Typecheck `tsc` and regression test suites all passing exit 0.
+- **Next**: Tackle login/auth decoupling when requested.
 
 ## Notes
 - To address the feedback about the system instructions focusing only on "limits": The dietitian prompts are currently weighted heavily towards identifying threshold breaches (sodium, saturated fat). We can update `server_food_dietitian_dispatch.ts` and `agents/scoutInstructions.ts` to implement a two-sided feedback loop that also praises and encourages optimal intake (protein, soluble fiber).

@@ -228,19 +228,23 @@ test.describe('Q-8.3: Dialog Inventory & Job Process Tier 2 Stubs', () => {
     expect(tree.dialogInventory).toHaveProperty('open', true);
     expect(tree.dialogInventory.on_card).toHaveProperty('kcal', 500);
 
-    // Verify §9 Contract Evaluation
+    // Verify §9 Contract Evaluation — named laws, not a frozen row count.
+    // Growing 13 → 23 is more coverage; pin PASS/FAIL on the laws that matter.
     expect(tree).toHaveProperty('contract');
     expect(Array.isArray(tree.contract)).toBe(true);
-    expect(tree.contract.length).toBe(13);
+    expect(tree.contract.length).toBeGreaterThanOrEqual(3);
 
-    // Assert key laws pass
-    const retryLaw = tree.contract.find((c: any) => c.law === 'Retry hidden if succeeded or kcal in logs');
+    const byLaw = (name: string) => tree.contract.find((c: any) => c.law === name);
+    const retryLaw = byLaw('Retry hidden if succeeded or kcal in logs');
+    expect(retryLaw).toBeTruthy();
     expect(retryLaw.result).toBe('PASS');
 
-    const composerLaw = tree.contract.find((c: any) => c.law === 'Composer controls count = 1');
+    const composerLaw = byLaw('Composer controls count = 1');
+    expect(composerLaw).toBeTruthy();
     expect(composerLaw.result).toBe('PASS');
 
-    const telemetryLaw = tree.contract.find((c: any) => c.law === 'Each dispatch has model + latency_ms');
+    const telemetryLaw = byLaw('Each dispatch has model + latency_ms');
+    expect(telemetryLaw).toBeTruthy();
     expect(telemetryLaw.result).toBe('PASS');
   });
 

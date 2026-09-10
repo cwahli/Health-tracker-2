@@ -4,6 +4,7 @@ import {
   normalizeMealImageUrl,
   photoKeyFromUrl,
   nextPhotoFallbackUrl,
+  uniqueMealImageUrls,
   PHOTO_PROXY_PREFIX,
 } from './foodImageSources';
 
@@ -38,5 +39,32 @@ describe('foodImageSources B11d', () => {
 
   it('rejects placeholders', () => {
     expect(isUsableImageUrl('[image_removed_for_snapshot]')).toBe(false);
+  });
+
+  it('uniqueMealImageUrls collapses r2.dev and /photos/ for the same key', () => {
+    const out = uniqueMealImageUrls([
+      'https://pub-d17eecca64f82625d29dc38b14f46c14.r2.dev/photos/job_tofu.jpg',
+      '/photos/job_tofu.jpg',
+      '/photos/job_tofu.jpg?x=1',
+    ]);
+    expect(out).toEqual(['/photos/job_tofu.jpg']);
+  });
+
+  it('drops data: copies once the same captures exist on /photos/', () => {
+    const dataTofu = 'data:image/jpeg;base64,' + 'A'.repeat(40);
+    const dataPeanuts = 'data:image/jpeg;base64,' + 'B'.repeat(40);
+    const out = uniqueMealImageUrls([
+      dataTofu,
+      '/photos/job_tofu.jpg',
+      dataPeanuts,
+      '/photos/job_peanuts.jpg',
+    ]);
+    expect(out).toEqual(['/photos/job_tofu.jpg', '/photos/job_peanuts.jpg']);
+  });
+
+  it('keeps local data: URLs when nothing has been uploaded yet', () => {
+    const a = 'data:image/jpeg;base64,' + 'A'.repeat(40);
+    const b = 'data:image/jpeg;base64,' + 'B'.repeat(40);
+    expect(uniqueMealImageUrls([a, a, b])).toEqual([a, b]);
   });
 });

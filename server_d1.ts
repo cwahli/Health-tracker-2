@@ -53,3 +53,18 @@ export async function d1Query<T = any>(sql: string, params: any[] = []): Promise
     meta: batch?.meta,
   };
 }
+
+export async function d1Exec(sql: string): Promise<D1QueryResult<any>> {
+  return d1Query(sql, []);
+}
+
+export function safeJsonParse<T = any>(val: any, fallback: T): T {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val === 'object') return val;
+  if (typeof val !== 'string') return fallback;
+  try {
+    return JSON.parse(val);
+  } catch {
+    return fallback;
+  }
+}

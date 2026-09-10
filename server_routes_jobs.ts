@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { verifyFirebaseIdToken } from './server_auth.js';
 import { supabaseAdmin } from './supabaseAdmin.js';
 import { uploadPhotoToR2 } from './src/utils/r2Storage.js';
+import { isD1Configured } from './server_d1.js';
+import { d1UpsertJob, d1DeleteJob, d1ListJobs, d1GetJob, d1UpdateJob } from './server_db_d1.js';
 
 export const jobsRouter = Router();
 
@@ -21,13 +23,20 @@ jobsRouter.post('/api/jobs/upsert', async (req, res) => {
     const payloadSize = JSON.stringify(payload).length;
     console.log(`[DIAG4] /api/jobs/upsert starting for job ${payload.id}, payload size ${payloadSize} bytes`);
 
-    const { error } = await supabaseAdmin.from('agent_jobs').upsert(payload, { onConflict: 'id' });
-
-    console.log(`[DIAG4] /api/jobs/upsert supabaseAdmin.upsert finished for job ${payload.id} in ${Date.now() - diag4Start}ms`);
-
-    if (error) {
-      console.error('Failed to upsert job to Supabase via server:', error);
-      return res.status(500).json({ error: error.message });
+    if (isD1Configured()) {
+      const d1Res = await d1UpsertJob(payload);
+      console.log(`[DIAG4] /api/jobs/upsert d1UpsertJob finished for job ${payload.id} in ${Date.now() - diag4Start}ms`);
+      if (!d1Res.success) {
+        console.error('Failed to upsert job to D1 via server:', d1Res.error);
+        return res.status(500).json({ error: d1Res.error });
+      }
+    } else {
+      const { error } = await supabaseAdmin.from('agent_jobs').upsert(payload, { onConflict: 'id' });
+      console.log(`[DIAG4] /api/jobs/upsert supabaseAdmin.upsert finished for job ${payload.id} in ${Date.now() - diag4Start}ms`);
+      if (error) {
+        console.error('Failed to upsert job to Supabase via server:', error);
+        return res.status(500).json({ error: error.message });
+      }
     }
     
     res.json({ success: true });
@@ -52,13 +61,17 @@ jobsRouter.post('/api/jobs/delete', async (req, res) => {
     console.warn('[jobs/delete] in-memory delete skipped:', memErr?.message || memErr);
   }
   try {
-    const { supabaseAdmin, isSupabaseConfigured } = await import('./supabaseAdmin.js');
-    if (isSupabaseConfigured) {
-      const { error } = await supabaseAdmin.from('agent_jobs').delete().eq('id', String(jobId));
-      if (error) console.warn('[jobs/delete] supabase:', error.message);
+    if (isD1Configured()) {
+      await d1DeleteJob(String(jobId));
+    } else {
+      const { supabaseAdmin, isSupabaseConfigured } = await import('./supabaseAdmin.js');
+      if (isSupabaseConfigured) {
+        const { error } = await supabaseAdmin.from('agent_jobs').delete().eq('id', String(jobId));
+        if (error) console.warn('[jobs/delete] supabase:', error.message);
+      }
     }
   } catch (dbErr: any) {
-    console.warn('[jobs/delete] supabase skipped:', dbErr?.message || dbErr);
+    console.warn('[jobs/delete] db delete skipped:', dbErr?.message || dbErr);
   }
   res.json({ success: true });
 });
@@ -147,6 +160,70 @@ jobsRouter.get('/api/jobs/status', async (req, res) => {
           }
         }
         return res.json({ jobs: [memJob] });
+      }
+    }
+
+    if (isD1Configured()) {
+      try {
+        const isFull = req.query.full === 'true';
+        const data = await d1ListJobs({
+          jobId: jobId ? String(jobId) : undefined,
+          userId: userId ? String(userId) : undefined,
+          isFull,
+          limit: 20
+        });
+
+        if (data && data.length > 0) {
+          const now = Date.now();
+          const staleThresholdMs = 300000;
+          const processedJobs = await Promise.all(data.map(async (job: any) => {
+            if (job.clean_result && typeof job.clean_result === 'object' && job.clean_result.is_r2) {
+              try {
+                const { fetchJobResultFromR2 } = await import('./src/utils/r2Storage.js');
+                const r2Promise = fetchJobResultFromR2(job.id);
+                const r2Timeout = new Promise<null>((resolve) =>
+                  setTimeout(() => resolve(null), 5000)
+                );
+                const fullResult = await Promise.race([r2Promise, r2Timeout]);
+                if (fullResult) {
+                  job.clean_result = fullResult;
+                }
+              } catch (r2FetchErr) {
+                console.error(`[JobsStatus] Failed to transparently fetch R2 clean_result for ${job.id}:`, r2FetchErr);
+              }
+            }
+
+            if (job.status === 'running' && job.updated_at) {
+              const updatedAtTime = new Date(job.updated_at).getTime();
+              if (now - updatedAtTime > staleThresholdMs) {
+                console.warn(`[JobsStatus] Auto-failing stale running job ${job.id} (updated ${Math.round((now - updatedAtTime) / 1000)}s ago)`);
+                const failedJob = {
+                  ...job,
+                  status: 'failed',
+                  status_message: 'Analysis timed out on server (>3 min). Tap Retry to try again.',
+                  updated_at: new Date().toISOString()
+                };
+                void d1UpdateJob(job.id, {
+                  status: 'failed',
+                  status_message: 'Analysis timed out on server (>3 min). Tap Retry to try again.'
+                });
+                return failedJob;
+              }
+            }
+            return job;
+          }));
+
+          return res.json({ jobs: processedJobs });
+        } else {
+          if (jobId) {
+            const memJob = getInMemoryServerJob(String(jobId));
+            return res.json({ jobs: memJob ? [memJob] : [] });
+          }
+          const memJobs = listInMemoryServerJobs(userId ? String(userId) : undefined);
+          return res.json({ jobs: memJobs });
+        }
+      } catch (d1Err) {
+        console.warn('[JobsStatus] D1 query failed or timed out, falling back to in-memory/Supabase store:', d1Err);
       }
     }
 
@@ -264,23 +341,31 @@ jobsRouter.all('/api/jobs/debug', async (req, res) => {
     let job: any = getInMemoryServerJob(cleanJobId) || getInMemoryServerJob(rawJobId);
 
     if (!job) {
-      const { isSupabaseConfigured } = await import('./src/utils/supabaseClient.js');
-      if (isSupabaseConfigured) {
+      if (isD1Configured()) {
         try {
-          const { supabaseAdmin } = await import('./supabaseAdmin.js');
-          let query = supabaseAdmin
-            .from('agent_jobs')
-            .select('*')
-            .in('id', [cleanJobId, rawJobId]);
-          if (userId && String(userId) !== 'anonymous') {
-            query = query.eq('user_id', String(userId));
+          job = await d1GetJob(cleanJobId) || await d1GetJob(rawJobId);
+        } catch (d1Err) {
+          console.warn('[JobsDebug] D1 lookup error:', d1Err);
+        }
+      } else {
+        const { isSupabaseConfigured } = await import('./src/utils/supabaseClient.js');
+        if (isSupabaseConfigured) {
+          try {
+            const { supabaseAdmin } = await import('./supabaseAdmin.js');
+            let query = supabaseAdmin
+              .from('agent_jobs')
+              .select('*')
+              .in('id', [cleanJobId, rawJobId]);
+            if (userId && String(userId) !== 'anonymous') {
+              query = query.eq('user_id', String(userId));
+            }
+            const { data, error } = await query.maybeSingle();
+            if (!error && data) {
+              job = data;
+            }
+          } catch (dbErr) {
+            console.warn('[JobsDebug] Supabase lookup error:', dbErr);
           }
-          const { data, error } = await query.maybeSingle();
-          if (!error && data) {
-            job = data;
-          }
-        } catch (dbErr) {
-          console.warn('[JobsDebug] Supabase lookup error:', dbErr);
         }
       }
     }
@@ -602,22 +687,30 @@ jobsRouter.get('/api/debug/job-lock-check', async (req, res) => {
       }
     }
 
-    let supabaseJobs: any[] = [];
-    let supabaseError: string | null = null;
-    try {
-      const { supabaseAdmin, isSupabaseConfigured } = await import('./supabaseAdmin.js');
-      if (isSupabaseConfigured) {
-        const { data, error } = await supabaseAdmin
-          .from('agent_jobs')
-          .select('id, kind, mode, status, status_message, progress_percent, updated_at')
-          .eq('user_id', uid)
-          .order('updated_at', { ascending: false })
-          .limit(10);
-        if (error) supabaseError = error.message;
-        supabaseJobs = data || [];
+    let dbJobs: any[] = [];
+    let dbError: string | null = null;
+    if (isD1Configured()) {
+      try {
+        dbJobs = await d1ListJobs({ userId: uid, limit: 10 });
+      } catch (dErr: any) {
+        dbError = dErr?.message || String(dErr);
       }
-    } catch (sbErr: any) {
-      supabaseError = sbErr?.message || String(sbErr);
+    } else {
+      try {
+        const { supabaseAdmin, isSupabaseConfigured } = await import('./supabaseAdmin.js');
+        if (isSupabaseConfigured) {
+          const { data, error } = await supabaseAdmin
+            .from('agent_jobs')
+            .select('id, kind, mode, status, status_message, progress_percent, updated_at')
+            .eq('user_id', uid)
+            .order('updated_at', { ascending: false })
+            .limit(10);
+          if (error) dbError = error.message;
+          dbJobs = data || [];
+        }
+      } catch (sbErr: any) {
+        dbError = sbErr?.message || String(sbErr);
+      }
     }
 
     res.json({
@@ -625,7 +718,8 @@ jobsRouter.get('/api/debug/job-lock-check', async (req, res) => {
       lock: lock ? { jobId: lock.jobId, ageMs: lockAgeMs, ageSeconds: Math.round((lockAgeMs || 0) / 1000) } : null,
       inMemoryJobsForUser: memJobs,
       recentSubmissionsForUser: recentSubmissions,
-      supabase: { rows: supabaseJobs, error: supabaseError },
+      db: { rows: dbJobs, error: dbError },
+      supabase: { rows: dbJobs, error: dbError },
     });
   } catch (err: any) {
     res.status(500).json({ error: err?.message || String(err), stack: err?.stack });

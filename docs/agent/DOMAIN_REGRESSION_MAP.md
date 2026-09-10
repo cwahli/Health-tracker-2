@@ -28,6 +28,9 @@ If you touch a hot path and **no** row fits: add a unit/fixture test in the same
 | `server_dish_finalize.ts` / `server_brand_match.ts` / `server_derivation.ts` / `server_dish_classify.ts` | `npx vitest run server_derivation.test.ts server_dish_classify.test.ts server_brand_match.test.ts server_dish_finalize.test.ts` |
 | `server_budget_reconcile.ts` / budget / reconcile | `npx vitest run server_budget_reconcile.test.ts` |
 | `server_vision_scout.ts` / mergeScoutItems | `npx vitest run server_vision_scout.test.ts` (components preserve; no agent kcal) |
+| Scout/compare instructions or schemas / nutrition targets | `node scripts/journey-guard.mjs` · `npx vitest run src/server/food/journeyFingerprints.test.ts src/server/food/server_food_scout_source.test.ts src/server/food/server_food_prompt_context.test.ts src/utils/nutritionTargetStatus.test.ts` |
+| `src/components/**` / `App.tsx` / chrome / composer | `node scripts/assert-shell-smoke.mjs` (key-journeys + R-3 + dialog-inventory). No live Gemini. |
+| Sync / jobs / `App.tsx` pull / Supabase / D1 | `node scripts/assert-egress-bomb.mjs` · `node scripts/assert-free-tier-complete.mjs` (M23–M28). Class `EGRESS_BOMB`. |
 | F-10 expand gate / Meal Agent create | `npx vitest run src/mealBuild/__tests__/shouldExpandMealAgent.test.ts server_derivation.test.ts` · `node scripts/assert-f10-pr1.mjs`. Not prototype log runners |
 | Food catalog / DB / resolver | `npx vitest run server_food_catalog.test.ts server_food_db.test.ts server_food_resolver.test.ts` |
 | Golden meals (`tests/Golden_meal/**`) | `npx vitest run tests/golden_meals.test.ts` only. Not `golden_g1.test.ts` and not `golden:inbox` on every edit (Q-7) |

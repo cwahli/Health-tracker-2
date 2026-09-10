@@ -431,6 +431,7 @@ export async function runFoodAnalyze(req: any, res: any) {
           scoutPromptText,
           imagePayloads,
           isCompare: userSelectedMode === 'compare',
+          systemInstruction: resolvedScoutSystemInstruction,
           message,
           callUnifiedLLM,
           sleep: (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms)),

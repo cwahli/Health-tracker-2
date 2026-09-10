@@ -726,6 +726,8 @@ export const fetchAllConsolidatedLogs = async (
  * Subscribes to instant Supabase real-time database changes for a user's food and biomarker logs.
  */
 export const subscribeToSupabaseLogs = (uid: string, onChange: (payload?: any) => void) => {
+  // Direct client Supabase realtime is disabled during D1 transition / quota restrictions
+  return () => {};
   if (!uid || !isSupabaseConfigured) return () => {};
   try {
     const channel = supabase

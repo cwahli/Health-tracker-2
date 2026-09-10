@@ -1,0 +1,12 @@
+{
+  "slug": "sync-duplicate-images",
+  "node": "builder-start",
+  "at": "2026-09-10T12:09:10.853Z",
+  "files": [
+    "docs/agent/standing.json",
+    "server_vision_scout.ts",
+    "src/server/food/server_food_analyze_schema.ts",
+    "prototype/meallog/compare/scout_only_compare_instructions.ts",
+    "specs/active/sync-duplicate-images.md"
+  ]
+}

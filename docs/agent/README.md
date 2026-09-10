@@ -6,7 +6,10 @@
 | File | When to read |
 |------|----------------|
 | [PACKS.md](./PACKS.md) | Retired — execute `plan/ROADMAP.md` |
-| [TEMPLATES.md](./TEMPLATES.md) | IMPACT, SELF-CHECK, GATE LOG paste format |
+| [TEMPLATES.md](./TEMPLATES.md) | SELF-CHECK, GATE LOG paste format (IMPACT = locked spec file) |
+| [JOURNEY.md](./JOURNEY.md) | **The process** (Studio + Antigravity + Grok). Planner → Guard → **go** → Builder → Guard → Reviewer |
+| [standing.json](./standing.json) | Must-keep journeys/features. Guard enforces. Add a row when something was overwritten |
+| [LOCKED_SPEC_PROCESS.md](./LOCKED_SPEC_PROCESS.md) | Packet internals (agent-written) |
 | [DOMAIN_REGRESSION_MAP.md](./DOMAIN_REGRESSION_MAP.md) | Which tests/gates after a change |
 | [domains/food-calc.md](./domains/food-calc.md) | Nutrition pipeline, modes A/D/Edit |
 | [domains/biomarkers.md](./domains/biomarkers.md) | Catalog / pending / overlay / logs; named agents; write map |
@@ -20,6 +23,7 @@
 |----------|------|
 | `AI_HANDOVER.md` | WIP, status, multi-agent handoff (update freely) |
 | `plan/` | Architecture & planned design (durable) |
+| `specs/active/<ID>.md` | Locked per-ID contract (durable memory). Implementer must not edit |
 | `AGENTS.md` + this tree | Process + domain guides (**protected** — confirmation + before→after) |
 
 Rulebooks **guide** evolution; they do not ban it. Changing an invariant requires tests + rulebook update together.

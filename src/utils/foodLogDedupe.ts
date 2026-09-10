@@ -1,5 +1,5 @@
 import { toYYYYMMDD } from './dateUtils';
-import { isUsableImageUrl, resolveMealImageCandidates } from './foodImageSources';
+import { isUsableImageUrl, resolveMealImageCandidates, uniqueMealImageUrls } from './foodImageSources';
 
 export interface DedupableFoodLog {
   id?: string;
@@ -150,15 +150,17 @@ function pickBetter<T extends DedupableFoodLog>(a: T, b: T): T {
       loser = bTime > aTime ? a : b;
     }
   }
-  const candidates = resolveMealImageCandidates({
-    imageUrl: winner.imageUrl || loser.imageUrl,
-    imageUrls: [
-      ...(Array.isArray(winner.imageUrls) ? winner.imageUrls : []),
-      ...(Array.isArray(loser.imageUrls) ? loser.imageUrls : []),
-      winner.imageUrl,
-      loser.imageUrl,
-    ].filter(Boolean) as string[],
-  });
+  const candidates = uniqueMealImageUrls(
+    resolveMealImageCandidates({
+      imageUrl: winner.imageUrl || loser.imageUrl,
+      imageUrls: [
+        ...(Array.isArray(winner.imageUrls) ? winner.imageUrls : []),
+        ...(Array.isArray(loser.imageUrls) ? loser.imageUrls : []),
+        winner.imageUrl,
+        loser.imageUrl,
+      ].filter(Boolean) as string[],
+    }),
+  );
   if (candidates.length === 0) return winner;
   return {
     ...winner,
@@ -325,41 +327,35 @@ export function rehydrateFoodImagesFromDonors<T extends DedupableFoodLog>(
       donor = donorList.find((d) => shouldSoftMerge(d, t)) || null;
     }
     
-    const targetCandidates = resolveMealImageCandidates({
-      imageUrl: t.imageUrl,
-      imageUrls: t.imageUrls,
-    });
+    const targetCandidates = uniqueMealImageUrls(
+      resolveMealImageCandidates({
+        imageUrl: t.imageUrl,
+        imageUrls: t.imageUrls,
+      }),
+    );
 
-    if (!donor || !hasUsableFoodImage(donor)) {
-      if (targetCandidates.length > 0) {
-        return {
-          ...t,
-          imageUrl: targetCandidates[0],
-          imageUrls: targetCandidates
-        };
-      }
-      return t;
+    // Already has a photo — do not union another meal's URLs (sync duplicate slides).
+    if (targetCandidates.length > 0) {
+      return {
+        ...t,
+        imageUrl: targetCandidates[0],
+        imageUrls: targetCandidates,
+      };
     }
 
-    const donorCandidates = resolveMealImageCandidates({
-      imageUrl: donor.imageUrl,
-      imageUrls: donor.imageUrls,
-    });
+    if (!donor || !hasUsableFoodImage(donor)) return t;
 
-    const combinedUrls: string[] = [];
-    const seen = new Set<string>();
-    [...targetCandidates, ...donorCandidates].forEach(url => {
-      if (url && typeof url === 'string' && !seen.has(url)) {
-        seen.add(url);
-        combinedUrls.push(url);
-      }
-    });
-
-    if (combinedUrls.length === 0) return t;
+    const donorCandidates = uniqueMealImageUrls(
+      resolveMealImageCandidates({
+        imageUrl: donor.imageUrl,
+        imageUrls: donor.imageUrls,
+      }),
+    );
+    if (donorCandidates.length === 0) return t;
     return {
       ...t,
-      imageUrl: combinedUrls[0],
-      imageUrls: combinedUrls,
+      imageUrl: donorCandidates[0],
+      imageUrls: donorCandidates,
     };
   });
 }
