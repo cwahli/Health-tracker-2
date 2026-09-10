@@ -249,12 +249,28 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
 
   const hasModifications = localMods && localMods.length > 0;
 
+  const normalize = (s: string | undefined | null) => s?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
+  const normRange = (s: string | undefined | null) => s?.toLowerCase().replace(/[^\d<>=.-]/g, '') || '';
+
+  const hasProposalChanges = Boolean(
+    localProposal && (
+      (localProposal.name && normalize(currentDef.name) !== normalize(localProposal.name) && !(currentDef.aliases || []).some((a: string) => normalize(a) === normalize(localProposal.name))) ||
+      (localProposal.metric && currentDef.unit && currentDef.unit !== localProposal.metric) ||
+      (localProposal.range && normRange(currentDef.normalRange || (currentDef as any).range) !== normRange(localProposal.range)) ||
+      (localProposal.description && (currentDef.description || currentDef.descriptions?.en || currentDef.descriptions?.zh || currentDef.descriptions?.fr) !== localProposal.description) ||
+      (Array.isArray(localProposal.rangeBrackets) && localProposal.rangeBrackets.length > 0) ||
+      (localProposal.optimalValue && currentDef.optimalValue !== localProposal.optimalValue)
+    )
+  );
+
+  const isActionable = Boolean(hasModifications || hasProposalChanges);
+
   const handleAccept = () => {
-    if (onLogMedical) {
+    if (isActionable && onLogMedical) {
       const profileUpdates: any = {};
       
       // 1. If we have a local proposal (definition update), build its customBiomarkers entry
-      if (localProposal) {
+      if (localProposal && hasProposalChanges) {
         const resolvedKey = getMappedBiomarkerKey(localProposal.name || targetKey) || targetKey || 'hscrp';
         profileUpdates.customBiomarkers = {
           [resolvedKey]: {
@@ -334,19 +350,19 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
           <h4 className="text-xs font-bold text-indigo-950 dark:text-indigo-200 tracking-wider uppercase font-display">
-            Biomarker Clinical Review & Calibration
+            {isActionable ? 'Biomarker Clinical Review & Calibration' : 'Biomarker Clinical Review & Analysis'}
           </h4>
         </div>
         {decisionState === 'accepted' && (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/40">
             <Check className="w-3 h-3" />
-            Accepted & Applied
+            {isActionable ? 'Accepted & Applied' : 'Acknowledged'}
           </span>
         )}
         {decisionState === 'refused' && (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/40">
             <X className="w-3 h-3" />
-            Proposal Declined
+            {isActionable ? 'Proposal Declined' : 'Dismissed'}
           </span>
         )}
       </div>
@@ -359,7 +375,7 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
       )}
 
       {/* Proposed Biomarker Definition & Clinical Diagnostics */}
-      {localProposal && (
+      {localProposal && (hasProposalChanges || isEditingProposal) && (
         <div className="space-y-3 bg-white/80 dark:bg-slate-900/60 p-3.5 rounded-xl border border-indigo-100/80 dark:border-indigo-800/40 shadow-xs">
           <div className="flex items-center justify-between border-b border-indigo-100/50 dark:border-indigo-900/30 pb-2">
             <div className="flex items-center gap-2">
@@ -749,7 +765,7 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
             }
           }}
           className="px-2.5 py-1.5 bg-slate-100 hover:bg-rose-50 dark:bg-slate-800 dark:hover:bg-rose-950/40 text-slate-500 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 border border-transparent hover:border-rose-200 dark:hover:border-rose-800/40 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center shrink-0"
-          title="Dismiss Proposal"
+          title={isActionable ? "Dismiss Proposal" : "Dismiss"}
         >
           <Trash2 className="w-4 h-4" />
         </button>
@@ -761,7 +777,7 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
             className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer flex items-center gap-1.5"
           >
             <Check className="w-3.5 h-3.5" />
-            Accept Proposal
+            {isActionable ? 'Accept Proposal' : 'Acknowledge'}
           </button>
         )}
       </div>

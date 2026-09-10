@@ -698,7 +698,13 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
                         prog = Math.max(prog, 50);
                       } else if (msg.toLowerCase().includes('dietitian') || msg.toLowerCase().includes('nutritionist')) {
                         prog = Math.max(prog, 70);
-                      } else if (msg.toLowerCase().includes('final')) {
+                      } else if (msg.toLowerCase().includes('extract') || msg.toLowerCase().includes('medical analyze')) {
+                        prog = Math.max(prog, 25);
+                      } else if (msg.toLowerCase().includes('classified') || msg.toLowerCase().includes('catalog')) {
+                        prog = Math.max(prog, 50);
+                      } else if (msg.toLowerCase().includes('running agent') || msg.toLowerCase().includes('batch')) {
+                        prog = Math.max(prog, 75);
+                      } else if (msg.toLowerCase().includes('final') || msg.toLowerCase().includes('complete') || msg.toLowerCase().includes('pipeline complete')) {
                         prog = Math.max(prog, 90);
                       }
                       await updateSupabaseProgress(prog, msg);

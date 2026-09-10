@@ -109,10 +109,13 @@ export const missResponseSchema = {
 
 export function hitPayload(rows: ClassifiedRow[]) {
   return rows.map((r) => {
-    const prev = r.template.historicalLogs
+    const historicalSorted = (r.template.historicalLogs || [])
       .filter((h) => !(h.date === r.date && h.value === r.value))
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .pop();
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const prev = historicalSorted[historicalSorted.length - 1];
+    const historicalTimeline = historicalSorted.length > 0
+      ? historicalSorted.map((h) => `${h.date}: ${h.value} ${h.unit || r.unit}`).join(" → ")
+      : undefined;
     const effectiveRange = r.template.assignedRange || r.printedRange || r.template.normalRange || "";
     return {
       id: r.id,
@@ -130,6 +133,7 @@ export function hitPayload(rows: ClassifiedRow[]) {
         description: r.template.description,
       },
       ...(prev ? { previous: `${prev.value} ${prev.unit || r.unit}` } : {}),
+      ...(historicalTimeline ? { historicalTimeline } : {}),
     };
   });
 }
