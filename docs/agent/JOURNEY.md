@@ -19,36 +19,17 @@ Chat does not carry over between tools. A packet in `specs/active/` and a checkp
 
 ---
 
-## Why this shape
+## Why this shape (Harness Engineering + SHEPHERD 2026)
 
-| Idea | What we take | What we skip |
-|------|----------------|--------------|
-| Loop (Osmani) | Maker ≠ checker; state on disk; stop when a script says so | You prompting every step; nightly cron |
-| Graph | Fixed wiring; **you are one node**; repair only the failing node | LangGraph rewrite; Teamwork swarm on `App.tsx` |
-| Skills | Planner / Builder / Guard as separate jobs | Six personas in parallel |
-| Standing registry | Countless incidents become **rows**, Guard enforces all of them every time | A new process doc per bug |
+| Idea | Source | What we take | What we skip |
+|------|--------|--------------|--------------|
+| **Harness Engineering** | Mitchell Hashimoto, Fowler, OpenAI | **Agent = Model + Harness**. 6 layers (Guides, Sensors, Loop, Memory, Permissions, Observability). **The Ratchet**: every bug leaves a test + standing row. | Pure prompt engineering; prompt inflation |
+| **Reversible Substrate** | Stanford SHEPHERD (2026) | **Git execution tree**: `[observe]` event stream, `[revert]` dirty state on fail, `[fork]` clean counterfactual hypothesis without compounding errors (>95% prompt cache reuse). | Heavy Docker containers |
+| **Maker ≠ Checker** | Osmani / Martin Fowler | Maker ≠ checker; state on disk; stop when a script says so | You prompting every step; nightly cron |
+| **Topological Graph** | LangGraph (Chase + Weiss) | Fixed wiring; **you are one node**; repair only the failing node | LangGraph framework rewrite; 100-agent swarm |
+| **Standing Registry** | Incident memory | Countless incidents become **rows** in `standing.json`. Guard enforces all of them every time. | A new process doc per bug |
 
 **Guard is a script, not a model.** An LLM checker will agree to swap compare onto the log pack. `scripts/journey-guard.mjs` will not.
-
-## What we take from Ng / LangGraph (Chase + Tavily)
-
-The YouTube course is DeepLearning.AI *AI Agents in LangGraph* (Harrison Chase, Rotem Weiss; Ng hosts). It is a **research-agent** tutorial (Tavily JSON search, essay writer). We do **not** port Health-tracker or this process onto LangGraph.
-
-| Course module | Lesson | In our graph |
-|---------------|--------|----------------|
-| One-shot → loop | Iteration beats a single prompt | Inner loop inside Planner / Builder |
-| Nodes, edges, state | Topology is code; shared typed state | Packet + `standing.json` = state. Edges are Guard scripts, not a hope in the prompt |
-| Checkpointers | Snapshot after every node; resume, don’t restart | `scripts/journey-checkpoint.mjs save \| restore <slug> <node>` — instruction files recoverable even if git wasn’t committed |
-| Streaming | See which node is running | Guard prints PASS/FAIL per check |
-| Human-in-the-loop | `interrupt_before` action | Packet `draft` + `src/` diffs → Guard FAIL. **go** is `resume` |
-| Time travel / manual state | Roll back a node; patch state | `restore <slug> planner` after compare was overwritten. One comment on the packet = manual state update |
-| Essay writer | plan → research → draft → critique → refine | Planner → Builder → Reviewer. Critique does not edit Guard |
-| Agentic search | Structured results, not a blob | Planner Findings from ROADMAP + standing + grep, not a chat dump |
-| Observability | Traces of non-linear runs | Guard output + learnings file + debug contract (product) |
-
-Skip: LangSmith as a requirement, Tavily in the coding loop, “100 agents,” agents that rewrite themselves without **promote**.
-
-The compare-pack wipe was a missing **checkpoint**. Time travel is how it becomes recoverable.
 
 ```text
  you: one sentence
@@ -63,24 +44,23 @@ The compare-pack wipe was a missing **checkpoint**. Time travel is how it become
  [YOU]       go | stop | one comment
         │ go → packet status: locked
         ▼
- [Builder]   skill: builder. Worktree/branch. Allowed files only.
+ [Builder]   skill: builder. Checkpoint saved: checkpoint/<slug>/start
         │
         ▼
- [Guard]     standing + spec-diff + packet vitest
+ [Guard]     standing + spec-diff + packet vitest (Sensors)
         │
-        ├── fail → Builder repairs that node once → Guard
-        │          second fail → [Reviewer] → you
+        ├── fail → SHEPHERD [revert] dirty state & [fork] clean 2nd hypothesis → Guard
+        │          second fail → [Reviewer / Learner] → you
         ▼
  COMPLETE    packet → specs/done/
         │
         ▼
- [Reviewer]  only if you ask, or a near-miss was noted
-             writes specs/learnings/<slug>.md
-             does not edit Guard / standing / src/
+ [Reviewer]  (Learner Agent): compiles specs/learnings/<slug>.md
+             proposes standing row + sensor test (Hashimoto's Ratchet)
         │
         ▼
  you: promote | skip
-        │ promote → tiny Planner packet (standing.json and/or one skill)
+        │ promote → standing.json grows; error is permanently blocked
         ▼
  [Guard]     standing may only grow
 ```

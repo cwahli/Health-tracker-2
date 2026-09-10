@@ -83,6 +83,14 @@ function isImagePath(f) {
   );
 }
 
+function isBiomarkerPath(f) {
+  return (
+    f.includes('biomarker') ||
+    f.includes('Biomarker') ||
+    f.startsWith('src/server/biomarkers/')
+  );
+}
+
 run('standing', [path.join(root, 'scripts/assert-standing.mjs')]);
 run('spec-diff', [path.join(root, 'scripts/assert-spec-diff.mjs'), ...(id ? [id] : [])]);
 
@@ -95,6 +103,16 @@ if (changed.some(isCalcPath) || process.env.GUARD_CALC === '1') {
     { cwd: root, stdio: 'inherit' },
   );
   if (calc.status !== 0) failed += 1;
+}
+
+if (changed.some(isBiomarkerPath) || process.env.GUARD_BIOMARKER === '1') {
+  console.log('\n── biomarker (named vitest, no Gemini) ──');
+  const bio = spawnSync(
+    'npx',
+    ['vitest', 'run', 'src/utils/biomarkerSanitize.test.ts', 'src/utils/__tests__/biomarkerIdentity.test.ts'],
+    { cwd: root, stdio: 'inherit' },
+  );
+  if (bio.status !== 0) failed += 1;
 }
 
 if (changed.some(isSyncPath) || process.env.GUARD_EGRESS === '1') {
@@ -135,8 +153,11 @@ if (st === 'draft') {
 }
 
 if (failed) {
-  console.error('\nGUARD FAIL — Builder must not COMPLETE. Restore or repair the failing node.');
-  console.error('Time travel: node scripts/journey-checkpoint.mjs restore <slug> <node>');
+  console.error('\nGUARD FAIL — Builder must not COMPLETE.');
+  console.error('SHEPHERD [revert]: Do not patch on top of broken code. Snap back to clean checkpoint:');
+  console.error('  node scripts/journey-checkpoint.mjs restore <slug> <node>');
+  console.error('SHEPHERD [fork]: Branch a clean second hypothesis from pristine state:');
+  console.error('  node scripts/journey-checkpoint.mjs fork <slug> <from_node> <new_node>');
   process.exit(1);
 }
 console.log('\nGUARD PASS');

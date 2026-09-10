@@ -78,6 +78,29 @@
           "keeps local data: URLs when nothing has been uploaded yet"
         ]
       }
+    },
+    {
+      "id": "biomarker_lifestyle_exclusion",
+      "label": "Behavioral/lifestyle metrics excluded from laboratory plausibility ratio checks",
+      "asked": "repeated",
+      "files_must_contain": {
+        "src/utils/biomarkers.ts": ["isExcludedDeviceMetric"],
+        "src/utils/biomarkerSanitize.test.ts": [
+          "does not flag everyday step counts as improbable"
+        ]
+      }
+    },
+    {
+      "id": "job_milestone_telemetry",
+      "label": "Background job streaming dispatches progress milestones for medical and food pipelines",
+      "asked": "repeated",
+      "files_must_contain": {
+        "serverJobs.ts": [
+          "msg.toLowerCase().includes('extract')",
+          "msg.toLowerCase().includes('classified')",
+          "msg.toLowerCase().includes('running agent')"
+        ]
+      }
     }
   ],
   "sibling_pairs": [

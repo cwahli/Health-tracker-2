@@ -101,6 +101,9 @@ When implementing or updating features (new agent flows, dispatches, interactive
 - **Testing & golden consolidation**: Identify where the feature naturally belongs in the testing framework (e.g., existing golden process tests, golden meal/biomarker suites, or Tier 2 Playwright stubs). Consolidate assertions into the **most relevant existing file** rather than spawning redundant, uncontrolled one-off test suites.
 - **Scope**: Applied on a case-by-case basis. Pure cosmetic/copy tweaks (Class S) do not require debug or golden updates; substantive logic, pipeline, or UI interaction updates must have their matching debug and golden/test representation.
 
+### L17 — Hashimoto's Ratchet & Reversible Loops (SHEPHERD)
+Every bugfix must leave behind a deterministic Sensor (named unit/contract test) and grow `docs/agent/standing.json` via Learner (`specs/learnings/`) so the error can never recur. If a Builder attempt fails Guard, do not patch on top of dirty code: use SHEPHERD `[revert]` (`node scripts/journey-checkpoint.mjs restore <slug> <node>`) to snap back to the clean checkpoint before forking Hypothesis 2 (`[fork]`). Two failed attempts → STOP and escalate to Reviewer / Learner.
+
 ### L10 — COMPLETE (code only)
 `tsc` + matching regression-map commands + the ROADMAP ID’s named assert if any. Skip all of that when no application code changed. Forbidden until then: “all done” / “fully verified.”
 
