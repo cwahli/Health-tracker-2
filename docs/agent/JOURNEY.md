@@ -28,6 +28,7 @@ Chat does not carry over between tools. A packet in `specs/active/` and a checkp
 | **Maker ≠ Checker** | Osmani / Martin Fowler | Maker ≠ checker; state on disk; stop when a script says so | You prompting every step; nightly cron |
 | **Topological Graph** | LangGraph (Chase + Weiss) | Fixed wiring; **you are one node**; repair only the failing node | LangGraph framework rewrite; 100-agent swarm |
 | **Standing Registry** | Incident memory | Countless incidents become **rows** in `standing.json`. Guard enforces all of them every time. | A new process doc per bug |
+| **Procedural Graphs** | Google / Lu et al. (2026) | **Active-node micro-graph**: step-level guidance, local sensor gates, and **Negative Rejection Cache** (`specs/rejected/`) to permanently prune burned hypotheses across sessions. | Dynamic online self-rewriting of Guard code |
 
 **Guard is a script, not a model.** An LLM checker will agree to swap compare onto the log pack. `scripts/journey-guard.mjs` will not.
 
@@ -35,7 +36,7 @@ Chat does not carry over between tools. A packet in `specs/active/` and a checkp
  you: one sentence
         │
         ▼
- [Planner]   skill: planner. Read-only. Writes specs/active/<slug>.md
+ [Planner]   skill: planner. Read-only. Queries specs/rejected/. Writes specs/active/<slug>.md (micro-node DAG)
         │
         ▼
  [Guard]     node scripts/journey-guard.mjs   (standing + spec-diff)
@@ -45,18 +46,19 @@ Chat does not carry over between tools. A packet in `specs/active/` and a checkp
         │ go → packet status: locked
         ▼
  [Builder]   skill: builder. Checkpoint saved: checkpoint/<slug>/start
-        │
+        │ executes node-by-node with local sensor gates
         ▼
  [Guard]     standing + spec-diff + packet vitest (Sensors)
         │
         ├── fail → SHEPHERD [revert] dirty state & [fork] clean 2nd hypothesis → Guard
-        │          second fail → [Reviewer / Learner] → you
+        │          second fail → [Reviewer / Learner] (contrastive diff) → you
         ▼
  COMPLETE    packet → specs/done/
         │
         ▼
  [Reviewer]  (Learner Agent): compiles specs/learnings/<slug>.md
-             proposes standing row + sensor test (Hashimoto's Ratchet)
+             writes burned hypothesis to specs/rejected/<slug>.json
+             proposes standing triplet + sensor test (Hashimoto's Ratchet)
         │
         ▼
  you: promote | skip
@@ -71,10 +73,10 @@ Chat does not carry over between tools. A packet in `specs/active/` and a checkp
 
 | Role | Who | Writes | Must not |
 |------|-----|--------|----------|
-| **Planner** | LLM | draft packet only | `src/`, instructions, schemas, tests |
-| **Builder** | LLM | `allowed_files` | `standing.json`, Guard scripts, Frozen files, whole-file instruction replace |
+| **Planner** | LLM | draft packet only (checks `specs/rejected/`) | `src/`, instructions, schemas, tests |
+| **Builder** | LLM | `allowed_files` (step-by-step on active node) | `standing.json`, Guard scripts, Frozen files, whole-file instruction replace |
 | **Guard** | `journey-guard.mjs` | nothing | “fix” a fail by editing standing or tests |
-| **Reviewer** | LLM | `specs/learnings/*.md` only | `src/`, standing, Guard, tests, in the same turn |
+| **Reviewer** | LLM | `specs/learnings/*.md` and `specs/rejected/*.json` | `src/`, standing, Guard, tests, in the same turn |
 | **You** | human | **go** / **stop** / **promote** | file lists, YAML, locking |
 
 Skills: `.agents/skills/{planner,builder,guard,reviewer}/SKILL.md`.

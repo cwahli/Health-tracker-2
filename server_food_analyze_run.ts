@@ -18,7 +18,7 @@ import { AnalyzeRunContext } from './server_food_analyze_run_types.js';
 import { initializeAnalysisRun } from './server_food_analyze_run_setup.js';
 import { executeScoutPhase } from './server_food_analyze_run_scout.js';
 import { executePrecalcPhase } from './server_food_analyze_run_precalc.js';
-import { executeDietitianPhase } from './server_food_analyze_run_dietitian.js';
+import { executeMealProjectorPhase, executeDietitianPhase } from './server_food_analyze_run_dietitian.js';
 import { executeFinalizePhase } from './server_food_analyze_run_finalize.js';
 
 import { collectImagePayloads, decideWeightRefine } from './src/server/food/server_food_session_setup.js';
@@ -248,7 +248,7 @@ export async function runFoodAnalyze(req: any, res: any) {
     await executePrecalcPhase(ctx);
 
     // 3. Meal Agent Decision & Narration
-    const { textOutput, rawParsed, narratorInput } = await executeDietitianPhase(ctx);
+    const { textOutput, rawParsed, narratorInput } = await executeMealProjectorPhase(ctx);
 
     // 4. Finalize Meal Assemble & Gate
     return await executeFinalizePhase(ctx, rawParsed, narratorInput, textOutput);

@@ -620,7 +620,7 @@ const LiveBackendStreamViewer = ({ logs }: { logs: string }) => {
     if (hasScout) tabs.push({ id: 'scout', label: 'Vision Scout' });
     if (hasDb) tabs.push({ id: 'db', label: 'DB Search' });
     if (hasResolver) tabs.push({ id: 'resolver', label: 'Food Resolver' });
-    if (hasDietitian) tabs.push({ id: 'dietitian', label: 'Dietitian' });
+    if (hasDietitian) tabs.push({ id: 'dietitian', label: 'Meal Agent' });
     if (hasErrors) tabs.push({ id: 'errors', label: 'Errors' });
     if (hasWarnings) tabs.push({ id: 'warnings', label: 'Warnings' });
 
@@ -923,7 +923,7 @@ export const AgentThoughtBox = ({
         step2Status = 'active';    // 🔵 Step 2 Active
         step3Status = 'pending';
         step4Status = 'pending';
-      } else if (currentStage === 'dietitian') {
+      } else if (currentStage === 'dietitian' || currentStage === 'finalize') {
         step1Status = 'completed';
         step2Status = 'completed';
         step3Status = 'completed';
@@ -935,7 +935,7 @@ export const AgentThoughtBox = ({
         step2Status = 'active';
         step3Status = 'pending';
         step4Status = 'pending';
-      } else if (currentStage === 'dietitian') {
+      } else if (currentStage === 'dietitian' || currentStage === 'finalize') {
         step1Status = 'completed';
         step2Status = 'completed';
         step3Status = 'completed';

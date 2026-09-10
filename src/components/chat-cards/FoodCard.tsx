@@ -2105,7 +2105,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                         language={language}
                       />
                       {(() => {
-                        const sentence = (msg.data?.pendingFoodLog.dietitianUpdateSentence || '').trim();
+                        const sentence = (msg.data?.pendingFoodLog.mealAgentUpdateSentence || msg.data?.pendingFoodLog.dietitianUpdateSentence || '').trim();
                         const mainMsg = (msg.content || msg.data?.agentResult?.message || '').trim();
                         if (!sentence) return null;
                         // Deduplicate: if the update sentence is identical or already fully contained in the main message, skip the duplicate bubble
@@ -2987,7 +2987,7 @@ export const FoodCard: React.FC<AgentCardProps & {
           return null;
         }
 
-        const rawText = msg.content || msg.data?.agentResult?.message || msg.data?.agentResult?.text || msg.data?.agentResult?.dietitianAnswer || msg.data?.agentResult?.scoutAnswer || (msg as any).text || (msg as any).message;
+        const rawText = msg.content || msg.data?.agentResult?.message || msg.data?.agentResult?.text || msg.data?.agentResult?.mealAgentAnswer || msg.data?.agentResult?.dietitianAnswer || msg.data?.agentResult?.scoutAnswer || (msg as any).text || (msg as any).message;
         let formattedText = '';
         if (rawText) {
           formattedText = formatMessageContent(rawText, msg);
@@ -3080,7 +3080,7 @@ export const FoodCard: React.FC<AgentCardProps & {
               </div>
             )}
 
-            {/* Dietitian Update / Response */}
+            {/* Meal Agent Update / Response */}
             {fallbackText && (
               <div className="text-[12px] text-slate-800 dark:text-slate-100 font-sans leading-relaxed whitespace-pre-line break-words space-y-2">
                 {fallbackText}

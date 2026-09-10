@@ -43,6 +43,9 @@ export function computeDietitianSkipGates(args: DietitianSkipArgs): {
   return { canSkipDietitianForPureScale };
 }
 
+export type PureScaleSkipArgs = DietitianSkipArgs;
+export const computePureScaleSkipGates = computeDietitianSkipGates;
+
 export interface ScoutTotals {
   totalSugar: number;
   totalSatFat: number;
@@ -219,6 +222,8 @@ export function applyPreDietitianDensityCheck(args: DensityCheckArgs): Record<st
   }
   return aggregatedNutrients;
 }
+
+export const applyPreProjectorDensityCheck = applyPreDietitianDensityCheck;
 
 export interface CreateSkipSynthesisArgs {
   rawScoutData: any;

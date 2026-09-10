@@ -1,0 +1,444 @@
+{
+  "testDate": "2026-09-10T19:42:30.045Z",
+  "model": "gemini-3.5-flash-lite",
+  "testInput": {
+    "photosCount": 5,
+    "photoPaths": [
+      "photo_01.jpg",
+      "photo_02.jpg",
+      "photo_03.jpg",
+      "photo_04.jpg",
+      "photo_05.jpg"
+    ],
+    "userTextPrompt": ""
+  },
+  "systemA": {
+    "name": "System A (Production Vision Scout without Dietitian)",
+    "apiCalls": 1,
+    "latencyMs": 14108,
+    "usage": {
+      "promptTokenCount": 7285,
+      "candidatesTokenCount": 2961,
+      "totalTokenCount": 10246,
+      "promptTokensDetails": [
+        {
+          "modality": "IMAGE",
+          "tokenCount": 5510
+        },
+        {
+          "modality": "TEXT",
+          "tokenCount": 1775
+        }
+      ],
+      "serviceTier": "standard"
+    },
+    "systemInstructionLengthLines": 60,
+    "systemInstructionText": "=== USER OUTPUT LANGUAGE ===\nThe patient's UI language is English (code: en).\nWrite every user-visible string you generate (verdicts, summaries, chat replies, dietitian lines, card titles, explanations, medicalInsight) in English.\nKeep JSON keys, nutrient codes, biomarker keys, enum values, and schema field names in English. User-visible nutrient labels must be in the UI language; never show raw keys like Saturated_fat to the patient.\nKeep numbers, units (g, kcal, mg/dL), and scientific abbreviations as-is.\nFood identity fields (keyword, originalName, dish names, brand names) stay as observed on labels or common culinary names used for database matching. Do not translate food names.\n\n- HIERARCHY: Extract each distinct food item/ingredient (e.g. Tofu, Beef, sides, meal prep items, drinks, packages) directly as its own separate 'dish' with its own boundingBox2D & nutrients. Never group distinct food items into a single composite dish with sub-items. Do not duplicate identical dishes across multi-angles or cooking prep.\n- QUANTITY & MULTIPACKS: Output 'weightGrams' (consumed serving) and 'packGrams' (container total). For unopened grocery multi-packs (e.g. '5 x 65ml', 'pack of 6') without explicit user notes stating all N units were consumed, set 'weightGrams' to a single unit/serving size (e.g. 65g) and 'packGrams' to the container total (e.g. 325g). Never estimate the whole container as consumed: weightGrams is ALWAYS one serving here — the portion question resolves the true amount.\n- GROCERY/SCALE STICKERS: Treat supermarket stickers as atomic: pair printed text with printed weight (e.g. 'Berat 0.252' -> 252g). Output text in 'packageLabelText'. Never transpose weights between packages.\n- LOCAL NAMES: Preserve the verbatim printed name from stickers, packaging, or menus in local language as foodName (e.g. 'Ikan Cendro', 'Cumi Bangka'). Do not genericise when specific local name is readable. ALWAYS provide the generic English translation of the ingredient in 'genericEnglishName' (e.g. 'needlefish', 'squid').\n- INGESTION: Extract ALL visible food items/packages from ALL provided images into dishes[]. After dishes[], emit 'perImage': one entry per provided image in 0-based order with the dishName values seen in that image ('itemsFound'; empty array only when that image truly shows no food, or when no images are attached) — every provided image must appear exactly once; never skip an image. Before emitting, verify the anchor both ways for images 0..N-1: each 'perImage' entry must match at least one dish carrying that same 'sourceImageIndex', and any entry with no matching dish must be confirmed food-free — a food image with no matching dish means you stopped early, so go back and extract it. 'contentType' is post-extraction metadata and must not restrict extraction.\n- DIRECT OCR: Transcribe nutrition labels into 'rawNutritionLabel' for packaged items with labels. Preserve exact 0 values when printed as 0g / 0mg.\n- % AKG / % DV: If nutrition labels state % AKG (Angka Kecukupan Gizi) or % DV for micronutrients (e.g. Vitamin D 8% AKG, Kalsium 2% AKG), preserve the % in rawNutritionLabel.\n- BRANDS & CONDIMENTS: Set 'chainName' for brands. Set 'isStandaloneCondimentPacket' for packets <=30g.\n- COOKING FATS: Include cooking oils/fats in 'dishNutrients.totalFat' based on 'cookingMethod'.\n- CLINICAL VERDICT & NARRATIVE: Provide a 3-6 word 'verdict' ('level': good|warning|alert|neutral) and a direct 35-70 word clinical 'clinicalAdvice' in 2nd person (\"You got...\"). Balance two sides: celebrate positive nutrient achievements (protein, soluble fiber, healthy fats) while plainly flagging any nutrient over budget (sodium, saturated fat) with its magnitude and actionable movement.\n- PATIENT CONTEXT (special case — shapes verdict/advice only, never identity or weights): at-risk: LDL (high); HbA1c (high). Budgets: see NUTRITIONAL TARGET STATUS below. Prefer a verdict level and advice that move those numbers the right way.\n=== NUTRITIONAL TARGET STATUS ===\n3 days avg: Sat fat (27.7g - 38% over), Calorie (2500kcal - 39% over), Sodium (3000mg - 30% over), Protein (100g - 17% under), Carbohydrates (263.3g - 32% over), Total Fibre (22.3g - 26% under), Potassium (2100mg), Soluble Fibre (3.5g), Added Sugar (45g - 50% over), Trans Fat (0.1g)\n\n=== REQUIRED OUTPUT JSON SCHEMA ===\nOutput exactly ONE JSON object matching this schema:\n{\n  \"_internalReasoning\": \"string (<15 words)\",\n  \"contentType\": \"visual | menu_or_poster | label | text\",\n  \"diningEnvironment\": \"home_cooked | casual_restaurant | fast_food_chain | fine_dining | airline | unknown\",\n  \"verdict\": {\n    \"label\": \"string (3-6 words)\",\n    \"level\": \"good | warning | alert | neutral\"\n  },\n  \"clinicalAdvice\": \"string (35-70 words, 2nd person)\",\n  \"perImage\": [{ \"imageIndex\": 0, \"itemsFound\": [\"Dish Name\"] }],\n  \"dishes\": [\n    {\n      \"dishName\": \"string\",\n      \"genericEnglishName\": \"string\",\n      \"chainName\": \"string | null\",\n      \"estimatedWeightGrams\": 0,\n      \"packGrams\": 0,\n      \"cookingMethod\": \"raw | baked | grilled | boiled | steamed | deep_fried | pan_fried | stir_fried\",\n      \"boundingBox2D\": [0, 0, 1000, 1000],\n      \"sourceImageIndex\": 0,\n      \"isStandaloneCondimentPacket\": false,\n      \"foods\": [\n        {\n          \"foodName\": \"string\",\n          \"genericEnglishName\": \"string\",\n          \"packageLabelText\": \"string | null\",\n          \"weightGrams\": 0,\n          \"packGrams\": 0,\n          \"sourceImageIndex\": 0,\n          \"rawNutritionLabel\": \"object | null\",\n          \"nutrients\": { \"protein\": 0, \"saturatedFat\": 0, \"addedSugar\": 0, \"totalFibre\": 0, \"sodium\": 0, \"carbohydrates\": 0 }\n        }\n      ],\n      \"dishNutrients\": { \"saturatedFat\": 0, \"totalFat\": 0, \"totalSugar\": 0, \"potassium\": 0, \"omega3\": 0, \"calcium\": 0, \"iron\": 0, \"magnesium\": 0, \"vitaminD\": 0 }\n    }\n  ]\n}",
+    "userPromptText": "Analyze the provided 5 meal images. Inspect all visible prepared dishes, cooking pots, grocery packages, and barcode labels. Read any visible OCR text on cups, wrappers, or menus to identify fast-food brands or commercial chains, and use these to anchor the nutritional estimation (e.g. calories and fat for commercial deep-fried items) to standard commercial nutrition tables. Ingest all visible foods and packages completely into dishes and constituent foods. Audit every image independently and extract distinct food items seen across ALL images. Do not stop after analyzing a label. Extract all physical dishes and constituent foods into the hierarchical schema with weightGrams, packGrams, and nutrients.",
+    "parsedOutput": {
+      "verdict": {
+        "label": "Watch saturated fat intake",
+        "level": "warning"
+      },
+      "clinicalAdvice": "You are exceeding your calorie and saturated fat budgets, which conflicts with your high LDL management. Celebrate your adequate vegetable soup intake, but reduce added sugars and fried snacks. Focus on lean proteins and swapping saturated fats for heart-healthy unsaturated alternatives to protect your cardiovascular health.",
+      "dishes": [
+        {
+          "dishName": "Informasi Nilai Gizi Packaging",
+          "estimatedWeightGrams": 35,
+          "boundingBox2D": [
+            0,
+            0,
+            1000,
+            1000
+          ],
+          "chainName": null,
+          "cookingMethod": "raw",
+          "dishNutrients": {
+            "calcium": 0,
+            "iron": 2.1,
+            "magnesium": 0,
+            "omega3": 0,
+            "potassium": 0,
+            "saturatedFat": 0.5,
+            "totalFat": 4,
+            "totalSugar": 2,
+            "vitaminD": 0
+          },
+          "foods": [
+            {
+              "foodName": "Cereal Package Label",
+              "weightGrams": 35,
+              "genericEnglishName": "cereal package",
+              "nutrients": {
+                "addedSugar": 2,
+                "carbohydrates": 23,
+                "protein": 4,
+                "saturatedFat": 0.5,
+                "sodium": 0,
+                "totalFibre": 3
+              },
+              "packGrams": 805,
+              "packageLabelText": "Takaran Saji 35g Energi Total 150 kkal Lemak Total 4g 6% Lemak Jenuh 0.5g 3% Protein 4g 7% Karbohidrat Total 23g 7% Serat Pangan 3g 10% Gula 2g Garam (Natrium) 0g",
+              "rawNutritionLabel": {},
+              "sourceImageIndex": 0
+            }
+          ],
+          "genericEnglishName": "packaged cereal",
+          "isStandaloneCondimentPacket": false,
+          "packGrams": 805,
+          "sourceImageIndex": 0
+        },
+        {
+          "dishName": "Sup Daging Sapi dan Sayur",
+          "estimatedWeightGrams": 400,
+          "boundingBox2D": [
+            100,
+            100,
+            900,
+            900
+          ],
+          "chainName": null,
+          "cookingMethod": "boiled",
+          "dishNutrients": {
+            "calcium": 60,
+            "iron": 2.5,
+            "magnesium": 35,
+            "omega3": 0.1,
+            "potassium": 450,
+            "saturatedFat": 3.5,
+            "totalFat": 8,
+            "totalSugar": 4,
+            "vitaminD": 0
+          },
+          "foods": [
+            {
+              "foodName": "Daging Sapi",
+              "weightGrams": 120,
+              "genericEnglishName": "beef",
+              "nutrients": {
+                "addedSugar": 0,
+                "carbohydrates": 0,
+                "protein": 26,
+                "saturatedFat": 3,
+                "sodium": 65,
+                "totalFibre": 0
+              },
+              "packGrams": 120,
+              "packageLabelText": null,
+              "rawNutritionLabel": null,
+              "sourceImageIndex": 1
+            },
+            {
+              "foodName": "Wortel",
+              "weightGrams": 100,
+              "genericEnglishName": "carrot",
+              "nutrients": {
+                "addedSugar": 0,
+                "carbohydrates": 10,
+                "protein": 1,
+                "saturatedFat": 0,
+                "sodium": 45,
+                "totalFibre": 3
+              },
+              "packGrams": 100,
+              "packageLabelText": null,
+              "rawNutritionLabel": null,
+              "sourceImageIndex": 1
+            },
+            {
+              "foodName": "Kol",
+              "weightGrams": 100,
+              "genericEnglishName": "cabbage",
+              "nutrients": {
+                "addedSugar": 0,
+                "carbohydrates": 6,
+                "protein": 1.3,
+                "saturatedFat": 0,
+                "sodium": 20,
+                "totalFibre": 2.5
+              },
+              "packGrams": 100,
+              "packageLabelText": null,
+              "rawNutritionLabel": null,
+              "sourceImageIndex": 1
+            },
+            {
+              "foodName": "Daun Bawang",
+              "weightGrams": 20,
+              "genericEnglishName": "scallion",
+              "nutrients": {
+                "addedSugar": 0,
+                "carbohydrates": 1.5,
+                "protein": 0.4,
+                "saturatedFat": 0,
+                "sodium": 5,
+                "totalFibre": 0.5
+              },
+              "packGrams": 20,
+              "packageLabelText": null,
+              "rawNutritionLabel": null,
+              "sourceImageIndex": 1
+            },
+            {
+              "foodName": "Minyak Kuah Sup",
+              "weightGrams": 60,
+              "genericEnglishName": "soup broth oil",
+              "nutrients": {
+                "addedSugar": 0,
+                "carbohydrates": 0,
+                "protein": 0,
+                "saturatedFat": 0.5,
+                "sodium": 300,
+                "totalFibre": 0
+              },
+              "packGrams": 60,
+              "packageLabelText": null,
+              "rawNutritionLabel": null,
+              "sourceImageIndex": 1
+            }
+          ],
+          "genericEnglishName": "beef and vegetable soup",
+          "isStandaloneCondimentPacket": false,
+          "packGrams": 400,
+          "sourceImageIndex": 1
+        },
+        {
+          "dishName": "Jajanan Pasar Gorengan",
+          "estimatedWeightGrams": 150,
+          "boundingBox2D": [
+            150,
+            150,
+            950,
+            950
+          ],
+          "chainName": null,
+          "cookingMethod": "deep_fried",
+          "dishNutrients": {
+            "calcium": 25,
+            "iron": 1.2,
+            "magnesium": 20,
+            "omega3": 0,
+            "potassium": 120,
+            "saturatedFat": 5.5,
+            "totalFat": 18,
+            "totalSugar": 3,
+            "vitaminD": 0
+          },
+          "foods": [
+            {
+              "foodName": "Gorengan Tepung",
+              "weightGrams": 150,
+              "genericEnglishName": "deep-fried snack",
+              "nutrients": {
+                "addedSugar": 1,
+                "carbohydrates": 30,
+                "protein": 4,
+                "saturatedFat": 5.5,
+                "sodium": 220,
+                "totalFibre": 1.5
+              },
+              "packGrams": 150,
+              "packageLabelText": null,
+              "rawNutritionLabel": null,
+              "sourceImageIndex": 2
+            }
+          ],
+          "genericEnglishName": "fried traditional pastry",
+          "isStandaloneCondimentPacket": false,
+          "packGrams": 150,
+          "sourceImageIndex": 2
+        },
+        {
+          "dishName": "Hemaviton C1000 Total Care",
+          "estimatedWeightGrams": 330,
+          "boundingBox2D": [
+            0,
+            0,
+            1000,
+            1000
+          ],
+          "chainName": "Hemaviton",
+          "cookingMethod": "raw",
+          "dishNutrients": {
+            "calcium": 10,
+            "iron": 0,
+            "magnesium": 5,
+            "omega3": 0,
+            "potassium": 50,
+            "saturatedFat": 0,
+            "totalFat": 0,
+            "totalSugar": 21,
+            "vitaminD": 10
+          },
+          "foods": [
+            {
+              "foodName": "Hemaviton C1000 Orange",
+              "weightGrams": 330,
+              "genericEnglishName": "vitamin c health supplement drink",
+              "nutrients": {
+                "addedSugar": 21,
+                "carbohydrates": 22,
+                "protein": 0,
+                "saturatedFat": 0,
+                "sodium": 45,
+                "totalFibre": 0
+              },
+              "packGrams": 330,
+              "packageLabelText": "Hemaviton C1000 Total Care Vitamin C 1000 mg Vitamin D3 400 IU Zinc 10 mg Kalori 89.55 kkal/kaleng",
+              "rawNutritionLabel": {},
+              "sourceImageIndex": 3
+            }
+          ],
+          "genericEnglishName": "vitamin C supplement drink",
+          "isStandaloneCondimentPacket": false,
+          "packGrams": 330,
+          "sourceImageIndex": 3
+        },
+        {
+          "dishName": "Lemonilo Brownies Crispy Packaging",
+          "estimatedWeightGrams": 15,
+          "boundingBox2D": [
+            0,
+            0,
+            1000,
+            1000
+          ],
+          "chainName": "Lemonilo",
+          "cookingMethod": "raw",
+          "dishNutrients": {
+            "calcium": 15,
+            "iron": 0.5,
+            "magnesium": 15,
+            "omega3": 0,
+            "potassium": 80,
+            "saturatedFat": 1,
+            "totalFat": 2,
+            "totalSugar": 6,
+            "vitaminD": 0
+          },
+          "foods": [
+            {
+              "foodName": "Lemonilo Brownies Crispy Strawberry",
+              "weightGrams": 15,
+              "genericEnglishName": "crispy brownies snack",
+              "nutrients": {
+                "addedSugar": 6,
+                "carbohydrates": 11,
+                "protein": 1,
+                "saturatedFat": 1,
+                "sodium": 55,
+                "totalFibre": 1
+              },
+              "packGrams": 30,
+              "packageLabelText": "Takaran Saji: 15 g 2 Sajian per Kemasan Energi Total 70 kkal Lemak Total 2 g Lemak Jenuh 1 g Protein 1 g Karbohidrat Total 11 g Gula 6 g Garam (Natrium) 55 mg",
+              "rawNutritionLabel": {},
+              "sourceImageIndex": 4
+            }
+          ],
+          "genericEnglishName": "crispy brownie snack package",
+          "isStandaloneCondimentPacket": false,
+          "packGrams": 30,
+          "sourceImageIndex": 4
+        }
+      ],
+      "perImage": [
+        {
+          "imageIndex": 0,
+          "itemsFound": [
+            "Informasi Nilai Gizi Packaging"
+          ]
+        },
+        {
+          "imageIndex": 1,
+          "itemsFound": [
+            "Sup Daging Sapi dan Sayur"
+          ]
+        },
+        {
+          "imageIndex": 2,
+          "itemsFound": [
+            "Jajanan Pasar Gorengan"
+          ]
+        },
+        {
+          "imageIndex": 3,
+          "itemsFound": [
+            "Hemaviton C1000 Total Care"
+          ]
+        },
+        {
+          "imageIndex": 4,
+          "itemsFound": [
+            "Lemonilo Brownies Crispy Packaging"
+          ]
+        }
+      ]
+    }
+  },
+  "systemB": {
+    "name": "System B (Procedural Graph Architecture)",
+    "apiCalls": 1,
+    "latencyMs": 9122,
+    "usage": {
+      "promptTokenCount": 6337,
+      "candidatesTokenCount": 485,
+      "totalTokenCount": 6822,
+      "promptTokensDetails": [
+        {
+          "modality": "IMAGE",
+          "tokenCount": 5510
+        },
+        {
+          "modality": "TEXT",
+          "tokenCount": 827
+        }
+      ],
+      "serviceTier": "standard"
+    },
+    "systemInstructionLengthLines": 21,
+    "systemInstructionText": "=== USER OUTPUT LANGUAGE ===\nThe patient's UI language is English (code: en).\nWrite every user-visible string you generate (verdicts, summaries, chat replies, card titles, explanations, clinicalAdvice) in English.\nKeep JSON keys, nutrient codes, biomarker keys, enum values, and schema field names in English.\nFood identity fields (originalName, dish names, brand names) stay as observed on labels or common culinary names used for database matching.\n\n=== PROCEDURAL GRAPH MEAL AGENT (SOLE AGENT) ===\nYou are the Meal Agent executing Active Graph Nodes [EXTRACTION -> AUDIT -> RECONCILE]. There is NO Dietitian in this system.\nYour responsibility: Extract dishes, inspect labels, estimate weights, and provide clinical coaching.\n\n- GRAPH STEP 1 (DISH EXTRACTION):\n  Group distinct physical plated items, separate cooking pots/bowls, drinks, or companion sides into separate 'dishes', and constituent ingredients into 'foods'. DO NOT duplicate identical dishes shown across cooking prep, multi-angles, or sliced/whole views. DO NOT group separate packages into a single dish. Each barcode package MUST be its own distinct 'dish'.\n- GRAPH STEP 2 (PORTION & PACKAGING AUDIT):\n  Output 'weightGrams' (consumed serving) and 'packGrams' (container total). For unopened grocery multi-packs without explicit user notes stating all N units were consumed, set 'weightGrams' to a single unit/serving size and 'packGrams' to the container total. Treat scale stickers as atomic: pair printed text with printed weight in 'packageLabelText'.\n- GRAPH STEP 3 (DIRECT OCR & PREPARATION):\n  Transcribe nutrition labels into 'rawNutritionLabel' for packaged items. Preserve exact 0 values when printed as 0g / 0mg. Classify realistic 'cookingMethod' (raw, baked, boiled, deep_fried, pan_fried, steamed).\n- GRAPH STEP 4 (CLINICAL COACHING & VERDICT):\n  Provide a 3-6 word 'verdict' ('level': good|warning|alert|neutral) and a constructive 35-70 word clinical 'clinicalAdvice' in 2nd person (\"You got...\") covering key nutritional assets, metabolic/glycemic impact, and an actionable next step/movement.\n- PATIENT CONTEXT: at-risk: LDL (high); HbA1c (high).\n=== NUTRITIONAL TARGET STATUS ===\n3 days avg: Sat fat (27.7g - 38% over), Calorie (2500kcal - 39% over), Sodium (3000mg - 30% over), Protein (100g - 17% under), Carbohydrates (263.3g - 32% over), Total Fibre (22.3g - 26% under), Potassium (2100mg), Soluble Fibre (3.5g), Added Sugar (45g - 50% over), Trans Fat (0.1g)",
+    "userPromptText": "Analyze the provided meal images (5 photos, one logging session). Inspect all visible prepared dishes, cooking pots, grocery packages, and barcode labels. Read any visible OCR text on cups, wrappers, menus, or nutrition panels to identify brands and transcribe printed nutrition facts into 'rawNutritionLabel' exactly as printed (values + % AKG). Ingest all visible foods and packages completely into dishes and constituent foods. Extract all physical dishes and constituent foods into the hierarchical schema with weightGrams, packGrams, and nutrients. Do not merge distinct plated items, sides, drinks, or packages into one dish. Each barcode package MUST be its own distinct 'dish'. For unopened multi-serving packs with no consumed-amount note, weightGrams is ONE serving and packGrams is the container total — the user will be asked to choose.",
+    "parsedOutput": {
+      "verdict": {
+        "label": "High Sodium & Saturated Fat Warning",
+        "level": "warning"
+      },
+      "clinicalAdvice": "You logged a multi-item meal featuring savory soup, traditional pastries, fiber-rich cereal, and vitamin-fortified drinks. Given your high LDL and HbA1c, watch out for the saturated fats and added sugars across these products. Take a brisk 20-minute walk to help manage your blood glucose levels after eating.",
+      "dishes": [
+        {
+          "dishName": "Oatmeal Cereal Packet",
+          "estimatedWeightGrams": 35,
+          "packGrams": 805,
+          "sourceImageIndex": 0
+        },
+        {
+          "dishName": "Beef and Vegetable Soup",
+          "estimatedWeightGrams": 400,
+          "packGrams": 400,
+          "sourceImageIndex": 1
+        },
+        {
+          "dishName": "Assorted Traditional Pastries",
+          "estimatedWeightGrams": 150,
+          "packGrams": 150,
+          "sourceImageIndex": 2
+        },
+        {
+          "dishName": "Hemaviton C1000 Total Care Vitamin Drink",
+          "estimatedWeightGrams": 330,
+          "packGrams": 330,
+          "sourceImageIndex": 3
+        },
+        {
+          "dishName": "Lemonilo Brownies Crispy Strawberry Cheese",
+          "estimatedWeightGrams": 15,
+          "packGrams": 30,
+          "sourceImageIndex": 4
+        }
+      ],
+      "_internalReasoning": "Extracted five distinct items across the five logged photos including an oatmeal package, soup bowl, pastries, a vitamin drink, and a crispy snack pack, maintaining strict hierarchical separation and following clinical context for LDL/HbA1c.",
+      "contentType": "meal_photos",
+      "diningEnvironment": "home"
+    }
+  }
+}

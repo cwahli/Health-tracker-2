@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { rebalanceNutrientProfile, applyNutrientModifiers } from "./server_derivation";
 import { sanitizeVerdictLabel, synchronizeNarrativeText, synthesizeEditCommandsFromBreakdown } from "./server_pure_helpers";
 
-describe("Dietitian Clinical Adjustment & Weight Calibration", () => {
+describe("Meal Agent Clinical Adjustment & Weight Calibration", () => {
   const NUTRIENT_KEYS = [
     'calories', 'protein', 'totalFat', 'saturatedFat', 'transFat', 'unsaturatedFat',
     'carbohydrates', 'sugar', 'addedSugar', 'totalFibre', 'sodium', 'potassium', 'salt'

@@ -13,6 +13,7 @@ export function buildDiscussionResponse(args: {
   const { rawParsed, agentInstructions, apiCalls, dispatches } = args;
   return {
     mode: "discussion",
+    mealAgentScratchpad: rawParsed._internalReasoning,
     dietitianScratchpad: rawParsed._internalReasoning,
     text: rawParsed.message || "Here is the details on this meal composition.",
     message: rawParsed.message || "Here is the details on this meal composition.",
@@ -42,6 +43,7 @@ export function buildEvaluationResponse(args: {
   } = args;
   return {
     mode: "evaluation",
+    mealAgentScratchpad: rawParsed._internalReasoning,
     dietitianScratchpad: rawParsed._internalReasoning,
     scoutInternalReasoning,
     rawScout: rawScoutData,
@@ -82,6 +84,7 @@ export function buildNewLogResponse(args: {
   } = args;
   return {
     mode: "new_log",
+    mealAgentScratchpad: rawParsed._internalReasoning,
     dietitianScratchpad: rawParsed._internalReasoning,
     scoutInternalReasoning,
     rawScout: rawScoutData,
@@ -138,6 +141,7 @@ export function buildModifyResponse(args: {
   } = args;
   return {
     mode: "modify",
+    mealAgentScratchpad: rawParsed._internalReasoning,
     dietitianScratchpad: rawParsed._internalReasoning,
     rawScout: rawScoutData,
     text: finalMessage,

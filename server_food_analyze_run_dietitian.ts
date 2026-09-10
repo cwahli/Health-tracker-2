@@ -11,25 +11,13 @@ import {
   resolveCreateMealTitle,
   PROJECTOR_NARRATOR_INSTRUCTION,
 } from './src/server/food/server_food_dietitian_dispatch.js';
-import {
-  buildTimeContext,
-  buildUserContext,
-  buildHistoryContext,
-  buildImageContext,
-  buildVisionScoutContext,
-  buildBiomarkersContext,
-  selectSystemInstruction,
-  stitchFoodPrompt,
-  buildDatabaseMatchesContext,
-  assemblePrecalcPromptBlock,
-} from './src/server/food/server_food_prompt_context.js';
 import { getCurrentDateInTimezone } from './src/utils/dateUtils.js';
 import { interpolate, t } from './src/utils/i18n.js';
 import { diffScoutToEditCommands } from './server_edit_patch_ledger.js';
 import { normalizeParsedPostDietitian } from './src/server/food/server_food_mode_routing.js';
 import { applyServerAverageNutrients, enrichBilingualItemName } from './server_pure_helpers.js';
 
-export async function executeDietitianPhase(ctx: AnalyzeRunContext): Promise<{ textOutput: string; rawParsed: any; narratorInput: any }> {
+export async function executeMealProjectorPhase(ctx: AnalyzeRunContext): Promise<{ textOutput: string; rawParsed: any; narratorInput: any }> {
   let textOutput: string = '';
   let rawParsed: any;
   let narratorInput: any = null;
@@ -44,10 +32,10 @@ export async function executeDietitianPhase(ctx: AnalyzeRunContext): Promise<{ t
 
   if (canSkipDietitianForPureScale && ctx.weightRefineIntent.isRefine && ctx.weightRefineIntent.weightGrams) {
     const targetWeight = ctx.weightRefineIntent.weightGrams;
-    ctx.addDebugLog(`[Refine] skip-dietitian: Scaled label-locked meal directly to ${targetWeight}g without LLM call.`);
+    ctx.addDebugLog(`[Refine] skip-agent: Scaled label-locked meal directly to ${targetWeight}g without LLM call.`);
     ctx.sendStreamEvent({
       type: 'status',
-      stage: 'dietitian',
+      stage: 'finalize',
       status: 'completed',
       message: interpolate(t(ctx.userProfile?.language, 'statusScaledPortion'), { grams: targetWeight }),
     });
@@ -69,8 +57,8 @@ export async function executeDietitianPhase(ctx: AnalyzeRunContext): Promise<{ t
       isResume: Boolean(ctx.req.body.skipScout || ctx.req.body.portionChoices),
     })
   ) {
-    ctx.addDebugLog('[Accept] portion choices within 30% of estimates: skipping agent, composing from ledger.');
-    ctx.sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'completed', message: 'Meal analysis finalized.' });
+    ctx.addDebugLog('[Accept] portion choices within 30% of estimates: composing from ledger without LLM call.');
+    ctx.sendStreamEvent({ type: 'status', stage: 'finalize', status: 'completed', message: 'Meal analysis finalized.' });
     const acceptMealName =
       ctx.activeMeal?.name ||
       ctx.visionScoutItems.map((v: any) => v?.keyword || v?.originalName || v?.name).filter(Boolean).slice(0, 3).join(', ') ||
@@ -96,7 +84,7 @@ export async function executeDietitianPhase(ctx: AnalyzeRunContext): Promise<{ t
   } else if (ctx.visionScoutRanAndReturnedItems || (ctx.visionScoutItems && ctx.visionScoutItems.length > 0) || ctx.rawScoutData) {
     if (ctx.userSelectedMode === 'compare' && (ctx.rawScoutData?.comparisonTitle || ctx.rawScoutData?.groups || ctx.rawScoutData?.items)) {
       ctx.addDebugLog('[MealAgent] Single-agent compare path: using Scout comparison directly without secondary LLM call.');
-      ctx.sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'completed', message: 'Comparison analysis finalized.' });
+      ctx.sendStreamEvent({ type: 'status', stage: 'finalize', status: 'completed', message: 'Comparison analysis finalized.' });
       const enrichedGroups = applyServerAverageNutrients(ctx.rawScoutData.groups || [], {});
       const enrichedItems = (ctx.rawScoutData.items || ctx.visionScoutItems || []).map((it: any) => {
         const name = it.name || it.originalName || '';
@@ -134,7 +122,7 @@ export async function executeDietitianPhase(ctx: AnalyzeRunContext): Promise<{ t
       };
     } else if (ctx.isModifySession) {
       ctx.addDebugLog('[MealAgent] Single-agent edit path: diffing Scout output into active meal.');
-      ctx.sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'completed', message: 'Meal update finalized.' });
+      ctx.sendStreamEvent({ type: 'status', stage: 'finalize', status: 'completed', message: 'Meal update finalized.' });
       const scoutDishes = (ctx.rawScoutData?.dishes && Array.isArray(ctx.rawScoutData.dishes))
         ? ctx.rawScoutData.dishes
         : (ctx.visionScoutItems || []);
@@ -184,7 +172,7 @@ export async function executeDietitianPhase(ctx: AnalyzeRunContext): Promise<{ t
       };
     } else {
       ctx.addDebugLog('[MealAgent] Single-agent create path: using Scout verdict & clinical advice with finalized ledger.');
-      ctx.sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'completed', message: 'Meal analysis finalized.' });
+      ctx.sendStreamEvent({ type: 'status', stage: 'finalize', status: 'completed', message: 'Meal analysis finalized.' });
       const totals = sumPrecalcTotals(ctx.preCalculatedItems);
       const scoutVerdict = decideScoutVerdict({
         scoutVerdict: ctx.rawScoutData?.verdict || null,
@@ -224,107 +212,50 @@ export async function executeDietitianPhase(ctx: AnalyzeRunContext): Promise<{ t
       };
     }
   } else {
-    ctx.addDebugLog(`[MealAgent] Initiating Dietitian LLM evaluation...`);
-    const systemCurrentDate = new Date().toISOString().split('T')[0];
-    const timeCtx = buildTimeContext({ timezone: ctx.userProfile?.timezone });
-    const userCtx = buildUserContext(ctx.userProfile);
-    const historyContext = buildHistoryContext(ctx.history);
-    const imageCtx = buildImageContext(ctx.imagePayloads, ctx.imageDates);
-    const visionScoutCtx = buildVisionScoutContext({
-      visionScoutItems: ctx.visionScoutItems,
-      visionScoutContentType: ctx.visionScoutContentType,
+    ctx.addDebugLog('[MealAgent] Fallback projector: finalizing empty/text response from available ledger.');
+    const totals = sumPrecalcTotals(ctx.preCalculatedItems || []);
+    const scoutVerdict = decideScoutVerdict({
+      scoutVerdict: ctx.rawScoutData?.verdict || null,
+      totals,
+      mealName: resolveCreateMealTitle(ctx.rawScoutData, ctx.visionScoutItems || [], ctx.userProfile?.language),
+      language: ctx.userProfile?.language,
+    });
+    const rawAdvice = decideScoutAdvice({
+      rawAdvice: ctx.rawScoutData?.clinicalAdvice || ctx.rawScoutData?.message || '',
+      totals,
+      mealName: resolveCreateMealTitle(ctx.rawScoutData, ctx.visionScoutItems || [], ctx.userProfile?.language),
+      language: ctx.userProfile?.language,
+    });
+    const createSkip = buildCreateSkipResponse({
+      rawScoutData: ctx.rawScoutData,
+      visionScoutItems: ctx.visionScoutItems || [],
+      preCalculatedItems: ctx.preCalculatedItems || [],
+      totals,
+      scoutVerdict,
+      rawAdvice,
       scoutConfidenceRating: ctx.scoutConfidenceRating,
       scoutConfidenceComment: ctx.scoutConfidenceComment,
       scoutCookingMethod: ctx.scoutCookingMethod,
+      scoutInternalReasoning: ctx.scoutInternalReasoning,
       diningEnvironment: ctx.diningEnvironment,
-      userSelectedMode: ctx.userSelectedMode,
-      isExplicitModify: ctx.isExplicitModify,
-      hasActiveMeal: !!ctx.effectiveActiveMeal,
-      hasComparison: false,
-      hasImages: ctx.hasUploadedNewImages,
+      language: ctx.userProfile?.language,
     });
-    const biomarkersCtx = buildBiomarkersContext(ctx.biomarkersNeedingImprovement);
-    const systemInstruction = selectSystemInstruction({
-      userSelectedMode: ctx.userSelectedMode,
-      isExplicitModify: ctx.isExplicitModify,
-      effectiveActiveMeal: ctx.effectiveActiveMeal,
-      activeComparisonState: null,
-      biomarkersNeedingImprovement: ctx.biomarkersNeedingImprovement,
-      remainingAllowance: ctx.remainingAllowance,
-      foodLogs: ctx.foodLogs,
-      userProfile: ctx.userProfile,
-      visionScoutItems: ctx.visionScoutItems,
-    });
-    let { promptText, fullPromptSent } = stitchFoodPrompt({
-      systemInstruction,
-      userSelectedMode: ctx.userSelectedMode,
-      biomarkersCtx,
-      visionScoutCtx,
-      databaseMatchesCtx: buildDatabaseMatchesContext('', ''),
-      historyContext,
-      pastMealsCtx: '',
-      userCtx,
-      timeCtx,
-      imageCtx,
-      message: ctx.message,
-    });
-    const precalcRes = assemblePrecalcPromptBlock({
-      preCalculatedItems: ctx.preCalculatedItems,
-      activeMeal: ctx.effectiveActiveMeal,
-      aggregatedNutrients: ctx.aggregatedNutrients,
-      userProfile: ctx.userProfile,
-      promptText,
-      fullPromptSent,
-      onLog: ctx.addDebugLog,
-    });
-    promptText = precalcRes.promptText;
-    fullPromptSent = precalcRes.fullPromptSent;
-
-    ctx.addDebugLog(`[MealAgent] Dispatched System Instruction:\n${systemInstruction}`);
-    ctx.addDebugLog(`[MealAgent] Dispatched Prompt:\n${promptText}`);
-    const responseText = await ctx.callUnifiedLLM({
-      modelId: ctx.engine || 'gemini-3.5-flash-lite',
-      systemInstruction,
-      promptText,
-      imagePayloads: ctx.imagePayloads || [],
-      responseMimeType: 'application/json',
-      maxOutputTokens: 8192,
-      temperature: 0.2,
-      logStagePrefix: 'dietitian',
-      onStream: (chunk: string, isThought?: boolean) => {
-        if (ctx.isStream && ctx.hasSentHeaders) {
-          try {
-            ctx.res.write(`data: ${JSON.stringify({ type: 'stream', chunk, stage: 'dietitian' })}\n\n`);
-            if (typeof (ctx.res as any).flush === 'function') (ctx.res as any).flush();
-          } catch (e) {}
-        }
-      },
-    });
-
-    textOutput = responseText;
-    ctx.addDebugLog(`[MealAgent] Raw Dietitian LLM Response (${textOutput.length} chars):\n${textOutput}`);
-    try {
-      const cleaned = textOutput.replace(/^```(?:json)?|```$/gm, '').trim();
-      rawParsed = JSON.parse(cleaned);
-    } catch (err: any) {
-      ctx.addDebugLog(`[MealAgent] Failed to parse Dietitian JSON: ${err.message}`);
-      throw new Error('Failed to parse Dietitian LLM output as JSON');
-    }
-    const narratorUsage = ctx.takeUnifiedUsage('dietitian');
-    const narratorMs = ctx.takeUnifiedTiming('dietitian');
+    textOutput = createSkip.textOutput;
+    rawParsed = createSkip.rawParsed;
     narratorInput = {
-      systemInstruction,
-      userPrompt: fullPromptSent,
-      model: ctx.engine || 'gemini-3.5-flash-lite',
-      latencyMs: narratorMs,
-      tokens: narratorUsage ? narratorUsage.total : null,
+      systemInstruction: PROJECTOR_NARRATOR_INSTRUCTION,
+      userPrompt: `[projector] single-agent fallback — finalized from available ledger.`,
+      model: 'projector',
+      latencyMs: 0,
+      tokens: 0,
+      projected: true,
     };
   }
 
   if (rawParsed._internalReasoning) {
     ctx.addDebugLog(`[MealAgent Internal Reasoning]\n${rawParsed._internalReasoning}`);
   }
-  ctx.sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'completed', message: 'Meal analysis finalized.' });
+  ctx.sendStreamEvent({ type: 'status', stage: 'finalize', status: 'completed', message: 'Meal analysis finalized.' });
 
   normalizeParsedPostDietitian({
     rawParsed,
@@ -335,3 +266,6 @@ export async function executeDietitianPhase(ctx: AnalyzeRunContext): Promise<{ t
 
   return { textOutput, rawParsed, narratorInput };
 }
+
+// Backward-compatible alias for any external callers
+export const executeDietitianPhase = executeMealProjectorPhase;

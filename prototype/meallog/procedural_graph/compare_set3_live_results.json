@@ -1,0 +1,175 @@
+{
+  "testDate": "2026-09-10T19:54:18.507Z",
+  "benchmarkCase": "Meal_03_compare Set 3 (Sambal Bakar Pencok 89 Menu)",
+  "model": "gemini-3.5-flash-lite",
+  "existingCompare": {
+    "latencyMs": 27487,
+    "usage": {
+      "promptTokenCount": 3118,
+      "candidatesTokenCount": 5907,
+      "totalTokenCount": 9025,
+      "promptTokensDetails": [
+        {
+          "modality": "IMAGE",
+          "tokenCount": 2204
+        },
+        {
+          "modality": "TEXT",
+          "tokenCount": 914
+        }
+      ],
+      "serviceTier": "standard"
+    },
+    "title": "Sambal Bakar Pencok 89 Menu Evaluation",
+    "recommended": "Sayur Asem / Tamarind Vegetable Soup",
+    "allExtractedDishesCount": 100,
+    "groupsCount": 4,
+    "groups": [
+      {
+        "name": "Tier 1 - Safest Choice: Clear Vegetable Broths & Boiled Greens",
+        "level": "good",
+        "label": "High Fibre & Low Fat",
+        "itemsCount": 9,
+        "sampleItems": [
+          "Sayur Asem / Tamarind Vegetable Soup",
+          "Kangkung Rebus / Boiled Water Spinach",
+          "Lalapan Rebus (Labu+Kangkung+Kcg Pjg) / Boiled Raw Vegetables",
+          "Rujak Kangkung/Plecing Kangkung / Spicy Water Spinach Salad"
+        ],
+        "caloriesPer100g": 35,
+        "satFatPer100g": 0.2,
+        "sodiumPer100g": 350
+      },
+      {
+        "name": "Tier 2 - Neutral Choice: Whole Fish, Lean Soups & Steamed Tofu",
+        "level": "neutral",
+        "label": "Cardioprotective Protein & Moderate Sodium",
+        "itemsCount": 11,
+        "sampleItems": [
+          "Sop Ayam Kampung / Daging Sapi / Free-Range Chicken or Beef Soup",
+          "Soto Betawi Daging Sapi / Ayam Kampung / Betawi Beef or Free-Range Chicken Soto",
+          "Sayur Sop Ceker / Chicken Feet Vegetable Soup",
+          "Pepes Tahu / Steamed Spiced Tofu in Banana Leaf"
+        ],
+        "caloriesPer100g": 110,
+        "satFatPer100g": 1.2,
+        "sodiumPer100g": 480
+      },
+      {
+        "name": "Tier 3 - Warning: Fried Meal Sets, Coconut Rice, Salted Fish & Offal",
+        "level": "warning",
+        "label": "High Saturated Fat & Sodium Surplus",
+        "itemsCount": 68,
+        "sampleItems": [
+          "Kerupuk Mie + Bumbu Kacang / Noodle Crackers with Peanut Sauce",
+          "Asinan Buah Bogor / Bogor Fruit Pickle",
+          "Asinan Sayur Rujak Pengantin / Bride's Salad Vegetable Pickle",
+          "Sate Usus / Intestine Satay"
+        ],
+        "caloriesPer100g": 220,
+        "satFatPer100g": 4.5,
+        "sodiumPer100g": 750
+      },
+      {
+        "name": "Tier 4 - Alert: Ultra-Processed Starch Stews & Added Sugar Desserts",
+        "level": "alert",
+        "label": "High Added Sugar & Processed Starch",
+        "itemsCount": 9,
+        "sampleItems": [
+          "Seblak Complete / Complete Seblak Wet Cracker Stew",
+          "Seblak Ceker / Chicken Feet Seblak",
+          "Seblak Sea Food / Seafood Seblak",
+          "Seblak Ciret Viral / Viral Chewy Tapioca Seblak"
+        ],
+        "caloriesPer100g": 180,
+        "satFatPer100g": 2,
+        "sodiumPer100g": 900
+      }
+    ]
+  },
+  "proceduralGraphCompare": {
+    "latencyMs": 20766,
+    "usage": {
+      "promptTokenCount": 2854,
+      "candidatesTokenCount": 1620,
+      "totalTokenCount": 4474,
+      "promptTokensDetails": [
+        {
+          "modality": "IMAGE",
+          "tokenCount": 2204
+        },
+        {
+          "modality": "TEXT",
+          "tokenCount": 650
+        }
+      ],
+      "serviceTier": "standard"
+    },
+    "title": "Sambal Bakar Pencok 89 Menu Clinical Evaluation",
+    "recommended": "Paket Kembung / Paket Uduk Kembung (Grilled Mackerel Set)",
+    "clinicalTradeOffs": "To address your high LDL and HbA1c while respecting your recent caloric and sodium overages, select the 'Paket Kembung' (requesting grilled preparation instead of fried). Mackerel is naturally rich in heart-healthy Omega-3 fatty acids that help improve your lipid profile without adding harmful trans or saturated fats. Pair this with a side of Sayur Asem for hydrating, low-calorie fiber that blunts glycemic spikes. Avoid all Tier 3 deep-fried sets and Tier 4 salted fish/organ satays to keep sodium and saturated fats well within your daily limits.",
+    "groupsCount": 4,
+    "groups": [
+      {
+        "name": "Tier 1: Good (Cardioprotective & Hydrating)",
+        "level": "green",
+        "label": "Optimal",
+        "itemCount": 4,
+        "sampleDishes": [
+          "Sayur Asem",
+          "Kangkung Rebus",
+          "Lalapan Rebus (Labu + Kangkung + KCG PJG)",
+          "Sayur Sop Ceker"
+        ],
+        "caloriesPer100g": 42,
+        "satFatPer100g": 0.3,
+        "sodiumPer100g": 180
+      },
+      {
+        "name": "Tier 2: Neutral (Marine Omega-3 & Lean Proteins)",
+        "level": "yellow",
+        "label": "Acceptable",
+        "itemCount": 5,
+        "sampleDishes": [
+          "Paket Kembung",
+          "Paket Uduk Kembung",
+          "Pepes Tahu",
+          "Ikan Bakar Cakalang"
+        ],
+        "caloriesPer100g": 142,
+        "satFatPer100g": 1.8,
+        "sodiumPer100g": 290
+      },
+      {
+        "name": "Tier 3: Warning (High Saturated Fat & Sodium)",
+        "level": "orange",
+        "label": "Caution",
+        "itemCount": 6,
+        "sampleDishes": [
+          "Paket Ayam Goreng",
+          "Paket Bebek",
+          "Paket Lele Goreng",
+          "Ayam Goreng Cabe Kering"
+        ],
+        "caloriesPer100g": 235,
+        "satFatPer100g": 6.8,
+        "sodiumPer100g": 520
+      },
+      {
+        "name": "Tier 4: Alert (Extreme Sodium & Purines)",
+        "level": "red",
+        "label": "High Risk",
+        "itemCount": 7,
+        "sampleDishes": [
+          "Ikan Asin Gabus",
+          "Ikan Asin Sepat",
+          "Ikan Asin Jambal",
+          "Sate Usus"
+        ],
+        "caloriesPer100g": 210,
+        "satFatPer100g": 5.5,
+        "sodiumPer100g": 1450
+      }
+    ]
+  }
+}

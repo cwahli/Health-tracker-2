@@ -23,18 +23,26 @@ Do not run in the same turn as Planner or Builder.
 4. `docs/agent/standing.json`
 5. `.agents/skills/{planner,builder,guard}/SKILL.md`
 
+## Trajectory Analysis (Contrastive Diff)
+
+1. Perform a **contrastive trajectory diff**: Compare the failed fork's code/AST against the clean starting snapshot (`checkpoint/<slug>/builder-start`).
+2. Pinpoint the exact step/node where the implementation diverged from invariants.
+3. Write the failed hypothesis to `specs/rejected/<slug>.json` to permanently block this path from being retried in future sessions or unattended runs.
+
 ## Write only
 
-`specs/learnings/<slug>-YYYYMMDD.md` from `specs/learnings/TEMPLATE.md`.
+`specs/learnings/<slug>-YYYYMMDD.md` from `specs/learnings/TEMPLATE.md` and `specs/rejected/<slug>.json`.
 
 Must include:
 
 - **Class:** `JOURNEY_SWAP` | `FEATURE_DROP` | `REWRITE` | `WRONG_FILE` | `LEARN_FROM_REPLACE` | `PROCESS_GAP`
 - **Node:** Planner | Builder | Guard | human
 - **Evidence:** Guard FAIL lines and/or extra files — not a story
+- **Contrastive Diff:** Exact line/AST divergence between baseline checkpoint and failed attempt
 - **Keep:** what the next run must not lose
-- **Propose standing:** JSON snippet to *add* (never delete a row)
+- **Propose standing triplet:** `(Condition, Action, Pitfall)` JSON snippet to *add* (never delete a row)
 - **Propose skill delta:** ≤5 lines each for planner / builder / guard. Additive only.
+- **Record in Rejected Cache:** `specs/rejected/<slug>.json` entry detailing the failed hypothesis and signature.
 
 If instruction/schema files were overwritten, say so and give:
 
@@ -44,7 +52,7 @@ node scripts/journey-checkpoint.mjs restore <slug> planner
 
 (or `builder-start`). That is time travel. Do not re-author the compare pack from memory.
 
-Then stop. Print: “Learning drafted. Reply **promote** to apply standing/skill rows, or **skip**.”
+Then stop. Print: “Learning and rejection cache drafted. Reply **promote** to apply standing/skill rows, or **skip**.”
 
 ## Frozen (same turn)
 

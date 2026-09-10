@@ -1,5 +1,5 @@
 /**
- * Match dietitian / breakdown rows to Vision Scout entities by scoutIndex or name.
+ * Match meal breakdown rows to Vision Scout entities by scoutIndex or name.
  * Never by array position — that is the 4106 kcal phantom-item bug.
  */
 
@@ -311,7 +311,7 @@ export type ScoutReconcileResult = {
  * Attach scoutIndex + crop fields from scout. Re-inject a scout dish only when
  * its name is not already on the board (index gap ≠ omission).
  */
-export function reconcileDietitianToScout(
+export function reconcileBreakdownToScout(
   breakdown: any[],
   scoutItems: any[]
 ): ScoutReconcileResult {
@@ -360,6 +360,8 @@ export function reconcileDietitianToScout(
 
   return { items: next, usedIndices, reinjected };
 }
+
+export const reconcileDietitianToScout = reconcileBreakdownToScout;
 
 /** Soft receipt: never scale component rows. Item calories follow the row sum. */
 export function applySoftReceiptAlignment(

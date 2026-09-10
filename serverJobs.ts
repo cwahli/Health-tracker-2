@@ -696,7 +696,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
                         prog = Math.max(prog, 30);
                       } else if (msg.toLowerCase().includes('database') || msg.toLowerCase().includes('usda') || msg.toLowerCase().includes('search')) {
                         prog = Math.max(prog, 50);
-                      } else if (msg.toLowerCase().includes('dietitian') || msg.toLowerCase().includes('nutritionist')) {
+                      } else if (msg.toLowerCase().includes('dietitian') || msg.toLowerCase().includes('nutritionist') || msg.toLowerCase().includes('meal agent')) {
                         prog = Math.max(prog, 70);
                       } else if (msg.toLowerCase().includes('extract') || msg.toLowerCase().includes('medical analyze')) {
                         prog = Math.max(prog, 25);
@@ -936,7 +936,8 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           pendingFoodLog: pendingFoodLog,
           message: finalPayload?.message || finalPayload?.text || '',
           text: finalPayload?.text || finalPayload?.message || '',
-          dietitianScratchpad: finalPayload?.dietitianScratchpad || '',
+          mealAgentScratchpad: finalPayload?.mealAgentScratchpad || finalPayload?.dietitianScratchpad || '',
+          dietitianScratchpad: finalPayload?.dietitianScratchpad || finalPayload?.mealAgentScratchpad || '',
           mode: finalPayload?.mode || mode || 'review',
           comparison: finalPayload?.comparison || undefined,
           comparisonSet: finalPayload?.comparisonSet || undefined,
@@ -981,7 +982,8 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           pendingFoodLog: pendingFoodLog,
           message: finalPayload?.message || finalPayload?.text || '',
           text: finalPayload?.text || finalPayload?.message || '',
-          dietitianScratchpad: finalPayload?.dietitianScratchpad || '',
+          mealAgentScratchpad: finalPayload?.mealAgentScratchpad || finalPayload?.dietitianScratchpad || '',
+          dietitianScratchpad: finalPayload?.dietitianScratchpad || finalPayload?.mealAgentScratchpad || '',
           mode: finalPayload?.mode || mode || 'review',
           comparison: finalPayload?.comparison || undefined,
           comparisonSet: finalPayload?.comparisonSet || undefined,

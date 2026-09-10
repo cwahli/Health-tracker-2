@@ -92,7 +92,7 @@ export default function GoldenInboxPanel() {
           ? 'Replayed saved tape (no agent)'
           : mode === 'catalog'
             ? 'Replayed catalog (dictionary only, no agent)'
-            : 'Pipeline finished (may have called Curator/Dietitian)';
+            : 'Pipeline finished (may have called Curator/Meal Agent)';
       setLoopMsg(`${label} · ${j.passCount ?? '—'} pass / ${j.failCount ?? '—'} fail`);
       await load();
       await refreshCase(id);
@@ -194,7 +194,7 @@ export default function GoldenInboxPanel() {
     const r = await fetch(`/api/golden/cases/${id}/studio-brief`);
     const md = await r.text();
     await navigator.clipboard.writeText(
-      `Check this golden bug and fix it.\n\nDo NOT POST /loop. Do not replay the meal until all_green. Do not edit catalog, aliases, or expected numbers to paint green.\n\n1. Classify the reds (FALSE_FRIEND / DISH_DROP / OPENING_WRONG / SILENT_REPAIR / CALL_BUDGET). Several bugs = several jobs; do independent classes in this same turn when files do not collide.\n2. Each job: hypothesis + predicted unit test + one allowed file. Predicted test does not flip → hypothesis burned. Two burns → STOP that job (blocked_human) and start the next.\n3. Inner loop = named vitest. Outer = one pipeline replay after the class test is green.\n4. Forbidden: server_food_db.ts, food_aliases, expected.json, dietitian prompt bloat, POST /api/golden/cases/${id}/loop.\n\n---\n${md}`
+      `Check this golden bug and fix it.\n\nDo NOT POST /loop. Do not replay the meal until all_green. Do not edit catalog, aliases, or expected numbers to paint green.\n\n1. Classify the reds (FALSE_FRIEND / DISH_DROP / OPENING_WRONG / SILENT_REPAIR / CALL_BUDGET). Several bugs = several jobs; do independent classes in this same turn when files do not collide.\n2. Each job: hypothesis + predicted unit test + one allowed file. Predicted test does not flip → hypothesis burned. Two burns → STOP that job (blocked_human) and start the next.\n3. Inner loop = named vitest. Outer = one pipeline replay after the class test is green.\n4. Forbidden: server_food_db.ts, food_aliases, expected.json, agent prompt bloat, POST /api/golden/cases/${id}/loop.\n\n---\n${md}`
     );
     setCopied(`studio:${id}`);
     setTimeout(() => setCopied(null), 2000);
@@ -262,7 +262,7 @@ export default function GoldenInboxPanel() {
             {domainTab === 'food' ? (
               <>
                 <span className="text-emerald-300 font-semibold">No agent:</span> Replay log (re-score the saved tape) · Replay catalog (dictionary only).{' '}
-                <span className="text-amber-300 font-semibold">May call Curator/Dietitian (quota):</span> Pipeline · Run until green.
+                <span className="text-amber-300 font-semibold">May call Curator/Meal Agent (quota):</span> Pipeline · Run until green.
               </>
             ) : (
               <>
@@ -639,7 +639,7 @@ export default function GoldenInboxPanel() {
                       </span>
                     ) : (
                       <span className="text-amber-300">
-                        Last replay: {detail.board.replayMode} (live resolve) · may have called Curator/Dietitian
+                        Last replay: {detail.board.replayMode} (live resolve) · may have called Curator/Meal Agent
                       </span>
                     )}
                   </p>
@@ -661,8 +661,8 @@ export default function GoldenInboxPanel() {
                     </span>
                   </div>
                   <p className="text-[10px] text-white/60">
-                    Scout → foundation → reconcile → dietitian payload → saved table → narrative.
-                    A backend or dietitian correction stays red — it does not promote.
+                    Scout → foundation → reconcile → ledger payload → saved table → narrative.
+                    A backend or agent correction stays red — it does not promote.
                   </p>
                   <div className="flex flex-wrap gap-1">
                     {(detail.board.ledger.books || []).map((b: any) => (

@@ -116,8 +116,8 @@ const ALL_AGENT_DEFS: AgentDef[] = [
   },
   {
     id: 'food',
-    name: 'Clinical Dietitian AI',
-    test: (l) => (l.includes('agenttype: food') || l.includes('agenttype:food') || l.includes('clinical dietitian ai') || l.includes('food & nutrition agent') || l.includes('[food_analysis]') || l.includes('food analyze agent') || l.includes('dietitian')) && !l.includes('food_resolver')
+    name: 'Meal Agent',
+    test: (l) => (l.includes('agenttype: food') || l.includes('agenttype:food') || l.includes('meal agent') || l.includes('clinical dietitian ai') || l.includes('food & nutrition agent') || l.includes('[food_analysis]') || l.includes('food analyze agent') || l.includes('dietitian')) && !l.includes('food_resolver')
   }
 ];
 
@@ -266,7 +266,7 @@ export const AGENT_COLOR_MAP: Record<string, {
     borderColor: 'border-red-500/40',
     bgBadge: 'bg-red-950/70 text-red-300 border-red-500/40',
     dotColor: 'bg-red-400',
-    name: 'Dietitian AI'
+    name: 'Meal Agent'
   },
   medical_ai: {
     textColor: 'text-cyan-300 dark:text-cyan-300',
@@ -911,7 +911,7 @@ export default function FullScreenLogViewer({
       'scout_ai': { id: 'scout_ai', name: 'Scout AI', shortLabel: 'Scout' },
       'food_resolver': { id: 'food_resolver', name: 'Food Resolver AI', shortLabel: 'Resolver' },
       'food_resolver_ai': { id: 'food_resolver_ai', name: 'Food Resolver AI', shortLabel: 'Resolver' },
-      'dietitian_ai': { id: 'dietitian_ai', name: 'Dietitian AI', shortLabel: 'Dietitian' },
+      'dietitian_ai': { id: 'dietitian_ai', name: 'Meal Agent', shortLabel: 'Meal Agent' },
       'medical_ai': { id: 'medical_ai', name: 'Medical AI', shortLabel: 'Medical' },
       'database': { id: 'database', name: 'Database & Extraction', shortLabel: 'Database' },
       'system': { id: 'system', name: 'System', shortLabel: 'System' },
@@ -1764,11 +1764,11 @@ export default function FullScreenLogViewer({
                  else if (isThought) currentAgentName = 'Resolver - Thought';
                  else currentAgentName = 'Resolver';
               } else if (chunkAgentId === 'dietitian_ai') {
-                 if (isFullExecution) currentAgentName = 'Dietitian - Execution';
-                 else if (isInstruction) currentAgentName = 'Dietitian - Instruction';
-                 else if (isResponse) currentAgentName = 'Dietitian - Response';
-                 else if (isThought) currentAgentName = 'Dietitian - Thought';
-                 else currentAgentName = 'Dietitian';
+                 if (isFullExecution) currentAgentName = 'Meal Agent - Execution';
+                 else if (isInstruction) currentAgentName = 'Meal Agent - Instruction';
+                 else if (isResponse) currentAgentName = 'Meal Agent - Response';
+                 else if (isThought) currentAgentName = 'Meal Agent - Thought';
+                 else currentAgentName = 'Meal Agent';
               } else if (chunkAgentId === 'medical_ai') {
                  if (isFullExecution) currentAgentName = 'Medical - Execution';
                  else if (isInstruction) currentAgentName = 'Medical - Instruction';

@@ -107,3 +107,7 @@ export function normalizeParsedPostDietitian(args: PostDietitianNormArgs): void 
     }
   }
 }
+
+export type PostProjectorNormArgs = PostDietitianNormArgs;
+export const normalizeParsedPostProjector = normalizeParsedPostDietitian;
+

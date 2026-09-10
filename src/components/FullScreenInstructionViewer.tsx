@@ -81,18 +81,18 @@ export default function FullScreenInstructionViewer({
   const systemTextareaRef = useRef<HTMLTextAreaElement>(null);
   const variableTextareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const [activeTab, setActiveTab] = useState<'dietitian' | 'scout'>('dietitian');
+  const [activeTab, setActiveTab] = useState<'meal' | 'scout'>('meal');
   
   // Set tab when agentType changes or when modal is opened
   useEffect(() => {
     if (isOpen) {
-      setActiveTab(agentType === 'food_scout' ? 'scout' : 'dietitian');
+      setActiveTab('meal');
     }
   }, [isOpen, agentType]);
 
   // Map the agent type
   const resolvedKey = (agentType === 'food' || agentType === 'food_scout')
-    ? (activeTab === 'scout' ? 'food_scout' : 'food')
+    ? 'food'
     : agentType;
   const maxMetrics = 50;
 
@@ -228,15 +228,9 @@ Your objective is to dynamically group EVERY biomarker into logical clinical con
 2. NO PRESCRIPTIONS: Present findings as a literature synthesis, citing primary medical guidelines (AHA, ESC, ADA, KDIGO).
 3. DETAILED BULLETS: Provide 3-4 distinct scholarly insights with bold titles, summaries, and relevant citation links.`;
       defaultVariableData = defaultVarData;
-    } else if (key === 'food_scout') {
-      title = "Visual Food Scout (Image Classifier Agent)";
-      subtitle = "Identifies food items visually and estimates weight before database matches lookup.";
-      icon = BrainCircuit;
-      defaultSystemInstruction = `You are a fast visual food identification agent. Look at the image and return a short list of plain-text search keywords for the food items you see (e.g. ['fried chicken', 'white rice', 'sambal']), plus a rough estimated weight in grams for each if visually judgeable. Do not do any nutrition or clinical analysis. Output only: { "items": [{ "keyword": string, "estimatedWeightGrams": number }] }`;
-      defaultVariableData = "";
-    } else if (key === 'food') {
-      title = "Clinical Dietitian AI (Meal Analysis Agent)";
-      subtitle = "Parses, calculates, and estimates macronutrients, micronutrients, health impacts, benefits, and warnings.";
+    } else if (key === 'food_scout' || key === 'food') {
+      title = "Meal Agent (Vision & Nutrition Analysis)";
+      subtitle = "Extracts food items, estimates portion weights, derives nutritional breakdown, and delivers personalized clinical advice.";
       icon = BrainCircuit;
 
       const biomarkersList = outOfRangeBiomarkers && outOfRangeBiomarkers.length > 0
@@ -251,7 +245,7 @@ Your objective is to dynamically group EVERY biomarker into logical clinical con
 
       defaultSystemInstruction = `CURRENT_ACTIVE_MEAL_STATE: ${mealStr}
 
-You are an expert clinical dietitian and nutritional LLM analyzer operating within an automated personalized health ecosystem. Your response must be an exact single structured JSON object matching the requested structure. Never add markdown formatting wrappers like \`\`\`json unless instructed.
+You are the unified Meal Agent (Vision & Nutrition Analyzer) operating within an automated personalized health ecosystem. Your response must be an exact single structured JSON object matching the requested structure. Never add markdown formatting wrappers like \`\`\`json unless instructed.
 
 === PATIENT CONTEXT PAYLOAD ===
 CRITICAL PATIENT BIOMARKER WARNINGS & NUTRITIONAL DIRECTIVES:
@@ -335,7 +329,7 @@ ${biomarkersList}
 TODAY'S REMAINING NUTRITIONAL TARGET LIMITS:
 ${targetLimits}`;
     } else if (key === 'food_idea') {
-      title = "Precision Meal Planning Companion (AI Dietitian)";
+      title = "Precision Meal Planning Companion (Nutrition Advisor)";
       subtitle = "Formulates personalized preventative recipes and tailored dietary suggestions based on user blood biomarkers.";
       icon = BookOpen;
 
@@ -357,9 +351,9 @@ ${targetLimits}`;
         ? outOfRangeBiomarkers.map((b: any) => `• ${b.name} is ${String(b.status).toUpperCase()} (${b.value} ${b.unit}, normal range: ${b.normalRange})`).join("\n")
         : "• None";
 
-      defaultSystemInstruction = `You are a world-class AI dietitian. Your response must be an exact JSON matching the requested schema. Never add markdown wrappers.`;
+      defaultSystemInstruction = `You are a world-class nutrition advisor and meal planning companion. Your response must be an exact JSON matching the requested schema. Never add markdown wrappers.`;
 
-      defaultVariableData = `You are a personalized AI Dietitian.
+      defaultVariableData = `You are a personalized Nutrition Advisor.
 ${userCtx}
 ${locCtx}
 ${addressCtx}
@@ -1004,28 +998,9 @@ For each matched group, determine:
       {/* Switcher Tabs for Food Agents Prompt debugging */}
       {(agentType === 'food' || agentType === 'food_scout') && (
         <div className="px-6 py-2 bg-slate-900 border-b border-slate-800/60 flex items-center gap-2 font-sans">
-          <button
-            type="button"
-            onClick={() => setActiveTab('dietitian')}
-            className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'dietitian'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850'
-            }`}
-          >
-            Clinical Dietitian AI
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('scout')}
-            className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'scout'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850'
-            }`}
-          >
-            Visual Food Scout Agent
-          </button>
+          <div className="px-3 py-1 text-xs font-semibold text-indigo-400 bg-indigo-950/50 rounded-lg border border-indigo-800/40">
+            Unified Meal Agent (Scout)
+          </div>
         </div>
       )}
 
@@ -1056,7 +1031,7 @@ For each matched group, determine:
                   </div>
                   <textarea
                     ref={systemTextareaRef}
-                    value={loadingInstruction ? "Loading real-time instructions from Clinical Dietitian agent..." : sysInstruction}
+                    value={loadingInstruction ? "Loading real-time instructions from Meal Agent..." : sysInstruction}
                     disabled={loadingInstruction}
                     onChange={(e) => handleTextareaInput(e, 'system')}
                     onKeyDown={(e) => handleKeyDown(e, 'system')}

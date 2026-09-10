@@ -249,7 +249,7 @@ export function mergeScoutItems(visionItems: any[], llmItems: any[] | null | und
         nutrients: vItem.nutrients ?? lItem.nutrients,
         nutrientBasisWeight: vItem.nutrientBasisWeight ?? lItem.nutrientBasisWeight ?? vItem.estimatedWeightGrams,
         lockedNutrientKeys: vItem.lockedNutrientKeys ?? lItem.lockedNutrientKeys,
-        // Soft scout kcal must survive dietitian merge (same priority as vision OCR fields)
+        // Soft scout kcal must survive ledger merge (same priority as vision OCR fields)
         estimatedCalories: vItem.estimatedCalories ?? lItem.estimatedCalories,
         estimatedWeightGrams: vItem.estimatedWeightGrams ?? lItem.estimatedWeightGrams,
         // Component structure: vision wins when present; never let empty LLM array wipe vision rows
@@ -1775,7 +1775,7 @@ export function parseAndHealVisionScout(
           if (!primaryItem) {
             // No confident match found (3+ items, no image/name signal). Leave the label as its
             // own item rather than guessing — a wrong guess silently corrupts a different item's
-            // data, which is worse than an unmerged label the dietitian agent can still read.
+            // data, which is worse than an unmerged label the single-agent pipeline can still read.
             addDebugLog(`[Label Merge] Could not confidently match label "${labelItem.originalName || labelItem.keyword}" (sourceImageIndex=${labelItem.sourceImageIndex}) to any food item. Leaving unmerged rather than guessing.`);
             break;
           }
