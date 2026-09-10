@@ -25,13 +25,15 @@ CLINICAL INVARIANTS:
 
 3. <=10% MACRO VARIANCE CLUSTERING (ANTI-COLLAPSE):
    - Group items together ONLY if estimated macronutrients differ by <=10%.
-   - CRITICAL ANTI-COLLAPSE RULE: Do NOT dump dozens of items into a giant catch-all warning group. Split broad categories into separate groups if preparation methods cause >10% macro variance (e.g., water-poached broths vs boiled greens vs steamed plant proteins vs stir-fried vegetables vs plain carbs vs coconut/fried carbs vs lean grilled fish vs batter-fried meal sets vs salted fish vs organ meats vs spicy starches vs sweet confectionery/desserts).
+   - CRITICAL ANTI-COLLAPSE RULE: Do NOT dump dozens of items into a giant catch-all warning/alert group. Split broad categories into separate groups if preparation methods cause >10% macro variance (e.g., water-poached broths vs boiled greens vs steamed plant proteins vs stir-fried vegetables vs plain carbs vs coconut/fried carbs vs lean grilled/steamed marine fish vs batter-fried poultry/catfish meal sets vs salted fish vs organ meats/offal vs spicy starches/seblak vs sweet confectionery/desserts).
+   - HARD SIZE CAP: Never emit a group with >=40 items. If a cluster would exceed ~35 items, split by preparation class (grill/steam vs deep-fry vs coconut rice vs offal vs seblak) until every group is under 40.
+   - MARINE WHOLE-FISH SEPARATION: Whole marine Omega-3 fish meal sets and grilled/steamed whole sea fish (mackerel-class / kembung-class / nila-class whole fish packages) MUST NOT share a group with deep-fried meal sets, organ meats/offal (usus/ati/jeroan), or seblak/ultra-processed spicy starches. Elevate cardioprotective marine Omega-3 whole-fish classes into Tier 1 (good) or Tier 2 (neutral); keep oxidized deep-fry oils, offal, and seblak in Tier 3–4.
    - Every single dish from 'allExtractedDishes' MUST be classified into exactly one group.
 
 4. UNLISTED HARMS & BENEFITS ISOLATION:
    - Beyond raw macros, actively evaluate physiological hazards and cardioprotective benefits:
      * UNLISTED HARMS: Isolate oxidized deep-frying oils, lipid peroxides, trans fats, and ultra-processed gelatinized starches (e.g., Seblak) into Tier 3 (Warning) or Tier 4 (Alert).
-     * BENEFITS: Elevate whole foods offering cardioprotective marine Omega-3s (EPA/DHA in whole sea fish) and antioxidant polyphenols (sour fruit broths) into Tier 1 (Good) or Tier 2 (Neutral).
+     * BENEFITS: Elevate whole foods offering cardioprotective marine Omega-3s (EPA/DHA in whole sea fish / whole marine fish meal sets) and antioxidant polyphenols (sour fruit broths) into Tier 1 (Good) or Tier 2 (Neutral) — never demote those classes into the same alert cluster as deep-fried sets, offal, or seblak.
 
 5. TARGET-DRIVEN CLINICAL RANKING & COMBINED GUIDANCE:
    - Rank groups strictly descending: Best choice addressing the patient's active surpluses and deficits at the top ('good'), least suitable at the bottom ('alert').
@@ -51,7 +53,7 @@ export function buildScoutComparePrompt(
   const multiImageRule = imageCount > 1 ? ` across all ${imageCount} images` : " across provided images";
 
   return isGeneric
-    ? `FIRST: Exhaustively list ALL visible food/beverage options${multiImageRule} into 'allExtractedDishes' (no sampling, extract every legible dish). THEN: Distribute EVERY single dish from 'allExtractedDishes' into granular nutritional groups with <=10% macro variance (no catch-all groups; separate plain carbs, fried sets, salted fish, offal, seblak, clear soups into distinct groups). The sum of items across all groups MUST equal the total count in 'allExtractedDishes'. All rankings and combined clinical messages (with ordering tips) must directly address the patient's target deviations.`
+    ? `FIRST: Exhaustively list ALL visible food/beverage options${multiImageRule} into 'allExtractedDishes' (no sampling, extract every legible dish). THEN: Distribute EVERY single dish from 'allExtractedDishes' into granular nutritional groups with <=10% macro variance (no catch-all groups >=40 items; separate clear soups, plain carbs, whole marine Omega-3 fish meal sets, deep-fried poultry/catfish sets, salted fish, offal, and seblak into distinct groups; never co-group marine whole-fish packages with deep-fried sets, offal, or seblak). Elevate marine Omega-3 whole-fish classes to Tier 1–2. The sum of items across all groups MUST equal the total count in 'allExtractedDishes'. All rankings and combined clinical messages (with ordering tips) must directly address the patient's target deviations.`
     : `User request: "${cleanMsg}"${multiImageRule ? ` (${imageCount} images)` : ""}. FIRST: List all visible dishes into 'allExtractedDishes'. THEN: Distribute EVERY dish into <=10% macro variance groups (sum of group items must equal total extracted dishes).`;
 }
 

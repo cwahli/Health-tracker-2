@@ -1,0 +1,112 @@
+{
+  "allExtractedDishes": [
+    "Green Snack Wrapper / Green Snack Bar",
+    "Yellow Croissant Wrapper / Multiseed Croissant",
+    "Yellow Sweet Bread Wrapper / Sweet Filled Bread",
+    "Blue Bread Wrapper / White Bread Loaf"
+  ],
+  "_internalReasoning": "Exhaustively extracted the 4 legible bakery/snack nutrition labels across the 4 images. Grouped them based on their macronutrient profiles per 100g into 3 distinct clusters: the lowest fat/calorie packaged snack, the moderate sandwich loaf, and the high-fat/sugar sweet filled pastries/croissants. Patient presents with high calorie, sat fat, sodium, carbohydrate, and added sugar surpluses, alongside fibre and protein deficits. Recommending the lowest calorie and fat option while advising portion control and pairing with protein/fibre to address deficits without worsening surpluses.",
+  "comparisonTitle": "Packaged Bakery and Snack Nutrition Label Comparison",
+  "comparisonType": "nutrition_labels",
+  "summary": "Evaluation of 4 packaged snack and bakery items against your active surpluses (Calories +39%, Sat Fat +38%, Sodium +30%, Carbs +32%, Added Sugar +50%) and deficits (Protein -17%, Fibre -26%). The green snack wrapper offers the lowest calorie and fat density, helping manage caloric and lipid surges, whereas the sweet pastries and croissants add excessive saturated fat and simple sugars.",
+  "recommendedOption": "Green Snack Wrapper / Green Snack Bar",
+  "groups": [
+    {
+      "groupName": "Tier 1 - Safest Choice: Low-Calorie Snack Bar",
+      "sourceImageIndex": 0,
+      "verdict": {
+        "label": "Lowest Calorie & Fat Density",
+        "level": "good"
+      },
+      "comparisonSentence": "This option contains significantly fewer calories and less total fat per 100g than the bakery items, helping mitigate your calorie and saturated fat surpluses.",
+      "message": "This snack bar aligns best with your need to curb caloric surplus and saturated fat intake while keeping sodium minimal. However, it remains low in protein and fibre. Order or select this item when craving a light snack, and pair it with an unsweetened protein source or vegetable sticks to cover your dietary fibre and protein gaps.",
+      "boundingBox2D": [
+        380,
+        0,
+        755,
+        1000
+      ],
+      "servingWeightGrams": 23,
+      "averageNutrientsPer100g": {
+        "calories": 391.3,
+        "protein": 4.3,
+        "totalFat": 13,
+        "saturatedFat": 4.3,
+        "carbohydrates": 65.2,
+        "sugar": 30.4,
+        "totalFibre": 3,
+        "sodium": 347.8,
+        "addedSugar": 25,
+        "transFat": 0
+      },
+      "items": [
+        "Green Snack Wrapper / Green Snack Bar"
+      ]
+    },
+    {
+      "groupName": "Tier 2 - Neutral Choice: Moderate Carbohydrate Loaf Bread",
+      "sourceImageIndex": 3,
+      "verdict": {
+        "label": "Moderate Carbs & Controlled Fats",
+        "level": "neutral"
+      },
+      "comparisonSentence": "Compared to the sweet pastries, this white loaf provides moderate calories and lower saturated fat, though it still contributes to your carbohydrate surplus.",
+      "message": "This white loaf bread has moderate lipid levels and controlled sodium, making it acceptable in strict moderation. It does not actively resolve your carbohydrate or added sugar surpluses, and lacks sufficient fibre. Pair a single slice with lean protein and raw greens to balance your macronutrient profile.",
+      "boundingBox2D": [
+        300,
+        0,
+        925,
+        1000
+      ],
+      "servingWeightGrams": 44,
+      "averageNutrientsPer100g": {
+        "calories": 272.7,
+        "protein": 9.1,
+        "totalFat": 5.7,
+        "saturatedFat": 3.4,
+        "carbohydrates": 47.7,
+        "sugar": 4.5,
+        "totalFibre": 2,
+        "sodium": 340.9,
+        "addedSugar": 3,
+        "transFat": 0
+      },
+      "items": [
+        "Blue Bread Wrapper / White Bread Loaf"
+      ]
+    },
+    {
+      "groupName": "Tier 3 - Warning Choice: High-Fat & Sugar Bakery Items",
+      "sourceImageIndex": 1,
+      "verdict": {
+        "label": "Excessive Saturated Fat & Sugar",
+        "level": "warning"
+      },
+      "comparisonSentence": "Unlike the lighter snack bar, these rich bakery items severely exacerbate your active saturated fat, carbohydrate, and added sugar surpluses.",
+      "message": "These croissants and sweet filled breads carry concentrated loads of saturated fat and refined sugars that directly worsen your 3-day nutritional surpluses. They offer minimal fibre to help meet your deficit. Avoid regular consumption of these items; if chosen, limit strictly to a half-portion and accompany with water or tea without added sweeteners.",
+      "boundingBox2D": [
+        255,
+        0,
+        925,
+        1000
+      ],
+      "servingWeightGrams": 77.5,
+      "averageNutrientsPer100g": {
+        "calories": 323.3,
+        "protein": 4.5,
+        "totalFat": 8.7,
+        "saturatedFat": 5.3,
+        "carbohydrates": 54,
+        "sugar": 35,
+        "totalFibre": 2,
+        "sodium": 260,
+        "addedSugar": 28,
+        "transFat": 0
+      },
+      "items": [
+        "Yellow Croissant Wrapper / Multiseed Croissant",
+        "Yellow Sweet Bread Wrapper / Sweet Filled Bread"
+      ]
+    }
+  ]
+}

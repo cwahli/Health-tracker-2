@@ -1,0 +1,29 @@
+{
+  "caseId": "09",
+  "slug": "09_restaurant_plates",
+  "mode": "log",
+  "modelRequired": "gemini-3.5-flash-lite",
+  "inputTypes": [
+    "restaurant_plate",
+    "multi_image"
+  ],
+  "photos": [
+    "09_steak_fish_chips_1.jpg",
+    "09_steak_fish_chips_2.jpg"
+  ],
+  "mealTotals": {
+    "weight": 1135,
+    "calories": 1340,
+    "protein": 78.0,
+    "carbs": 102.0,
+    "fat": 67.0,
+    "satFat": 16.0,
+    "fibre": 10.0,
+    "sodium": 1850
+  },
+  "verifyFlags": [
+    "macros_from_prototype_runner_gt",
+    "expand_to_full_NUTRIENT_KEYS_when_OCR_elastic_available"
+  ],
+  "sourceOfTruth": "golden/meal/Meal_04_log (this folder); prototype runner is harness only"
+}

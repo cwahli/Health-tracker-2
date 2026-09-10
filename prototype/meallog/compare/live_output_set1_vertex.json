@@ -1,0 +1,153 @@
+{
+  "allExtractedDishes": [
+    "SilverQueen Milk Chocolate with Cashews / SilverQueen Milk Chocolate with Cashews",
+    "Magnum Pistachio Ice Cream / Magnum Pistachio Ice Cream",
+    "Polo Cokelat / Chocolate Polo Bread",
+    "Polo Keju / Cheese Polo Bread",
+    "Choco Topping Pie / Choco Topping Pie",
+    "Cheese Topping Pie / Cheese Topping Pie",
+    "Double Cheese Bread / Double Cheese Bread",
+    "Say Bread Plain Bun / Say Bread Plain Bun",
+    "Kinder Joy / Kinder Joy Chocolate Egg"
+  ],
+  "_internalReasoning": "Exhaustively extracted all visible packaged sweets, chocolate bars, ice cream bars, and bakery buns across the three shelf images. Grouped them carefully maintaining <=10% macro variance based on sugar-to-fat ratios (chocolate/confectionery vs dense sweet baked goods). Addressed the patient's existing surges in saturated fat, added sugar, and overall calories by placing high-sugar and high-fat items in warning and alert tiers, guiding toward lower-calorie alternatives if consumption is necessary.",
+  "comparisonTitle": "Retail Shelf Snack and Bakery Evaluation",
+  "comparisonType": "shelf_selection",
+  "summary": "The evaluated shelf items consist entirely of high-calorie, high-sugar, and high-saturated-fat snacks and bakery items. Given that the patient is already significantly exceeding their daily targets for added sugar (+50%), saturated fat (+38%), and calories (+39%), all options present considerable metabolic risk. Confectionery and chocolate bars deliver dense sugar and trans/saturated fat loads, whereas sweet pastries add refined carbohydrate burdens that exacerbate carbohydrate surpluses.",
+  "recommendedOption": "Say Bread Plain Bun / Say Bread Plain Bun",
+  "groups": [
+    {
+      "groupName": "Tier 3 - Warning: Lower-Sugar Bakery Breads",
+      "sourceImageIndex": 2,
+      "verdict": {
+        "label": "High Carbs Moderate Fat",
+        "level": "warning"
+      },
+      "comparisonSentence": "Unlike dense chocolate bars, these plain bakery options contain significantly less saturated fat while still contributing to carbohydrate surpluses.",
+      "message": "These bakery items contribute to your existing carbohydrate and calorie surpluses, though they contain lower saturated fat levels than the chocolate confections. If you choose to consume them to manage cravings, opt for a single plain bun and pair it with fiber-rich whole foods to blunt glycemic spikes.",
+      "boundingBox2D": [
+        75,
+        715,
+        395,
+        995
+      ],
+      "servingWeightGrams": 75,
+      "averageNutrientsPer100g": {
+        "calories": 310,
+        "protein": 8,
+        "totalFat": 9.5,
+        "saturatedFat": 4,
+        "carbohydrates": 48,
+        "sugar": 12,
+        "totalFibre": 2.5,
+        "sodium": 350,
+        "addedSugar": 10,
+        "transFat": 0
+      },
+      "items": [
+        "Say Bread Plain Bun / Say Bread Plain Bun"
+      ]
+    },
+    {
+      "groupName": "Tier 3 - Warning: Sweet Pastries and Topping Breads",
+      "sourceImageIndex": 2,
+      "verdict": {
+        "label": "High Sugar & Refined Fats",
+        "level": "warning"
+      },
+      "comparisonSentence": "These filled and topped pastries combine elevated refined carbohydrates with rich dairy fats, worsening both your saturated fat and added sugar surpluses.",
+      "message": "These items combine high added sugars with substantial saturated fats from fillings and toppings, directly worsening your active surpluses. To protect your metabolic health, avoid purchasing sweet pastries and instead select fresh whole fruit or unsweetened nuts when snack cravings arise.",
+      "boundingBox2D": [
+        670,
+        20,
+        955,
+        995
+      ],
+      "servingWeightGrams": 90,
+      "averageNutrientsPer100g": {
+        "calories": 380,
+        "protein": 7,
+        "totalFat": 18,
+        "saturatedFat": 9,
+        "carbohydrates": 46,
+        "sugar": 18,
+        "totalFibre": 1.8,
+        "sodium": 290,
+        "addedSugar": 16,
+        "transFat": 0.1
+      },
+      "items": [
+        "Polo Cokelat / Chocolate Polo Bread",
+        "Polo Keju / Cheese Polo Bread",
+        "Choco Topping Pie / Choco Topping Pie",
+        "Cheese Topping Pie / Cheese Topping Pie",
+        "Double Cheese Bread / Double Cheese Bread"
+      ]
+    },
+    {
+      "groupName": "Tier 4 - Alert: Dense Milk Chocolate & Nut Bars",
+      "sourceImageIndex": 0,
+      "verdict": {
+        "label": "Excessive Saturated Fat & Sugar",
+        "level": "alert"
+      },
+      "comparisonSentence": "Compared to plain bakery items, these chocolate bars deliver concentrated bursts of added sugar and saturated fats that severely aggravate your daily limits.",
+      "message": "This option packs high levels of added sugar (exceeding your target by 50%) and saturated fat (38% over target) into every serving, making it a critical metabolic hazard. Completely bypass milk chocolates and nut confectionery bars to prevent further strain on your caloric and lipid parameters.",
+      "boundingBox2D": [
+        0,
+        200,
+        1000,
+        535
+      ],
+      "servingWeightGrams": 52,
+      "averageNutrientsPer100g": {
+        "calories": 535,
+        "protein": 10,
+        "totalFat": 32.5,
+        "saturatedFat": 17.5,
+        "carbohydrates": 50,
+        "sugar": 47,
+        "totalFibre": 3,
+        "sodium": 100,
+        "addedSugar": 42,
+        "transFat": 0.1
+      },
+      "items": [
+        "SilverQueen Milk Chocolate with Cashews / SilverQueen Milk Chocolate with Cashews"
+      ]
+    },
+    {
+      "groupName": "Tier 4 - Alert: Premium Ice Cream & Confectionery Novelties",
+      "sourceImageIndex": 1,
+      "verdict": {
+        "label": "Extreme Saturated Fat & Calories",
+        "level": "alert"
+      },
+      "comparisonSentence": "These frozen dairy novelties and toy-packaged sweets provide the highest density of empty calories and saturated fat among all displayed choices.",
+      "message": "These novelties combine high dairy fat with concentrated sugars, driving your caloric surplus even higher while contributing zero beneficial fiber or micronutrients. Eliminate these ultra-processed treats entirely from your shopping list, opting instead for water-based or whole-food refreshments if needed.",
+      "boundingBox2D": [
+        135,
+        600,
+        995,
+        995
+      ],
+      "servingWeightGrams": 85,
+      "averageNutrientsPer100g": {
+        "calories": 360,
+        "protein": 5.5,
+        "totalFat": 24,
+        "saturatedFat": 14,
+        "carbohydrates": 31,
+        "sugar": 28,
+        "totalFibre": 1,
+        "sodium": 80,
+        "addedSugar": 25,
+        "transFat": 0.1
+      },
+      "items": [
+        "Magnum Pistachio Ice Cream / Magnum Pistachio Ice Cream",
+        "Kinder Joy / Kinder Joy Chocolate Egg"
+      ]
+    }
+  ]
+}

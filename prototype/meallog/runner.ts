@@ -114,6 +114,18 @@ export const benchmarkCases: Record<string, MealBenchmarkCase> = {
     userPrompt: "Analyze this home cooked beef soup meal from Hari Hari Lokasari grocery barcodes",
     groundTruth: { weight: 825, calories: 616, protein: 65.2, carbs: 45.9, fat: 23.5, satFat: 6.2, fibre: 17.8, sodium: 380 },
   },
+  "11": {
+    id: "11",
+    name: "Seafood Squid/Fish + Mr Oat Rolled Oats (brackets)",
+    imageFiles: [
+      "prototype/meallog/images/11_seafood_squid_fish_ingredients.jpg",
+      "prototype/meallog/images/11_seafood_squid_fish_receipt_1.jpg",
+      "prototype/meallog/images/11_seafood_squid_fish_receipt_2.jpg",
+    ],
+    userPrompt: "I had [Mr Oat Rolled Oats 70g] and all food in the pictures",
+    // Approximate GT — used for portion defaults / band checks; refine later if needed
+    groundTruth: { weight: 700, calories: 900, protein: 55.0, carbs: 80.0, fat: 30.0, satFat: 8.0, fibre: 10.0, sodium: 1200 },
+  },
 };
 
 function arg(flag: string, fallback?: string): string | undefined {
@@ -267,22 +279,44 @@ export async function runLiveMealBenchmark(c: MealBenchmarkCase, options: { port
   if (resultData?.needsPortionClarify || resultData?.mode === "portion_clarify") {
     console.log(`  [Runner] Turn 1 paused for Portion Clarification: "${resultData.message || resultData.text}"`);
     console.log(`  [Runner] Auto-answering Turn 2 with confirmed portion choices...`);
-    const clarifyItems = resultData.portionClarify?.items || resultData.scoutItems || [];
-    const portionChoices: any = {};
-    for (const item of clarifyItems) {
-      const name = item.originalName || item.keyword || item.name;
-      const chosenGrams = c.groundTruth.weight || item.estimatedWeightGrams || 100;
-      portionChoices[name] = chosenGrams;
+    // Server applySkipScoutShortcut needs prior scout rows; they live on portionClarify.scoutItems
+    // when the final payload omits top-level scoutItems. Choices must be keyed by scoutIndex.
+    const priorScout =
+      (Array.isArray(resultData.scoutItems) && resultData.scoutItems.length > 0
+        ? resultData.scoutItems
+        : null) ||
+      (Array.isArray(resultData.portionClarify?.scoutItems) && resultData.portionClarify.scoutItems.length > 0
+        ? resultData.portionClarify.scoutItems
+        : null) ||
+      (Array.isArray(resultData.agentResult?.scoutItems) && resultData.agentResult.scoutItems.length > 0
+        ? resultData.agentResult.scoutItems
+        : []) ||
+      [];
+    const clarifyItems = resultData.portionClarify?.items || priorScout || [];
+    const portionChoices: Record<string, number> = {};
+    for (let idx = 0; idx < clarifyItems.length; idx++) {
+      const item = clarifyItems[idx];
+      const si = item.scoutIndex != null ? Number(item.scoutIndex) : idx;
+      const chosenGrams = Number(item.estimatedWeightGrams) || c.groundTruth.weight || 100;
+      portionChoices[String(si)] = Math.round(chosenGrams);
+    }
+    // If clarify only listed ambiguous rows, still apply GT total weight to index 0 when single dish
+    if (Object.keys(portionChoices).length === 0 && priorScout.length > 0) {
+      portionChoices["0"] = Math.round(c.groundTruth.weight || priorScout[0].estimatedWeightGrams || 100);
     }
     const turn2Body = {
       message: "Confirmed portion sizes",
       portionChoices,
       skipScout: true,
-      scoutItems: resultData.scoutItems,
-      activeScoutItems: resultData.scoutItems,
+      scoutItems: priorScout,
+      activeScoutItems: priorScout,
       resolvedDbCandidates: resultData.resolvedDbCandidates || [],
       userProfile: body.userProfile,
       jobId: body.jobId,
+      // Keep image context like LogChat portion confirm (helps resume path)
+      images: imageDataUrls,
+      image: imageDataUrls[0],
+      imageUrls: imageDataUrls,
     };
 
     try {

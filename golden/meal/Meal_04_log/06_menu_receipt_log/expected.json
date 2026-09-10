@@ -1,0 +1,29 @@
+{
+  "caseId": "06",
+  "slug": "06_menu_receipt_log",
+  "mode": "log",
+  "modelRequired": "gemini-3.5-flash-lite",
+  "inputTypes": [
+    "restaurant_menu",
+    "receipt"
+  ],
+  "photos": [
+    "06_indonesian_menu_page_1.jpg",
+    "06_indonesian_menu_page_2.jpg"
+  ],
+  "mealTotals": {
+    "weight": 570,
+    "calories": 780,
+    "protein": 27.0,
+    "carbs": 111.0,
+    "fat": 25.0,
+    "satFat": 5.0,
+    "fibre": 4.0,
+    "sodium": 1250
+  },
+  "verifyFlags": [
+    "macros_from_prototype_runner_gt",
+    "expand_to_full_NUTRIENT_KEYS_when_OCR_elastic_available"
+  ],
+  "sourceOfTruth": "golden/meal/Meal_04_log (this folder); prototype runner is harness only"
+}

@@ -75,10 +75,35 @@ function parseJsonLoose(text: string): any {
   return { _raw: text.slice(0, 2000) };
 }
 
+function kembungInAlertWithOffal(parsed: any): boolean {
+  for (const g of parsed?.groups || []) {
+    const level = String(g?.verdict?.level || '').toLowerCase();
+    const isAlert = level === 'alert' || /tier\s*4|alert/i.test(String(g?.groupName || ''));
+    if (!isAlert) continue;
+    const items = (g.items || g.allDishes || []).map((x: any) => String(typeof x === 'string' ? x : x?.name || ''));
+    const joined = items.join('\n');
+    const hasKembung = /kembung|mackerel/i.test(joined);
+    const hasOffalSeblak = /offal|usus|ati|jeroan|seblak/i.test(joined);
+    if (hasKembung && hasOffalSeblak) return true;
+  }
+  return false;
+}
+
 async function main() {
   console.log('Vertex?', useVertex, project, location, MODEL);
+  const only = (process.env.MEAL03_ONLY_SET || '').trim().toLowerCase();
+  const selected = only ? cases.filter((c) => c.id === only) : cases;
+  if (!selected.length) throw new Error('MEAL03_ONLY_SET matched no cases: ' + only);
   const rows: any[] = [];
-  for (const tc of cases) {
+  // When re-scoring a subset, preserve prior rows for other sets if results file exists
+  let priorById: Record<string, any> = {};
+  if (only && fs.existsSync(OUT_JSON)) {
+    try {
+      const prior = JSON.parse(fs.readFileSync(OUT_JSON, 'utf8'));
+      for (const r of prior.rows || []) priorById[r.id] = r;
+    } catch {}
+  }
+  for (const tc of selected) {
     const gt = GT[tc.id];
     console.log('Running', tc.id, '...');
     const t0 = Date.now();
@@ -107,9 +132,13 @@ async function main() {
       const n = (g.items || g.allDishes || []).length || Number(g.itemCount) || 0;
       return n >= 40;
     });
+    const kembungAlertOffal = kembungInAlertWithOffal(parsed);
     const recall = Math.round((1000 * dishes.length) / gt.extractTarget) / 10;
     const recPass = gt.recOk.test(rec);
     const extractPass = dishes.length >= Math.floor(gt.extractTarget * 0.9); // ≥90% of target
+    // Set3 clustering quality: fail catch-all ≥40 OR kembung/mackerel in alert with offal/usus/seblak
+    const set3ClusterFail = tc.id === 'set3' && (catchAll || kembungAlertOffal);
+    const clusterPass = tc.id !== 'set3' || !set3ClusterFail;
     const row = {
       id: tc.id,
       latencyMs,
@@ -121,15 +150,24 @@ async function main() {
       groupsCount: groups.length,
       groupsWithBBox: bboxOk,
       hasCatchAll40: catchAll,
+      kembungInAlertWithOffal: tc.id === 'set3' ? kembungAlertOffal : undefined,
       recommendedOption: rec,
       gtRecLabel: gt.label,
       recPass,
-      pass: extractPass && recPass,
+      clusterPass,
+      pass: extractPass && recPass && clusterPass,
     };
-    console.log(tc.id, row.pass ? 'PASS' : 'FAIL', 'extract', dishes.length, '/', gt.extractTarget, 'rec', recPass, rec.slice(0, 80));
+    console.log(tc.id, row.pass ? 'PASS' : 'FAIL', 'extract', dishes.length, '/', gt.extractTarget, 'rec', recPass, 'catchAll40', catchAll, 'kembungAlertOffal', kembungAlertOffal, rec.slice(0, 80));
     // lightweight per-set dump without huge payload in summary
     fs.writeFileSync(path.join(process.cwd(), 'prototype', 'meallog', 'compare', `live_output_${tc.id}_vertex.json`), JSON.stringify(parsed, null, 2));
     rows.push(row);
+  }
+  // Merge subset re-run into full six-row scorecard when MEAL03_ONLY_SET is set
+  let finalRows = rows;
+  if (only) {
+    const byId: Record<string, any> = { ...priorById };
+    for (const r of rows) byId[r.id] = r;
+    finalRows = cases.map((c) => byId[c.id]).filter(Boolean);
   }
   const payload = {
     testDate: new Date().toISOString(),
@@ -137,24 +175,32 @@ async function main() {
     evalOwner: 'script + frozen golden Meal_03_compare (builder ≠ scorer)',
     model: MODEL,
     vertex: { project, location },
-    rows,
-    overallPass: rows.every((r) => r.pass),
-    passCount: rows.filter((r) => r.pass).length,
+    onlySet: only || null,
+    rows: finalRows,
+    overallPass: finalRows.length === cases.length && finalRows.every((r) => r.pass),
+    passCount: finalRows.filter((r) => r.pass).length,
   };
+  const rowsForMd = finalRows;
   fs.writeFileSync(OUT_JSON, JSON.stringify(payload, null, 2));
   const md = [
     `# Meal_03 six-case Vertex GT scorecard — ${payload.testDate}`,
     '',
     `- Method: **production** Mode D monolith (graph not used)`,
     `- Eval owner: frozen GT + this script`,
-    `- Overall: **${payload.passCount}/6** pass (extract ≥90% target AND rec matches GT pattern)`,
+    `- Overall: **${payload.passCount}/6** pass (extract ≥90% target AND rec matches GT pattern; set3 also requires no catch-all≥40 and no kembung/mackerel in alert with offal/usus/seblak)`,
+    payload.onlySet ? `- Partial re-run: **${payload.onlySet}** (other sets preserved from prior scorecard)` : '',
     '',
-    '| Set | Extract | Rec vs GT | Catch-all≥40 | BBox | Latency | Pass |',
-    '|---|---|---|---|---|---|---|',
-    ...rows.map((r) => `| ${r.id} | ${r.extractedCount}/${r.extractTarget} (${r.recallVsTargetPct}%) ${r.extractPass ? '✅' : '❌'} | ${r.recPass ? '✅' : '❌'} \`${String(r.recommendedOption).replace(/\|/g, '/').slice(0, 60)}\` | ${r.hasCatchAll40} | ${r.groupsWithBBox}/${r.groupsCount} | ${r.latencyMs}ms | ${r.pass ? 'PASS' : 'FAIL'} |`),
+    '| Set | Extract | Rec vs GT | Catch-all≥40 | Kembung⊗OffalAlert | BBox | Latency | Pass |',
+    '|---|---|---|---|---|---|---|---|',
+    ...rowsForMd.map((r) => `| ${r.id} | ${r.extractedCount}/${r.extractTarget} (${r.recallVsTargetPct}%) ${r.extractPass ? '✅' : '❌'} | ${r.recPass ? '✅' : '❌'} \`${String(r.recommendedOption).replace(/\|/g, '/').slice(0, 60)}\` | ${r.hasCatchAll40} | ${r.id === 'set3' ? (r.kembungInAlertWithOffal ? 'FAIL' : 'ok') : '—'} | ${r.groupsWithBBox}/${r.groupsCount} | ${r.latencyMs}ms | ${r.pass ? 'PASS' : 'FAIL'} |`),
+    '',
+    '### Set3 clustering gates',
+    '- FAIL if any group has ≥40 items (`hasCatchAll40`).',
+    '- FAIL if a dish matching `/kembung|mackerel/i` sits in an alert/Tier4 group that also contains offal/usus/ati/jeroan/seblak.',
+    '- Frozen GT rec patterns unchanged (Kembung OR Sayur Asem still accepted).',
     '',
     `Raw: \`${OUT_JSON}\``,
-  ].join('\n');
+  ].filter((line) => line !== '').join('\n');
   fs.writeFileSync(OUT_MD, md);
   console.log(md);
   if (!payload.overallPass) process.exitCode = 1;

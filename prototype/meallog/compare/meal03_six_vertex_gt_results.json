@@ -1,5 +1,5 @@
 {
-  "testDate": "2026-09-10T21:53:04.583Z",
+  "testDate": "2026-09-10T22:04:24.384Z",
   "method": "production scout_only_compare (monolith) — kept",
   "evalOwner": "script + frozen golden Meal_03_compare (builder ≠ scorer)",
   "model": "gemini-3.5-flash-lite",
@@ -7,6 +7,7 @@
     "project": "test-llm-project-502307",
     "location": "global"
   },
+  "onlySet": "set3",
   "rows": [
     {
       "id": "set1",
@@ -48,21 +49,23 @@
     },
     {
       "id": "set3",
-      "latencyMs": 18300,
+      "latencyMs": 20077,
       "usage": {
-        "promptTokenCount": 4554,
-        "candidatesTokenCount": 5895
+        "promptTokenCount": 4853,
+        "candidatesTokenCount": 6361
       },
-      "extractedCount": 100,
+      "extractedCount": 116,
       "extractTarget": 104,
-      "recallVsTargetPct": 96.2,
+      "recallVsTargetPct": 111.5,
       "extractPass": true,
-      "groupsCount": 4,
-      "groupsWithBBox": 4,
-      "hasCatchAll40": true,
-      "recommendedOption": "Sayur Asem / Sour Vegetable Tamarind Soup",
+      "groupsCount": 7,
+      "groupsWithBBox": 7,
+      "hasCatchAll40": false,
+      "kembungInAlertWithOffal": false,
+      "recommendedOption": "Paket Uduk Kembung / Mackerel Uduk Rice Meal Set",
       "gtRecLabel": "Kembung OR Sayur Asem",
       "recPass": true,
+      "clusterPass": true,
       "pass": true
     },
     {

@@ -1,0 +1,28 @@
+{
+  "caseId": "11",
+  "slug": "11_seafood_oats",
+  "mode": "log",
+  "modelRequired": "gemini-3.5-flash-lite",
+  "inputTypes": [
+    "receipt_ocr",
+    "ingredients_photo",
+    "bracket_text_edit"
+  ],
+  "photos": [
+    "11_seafood_squid_fish_ingredients.jpg",
+    "11_seafood_squid_fish_receipt_1.jpg",
+    "11_seafood_squid_fish_receipt_2.jpg"
+  ],
+  "mealTotals": {
+    "weight": 700,
+    "calories": 900,
+    "protein": 55,
+    "carbs": 80,
+    "fat": 30
+  },
+  "verifyFlags": [
+    "macros_from_prototype_runner_gt",
+    "expand_to_full_NUTRIENT_KEYS_when_OCR_elastic_available"
+  ],
+  "sourceOfTruth": "golden/meal/Meal_04_log (this folder); prototype runner is harness only"
+}

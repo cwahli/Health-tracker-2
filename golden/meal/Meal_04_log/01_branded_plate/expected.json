@@ -1,0 +1,27 @@
+{
+  "caseId": "01",
+  "slug": "01_branded_plate",
+  "mode": "log",
+  "modelRequired": "gemini-3.5-flash-lite",
+  "inputTypes": [
+    "branded_restaurant_plate"
+  ],
+  "photos": [
+    "01_yolk_panini_wrap.jpg"
+  ],
+  "mealTotals": {
+    "weight": 600,
+    "calories": 950,
+    "protein": 49.0,
+    "carbs": 92.0,
+    "fat": 42.0,
+    "satFat": 8.5,
+    "fibre": 11.5,
+    "sodium": 1250
+  },
+  "verifyFlags": [
+    "macros_from_prototype_runner_gt",
+    "expand_to_full_NUTRIENT_KEYS_when_OCR_elastic_available"
+  ],
+  "sourceOfTruth": "golden/meal/Meal_04_log (this folder); prototype runner is harness only"
+}

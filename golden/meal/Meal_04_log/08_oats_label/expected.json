@@ -1,0 +1,29 @@
+{
+  "caseId": "08",
+  "slug": "08_oats_label",
+  "mode": "log",
+  "modelRequired": "gemini-3.5-flash-lite",
+  "inputTypes": [
+    "nutrition_label",
+    "portion_clarify_edit"
+  ],
+  "photos": [
+    "08_rolled_oats_1.jpg",
+    "08_rolled_oats_2.jpg"
+  ],
+  "mealTotals": {
+    "weight": 220,
+    "calories": 212,
+    "protein": 5.0,
+    "carbs": 35.0,
+    "fat": 5.8,
+    "satFat": 0.8,
+    "fibre": 5.0,
+    "sodium": 0
+  },
+  "verifyFlags": [
+    "macros_from_prototype_runner_gt",
+    "expand_to_full_NUTRIENT_KEYS_when_OCR_elastic_available"
+  ],
+  "sourceOfTruth": "golden/meal/Meal_04_log (this folder); prototype runner is harness only"
+}
