@@ -1980,6 +1980,10 @@ export function parseNormalRangeBounds(normalRangeStr?: string): { min?: number;
   return {};
 }
 
+export function isExcludedDeviceMetric(k: string): boolean {
+  return /^(steps|step_count|stepcount|daily_steps|weight|body_weight|bodyweight|active_minutes|sleep_duration|resting_heart_rate|water_intake|distance)$/i.test(k);
+}
+
 export function isBiomarkerValueImprobable(key: string, val: number | string, normalRangeStr?: string): boolean {
   const num = typeof val === 'number' ? val : parseFloat(String(val));
   if (isNaN(num)) return false;
@@ -1990,6 +1994,13 @@ export function isBiomarkerValueImprobable(key: string, val: number | string, no
   if (def?.plausibleBounds) {
     if (def.plausibleBounds.min !== undefined && num < def.plausibleBounds.min) return true;
     if (def.plausibleBounds.max !== undefined && num > def.plausibleBounds.max) return true;
+  }
+
+  // Device & lifestyle biometrics (steps, active minutes, water intake, etc.) vary by daily behavior
+  // and must not be flagged as improbable clinical blood lab unit mismatches.
+  if (isExcludedDeviceMetric(key) || isExcludedDeviceMetric(mapped)) {
+    if (num < 0) return true;
+    return false;
   }
 
   let rangeStr = (normalRangeStr && normalRangeStr !== 'Unknown' && normalRangeStr !== 'unset' && normalRangeStr !== 'n/a' && normalRangeStr !== '-') ? normalRangeStr : undefined;
@@ -2276,10 +2287,6 @@ function _detectFlaggedTelemetryErrors(
     const def = (allDefinitions || []).find((d: any) => d.key === canonical || d.key?.toLowerCase() === k.toLowerCase() || d.key?.toLowerCase().replace(/[\s_]/g, '') === kClean || d.name?.toLowerCase() === k.toLowerCase() || d.name?.toLowerCase().replace(/[\s_]/g, '') === kClean) ||
       biomarkerDefinitions.find((d: any) => d.key === canonical || d.key?.toLowerCase() === k.toLowerCase() || d.key?.toLowerCase().replace(/[\s_]/g, '') === kClean || d.name?.toLowerCase() === k.toLowerCase() || d.name?.toLowerCase().replace(/[\s_]/g, '') === kClean);
     return { custom, def, canonicalKey: canonical };
-  };
-
-  const isExcludedDeviceMetric = (k: string) => {
-    return /^(steps|weight|active_minutes|sleep_duration|resting_heart_rate|water_intake|distance)$/i.test(k);
   };
 
   // Compute automated conversion proposal for an outlier

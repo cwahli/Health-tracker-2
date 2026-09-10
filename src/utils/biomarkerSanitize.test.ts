@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   isBiomarkerValueImprobable,
+  getBiomarkerStatus,
   sanitizeBiomarkerHistoryOnLoad,
   normalizeHistoricalTelemetryErrors,
   parseNormalRangeBounds,
@@ -22,6 +23,13 @@ describe('isBiomarkerValueImprobable', () => {
   });
   it('flags 14.5 hemoglobin as g/dL when unit is g/L', () => {
     expect(isBiomarkerValueImprobable('hemoglobin', 14.5, '120-180')).toBe(true);
+  });
+  it('does not flag everyday step counts as improbable', () => {
+    expect(isBiomarkerValueImprobable('steps', 3095, '7000 - 12000')).toBe(false);
+    expect(isBiomarkerValueImprobable('steps', 0, '7000 - 12000')).toBe(false);
+    expect(isBiomarkerValueImprobable('steps', 25000, '7000 - 12000')).toBe(false);
+    expect(isBiomarkerValueImprobable('steps', -10, '7000 - 12000')).toBe(true);
+    expect(getBiomarkerStatus('steps', 3095, '7000 - 12000')).toBe('low');
   });
 });
 
