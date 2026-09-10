@@ -140,7 +140,7 @@ export const VisionScoutSchema = z.object({
   message: z.string().nullable().optional(),
   perImage: z.array(z.object({ imageIndex: z.number().nullable().optional(), itemsFound: z.array(z.string()).nullable().optional() })).nullable().optional(),
 }).passthrough();
-export const scoutSystemInstruction = `- HIERARCHY: Group distinct physical plated items, separate cooking pots/bowls, drinks, or companion sides into separate 'dishes', and constituent ingredients into 'foods'. DO NOT duplicate identical dishes shown across cooking prep, multi-angles, or sliced/whole views. DO NOT group separate packages into a single dish. Each barcode package MUST be its own distinct 'dish'.
+export const scoutSystemInstruction = `- HIERARCHY: Extract each distinct food item/ingredient (e.g. Tofu, Beef, sides, meal prep items, drinks, packages) directly as its own separate 'dish' with its own boundingBox2D & nutrients. Never group distinct food items into a single composite dish with sub-items. Do not duplicate identical dishes across multi-angles or cooking prep.
 - QUANTITY & MULTIPACKS: Output 'weightGrams' (consumed serving) and 'packGrams' (container total). For unopened grocery multi-packs (e.g. '5 x 65ml', 'pack of 6') without explicit user notes stating all N units were consumed, set 'weightGrams' to a single unit/serving size (e.g. 65g) and 'packGrams' to the container total (e.g. 325g). Never estimate the whole container as consumed: weightGrams is ALWAYS one serving here — the portion question resolves the true amount.
 - GROCERY/SCALE STICKERS: Treat supermarket stickers as atomic: pair printed text with printed weight (e.g. 'Berat 0.252' -> 252g). Output text in 'packageLabelText'. Never transpose weights between packages.
 - LOCAL NAMES: Preserve the verbatim printed name from stickers, packaging, or menus in local language as foodName (e.g. 'Ikan Cendro', 'Cumi Bangka'). Do not genericise when specific local name is readable. ALWAYS provide the generic English translation of the ingredient in 'genericEnglishName' (e.g. 'needlefish', 'squid').
@@ -1192,36 +1192,129 @@ export function parseAndHealVisionScout(
         let dishTitle = d.dishName || (compNames.length > 0 ? compNames.join(', ') : "Dish");
         const compPackGrams = components.length === 1 ? (components[0].packGrams ?? null) : (d.packGrams ?? null);
         const compPackageLabel = components.length === 1 ? (components[0].packageLabelText ?? null) : (d.packageLabelText ?? null);
-        const convertedItem: any = {
-          keyword: dishTitle,
-          originalName: dishTitle,
-          name: dishTitle,
-          genericEnglishName: d.genericEnglishName || null,
-          chainName: d.chainName || null,
-          packageLabelText: compPackageLabel,
-          estimatedWeightGrams: dishWeight,
-          nutrientBasisWeight: dishWeight,
-          packGrams: compPackGrams,
-          cookingMethod: d.cookingMethod || "cooked",
-          sourceImageIndex: d.sourceImageIndex ?? 0,
-          boundingBox2D: d.boundingBox2D || [0, 0, 1000, 1000],
-          isStandaloneCondimentPacket: d.isStandaloneCondimentPacket || false,
-          // Keep long _internalReasoning on the scout root only — copying it onto
-          // every dish item trips checkScoutSanity (length > 3000) on retries.
-          components: components.length > 0 ? components : undefined,
-          componentsDetailList: components.length > 0 ? components : undefined,
-          compositeSiblings: components.length > 0 ? components : undefined,
-          hasComponents: components.length > 1,
-          ingredients: compNames,
-          visualIngredients: compNames,
-          ingredientsList: compNames.length > 0 ? compNames.join(', ') : null,
-          rawNutritionLabel: dishRawLabel,
-          source: dishRawLabel ? "brand_official" : "estimated",
-          dbSource: dishRawLabel ? "brand_official" : "estimated",
-          nutrients: convertedNutrients,
-          truthNutrients: convertedNutrients,
-        };
-        parsedScout.items.push(convertedItem);
+
+        const isCompoundDishName = /\b(dan|and|\&|\+|\/)\b/i.test(d.dishName || '') ||
+          (components.length > 1 && compNames.length > 1 && compNames.every(cn => cn.length > 2 && (d.dishName || '').toLowerCase().includes(cn.toLowerCase())));
+
+        if (components.length > 1 && isCompoundDishName) {
+          // Unroll each distinct food component directly into a standalone scout item
+          // so there are no sub-items under a synthetic compound dish name.
+          components.forEach((c: any) => {
+            const compSugarResult = deduceSugarBreakdown({
+              totalSugar: c.nutrients?.totalSugar != null ? Number(c.nutrients.totalSugar) : null,
+              addedSugarPrinted: Number(c.nutrients?.addedSugar) || null,
+              carbohydrates: c.carbohydrates || c.carbs || 0,
+              totalFibre: Number(c.nutrients?.totalFibre) || 0,
+              foodName: c.name,
+              ingredientsList: c.name,
+            });
+            const compTransFat = (Number.isFinite(Number(c.nutrients?.transFat)) && Number(c.nutrients.transFat) >= 0)
+              ? Number(c.nutrients.transFat)
+              : (d.cookingMethod === 'deep_fried'
+                  ? Math.round(c.totalFat * 0.04 * 10) / 10
+                  : (/(beef|lamb|mutton|dairy|butter|cheese)/i.test(c.name || '')
+                      ? Math.round(c.totalFat * 0.03 * 10) / 10
+                      : 0));
+            const compUnsatFat = (Number.isFinite(Number(c.nutrients?.unsaturatedFat)) && Number(c.nutrients.unsaturatedFat) >= 0)
+              ? Number(c.nutrients.unsaturatedFat)
+              : Math.max(0, Math.round((c.totalFat - c.saturatedFat - compTransFat) * 10) / 10);
+
+            const compWeight = c.weightGrams || 100;
+            const compNutrients: Record<string, number> = {
+              protein: Math.round((c.protein || 0) * 10) / 10,
+              carbohydrates: Math.round((c.carbohydrates || c.carbs || 0) * 10) / 10,
+              totalFat: Math.round((c.totalFat || 0) * 10) / 10,
+              saturatedFat: Math.round((c.saturatedFat || 0) * 10) / 10,
+              transFat: compTransFat,
+              sugar: compSugarResult.sugar,
+              addedSugar: compSugarResult.addedSugar,
+              totalFibre: Math.round((Number(c.nutrients?.totalFibre) || 0) * 10) / 10,
+              sodium: Math.round(c.sodium || 0),
+              unsaturatedFat: compUnsatFat,
+              potassium: Number(c.nutrients?.potassium) || (convertedNutrients.potassium ? Math.round(convertedNutrients.potassium * (compWeight / (dishWeight || 1))) : 0),
+              calcium: Number(c.nutrients?.calcium) || (convertedNutrients.calcium ? Math.round(convertedNutrients.calcium * (compWeight / (dishWeight || 1))) : 0),
+              iron: Number(c.nutrients?.iron) || (convertedNutrients.iron ? Math.round(convertedNutrients.iron * (compWeight / (dishWeight || 1)) * 10) / 10 : 0),
+              magnesium: Number(c.nutrients?.magnesium) || (convertedNutrients.magnesium ? Math.round(convertedNutrients.magnesium * (compWeight / (dishWeight || 1))) : 0),
+              vitaminD: Number(c.nutrients?.vitaminD) || 0,
+              zinc: Number(c.nutrients?.zinc) || (convertedNutrients.zinc ? Math.round(convertedNutrients.zinc * (compWeight / (dishWeight || 1)) * 10) / 10 : 0),
+              selenium: Number(c.nutrients?.selenium) || 0,
+              iodine: Number(c.nutrients?.iodine) || 0,
+              phosphorus: Number(c.nutrients?.phosphorus) || 0,
+              vitaminA: Number(c.nutrients?.vitaminA) || 0,
+              vitaminC: Number(c.nutrients?.vitaminC) || 0,
+              vitaminE: Number(c.nutrients?.vitaminE) || 0,
+              vitaminK: Number(c.nutrients?.vitaminK) || 0,
+              vitaminB12: Number(c.nutrients?.vitaminB12) || 0,
+              folate: Number(c.nutrients?.folate) || 0,
+              vitaminB6: Number(c.nutrients?.vitaminB6) || 0,
+              thiamine: Number(c.nutrients?.thiamine) || 0,
+              riboflavin: Number(c.nutrients?.riboflavin) || 0,
+              niacin: Number(c.nutrients?.niacin) || 0,
+              solubleFibre: Number(c.nutrients?.solubleFibre) || computeSolubleFibre(Number(c.nutrients?.totalFibre) || 0, c.name),
+              omega3: Number(c.nutrients?.omega3) || 0,
+            };
+
+            const unrolledItem: any = {
+              keyword: c.name,
+              originalName: c.name,
+              name: c.name,
+              genericEnglishName: c.searchQuery && c.searchQuery !== c.name.toLowerCase() ? c.searchQuery : null,
+              chainName: d.chainName || null,
+              packageLabelText: c.packageLabelText || null,
+              estimatedWeightGrams: compWeight,
+              nutrientBasisWeight: compWeight,
+              packGrams: c.packGrams || null,
+              cookingMethod: d.cookingMethod || "cooked",
+              sourceImageIndex: c.sourceImageIndex ?? d.sourceImageIndex ?? 0,
+              boundingBox2D: c.boundingBox2D || d.boundingBox2D || [0, 0, 1000, 1000],
+              isStandaloneCondimentPacket: false,
+              components: undefined,
+              componentsDetailList: undefined,
+              compositeSiblings: undefined,
+              hasComponents: false,
+              ingredients: [c.name],
+              visualIngredients: [c.name],
+              ingredientsList: c.name,
+              rawNutritionLabel: c.rawNutritionLabel || null,
+              source: c.rawNutritionLabel ? "brand_official" : "estimated",
+              dbSource: c.rawNutritionLabel ? "brand_official" : "estimated",
+              nutrients: compNutrients,
+              truthNutrients: compNutrients,
+            };
+            parsedScout.items.push(unrolledItem);
+          });
+        } else {
+          const convertedItem: any = {
+            keyword: dishTitle,
+            originalName: dishTitle,
+            name: dishTitle,
+            genericEnglishName: d.genericEnglishName || null,
+            chainName: d.chainName || null,
+            packageLabelText: compPackageLabel,
+            estimatedWeightGrams: dishWeight,
+            nutrientBasisWeight: dishWeight,
+            packGrams: compPackGrams,
+            cookingMethod: d.cookingMethod || "cooked",
+            sourceImageIndex: d.sourceImageIndex ?? 0,
+            boundingBox2D: d.boundingBox2D || [0, 0, 1000, 1000],
+            isStandaloneCondimentPacket: d.isStandaloneCondimentPacket || false,
+            // Keep long _internalReasoning on the scout root only — copying it onto
+            // every dish item trips checkScoutSanity (length > 3000) on retries.
+            components: components.length > 0 ? components : undefined,
+            componentsDetailList: components.length > 0 ? components : undefined,
+            compositeSiblings: components.length > 0 ? components : undefined,
+            hasComponents: components.length > 1,
+            ingredients: compNames,
+            visualIngredients: compNames,
+            ingredientsList: compNames.length > 0 ? compNames.join(', ') : null,
+            rawNutritionLabel: dishRawLabel,
+            source: dishRawLabel ? "brand_official" : "estimated",
+            dbSource: dishRawLabel ? "brand_official" : "estimated",
+            nutrients: convertedNutrients,
+            truthNutrients: convertedNutrients,
+          };
+          parsedScout.items.push(convertedItem);
+        }
       });
     }
     if (parsedScout.queriesToSearch && Array.isArray(parsedScout.queriesToSearch)) {

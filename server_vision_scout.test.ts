@@ -850,6 +850,71 @@ describe("server_vision_scout", () => {
       expect(injected.totalFat).toBeGreaterThan(0);
       expect(injected.nutrients.calories).toBeGreaterThan(0);
     });
+
+    it("unrolls a single dish containing multiple distinct food components into separate top-level items without subitems", () => {
+      const mockScout = {
+        dishes: [
+          {
+            dishName: "Tahu dan Daging Sapi",
+            estimatedWeightGrams: 400,
+            cookingMethod: "boiled",
+            sourceImageIndex: 0,
+            boundingBox2D: [0, 0, 1000, 1000],
+            foods: [
+              {
+                foodName: "Tahu",
+                genericEnglishName: "tofu",
+                weightGrams: 300,
+                nutrients: {
+                  protein: 24,
+                  saturatedFat: 1.5,
+                  addedSugar: 0,
+                  totalFibre: 2,
+                  sodium: 15,
+                  carbohydrates: 5,
+                }
+              },
+              {
+                foodName: "Daging Sapi",
+                genericEnglishName: "beef",
+                weightGrams: 100,
+                nutrients: {
+                  protein: 26,
+                  saturatedFat: 3,
+                  addedSugar: 0,
+                  totalFibre: 0,
+                  sodium: 50,
+                  carbohydrates: 0,
+                }
+              }
+            ],
+            dishNutrients: {
+              saturatedFat: 4.5,
+              totalFat: 15,
+              totalSugar: 0.5,
+              vitaminD: 0,
+              protein: 50,
+              sodium: 65,
+              totalFibre: 2,
+            }
+          }
+        ]
+      };
+
+      const result = parseAndHealVisionScout(mockScout, () => {});
+      expect(result.items.length).toBe(2);
+      expect(result.items[0].originalName).toBe("Tahu");
+      expect(result.items[0].estimatedWeightGrams).toBe(300);
+      expect(result.items[0].hasComponents).toBe(false);
+      expect(result.items[0].components).toBeUndefined();
+      expect(result.items[0].nutrients.protein).toBe(24);
+
+      expect(result.items[1].originalName).toBe("Daging Sapi");
+      expect(result.items[1].estimatedWeightGrams).toBe(100);
+      expect(result.items[1].hasComponents).toBe(false);
+      expect(result.items[1].components).toBeUndefined();
+      expect(result.items[1].nutrients.protein).toBe(26);
+    });
   });
 });
 
