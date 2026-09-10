@@ -237,41 +237,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     localStorage.setItem('demo_fresh_login', '1');
     setErrorMsg('');
     setStatus('sending');
-    const demoEmail = 'demo@healthcockpit.com';
-    const demoPassword = 'DemoAccount123!';
-    try {
-      if (isSupabaseConfigured) {
-        let { data, error } = await supabase.auth.signInWithPassword({
-          email: demoEmail,
-          password: demoPassword
-        });
-        if (error) {
-          const signUpRes = await supabase.auth.signUp({
-            email: demoEmail,
-            password: demoPassword,
-            options: {
-              emailRedirectTo: getAuthRedirectTo(),
-              data: { nickname: 'Demo User' }
-            }
-          });
-          data = signUpRes.data as any;
-        }
-        if (data?.user) {
-          handleSuccessfulLogin({
-            uid: data.user.id,
-            email: demoEmail,
-            displayName: 'Alex (Demo)',
-            photoURL: '',
-            emailVerified: true
-          } as any);
-          return;
-        }
-      }
-      triggerLocalDemoLogin();
-    } catch (err: any) {
-      console.warn("Demo login error, falling back to local simulation:", err);
-      triggerLocalDemoLogin();
-    }
+    triggerLocalDemoLogin();
   };
 
   const handleManualAuth = async (e: React.FormEvent) => {
