@@ -39,7 +39,7 @@ export function buildScoutPersonalizationBlock(args: {
     .filter(Boolean)
     .slice(0, 5);
   if (risks.length === 0) return '';
-  return `- PATIENT CONTEXT (special case — shapes verdict/advice only, never identity or weights): at-risk: ${risks.join('; ')}. Budgets: see NUTRITIONAL TARGET STATUS below. Flag plainly any dish or nutrient working against those numbers — a significant impact sets the verdict level, never a softened neutral label.`;
+  return `- PATIENT CONTEXT (special case — shapes verdict/advice only, never identity or weights): at-risk: ${risks.join('; ')}. Budgets: see NUTRITIONAL TARGET STATUS below. Pair praise for positive nutrient targets with plain alerts on any dish or nutrient working against those numbers.`;
 }
 
 export function parseBracketedFoodItems(message: string): Array<{

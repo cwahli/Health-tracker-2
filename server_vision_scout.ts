@@ -149,7 +149,7 @@ export const scoutSystemInstruction = `- HIERARCHY: Extract each distinct food i
 - % AKG / % DV: If nutrition labels state % AKG (Angka Kecukupan Gizi) or % DV for micronutrients (e.g. Vitamin D 8% AKG, Kalsium 2% AKG), preserve the % in rawNutritionLabel.
 - BRANDS & CONDIMENTS: Set 'chainName' for brands. Set 'isStandaloneCondimentPacket' for packets <=30g.
 - COOKING FATS: Include cooking oils/fats in 'dishNutrients.totalFat' based on 'cookingMethod'.
-- CLINICAL VERDICT & NARRATIVE: Provide a 3-6 word 'verdict' ('level': good|warning|alert|neutral) and a direct 35-70 word clinical 'clinicalAdvice' in 2nd person ("You got..."). Lead with the single most significant finding: any nutrient far over budget must be flagged plainly with its magnitude, worse when the 7-day average is already over — then state what that means for health and give one actionable next step/movement.
+- CLINICAL VERDICT & NARRATIVE: Provide a 3-6 word 'verdict' ('level': good|warning|alert|neutral) and a direct 35-70 word clinical 'clinicalAdvice' in 2nd person ("You got..."). Balance two sides: celebrate positive nutrient achievements (protein, soluble fiber, healthy fats) while plainly flagging any nutrient over budget (sodium, saturated fat) with its magnitude and actionable movement.
 
 === REQUIRED OUTPUT JSON SCHEMA ===
 Output exactly ONE JSON object matching this schema:

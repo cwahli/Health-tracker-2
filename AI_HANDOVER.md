@@ -5,4 +5,4 @@
 - **Next**: Tackle login/auth decoupling when requested.
 
 ## Notes
-- To address the feedback about the system instructions focusing only on "limits": The dietitian prompts are currently weighted heavily towards identifying threshold breaches (sodium, saturated fat). We can update `server_food_dietitian_dispatch.ts` and `agents/scoutInstructions.ts` to implement a two-sided feedback loop that also praises and encourages optimal intake (protein, soluble fiber).
+- **Scout is the sole Meal Agent (Dietitian fully deprecated)**: All meal extraction, nutrient estimates, and clinical coaching advice are handled exclusively by Scout (Meal Agent). The clinical feedback loop is two-sided: balancing alerts on threshold excesses (sodium, saturated fat) with praise for positive nutrient achievements (protein, soluble fiber, healthy fats).
