@@ -2,6 +2,8 @@
   "caseId": "11",
   "slug": "11_seafood_oats",
   "mode": "log",
+  "status": "DRAFT",
+  "gtNote": "APPROXIMATE GT from runner (portion-default grade); elastic file carries a conflicting GT — see correct_results.md. Do not treat as clinical truth.",
   "modelRequired": "gemini-3.5-flash-lite",
   "inputTypes": [
     "receipt_ocr",
@@ -18,11 +20,51 @@
     "calories": 900,
     "protein": 55,
     "carbs": 80,
-    "fat": 30
+    "fat": 30,
+    "satFat": 8.0,
+    "fibre": 10.0,
+    "sodium": 1200
+  },
+  "gtSource": "prototype/meallog/runner.ts benchmarkCases[\"11\"] (APPROXIMATE — restores satFat/fibre/sodium omitted by scaffold)",
+  "conflictingGt": {
+    "file": "prototype/meallog/meal/final_elastic_benchmark_results.json",
+    "caseId": 11,
+    "gt": { "weightGrams": 892, "calories": 822, "protein": 95.1, "carbohydrates": 69, "totalFat": 20.8, "sodium": 473 },
+    "pred": { "weight": 942, "cal": 817.46, "p": 97.5, "c": 66.27, "f": 21.55, "na": 572 }
+  },
+  "fullNutrientsAvailable": false,
+  "lockedLabelTruth": null,
+  "provenance": {
+    "scoutSummary": {
+      "file": "prototype/meallog/meal/BENCHMARK_PERFORMANCE_SUMMARY.md",
+      "weightAcc": 96.6,
+      "calorieAcc": 93.7,
+      "proteinAcc": 98.0,
+      "fatAcc": 81.2,
+      "sodiumAcc": 97.7,
+      "note": "fat below 90%"
+    },
+    "liveCase": {
+      "log": "/workspace/gemini38-meal-review/cases/CASE_11_rerun.log",
+      "result": "PASS (contract; protein/fat deltas vs runner approx GT documented)",
+      "prompt": "I had [Mr Oat Rolled Oats 70g] and all food in the pictures",
+      "items": [
+        "Seafood and Vegetable Hotpot Prep ~657g 429kcal",
+        "Mr Oat Rolled Oats ~70g 294kcal"
+      ],
+      "computed": { "calories": 723, "protein": 83.1, "carbs": 68, "fat": 12.9 }
+    },
+    "ocr": {
+      "focus": "thermal receipts + raw seafood ingredients + Mr Oat pack (test_ocr_cases.ts, audit_ocr_failures.ts Case 11)",
+      "labelLock": false,
+      "note": "receipt grams locked via crossReferenceIndex; nutrients estimated"
+    }
   },
   "verifyFlags": [
-    "macros_from_prototype_runner_gt",
-    "expand_to_full_NUTRIENT_KEYS_when_OCR_elastic_available"
+    "macros_from_prototype_runner_gt_APPROXIMATE",
+    "DRAFT_gt_conflict_runner_vs_elastic",
+    "bracket_text_edit_required",
+    "FINAL_requires_refined_weigh_plus_32keys"
   ],
   "sourceOfTruth": "golden/meal/Meal_04_log (this folder); prototype runner is harness only"
 }

@@ -2,6 +2,7 @@
   "caseId": "09",
   "slug": "09_restaurant_plates",
   "mode": "log",
+  "status": "DRAFT",
   "modelRequired": "gemini-3.5-flash-lite",
   "inputTypes": [
     "restaurant_plate",
@@ -21,9 +22,41 @@
     "fibre": 10.0,
     "sodium": 1850
   },
+  "gtSource": "prototype/meallog/runner.ts benchmarkCases[\"09\"] (frozen 8-macro GT)",
+  "fullNutrientsAvailable": false,
+  "lockedLabelTruth": null,
+  "provenance": {
+    "elastic": {
+      "file": "prototype/meallog/meal/final_elastic_benchmark_results.json",
+      "caseId": 9,
+      "status": "DELEGATE",
+      "pred": { "weight": 1100, "cal": 1420, "p": 75.5, "c": 134, "f": 63, "na": 1690 }
+    },
+    "scoutSummary": {
+      "file": "prototype/meallog/meal/BENCHMARK_PERFORMANCE_SUMMARY.md",
+      "weightAcc": 95.2,
+      "calorieAcc": 82.8,
+      "proteinAcc": 92.7,
+      "fatAcc": 60.4,
+      "sodiumAcc": 94.3,
+      "note": "cal/fat below 90%: batter oil + sizzling butter base"
+    },
+    "liveCase": {
+      "log": "/workspace/gemini38-meal-review/cases/CASE_09.log",
+      "result": "PASS with fat warning",
+      "items": [
+        "Beef Steak with Gravy and Vegetables ~450g 520kcal",
+        "Fish and Chips ~400g 505kcal",
+        "Iced Tea ~300g 88kcal"
+      ],
+      "computed": { "calories": 1113, "protein": 84, "carbs": 112, "fat": 36.4 }
+    },
+    "ocr": null
+  },
   "verifyFlags": [
     "macros_from_prototype_runner_gt",
-    "expand_to_full_NUTRIENT_KEYS_when_OCR_elastic_available"
+    "DRAFT_no_32key_ledger",
+    "known_gap_batter_butter_fat_F-10.6"
   ],
   "sourceOfTruth": "golden/meal/Meal_04_log (this folder); prototype runner is harness only"
 }

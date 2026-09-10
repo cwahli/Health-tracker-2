@@ -12,6 +12,11 @@ Each `Meal_NN/` folder is one computation use case: photos + `Instruction.md`
 | Meal_03_compare | 1–2 (pre-meal evaluate → optional log) | 6 retail & dining sets (menus, labels, shelves); 10-nutrient allowance vectors (serving & 100g); <=10% macro variance grouping; OCR lock; bounding box quadrants; intra-group health sorting | `tests/golden_meal03.test.ts` (parity, non-LLM) + `prototype/tests/compare-mode-six-cases.spec.ts` (Playwright E2E 6/6 cases) |
 | Meal_04_log | 1–2 (log; portion-clarify/edit on 08/11) | Mode A matrix from prototype 01/02/06/08/09/10/11: nutrition label, brand pack, barcode, menu-as-log, restaurant plates, receipt+brackets | Fill `benchmark_result.md` per case via Vertex flash-lite; runner harness `npm run test:benchmark:food` |
 
+## Bench entrypoint
+
+- Offline deterministic check (no server, no LLM): `npm run test:benchmark:meal-golden` → `scripts/meal-golden-bench.mjs` (validates `expected.json` macros/photos/status + `correct_results.md` DRAFT-vs-FINAL + sources for all 7 `Meal_04_log` cases).
+- Live run (needs `:3000` + Vertex key): existing runners per case docs, e.g. `npm run test:benchmark:food`.
+
 ## Adding or Transposing Golden Meals
 
 1. Add photos (≤200 KB each, `NN_description.jpg` or `setN_description.jpg`).

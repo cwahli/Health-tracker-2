@@ -2,6 +2,7 @@
   "caseId": "06",
   "slug": "06_menu_receipt_log",
   "mode": "log",
+  "status": "DRAFT",
   "modelRequired": "gemini-3.5-flash-lite",
   "inputTypes": [
     "restaurant_menu",
@@ -21,9 +22,45 @@
     "fibre": 4.0,
     "sodium": 1250
   },
+  "gtSource": "prototype/meallog/runner.ts benchmarkCases[\"06\"] (frozen 8-macro GT)",
+  "fullNutrientsAvailable": false,
+  "lockedLabelTruth": null,
+  "provenance": {
+    "elastic": {
+      "file": "prototype/meallog/meal/final_elastic_benchmark_results.json",
+      "caseId": 6,
+      "status": "COMPLETE",
+      "pred": { "weight": 690, "cal": 950, "p": 27, "c": 140, "f": 31.5, "na": 1385 }
+    },
+    "scoutSummary": {
+      "file": "prototype/meallog/meal/BENCHMARK_PERFORMANCE_SUMMARY.md",
+      "weightAcc": 87.7,
+      "calorieAcc": 89.5,
+      "proteinAcc": 94.4,
+      "fatAcc": 74.8,
+      "sodiumAcc": 86.0,
+      "note": "cal/fat/Na below 90%: fried wontons + noodle oil"
+    },
+    "liveCase": {
+      "log": "/workspace/gemini38-meal-review/cases/CASE_06.log",
+      "result": "PASS",
+      "items": [
+        "Mie Suit ~220g 328kcal",
+        "Siomay ~120g 197kcal",
+        "Es Petak Umpet ~350g 145kcal"
+      ],
+      "computed": { "calories": 670, "protein": 22.5, "carbs": 98, "fat": 20.8 }
+    },
+    "ocr": {
+      "focus": "Indonesian menu names/prices: Mie Suit, Siomay, Es Petak Umpet (test_ocr_cases.ts, audit_ocr_failures.ts Case 6)",
+      "labelLock": false,
+      "note": "menu text identifies dishes; nutrients stay estimates"
+    }
+  },
   "verifyFlags": [
     "macros_from_prototype_runner_gt",
-    "expand_to_full_NUTRIENT_KEYS_when_OCR_elastic_available"
+    "DRAFT_no_32key_ledger",
+    "modeA_log_not_modeD_compare"
   ],
   "sourceOfTruth": "golden/meal/Meal_04_log (this folder); prototype runner is harness only"
 }

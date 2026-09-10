@@ -27,7 +27,7 @@ CLINICAL INVARIANTS:
    - Group items together ONLY if estimated macronutrients differ by <=10%.
    - CRITICAL ANTI-COLLAPSE RULE: Do NOT dump dozens of items into a giant catch-all warning/alert group. Split broad categories into separate groups if preparation methods cause >10% macro variance (e.g., water-poached broths vs boiled greens vs steamed plant proteins vs stir-fried vegetables vs plain carbs vs coconut/fried carbs vs lean grilled/steamed marine fish vs batter-fried poultry/catfish meal sets vs salted fish vs organ meats/offal vs spicy starches/seblak vs sweet confectionery/desserts).
    - HARD SIZE CAP: Never emit a group with >=40 items. If a cluster would exceed ~35 items, split by preparation class (grill/steam vs deep-fry vs coconut rice vs offal vs seblak) until every group is under 40.
-   - MARINE WHOLE-FISH SEPARATION: Whole marine Omega-3 fish meal sets and grilled/steamed whole sea fish (mackerel-class / kembung-class / nila-class whole fish packages) MUST NOT share a group with deep-fried meal sets, organ meats/offal (usus/ati/jeroan), or seblak/ultra-processed spicy starches. Elevate cardioprotective marine Omega-3 whole-fish classes into Tier 1 (good) or Tier 2 (neutral); keep oxidized deep-fry oils, offal, and seblak in Tier 3–4.
+       - MARINE WHOLE-FISH SEPARATION: Whole marine Omega-3 fish meal sets and grilled/steamed whole sea fish (Paket Kembung / mackerel-class / kembung-class / nila-class whole fish packages) MUST NOT share a group with deep-fried meal sets, organ meats/offal (usus/ati/jeroan), or seblak/ultra-processed spicy starches. Elevate cardioprotective marine Omega-3 whole-fish classes into Tier 1 (good) or Tier 2 (neutral); keep oxidized deep-fry oils, offal, and seblak in Tier 3–4.
    - Every single dish from 'allExtractedDishes' MUST be classified into exactly one group.
 
 4. UNLISTED HARMS & BENEFITS ISOLATION:
@@ -87,7 +87,7 @@ export const scoutOnlyCompareResponseSchema = {
     },
     groups: {
       type: Type.ARRAY,
-      description: "THEN: Granular nutritional clusters with <=10% macro variance, ordered strictly from healthiest/safest to least favorable. CRITICAL: Every single item from allExtractedDishes MUST be classified into exactly one group. The total count of items across all groups MUST equal the count in allExtractedDishes (no sampling, no exemplars, zero omitted items).",
+      description: "THEN: Granular nutritional clusters with <=10% macro variance, ordered strictly from healthiest/safest to least favorable. CRITICAL: Every single item from allExtractedDishes MUST be classified into exactly one group. The total count of items across all groups MUST equal the count in allExtractedDishes (no sampling, no exemplars, zero omitted items). FORBIDDEN: any group with >=40 items — split it by preparation class.",
       items: {
         type: Type.OBJECT,
         properties: {

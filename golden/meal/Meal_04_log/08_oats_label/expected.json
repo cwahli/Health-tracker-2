@@ -2,6 +2,7 @@
   "caseId": "08",
   "slug": "08_oats_label",
   "mode": "log",
+  "status": "DRAFT",
   "modelRequired": "gemini-3.5-flash-lite",
   "inputTypes": [
     "nutrition_label",
@@ -21,9 +22,40 @@
     "fibre": 5.0,
     "sodium": 0
   },
+  "gtSource": "prototype/meallog/runner.ts benchmarkCases[\"08\"] (frozen 8-macro GT)",
+  "fullNutrientsAvailable": false,
+  "lockedLabelTruth": null,
+  "provenance": {
+    "elastic": {
+      "file": "prototype/meallog/meal/final_elastic_benchmark_results.json",
+      "caseId": 8,
+      "status": "COMPLETE",
+      "pred": { "weight": 260, "cal": 240, "p": 6, "c": 42, "f": 7, "na": 0 }
+    },
+    "scoutSummary": {
+      "file": "prototype/meallog/meal/BENCHMARK_PERFORMANCE_SUMMARY.md",
+      "note": "ALL >= 90%: W97.7/cal90.6/P90.0/F91.4/Na100 (perfect single-dish OCR)"
+    },
+    "liveCase": {
+      "logPreFix": "/workspace/gemini38-meal-review/cases/CASE_08.log",
+      "logPreFixResult": "FAIL (Turn2 dropped scoutItems -> 0 kcal; harness bug)",
+      "log": "/workspace/gemini38-meal-review/cases/CASE_08_rerun.log",
+      "result": "PASS",
+      "turns": 2,
+      "turn1": "portionClarify (label per 100g)",
+      "turn2Item": "Rolled Oats ~45g 180kcal",
+      "computed": { "calories": 180, "protein": 4.5, "carbs": 31.5, "fat": 5.3 }
+    },
+    "ocr": {
+      "focus": "back-of-pack Nutrition Facts per-100g + serving size (test_ocr_cases.ts, audit_ocr_failures.ts Case 8)",
+      "labelLock": "intended (per-100g lock + clarify grams); panel not yet transcribed into lockedLabelTruth"
+    }
+  },
   "verifyFlags": [
     "macros_from_prototype_runner_gt",
-    "expand_to_full_NUTRIENT_KEYS_when_OCR_elastic_available"
+    "DRAFT_panel_not_transcribed",
+    "portion_clarify_2turn_required",
+    "regression_CASE_08_zero_kcal_harness_bug"
   ],
   "sourceOfTruth": "golden/meal/Meal_04_log (this folder); prototype runner is harness only"
 }

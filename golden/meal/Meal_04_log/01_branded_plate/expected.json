@@ -2,6 +2,7 @@
   "caseId": "01",
   "slug": "01_branded_plate",
   "mode": "log",
+  "status": "DRAFT",
   "modelRequired": "gemini-3.5-flash-lite",
   "inputTypes": [
     "branded_restaurant_plate"
@@ -19,9 +20,41 @@
     "fibre": 11.5,
     "sodium": 1250
   },
+  "gtSource": "prototype/meallog/runner.ts benchmarkCases[\"01\"] (frozen 8-macro GT)",
+  "fullNutrientsAvailable": false,
+  "lockedLabelTruth": null,
+  "provenance": {
+    "elastic": {
+      "file": "prototype/meallog/meal/final_elastic_benchmark_results.json",
+      "caseId": 1,
+      "status": "DELEGATE",
+      "pred": { "weight": 670, "cal": 755, "p": 44.7, "c": 84, "f": 27.7, "na": 1120 }
+    },
+    "scoutSummary": {
+      "file": "prototype/meallog/meal/BENCHMARK_PERFORMANCE_SUMMARY.md",
+      "weightAcc": 95.0,
+      "calorieAcc": 94.3,
+      "proteinAcc": 96.9,
+      "fatAcc": 70.2,
+      "sodiumAcc": 81.6,
+      "note": "fat/Na below 90%: hidden commercial cooking fat"
+    },
+    "liveCase": {
+      "log": "/workspace/gemini38-meal-review/cases/CASE_01.log",
+      "result": "PASS",
+      "items": [
+        "Chicken Sandwich Halves ~300g 360kcal",
+        "Roasted Broccoli and Cabbage ~180g 118kcal",
+        "Roasted Baby Potatoes ~200g 236kcal"
+      ],
+      "computed": { "calories": 714, "protein": 35.9, "carbs": 85, "fat": 25.5 }
+    },
+    "ocr": null
+  },
   "verifyFlags": [
     "macros_from_prototype_runner_gt",
-    "expand_to_full_NUTRIENT_KEYS_when_OCR_elastic_available"
+    "DRAFT_no_32key_ledger",
+    "restaurant_fat_Na_estimated_F-10.6"
   ],
   "sourceOfTruth": "golden/meal/Meal_04_log (this folder); prototype runner is harness only"
 }

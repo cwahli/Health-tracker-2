@@ -2,6 +2,7 @@
   "caseId": "10",
   "slug": "10_barcode_hotpot",
   "mode": "log",
+  "status": "DRAFT",
   "modelRequired": "gemini-3.5-flash-lite",
   "inputTypes": [
     "barcode",
@@ -21,9 +22,45 @@
     "fibre": 17.8,
     "sodium": 380
   },
+  "gtSource": "prototype/meallog/runner.ts benchmarkCases[\"10\"] (frozen 8-macro GT)",
+  "fullNutrientsAvailable": false,
+  "lockedLabelTruth": null,
+  "provenance": {
+    "elastic": {
+      "file": "prototype/meallog/meal/final_elastic_benchmark_results.json",
+      "caseId": 10,
+      "status": "DELEGATE",
+      "pred": { "weight": 1076, "cal": 740.8, "p": 78.6, "c": 35.5, "f": 33.3, "na": 326.8 }
+    },
+    "scoutSummary": {
+      "file": "prototype/meallog/meal/BENCHMARK_PERFORMANCE_SUMMARY.md",
+      "weightAcc": 90.3,
+      "calorieAcc": 88.8,
+      "proteinAcc": 75.3,
+      "fatAcc": 89.4,
+      "sodiumAcc": 97.4
+    },
+    "liveCase": {
+      "logPreFix": "/workspace/gemini38-meal-review/cases/CASE_10.log",
+      "logPreFixResult": "FAIL (Turn2 dropped items -> 0 kcal; harness bug)",
+      "log": "/workspace/gemini38-meal-review/cases/CASE_10_rerun.log",
+      "result": "PASS",
+      "turns": 2,
+      "turn1": "portionClarify on soup; scouted Beef+Veg Hotpot ~800g + Telur Ayam Negeri ~65g",
+      "turn2Item": "Hotpot Sayur dan Daging ~650g 582kcal",
+      "computed": { "calories": 582, "protein": 66.2, "carbs": 29, "fat": 22.4 }
+    },
+    "ocr": {
+      "focus": "price stickers + barcodes Hari Hari Lokasari (test_ocr_cases.ts, audit_ocr_failures.ts Case 10)",
+      "labelLock": false,
+      "note": "barcode grams locked via crossReferenceIndex; nutrients estimated"
+    }
+  },
   "verifyFlags": [
     "macros_from_prototype_runner_gt",
-    "expand_to_full_NUTRIENT_KEYS_when_OCR_elastic_available"
+    "DRAFT_no_32key_ledger",
+    "portion_clarify_2turn_required",
+    "regression_CASE_10_zero_kcal_harness_bug"
   ],
   "sourceOfTruth": "golden/meal/Meal_04_log (this folder); prototype runner is harness only"
 }
