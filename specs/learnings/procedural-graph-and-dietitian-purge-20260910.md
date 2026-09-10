@@ -6,6 +6,8 @@ node: Builder
 status: draft
 ---
 
+> **SUPERSEDED (clinical/speed “graph win”):** Fair + same-schema Vertex Set 3 (2026-09-10/11) showed those claims were spoilers/schema/incomplete work. Keep dietitian purge + non-USDA pillars. See `builder-ne-tester-tier3-ab-20260911.md`. Production Mode D monolith stays.
+
 # Learning: Dietitian Purge, Non-USDA Nutrient Derivation, and Compare Catch-All Collapse on Dense Menus
 
 ## What happened

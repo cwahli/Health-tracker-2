@@ -333,6 +333,7 @@ TIER 2  When UI shell or job-card wiring changed. 0 Gemini.
 TIER 3  Once per class/milestone. Real Gemini. Pick ONE shape:
         website (card+worker) OR API submit (worker only).
         Website subsumes API. Human or a script — not Grok in the wait loop.
+        **Eval ownership:** Builder must not author and score the same live A/B / quality claim (completion bias). Score vs frozen goldens; separate script or human owns the scorecard.
         New class on that dump → add a process row, stop. Do not re-upload.
 ```
 

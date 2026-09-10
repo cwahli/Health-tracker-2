@@ -9,12 +9,19 @@
       "schema_file": "src/server/food/server_food_analyze_schema.ts",
       "schema_export": "visionScoutResponseSchema",
       "must_in_instruction": [],
-      "must_not_in_instruction": ["allExtractedDishes"],
-      "must_in_schema_file": ["visionScoutResponseSchema"],
+      "must_not_in_instruction": [
+        "allExtractedDishes"
+      ],
+      "must_in_schema_file": [
+        "visionScoutResponseSchema"
+      ],
       "call_sites": [
         "src/server/food/server_food_scout_source.ts"
       ],
-      "call_sites_must_contain": ["scoutSystemInstruction", "visionScoutResponseSchema"]
+      "call_sites_must_contain": [
+        "scoutSystemInstruction",
+        "visionScoutResponseSchema"
+      ]
     },
     {
       "id": "food_compare",
@@ -22,15 +29,23 @@
       "instruction_file": "prototype/meallog/compare/scout_only_compare_instructions.ts",
       "schema_file": "src/server/food/server_food_analyze_schema.ts",
       "schema_export": "scoutOnlyCompareResponseSchema",
-      "must_in_instruction": ["EVALUATION ONLY", "allExtractedDishes"],
+      "must_in_instruction": [
+        "EVALUATION ONLY",
+        "allExtractedDishes"
+      ],
       "must_not_in_instruction": [],
-      "must_in_schema_file": ["allExtractedDishes", "scoutOnlyCompareResponseSchema"],
+      "must_in_schema_file": [
+        "allExtractedDishes",
+        "scoutOnlyCompareResponseSchema"
+      ],
       "call_sites": [
         "server_food_analyze_run.ts",
         "server_food_analyze_run_scout.ts",
         "src/server/food/server_food_scout_source.ts"
       ],
-      "call_sites_must_contain": ["scoutOnlyCompareSystemInstruction"]
+      "call_sites_must_contain": [
+        "scoutOnlyCompareSystemInstruction"
+      ]
     }
   ],
   "features": [
@@ -54,7 +69,9 @@
       "id": "kcal_one_writer",
       "label": "finalizeDishLedger is the only kcal writer on log",
       "files_must_contain": {
-        "docs/agent/domains/food-calc.md": ["`finalizeDishLedger` is the only writer"]
+        "docs/agent/domains/food-calc.md": [
+          "`finalizeDishLedger` is the only writer"
+        ]
       }
     },
     {
@@ -62,9 +79,16 @@
       "label": "No unbounded Supabase/D1 pull; no SELECT *; job poll only when hasActiveJob; no direct client Supabase",
       "asked": "repeated",
       "files_must_contain": {
-        "src/jobs/SupabaseJobSync.ts": ["hasActiveJob", "isDirectClientSupabaseDisabled = true"],
-        "src/App.tsx": ["lastSyncTime"],
-        "scripts/assert-egress-bomb.mjs": ["EGRESS_BOMB"]
+        "src/jobs/SupabaseJobSync.ts": [
+          "hasActiveJob",
+          "isDirectClientSupabaseDisabled = true"
+        ],
+        "src/App.tsx": [
+          "lastSyncTime"
+        ],
+        "scripts/assert-egress-bomb.mjs": [
+          "EGRESS_BOMB"
+        ]
       }
     },
     {
@@ -72,7 +96,10 @@
       "label": "Meal image lists: one URL per capture; drop data:/blob: when /photos/ or https exists",
       "asked": "repeated",
       "files_must_contain": {
-        "src/utils/foodImageSources.ts": ["uniqueMealImageUrls", "startsWith('data:')"],
+        "src/utils/foodImageSources.ts": [
+          "uniqueMealImageUrls",
+          "startsWith('data:')"
+        ],
         "src/utils/foodImageSources.test.ts": [
           "drops data: copies once the same captures exist on /photos/",
           "keeps local data: URLs when nothing has been uploaded yet"
@@ -84,7 +111,9 @@
       "label": "Behavioral/lifestyle metrics excluded from laboratory plausibility ratio checks",
       "asked": "repeated",
       "files_must_contain": {
-        "src/utils/biomarkers.ts": ["isExcludedDeviceMetric"],
+        "src/utils/biomarkers.ts": [
+          "isExcludedDeviceMetric"
+        ],
         "src/utils/biomarkerSanitize.test.ts": [
           "does not flag everyday step counts as improbable"
         ]
@@ -99,6 +128,20 @@
           "msg.toLowerCase().includes('extract')",
           "msg.toLowerCase().includes('classified')",
           "msg.toLowerCase().includes('running agent')"
+        ]
+      }
+    },
+    {
+      "id": "builder_ne_tier3_ab_scorer",
+      "label": "Agent that authors a method must not run/score its own live A/B or Tier-3 quality claim",
+      "asked": "repeated",
+      "files_must_contain": {
+        "docs/agent/JOURNEY.md": [
+          "Builder \u2260 Tier-3 scorer",
+          "frozen ground-truth scorecard"
+        ],
+        "plan/RELIABILITY.md": [
+          "Builder must not author and score the same live A/B"
         ]
       }
     }

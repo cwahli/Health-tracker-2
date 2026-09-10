@@ -359,3 +359,14 @@ You: **promote** (tiny packet, standing grows) or **skip**.
 Packet → `specs/done/`. One HANDOVER line. Next session reads standing + done packet, not the chat. Nutrition targets are not “asked again”; they are a row. Compare is not “remembered”; it is a sibling journey Guard still fingerprints.
 
 That is the whole system: one sentence, one **go**, checkpoints so a wipe is a restore, standing so a vanished feature is a FAIL, Reviewer so the next incident becomes a row instead of another retrieval session.
+
+---
+
+## Builder ≠ Tier-3 scorer
+
+**Maker ≠ Checker** already covers code vs Guard. It also covers **live quality claims**:
+
+- The agent (or packet) that **authors** a new compare/log method must **not** run or grade its own Tier-3 / live A/B and publish the win.
+- Eval uses a **frozen ground-truth scorecard** (`golden/meal/.../correct_results.md` or named vitest), shared constraints (no dish-name spoilers), and preferably a separate surface/script owner.
+- One-call “STEP 1..N” prose is not a gated procedural graph. Keep production Mode D monolith unless a packet proves multi-call gates.
+

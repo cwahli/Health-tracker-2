@@ -1,0 +1,128 @@
+{
+  "testDate": "2026-09-10T21:53:04.583Z",
+  "method": "production scout_only_compare (monolith) — kept",
+  "evalOwner": "script + frozen golden Meal_03_compare (builder ≠ scorer)",
+  "model": "gemini-3.5-flash-lite",
+  "vertex": {
+    "project": "test-llm-project-502307",
+    "location": "global"
+  },
+  "rows": [
+    {
+      "id": "set1",
+      "latencyMs": 9522,
+      "usage": {
+        "promptTokenCount": 5656,
+        "candidatesTokenCount": 1858
+      },
+      "extractedCount": 9,
+      "extractTarget": 6,
+      "recallVsTargetPct": 150,
+      "extractPass": true,
+      "groupsCount": 4,
+      "groupsWithBBox": 4,
+      "hasCatchAll40": false,
+      "recommendedOption": "Say Bread Plain Bun / Say Bread Plain Bun",
+      "gtRecLabel": "Polo Keju / savory cheese bread (not candy)",
+      "recPass": true,
+      "pass": true
+    },
+    {
+      "id": "set2",
+      "latencyMs": 6162,
+      "usage": {
+        "promptTokenCount": 6758,
+        "candidatesTokenCount": 1424
+      },
+      "extractedCount": 4,
+      "extractTarget": 4,
+      "recallVsTargetPct": 100,
+      "extractPass": true,
+      "groupsCount": 3,
+      "groupsWithBBox": 3,
+      "hasCatchAll40": false,
+      "recommendedOption": "Green Snack Wrapper / Green Snack Bar",
+      "gtRecLabel": "Blue or Green bread",
+      "recPass": true,
+      "pass": true
+    },
+    {
+      "id": "set3",
+      "latencyMs": 18300,
+      "usage": {
+        "promptTokenCount": 4554,
+        "candidatesTokenCount": 5895
+      },
+      "extractedCount": 100,
+      "extractTarget": 104,
+      "recallVsTargetPct": 96.2,
+      "extractPass": true,
+      "groupsCount": 4,
+      "groupsWithBBox": 4,
+      "hasCatchAll40": true,
+      "recommendedOption": "Sayur Asem / Sour Vegetable Tamarind Soup",
+      "gtRecLabel": "Kembung OR Sayur Asem",
+      "recPass": true,
+      "pass": true
+    },
+    {
+      "id": "set4",
+      "latencyMs": 8912,
+      "usage": {
+        "promptTokenCount": 3450,
+        "candidatesTokenCount": 2427
+      },
+      "extractedCount": 31,
+      "extractTarget": 32,
+      "recallVsTargetPct": 96.9,
+      "extractPass": true,
+      "groupsCount": 4,
+      "groupsWithBBox": 4,
+      "hasCatchAll40": false,
+      "recommendedOption": "Es Kelapa Muda / Young Coconut Water",
+      "gtRecLabel": "Es Kelapa Muda",
+      "recPass": true,
+      "pass": true
+    },
+    {
+      "id": "set5",
+      "latencyMs": 13532,
+      "usage": {
+        "promptTokenCount": 3450,
+        "candidatesTokenCount": 4191
+      },
+      "extractedCount": 58,
+      "extractTarget": 56,
+      "recallVsTargetPct": 103.6,
+      "extractPass": true,
+      "groupsCount": 5,
+      "groupsWithBBox": 5,
+      "hasCatchAll40": false,
+      "recommendedOption": "Ikan Nila Garang Asem + Nasi / Tilapia in Tangy Spiced Broth with Rice",
+      "gtRecLabel": "Nila Garang Asem + Nasi",
+      "recPass": true,
+      "pass": true
+    },
+    {
+      "id": "set6",
+      "latencyMs": 6618,
+      "usage": {
+        "promptTokenCount": 3450,
+        "candidatesTokenCount": 1639
+      },
+      "extractedCount": 35,
+      "extractTarget": 17,
+      "recallVsTargetPct": 205.9,
+      "extractPass": true,
+      "groupsCount": 1,
+      "groupsWithBBox": 1,
+      "hasCatchAll40": false,
+      "recommendedOption": "None - All shelf options violate active nutritional targets.",
+      "gtRecLabel": "Chitato Lite OR Happy Tos",
+      "recPass": false,
+      "pass": false
+    }
+  ],
+  "overallPass": false,
+  "passCount": 5
+}
