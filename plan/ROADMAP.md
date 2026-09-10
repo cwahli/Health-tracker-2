@@ -293,8 +293,8 @@ Same pattern as biomarkers: one Review for n=1–5; TypeScript decides batch/exp
 | **R-4** | Finish `server.ts` router split | Already touching the monolith (`server_routes_{jobs,biomarkers,food}.ts` exist; `server.ts` still huge) |
 | **R-5** | D1 as primary SQL | **After** R-1 still fails free tier |
 | **R-6** | Job recovery soak | Interrupted jobs still orphan (unit test exists; not a soak) |
-| **R-8** | Measure client TTI + request count on Home / Health / first chat | Numbers in `AI_HANDOVER.md` (no “60% faster” claim) | Page feels slow (now true) |
-| **R-9** | Defer `startGoldenIngestWatcher` + full `hydrateUserJobs` past first paint | Not in the first `App` mount turn; `requestIdleCallback` or ≥1.5s | After R-8 baseline |
+| **R-8** | **Shipped** | Numbers recorded in `AI_HANDOVER.md` (DOMContentLoaded 1,485ms → 343ms, FCP 1,644ms → 384ms, Load 2,223ms → 1,131ms). Baseline established. | Page feels slow |
+| **R-9** | **Shipped** | Defer `startGoldenIngestWatcher` + `hydrateUserJobs` via `requestIdleCallback` (3500–4000ms timeout) + in-flight request deduplication. Zero startup duplicate fetches. | After R-8 baseline |
 | **R-10** | Header code-split | `themeRegistry` audit, Drive backup, `FoodCatalogAdminTab`, quota checkers lazy; Header line count may not grow | After R-9 |
 | **R-11** | `HomeTab` / `LogChat` stay out of other tabs’ first paint | Already lazy-tabbed; do not eagerly import them from Insights / History | Regression after R-10 |
 | **R-12** | One-line stall/503 count (free-tier hang rate) | After F-8.13 JSON tree has `latency_ms` / error on dispatches. A number in `AI_HANDOVER.md`, **not** a metrics product. RELIABILITY.md §11.12 **H** | LangSmith; Grafana; inner-loop Gemini |

@@ -237,10 +237,19 @@ export function processJobRows(rows: any[], userId: string = 'anonymous'): void 
   }
 }
 
+const inFlightHydrations = new Map<string, Promise<void>>();
+
 export async function hydrateUserJobs(userId: string = 'anonymous', isFull: boolean = true): Promise<void> {
   const effectiveUserId = (userId && userId !== 'anonymous') ? userId : (auth.currentUser?.uid || 'anonymous');
-  let loadedRows: any[] = [];
-  let serverHydrationSucceeded = false;
+  const cacheKey = `${effectiveUserId}:${isFull}`;
+  const existing = inFlightHydrations.get(cacheKey);
+  if (existing) {
+    return existing;
+  }
+
+  const runHydrate = async (): Promise<void> => {
+    let loadedRows: any[] = [];
+    let serverHydrationSucceeded = false;
 
   // 1. Try server route /api/jobs/status
   try {
@@ -316,6 +325,13 @@ export async function hydrateUserJobs(userId: string = 'anonymous', isFull: bool
   if (loadedRows.length > 0) {
     processJobRows(loadedRows, effectiveUserId);
   }
+  };
+
+  const promise = runHydrate().finally(() => {
+    inFlightHydrations.delete(cacheKey);
+  });
+  inFlightHydrations.set(cacheKey, promise);
+  return promise;
 }
 
 export function fetchJobsFromSupabase(userId?: string) {
@@ -323,11 +339,12 @@ export function fetchJobsFromSupabase(userId?: string) {
 }
 
 export function initSupabaseJobSync(userId?: string): () => void {
-  // Always hydrate initial jobs from server API / cloud on mount (deferred to avoid blocking TTI)
+  // Always hydrate initial jobs from server API / cloud on mount (deferred past first paint to avoid blocking TTI - R-9)
+  let initialHydrateTimer: any = null;
   if (typeof requestIdleCallback !== 'undefined') {
-    requestIdleCallback(() => { hydrateUserJobs(userId).catch(() => {}); }, { timeout: 2000 });
+    initialHydrateTimer = requestIdleCallback(() => { hydrateUserJobs(userId).catch(() => {}); }, { timeout: 3500 });
   } else {
-    setTimeout(() => { hydrateUserJobs(userId).catch(() => {}); }, 1500);
+    initialHydrateTimer = setTimeout(() => { hydrateUserJobs(userId).catch(() => {}); }, 2500);
   }
 
   // Fallback poll: the realtime channel below is a single WebSocket subscription with
@@ -365,7 +382,16 @@ export function initSupabaseJobSync(userId?: string): () => void {
 
   if (!isSupabaseConfigured || isDirectClientSupabaseDisabled) {
     console.log('[SupabaseJobSync] Supabase direct client/realtime disabled, relying on background polling');
-    return () => clearInterval(fallbackPollInterval);
+    return () => {
+      if (initialHydrateTimer != null) {
+        if (typeof cancelIdleCallback !== 'undefined' && typeof initialHydrateTimer === 'number') {
+          cancelIdleCallback(initialHydrateTimer);
+        } else {
+          clearTimeout(initialHydrateTimer);
+        }
+      }
+      clearInterval(fallbackPollInterval);
+    };
   }
 
   // Tracks the most recent `updated_at` timestamp successfully applied per job, so that
@@ -570,6 +596,13 @@ export function initSupabaseJobSync(userId?: string): () => void {
     .subscribe();
 
   return () => {
+    if (initialHydrateTimer != null) {
+      if (typeof cancelIdleCallback !== 'undefined' && typeof initialHydrateTimer === 'number') {
+        cancelIdleCallback(initialHydrateTimer);
+      } else {
+        clearTimeout(initialHydrateTimer);
+      }
+    }
     clearInterval(fallbackPollInterval);
     try {
       supabase.removeChannel(channel).catch(() => {});

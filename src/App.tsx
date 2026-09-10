@@ -1778,11 +1778,20 @@ export default function App() {
 
     JobQueueRunner.start();
     let stopGoldenIngest: (() => void) | null = null;
-    const ingestTimer = setTimeout(() => {
-      import('./utils/goldenIngestClient').then(({ startGoldenIngestWatcher }) => {
-        stopGoldenIngest = startGoldenIngestWatcher();
-      });
-    }, 1500);
+    let ingestIdleHandle: any = null;
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      ingestIdleHandle = (window as any).requestIdleCallback(() => {
+        import('./utils/goldenIngestClient').then(({ startGoldenIngestWatcher }) => {
+          stopGoldenIngest = startGoldenIngestWatcher();
+        });
+      }, { timeout: 4000 });
+    } else {
+      ingestIdleHandle = setTimeout(() => {
+        import('./utils/goldenIngestClient').then(({ startGoldenIngestWatcher }) => {
+          stopGoldenIngest = startGoldenIngestWatcher();
+        });
+      }, 2500);
+    }
 
     // Subscribe to JobStore to handle automated credit refund when a job transitions to failed/cancelled
     const unsubscribeJobStore = JobStore.subscribe(async () => {
@@ -1817,7 +1826,13 @@ export default function App() {
     }
 
     return () => {
-      clearTimeout(ingestTimer);
+      if (ingestIdleHandle != null) {
+        if (typeof window !== 'undefined' && 'cancelIdleCallback' in window && typeof ingestIdleHandle === 'number') {
+          (window as any).cancelIdleCallback(ingestIdleHandle);
+        } else {
+          clearTimeout(ingestIdleHandle);
+        }
+      }
       JobQueueRunner.stop();
       if (stopGoldenIngest) stopGoldenIngest();
       unsubscribeJobStore();
@@ -2531,11 +2546,15 @@ export default function App() {
               }
             }
           }
-          // Trigger job hydration: immediate on manual pull, deferred on background check
+          // Trigger job hydration: immediate on manual pull, deferred on background check past first paint (R-9)
           if (forcePull) {
             hydrateUserJobs(uid, true).catch(() => {});
           } else {
-            setTimeout(() => { hydrateUserJobs(uid).catch(() => {}); }, 1500);
+            if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+              (window as any).requestIdleCallback(() => { hydrateUserJobs(uid).catch(() => {}); }, { timeout: 3500 });
+            } else {
+              setTimeout(() => { hydrateUserJobs(uid).catch(() => {}); }, 2500);
+            }
           }
           tFoodsId = logInteraction('download', `users/${uid}/foodLogs`, null);
           tBioId = logInteraction('download', `users/${uid}/biomarkerHistory`, null);
