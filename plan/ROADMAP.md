@@ -226,7 +226,7 @@ Q-1 (`assert-budgets.mjs`) is **green**. They do **not** rebuild the curator (M3
 
 | ID | Still to do | Done when | Do not |
 |---|---|---|---|
-| **F-8.10** | Goldilocks-split the pipeline owner | `server_food_analyze_run.ts` (~3560, ceiling 3800) split into 400–600 owners (**Meal Agent dispatch**, optional workers, DB search, prompt assembly). Delete leftover `STANDARD_FOOD_FACTORS` mock table if unused. HTTP adapter stays ≤700. Do this **with** F-10, not as a scout-vs-dietitian file split | 40-line shards; a second kcal writer |
+| **F-8.10** | **Shipped** | `server_food_analyze_run.ts` split into 150–600 owners (Meal Agent dispatch, DB search, precalc/finalize, responses). Dead backup deleted. HTTP adapter stays ≤700. | 40-line shards; a second kcal writer |
 | **F-8.11** | **Superseded by F-10.8** | Do not soak the old always-dietitian create path. Evidence job still required on the F-10 pipeline | Replay scout+dietitian as “done” |
 | **F-8.12** | Packaged catalog residual | Hemaviton-class drink: vitamin C / labelled kcal from **brand or printed OCR** when those facts exist. Bind-attempt + `BIND_MISS` is already honest. F-10 does not replace catalog bind | Invent 1000 mg vitamin C |
 | **F-8.13** | **Shipped** | JSON run tree (`debugRunTree.ts`) + `dumpContract` on JSON + Contract-first markdown. Gaps A–F in `docs/agent/domains/debug-contract.md`. | Hash-only prompts; hide schema; PNG as contract; LangSmith/LLM-judge |
@@ -353,7 +353,7 @@ F-9.5 App poller             ← shipped (Grok)
 F-10.6 fat/Na TS             ← shipped (Grok)
 F-8.13 debug contract        ← shipped
 Q-8.1 → 8.5                  ← shipped (Grok)
-F-8.10 shards                ← Gemini Current work
+F-8.10 shards                ← shipped
 Q-8.6 / F-10.8 outer         ← one website Log Meal (human/script)
 B0 / fill-template C1–C7     ← Track B
 Q-9 website consolidation    ← later step (Grok; serialize App.tsx)
