@@ -19,6 +19,16 @@ describe("server_brand_match", () => {
     expect(result.matched).toBe(false);
     expect(result.status).toBe("MISS");
   });
+
+  it("F-8.12 binds the Hemaviton brand row with vitamin C locked (never the 1000 mg name)", async () => {
+    const result = await matchBrandMenu("Hemaviton", "Hemaviton C1000 Orange Drink");
+    expect(result.matched).toBe(true);
+    expect(result.status).toBe("HIT");
+    expect(result.lockedKeys).toContain("calories");
+    expect(result.lockedKeys).toContain("vitaminC");
+    expect(Number(result.valuesAtBasis?.vitaminC)).toBeGreaterThan(0);
+    expect(Number(result.valuesAtBasis?.vitaminC)).not.toBe(1000);
+  });
 });
 
 describe("packaged bind F-8.7", () => {

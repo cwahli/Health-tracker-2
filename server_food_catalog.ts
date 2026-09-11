@@ -519,6 +519,61 @@ export function checkAtwaterValidity(nutrients: Record<string, number>): { valid
   };
 }
 
+// F-4: measured alias hit rate + gated near-dup merges (dups gated, not silently merged).
+export function computeAliasHitRate(rows: Array<{ hit_count?: number | null }>): {
+  total: number;
+  hitAliases: number;
+  totalHits: number;
+  hitRate: number;
+} {
+  const total = rows.length;
+  let hitAliases = 0;
+  let totalHits = 0;
+  for (const r of rows) {
+    const n = Number(r?.hit_count || 0);
+    if (n > 0) hitAliases += 1;
+    if (Number.isFinite(n) && n > 0) totalHits += n;
+  }
+  return { total, hitAliases, totalHits, hitRate: total > 0 ? hitAliases / total : 0 };
+}
+
+export interface NearDupCandidate {
+  food_key?: string;
+  display_name?: string;
+  fdc_id?: string | null;
+  nutrients_per_100g?: Record<string, number> | null;
+}
+
+function nearDupNameSim(a: string, b: string): number {
+  const ta = new Set(normalizeFoodKey(a).split('_').filter(Boolean));
+  const tb = new Set(normalizeFoodKey(b).split('_').filter(Boolean));
+  if (ta.size === 0 || tb.size === 0) return 0;
+  let inter = 0;
+  for (const t of ta) if (tb.has(t)) inter += 1;
+  return inter / Math.max(ta.size, tb.size);
+}
+
+function nearDupCaloriesClose(
+  na: Record<string, number> | null | undefined,
+  nb: Record<string, number> | null | undefined
+): boolean {
+  const ca = Number(na?.calories || 0);
+  const cb = Number(nb?.calories || 0);
+  if (!(ca > 0) || !(cb > 0)) return false;
+  return Math.abs(ca - cb) / Math.max(ca, cb) <= 0.35;
+}
+
+// NEAR_DUP_CLUSTER per FOOD.md 7.2: same fdc_id OR (high name sim + Atwater-close pair).
+export function isNearDupCluster(a: NearDupCandidate, b: NearDupCandidate): { cluster: boolean; reason: string } {
+  const fa = String(a?.fdc_id || '').trim();
+  const fb = String(b?.fdc_id || '').trim();
+  if (fa && fb && fa === fb) return { cluster: true, reason: 'same_fdc_id' };
+  const sim = nearDupNameSim(String(a?.display_name || a?.food_key || ''), String(b?.display_name || b?.food_key || ''));
+  const close = nearDupCaloriesClose(a?.nutrients_per_100g, b?.nutrients_per_100g);
+  if (sim >= 0.5 && close) return { cluster: true, reason: `name_sim_${sim.toFixed(2)}_kcal_close` };
+  return { cluster: false, reason: `name_sim_${sim.toFixed(2)}_kcal_${close ? 'close' : 'far'}` };
+}
+
 export const DEFAULT_CATEGORY_PROFILES: Record<string, Record<string, number>> = {
   leafy_greens: {
     calories: 20, protein: 1.5, carbohydrates: 3.5, totalFat: 0.2, saturatedFat: 0.03, unsaturatedFat: 0.15,
@@ -820,6 +875,33 @@ export async function mergeFoodCatalogItems(
 
       if ((sourceIsBar && targetIsLoose) || (sourceIsLoose && targetIsBar)) {
         return { success: false, error: 'Refused merge: Incompatible physical form tags (bar vs loose/cup)' };
+      }
+
+      // F-4: gate silent merges — both rows loaded with names + kcal means we can
+      // demand a NEAR_DUP_CLUSTER (same fdc_id OR name-sim + kcal-close). Missing
+      // data fails open for admin; clear non-dups are refused, not silently merged.
+      const hasNames = Boolean(sourceItem.display_name || sourceItem.food_key)
+        && Boolean(targetItem.display_name || targetItem.food_key);
+      const hasKcal = Number(sourceItem.nutrients_per_100g?.calories || 0) > 0
+        && Number(targetItem.nutrients_per_100g?.calories || 0) > 0;
+      if (hasNames && hasKcal) {
+        const dup = isNearDupCluster(
+          {
+            food_key: sourceItem.food_key,
+            display_name: sourceItem.display_name,
+            fdc_id: sourceItem.fdc_id,
+            nutrients_per_100g: sourceItem.nutrients_per_100g,
+          },
+          {
+            food_key: targetItem.food_key,
+            display_name: targetItem.display_name,
+            fdc_id: targetItem.fdc_id,
+            nutrients_per_100g: targetItem.nutrients_per_100g,
+          }
+        );
+        if (!dup.cluster) {
+          return { success: false, error: `Refused merge: not a near-duplicate cluster (${dup.reason})` };
+        }
       }
     }
 

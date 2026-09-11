@@ -117,6 +117,23 @@ export async function matchBrandMenu(
     }
   }
 
+  // F-8.12: carry brand-row micros (vitamin C etc.) into the lock when the row has
+  // them. Packaged drinks bind labelled micros from brand facts; never invent the
+  // can-name dose (e.g. 1000 mg from "C1000") — only lock values present on the row.
+  const MICRO_FIELDS = [
+    'vitaminC', 'vitaminD', 'vitaminA', 'vitaminE', 'vitaminK', 'vitaminB12',
+    'calcium', 'iron', 'zinc', 'magnesium', 'potassium', 'phosphorus', 'iodine',
+  ];
+  for (const field of MICRO_FIELDS) {
+    const val = Number(rawNutrients[field]);
+    if (Number.isFinite(val) && val > 0) {
+      valuesAtBasis[field] = val;
+      if (!lockedKeys.includes(field)) {
+        lockedKeys.push(field);
+      }
+    }
+  }
+
   return {
     matched: true,
     status: 'HIT',

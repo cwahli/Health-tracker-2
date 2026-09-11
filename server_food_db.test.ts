@@ -201,4 +201,15 @@ describe('FALSE_FRIEND class examples', () => {
     const res = lookupCanonicalBaseFood('cooked bacon');
     expect(res?.fdcId).toBe('172550');
   });
+
+  it('F-3 FALSE_FRIEND PLANT_MILK_AS_DAIRY: plant milks never resolve to dairy milk', () => {
+    for (const q of ['oat milk', 'soy milk', 'almond milk', 'coconut milk', 'Oat Milk Latte']) {
+      const res = lookupCanonicalBaseFood(q);
+      expect(res?.fdcId).not.toBe('746782');
+      expect(res?.foodType).not.toBe('dairy');
+    }
+    // Dairy control still resolves; oats-with-milk composite is not a plant milk.
+    expect(lookupCanonicalBaseFood('whole milk')?.fdcId).toBe('746782');
+    expect(lookupCanonicalBaseFood('glass of milk')?.fdcId).toBe('746782');
+  });
 });

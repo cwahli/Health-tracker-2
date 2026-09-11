@@ -498,6 +498,14 @@ export function lookupCanonicalBaseFood(name: string): any | null {
   if (clean.includes('sugar_syrup') || clean.includes('simple_syrup') || (clean.includes('sugar') && clean.includes('syrup')) || clean.includes('corn_syrup')) return CANONICAL_BASE_FOODS.sugar_syrup;
   if (clean.includes('citrus_juice') || clean.includes('orange_juice') || (clean.includes('orange') && (clean.includes('juice') || clean.includes('drink'))) || (clean.includes('citrus') && (clean.includes('juice') || clean.includes('drink')))) return CANONICAL_BASE_FOODS.citrus_juice;
   if (clean.includes('espresso') || clean.includes('brewed_espresso') || clean.includes('cold_brew_espresso')) return CANONICAL_BASE_FOODS.espresso;
+  // F-3 FALSE_FRIEND (PLANT_MILK_AS_DAIRY): oat/soy/almond/coconut milk must never
+  // resolve to dairy whole_cow_milk. Return null so the pipeline falls through to an
+  // honest fallback instead of confident-wrong dairy numbers. "X with milk" (oats
+  // prepared with dairy) is not a plant milk and still resolves below.
+  const rawLower = String(name || '').toLowerCase();
+  const isPlantMilk = /\b(oat|soy|soya|almond|coconut|cashew|rice|pea|hemp)\s*milks?\b/i.test(rawLower)
+    && !/\bwith\b[^.]*\bmilks?\b/i.test(rawLower);
+  if (isPlantMilk) return null;
   if (!clean.includes('cheese') && !clean.includes('mozzarella') && !clean.includes('ricotta') && (clean.includes('milk') || clean.includes('whole_cow_milk') || clean.includes('steamed_milk') || clean.includes('cow_milk') || clean.includes('whole_milk'))) return CANONICAL_BASE_FOODS.whole_cow_milk;
   if (clean.includes('jam') || clean.includes('preserves') || clean.includes('marmalade') || clean.includes('jelly_spread') || (clean.includes('fruit') && clean.includes('spread'))) return CANONICAL_BASE_FOODS.fruit_jam;
   if (tokens.includes('grapes') || tokens.includes('grape') || clean.includes('red_grapes') || clean.includes('green_grapes')) return CANONICAL_BASE_FOODS.grapes;

@@ -120,5 +120,30 @@
     "notes": "Mr Oat Australian Rolled Oats nutrition facts per 100g",
     "enabled": true,
     "updated_at": "2026-08-29T00:00:00.000Z"
+  },
+  {
+    "country_code": "ID",
+    "chain_key": "hemaviton",
+    "chain_name": "Hemaviton",
+    "dish_name": "Hemaviton C1000 Orange Drink",
+    "dish_name_key": "hemaviton_c1000_orange_drink",
+    "basis_type": "per_100g",
+    "serving_grams": 100,
+    "nutrients": {
+      "calories": 30,
+      "protein": 0,
+      "totalFat": 0,
+      "saturatedFat": 0,
+      "carbohydrates": 7.5,
+      "sugar": 7.5,
+      "totalFibre": 0,
+      "sodium": 14,
+      "vitaminC": 38
+    },
+    "ingredients": "Water, sugar, vitamin C, orange flavour",
+    "source_url": null,
+    "notes": "F-8.12 brand facts scaled to per_100g from the 330 ml can lock used in-app (100 kcal, 25 g carbs, 125 mg vitamin C per can). 38 mg vitamin C per 100 g is the brand fact — never the 1000 mg can-name dose.",
+    "enabled": true,
+    "updated_at": "2026-09-11T00:00:00.000Z"
   }
 ]

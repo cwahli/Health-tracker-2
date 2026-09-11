@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { normalizeFoodKey, normalizeDishKey, resolveInternalFood, checkAtwaterValidity, getFallbackCategoryProfile, upsertFoodAlias, mergeFoodCatalogItems } from './server_food_catalog';
+import { normalizeFoodKey, normalizeDishKey, resolveInternalFood, checkAtwaterValidity, getFallbackCategoryProfile, upsertFoodAlias, mergeFoodCatalogItems, computeAliasHitRate, isNearDupCluster } from './server_food_catalog';
 import { applyServerAverageNutrients } from './server_pure_helpers';
 import { NUTRIENT_KEYS } from './src/utils/nutrients';
 
@@ -155,5 +155,35 @@ describe('Food Catalog Normalization & Resolution (PASS 2 - R7)', () => {
     expect(match?.source).toBe('alias_active');
     expect(aliasHitUpdates).toHaveLength(1);
     expect(aliasHitUpdates[0].hit_count).toBe(5);
+  });
+
+  it('F-4 measures alias hit rate from hit_count rows (no silent merge metric)', () => {
+    const r = computeAliasHitRate([
+      { hit_count: 5 },
+      { hit_count: 0 },
+      { hit_count: 2 },
+      {},
+    ]);
+    expect(r.total).toBe(4);
+    expect(r.hitAliases).toBe(2);
+    expect(r.totalHits).toBe(7);
+    expect(r.hitRate).toBeCloseTo(0.5);
+    expect(computeAliasHitRate([]).hitRate).toBe(0);
+  });
+
+  it('F-4 gates merges to near-duplicate clusters (same fdc_id or name+kcal)', () => {
+    expect(isNearDupCluster(
+      { display_name: 'Rolled Oats', fdc_id: '123', nutrients_per_100g: { calories: 350 } },
+      { display_name: 'Rolled Oats Bulk', fdc_id: '123', nutrients_per_100g: { calories: 900 } },
+    ).cluster).toBe(true);
+    expect(isNearDupCluster(
+      { display_name: 'Rolled Oats', nutrients_per_100g: { calories: 350, protein: 10, carbohydrates: 60, totalFat: 8 } },
+      { display_name: 'Rolled Oats Bulk', nutrients_per_100g: { calories: 360, protein: 10, carbohydrates: 62, totalFat: 8 } },
+    ).cluster).toBe(true);
+    const far = isNearDupCluster(
+      { display_name: 'Rolled Oats', fdc_id: '111', nutrients_per_100g: { calories: 350 } },
+      { display_name: 'Chocolate Bar', fdc_id: '999', nutrients_per_100g: { calories: 500 } },
+    );
+    expect(far.cluster).toBe(false);
   });
 });
