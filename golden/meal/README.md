@@ -40,3 +40,7 @@ Each `Meal_NN/` folder is one computation use case: photos + `Instruction.md`
 | `prototype/meallog/**` | Live harness only — see `prototype/meallog/README.md` |
 
 Builder must not author and score the same live A/B (standing `builder_ne_tier3_ab_scorer`).
+
+### Live scorecards
+- Mode A log suite: [`Meal_04_log/benchmark_result.md`](./Meal_04_log/benchmark_result.md)
+- Mode D compare: [`Meal_03_compare/benchmark_result.md`](./Meal_03_compare/benchmark_result.md)
