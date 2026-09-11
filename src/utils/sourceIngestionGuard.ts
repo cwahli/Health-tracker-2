@@ -1,118 +1,82 @@
 /**
- * Source Channel Ingestion Guard
- * Enforces strict channel type boundaries to prevent cross-contamination
- * (e.g., wearable devices syncing clinical lab analytes like WBC, eGFR, Lymphocytes).
+ * Source Ingestion Guard
+ * Enforces allowed biomarker metrics per data ingestion source channel (e.g. wearables, manual, lab results).
  */
 
-export const WEARABLE_ALLOWED_METRICS = new Set([
-  'steps',
-  'step_count',
-  'resting_heart_rate',
-  'heart_rate',
-  'pulse_rate',
-  'active_energy',
-  'active_minutes',
-  'calories',
-  'calories_burned',
-  'sleep_duration',
-  'sleep_hours',
-  'sleep_efficiency',
-  'body_weight',
-  'weight',
-  'weight_kg',
-  'blood_pressure',
-  'systolic_blood_pressure',
-  'diastolic_blood_pressure',
-  'distance',
-  'distance_km',
-  'floors_climbed',
-  'vo2_max',
-  'respiratory_rate',
-  'oxygen_saturation',
-  'spo2',
+export const SOURCE_CHANNEL_ALLOWLIST = new Set([
+  'apple_health',
+  'google_fit',
+  'garmin',
+  'whoop',
+  'oura',
+  'fitbit',
+  'withings',
+  'wearable',
+  'manual',
+  'lab_pdf',
+  'doctor_note',
+  'ocr_scan',
+  'agent_inference'
 ]);
 
-export const SOURCE_CHANNEL_ALLOWLIST: Record<string, Set<string>> = {
-  google_fit: WEARABLE_ALLOWED_METRICS,
-  apple_health: WEARABLE_ALLOWED_METRICS,
-  fitbit: WEARABLE_ALLOWED_METRICS,
-  whoop: WEARABLE_ALLOWED_METRICS,
-  oura: WEARABLE_ALLOWED_METRICS,
-  garmin: WEARABLE_ALLOWED_METRICS,
-  health_connect: WEARABLE_ALLOWED_METRICS,
-  // Clinical pipelines permit all mapped clinical biomarkers
-  lab_ocr_pdf: new Set(['*']),
-  nhs_emis_table: new Set(['*']),
-  manual_entry: new Set(['*']),
-  lab_csv: new Set(['*']),
-  doctor_letter: new Set(['*']),
-};
+export const WEARABLE_ALLOWED_METRICS = new Set([
+  'heart_rate',
+  'resting_heart_rate',
+  'heart_rate_variability',
+  'hrv',
+  'steps',
+  'sleep_duration',
+  'deep_sleep',
+  'rem_sleep',
+  'vo2_max',
+  'respiratory_rate',
+  'blood_oxygen',
+  'spo2',
+  'body_temperature',
+  'blood_pressure_systolic',
+  'blood_pressure_diastolic',
+  'active_calories',
+  'resting_calories',
+  'weight',
+  'body_fat_percentage'
+]);
 
-/**
- * Checks if a biomarker key is authorized for ingestion from the given source.
- */
-export function isKeyAllowedForSource(source: string, key: string): boolean {
-  if (!source) return true;
-  const sourceLower = source.toLowerCase().trim();
-  const allowlist = SOURCE_CHANNEL_ALLOWLIST[sourceLower];
+export function isKeyAllowedForSource(key: string, source: string): boolean {
+  if (!key) return false;
+  const s = (source || 'manual').toLowerCase().trim();
+  const k = key.toLowerCase().trim();
 
-  // If source is not registered as a wearable integration, default to permitting clinical intake
-  if (!allowlist) return true;
+  // If source is a wearable, only allowed wearable metrics pass
+  if (['apple_health', 'google_fit', 'garmin', 'whoop', 'oura', 'fitbit', 'withings', 'wearable'].includes(s)) {
+    return WEARABLE_ALLOWED_METRICS.has(k);
+  }
 
-  // Wildcard permits all
-  if (allowlist.has('*')) return true;
-
-  const keyClean = (key || '').toLowerCase().replace(/[\s-]/g, '_');
-  return allowlist.has(keyClean);
+  // Lab reports and manual entry allow clinical biomarkers
+  return true;
 }
 
-/**
- * Validates a batch of biomarker keys against the source channel.
- */
-export function validateSourceIngestion(
-  source: string,
-  biomarkerKeys: string[]
-): { valid: boolean; rejectedKeys: string[]; error?: string } {
-  if (!source || !biomarkerKeys || biomarkerKeys.length === 0) {
-    return { valid: true, rejectedKeys: [] };
-  }
+export function validateSourceIngestion<T extends { key?: string; biomarker?: string }>(
+  observations: T[],
+  source: string
+): { valid: T[]; rejected: T[] } {
+  const valid: T[] = [];
+  const rejected: T[] = [];
 
-  const rejectedKeys = biomarkerKeys.filter((k) => !isKeyAllowedForSource(source, k));
-
-  if (rejectedKeys.length > 0) {
-    return {
-      valid: false,
-      rejectedKeys,
-      error: `SchemaValidationError: Source '${source}' is not authorized to ingest clinical lab analytes: [${rejectedKeys.join(', ')}]`,
-    };
-  }
-
-  return { valid: true, rejectedKeys: [] };
-}
-
-/**
- * Filters incoming biomarker records, rejecting unwhitelisted metrics for the source.
- */
-export function filterAllowedBiomarkersForSource(
-  source: string,
-  biomarkers: Record<string, any>
-): { allowed: Record<string, any>; rejected: Record<string, any>; rejectedKeys: string[] } {
-  const allowed: Record<string, any> = {};
-  const rejected: Record<string, any> = {};
-  const rejectedKeys: string[] = [];
-
-  if (!biomarkers) {
-    return { allowed, rejected, rejectedKeys };
-  }
-
-  Object.entries(biomarkers).forEach(([key, value]) => {
-    if (isKeyAllowedForSource(source, key)) {
-      allowed[key] = value;
+  for (const obs of observations) {
+    const k = obs.key || obs.biomarker || '';
+    if (isKeyAllowedForSource(k, source)) {
+      valid.push(obs);
     } else {
-      rejected[key] = value;
-      rejectedKeys.push(key);
+      rejected.push(obs);
     }
-  });
+  }
 
-  return { allowed, rejected, rejectedKeys };
+  return { valid, rejected };
+}
+
+export function filterAllowedBiomarkersForSource<T extends { key?: string; biomarker?: string }>(
+  observations: T[],
+  source: string
+): T[] {
+  return validateSourceIngestion(observations, source).valid;
 }

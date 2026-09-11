@@ -49,7 +49,11 @@ export default function ApiCallTrackerModal({ isOpen, onClose, userEmail, langua
     if (isOpen) {
       loadEvents();
       setSyncStatusMsg('idle');
-      getAllLocalUsers().then(users => setLocalUsers(users)).catch(() => {});
+      try {
+        setLocalUsers(getAllLocalUsers());
+      } catch (e) {
+        console.warn('Failed to load local users:', e);
+      }
     }
   }, [isOpen]);
 

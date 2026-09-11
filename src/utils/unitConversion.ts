@@ -1,103 +1,111 @@
-export const CONVERSION_FACTORS: Record<string, { multiplier: number, from: string, to: string }> = {
-  'hba1c': { multiplier: 1.0000, from: '%', to: '%' },
-  'creatinine': { multiplier: 88.4956, from: 'mg/dL', to: 'umol/L' },
-  'total_cholesterol': { multiplier: 0.0259, from: 'mg/dL', to: 'mmol/L' },
-  'ldl': { multiplier: 0.0259, from: 'mg/dL', to: 'mmol/L' },
-  'hdl': { multiplier: 0.0259, from: 'mg/dL', to: 'mmol/L' },
-  'triglycerides': { multiplier: 0.0113, from: 'mg/dL', to: 'mmol/L' },
-  'fasting_glucose': { multiplier: 0.0555, from: 'mg/dL', to: 'mmol/L' },
-  'glucose': { multiplier: 0.0555, from: 'mg/dL', to: 'mmol/L' },
-  'blood_urea_nitrogen': { multiplier: 0.3570, from: 'mg/dL', to: 'mmol/L' },
-  'urea': { multiplier: 0.3570, from: 'mg/dL', to: 'mmol/L' },
-  'uric_acid': { multiplier: 59.5238, from: 'mg/dL', to: 'umol/L' },
-  'bilirubin': { multiplier: 17.0940, from: 'mg/dL', to: 'umol/L' },
-  'calcium': { multiplier: 0.2500, from: 'mg/dL', to: 'mmol/L' },
-  'phosphorus': { multiplier: 0.3230, from: 'mg/dL', to: 'mmol/L' },
-  'magnesium': { multiplier: 0.4110, from: 'mg/dL', to: 'mmol/L' },
-  'iron': { multiplier: 0.1790, from: 'ug/dL', to: 'umol/L' },
-  'hemoglobin': { multiplier: 10.0000, from: 'g/dL', to: 'g/L' },
-  'albumin': { multiplier: 10.0000, from: 'g/dL', to: 'g/L' },
-  'total_protein': { multiplier: 10.0000, from: 'g/dL', to: 'g/L' },
-  'thyroxine': { multiplier: 12.8700, from: 'ug/dL', to: 'nmol/L' },
-  'vitamin_d': { multiplier: 2.4963, from: 'ng/mL', to: 'nmol/L' },
-  'vitamin_b12': { multiplier: 0.7380, from: 'pg/mL', to: 'pmol/L' },
-  'folate': { multiplier: 2.2660, from: 'ng/mL', to: 'nmol/L' },
-  'testosterone': { multiplier: 0.0347, from: 'ng/dL', to: 'nmol/L' },
-  'estradiol': { multiplier: 3.6711, from: 'pg/mL', to: 'pmol/L' },
-  'progesterone': { multiplier: 3.1797, from: 'ng/mL', to: 'nmol/L' },
-  'cortisol': { multiplier: 27.6243, from: 'ug/dL', to: 'nmol/L' },
+import { ANALYTE_CONVERSIONS, specForAnalyte } from './analyteConversions';
+
+export interface ConversionFactor {
+  from: string;
+  to: string;
+  multiplier: number;
+  decimals?: number;
+}
+
+export const CONVERSION_FACTORS: Record<string, ConversionFactor> = {
+  hdl: { from: 'mg/dL', to: 'mmol/L', multiplier: 0.02586, decimals: 2 },
+  ldl: { from: 'mg/dL', to: 'mmol/L', multiplier: 0.02586, decimals: 2 },
+  total_cholesterol: { from: 'mg/dL', to: 'mmol/L', multiplier: 0.02586, decimals: 2 },
+  non_hdl_cholesterol: { from: 'mg/dL', to: 'mmol/L', multiplier: 0.02586, decimals: 2 },
+  vldl: { from: 'mg/dL', to: 'mmol/L', multiplier: 0.02586, decimals: 2 },
+  triglycerides: { from: 'mg/dL', to: 'mmol/L', multiplier: 0.01129, decimals: 2 },
+  fasting_glucose: { from: 'mg/dL', to: 'mmol/L', multiplier: 0.0555, decimals: 2 },
+  glucose: { from: 'mg/dL', to: 'mmol/L', multiplier: 0.0555, decimals: 2 },
+  creatinine: { from: 'mg/dL', to: 'umol/L', multiplier: 88.4, decimals: 1 },
+  total_bilirubin: { from: 'mg/dL', to: 'umol/L', multiplier: 17.1, decimals: 1 },
+  direct_bilirubin: { from: 'mg/dL', to: 'umol/L', multiplier: 17.1, decimals: 1 },
+  bilirubin: { from: 'mg/dL', to: 'umol/L', multiplier: 17.1, decimals: 1 },
+  hemoglobin: { from: 'g/dL', to: 'g/L', multiplier: 10, decimals: 1 },
+  mean_corpuscular_hemoglobin_concentration: { from: 'g/dL', to: 'g/L', multiplier: 10, decimals: 1 },
+  mchc: { from: 'g/dL', to: 'g/L', multiplier: 10, decimals: 1 },
+  hematocrit: { from: '%', to: 'L/L', multiplier: 0.01, decimals: 3 },
+  albumin: { from: 'g/dL', to: 'g/L', multiplier: 10, decimals: 1 },
+  serum_albumin: { from: 'g/dL', to: 'g/L', multiplier: 10, decimals: 1 },
+  total_protein: { from: 'g/dL', to: 'g/L', multiplier: 10, decimals: 1 },
+  serum_globulin: { from: 'g/dL', to: 'g/L', multiplier: 10, decimals: 1 },
+  globulin: { from: 'g/dL', to: 'g/L', multiplier: 10, decimals: 1 },
+  uric_acid: { from: 'mg/dL', to: 'umol/L', multiplier: 59.48, decimals: 1 },
+  calcium: { from: 'mg/dL', to: 'mmol/L', multiplier: 0.2495, decimals: 2 },
+  serum_calcium: { from: 'mg/dL', to: 'mmol/L', multiplier: 0.2495, decimals: 2 },
+  serum_adjusted_calcium: { from: 'mg/dL', to: 'mmol/L', multiplier: 0.2495, decimals: 2 },
+  serum_inorganic_phosphate: { from: 'mg/dL', to: 'mmol/L', multiplier: 0.3229, decimals: 2 },
+  phosphate: { from: 'mg/dL', to: 'mmol/L', multiplier: 0.3229, decimals: 2 },
 };
 
-export function standardizeUnit(key: string, value: number | string, currentUnit: string): { newValue: number | string, newUnit: string } {
-  if (typeof value !== 'number' && isNaN(Number(value))) {
-    return { newValue: value, newUnit: currentUnit };
+export function standardizeUnit(
+  key: string,
+  value: number | string,
+  unit?: string
+): { newValue: number | string; standardizedUnit: string } {
+  if (value === '' || value === null || value === undefined) {
+    return { newValue: value, standardizedUnit: unit || '' };
+  }
+  const num = typeof value === 'number' ? value : parseFloat(String(value));
+  if (isNaN(num)) return { newValue: value, standardizedUnit: unit || '' };
+
+  const normKey = key.toLowerCase();
+  const conv = CONVERSION_FACTORS[normKey];
+  const u = (unit || '').toLowerCase().trim();
+
+  if (conv && u === conv.from.toLowerCase()) {
+    const converted = num * conv.multiplier;
+    const rounded = conv.decimals !== undefined ? Number(converted.toFixed(conv.decimals)) : converted;
+    return { newValue: rounded, standardizedUnit: conv.to };
   }
 
-  const numericValue = Number(value);
-  const k = key.toLowerCase();
-  const unit = (currentUnit || '').toLowerCase().trim();
-
-  if (k === 'hba1c') {
-    if (unit === '%' || unit === 'percent') {
-      const mmol = Math.round((10.93 * numericValue) - 23.5);
-      return { newValue: mmol, newUnit: 'mmol/mol' };
-    }
-  }
-
-  const conversion = CONVERSION_FACTORS[k];
-
-  if (conversion && unit === conversion.from.toLowerCase()) {
-    return {
-      newValue: Number((numericValue * conversion.multiplier).toFixed(2)),
-      newUnit: conversion.to
-    };
-  }
-
-  return { newValue: value, newUnit: currentUnit };
+  return { newValue: value, standardizedUnit: unit || '' };
 }
 
-export function reverseStandardizeUnit(key: string, value: number | string, currentUnit: string): { newValue: number | string, newUnit: string } {
-  if (typeof value !== 'number' && isNaN(Number(value))) {
-    return { newValue: value, newUnit: currentUnit };
+export function reverseStandardizeUnit(
+  key: string,
+  value: number | string,
+  targetUnit?: string
+): number | string {
+  if (value === '' || value === null || value === undefined) return value;
+  const num = typeof value === 'number' ? value : parseFloat(String(value));
+  if (isNaN(num)) return value;
+
+  const normKey = key.toLowerCase();
+  const conv = CONVERSION_FACTORS[normKey];
+  const target = (targetUnit || '').toLowerCase().trim();
+
+  if (conv && target === conv.from.toLowerCase()) {
+    const reversed = num / conv.multiplier;
+    return Number(reversed.toFixed(conv.decimals !== undefined ? conv.decimals : 2));
   }
 
-  const numericValue = Number(value);
-  const k = key.toLowerCase();
-  const unit = (currentUnit || '').toLowerCase().trim();
-
-  if (k === 'hba1c') {
-    if (unit === 'mmol/mol') {
-      const pct = Number(((numericValue + 23.5) / 10.93).toFixed(1));
-      return { newValue: pct, newUnit: '%' };
-    }
-  }
-
-  const conversion = CONVERSION_FACTORS[k];
-
-  if (conversion && unit === conversion.to.toLowerCase()) {
-    return {
-      newValue: Number((numericValue / conversion.multiplier).toFixed(2)),
-      newUnit: conversion.from
-    };
-  }
-
-  return { newValue: value, newUnit: currentUnit };
+  return num;
 }
 
-export function formatBiomarkerDisplay(key: string, value: number | string, currentUnit: string, preference?: 'SI' | 'US'): { value: number | string, unit: string } {
-  if (preference === 'US') {
-    const reversed = reverseStandardizeUnit(key, value, currentUnit);
-    return { value: reversed.newValue, unit: reversed.newUnit || currentUnit };
-  }
-  return { value, unit: currentUnit };
-}
+export function formatNormalRange(
+  key: string,
+  normalRange: string,
+  currentUnit: string,
+  targetPreference: 'SI' | 'US'
+): string {
+  if (!normalRange || !normalRange.trim()) return normalRange;
+  const normKey = key.toLowerCase();
+  const conv = CONVERSION_FACTORS[normKey];
+  if (!conv) return normalRange;
 
-export function formatNormalRange(key: string, normalRange: string, currentUnit: string, preference?: 'SI' | 'US'): string {
-  if (preference !== 'US') return normalRange;
-  
-  // Replace any numbers in the string with their converted values
-  return normalRange.replace(/[\d\.]+/g, (match) => {
-    const reversed = reverseStandardizeUnit(key, match, currentUnit);
-    return String(reversed.newValue);
-  });
+  const match = normalRange.match(/^([\d.]+)\s*-\s*([\d.]+)$/);
+  if (!match) return normalRange;
+
+  const low = parseFloat(match[1]);
+  const high = parseFloat(match[2]);
+  if (isNaN(low) || isNaN(high)) return normalRange;
+
+  if (targetPreference === 'US') {
+    // Current is SI, convert bounds to US (from)
+    const newLow = Number((low / conv.multiplier).toFixed(conv.decimals || 1));
+    const newHigh = Number((high / conv.multiplier).toFixed(conv.decimals || 1));
+    return `${newLow} - ${newHigh}`;
+  } else {
+    return normalRange;
+  }
 }

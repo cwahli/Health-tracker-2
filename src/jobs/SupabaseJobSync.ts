@@ -380,7 +380,7 @@ export function initSupabaseJobSync(userId?: string): () => void {
     }
   }, 8000);
 
-  if (!isSupabaseConfigured || isDirectClientSupabaseDisabled) {
+  if (!isSupabaseConfigured || !supabase || isDirectClientSupabaseDisabled) {
     console.log('[SupabaseJobSync] Supabase direct client/realtime disabled, relying on background polling');
     return () => {
       if (initialHydrateTimer != null) {

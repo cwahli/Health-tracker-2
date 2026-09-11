@@ -1,565 +1,177 @@
+/**
+ * R2 Storage utility for uploading and deleting assets/payloads via API endpoints.
+ */
 
-// Storage preserves photo to /photos/ and raw log to /debug/
-// endpoint d17eecca64f82625d29dc38b14f46c14.r2.cloudflarestorage.com
-
-export async function uploadPhotoToR2(jobId: string, imageBlobOrDataUrl: string): Promise<string> {
-  if (typeof window === 'undefined') {
-    try {
-      const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
-      const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID || 'd17eecca64f82625d29dc38b14f46c14';
-      const CLOUDFLARE_R2_BUCKET_NAME = process.env.CLOUDFLARE_R2_BUCKET_NAME || 'health-tracker-photos';
-      const CLOUDFLARE_R2_PUBLIC_URL = (process.env.CLOUDFLARE_R2_PUBLIC_URL || 'https://pub-d17eecca64f82625d29dc38b14f46c14.r2.dev').replace(/\/$/, '');
-      const CLOUDFLARE_R2_ACCESS_KEY_ID = process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || '';
-      const CLOUDFLARE_R2_SECRET_ACCESS_KEY = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || '';
-
-      const publicUrl = `${CLOUDFLARE_R2_PUBLIC_URL}/photos/${jobId}.jpg`;
-      if (!CLOUDFLARE_R2_ACCESS_KEY_ID || !CLOUDFLARE_R2_SECRET_ACCESS_KEY) {
-        console.error('[R2Storage] Missing R2 credentials — skipping photo upload, returning empty to signal failure instead of a URL that was never written.');
-        return '';
-      }
-
-      const s3Endpoint = `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`;
-      const client = new S3Client({
-        region: 'auto',
-        endpoint: s3Endpoint,
-        credentials: {
-          accessKeyId: CLOUDFLARE_R2_ACCESS_KEY_ID,
-          secretAccessKey: CLOUDFLARE_R2_SECRET_ACCESS_KEY,
-        },
-      });
-
-      let body;
-      let contentType = 'image/jpeg';
-
-      if (imageBlobOrDataUrl.startsWith('data:')) {
-        const match = imageBlobOrDataUrl.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
-        if (match) {
-          contentType = match[1];
-          body = Buffer.from(match[2], 'base64');
-        } else {
-          body = Buffer.from(imageBlobOrDataUrl);
-        }
-      } else {
-        body = Buffer.from(imageBlobOrDataUrl);
-      }
-
-      const command = new PutObjectCommand({
-        Bucket: CLOUDFLARE_R2_BUCKET_NAME,
-        Key: `photos/${jobId}.jpg`,
-        Body: body,
-        ContentType: contentType,
-      });
-      await client.send(command);
-      return publicUrl;
-    } catch (err) {
-      console.error('[R2Storage] Server-side uploadPhotoToR2 failed:', err);
-      return '';
-    }
-  }
-
+export async function uploadPhotoToR2(
+  photoDataOrId: string | Blob,
+  optionsOrData?: { prefix?: string; filename?: string } | string,
+  index?: number
+): Promise<string> {
   try {
-    let payload = imageBlobOrDataUrl;
-    if (payload.startsWith('blob:')) {
-      const res = await fetch(payload);
-      const blob = await res.blob();
-      
-      const reader = new FileReader();
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
+    if (typeof photoDataOrId === 'string' && typeof optionsOrData === 'string') {
+      const id = photoDataOrId;
+      const base64 = optionsOrData;
+      const filename = `${id}${typeof index === 'number' && index > 0 ? `_${index}` : ''}.jpg`;
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: base64,
+          prefix: 'photos',
+          filename
+        })
       });
-      payload = dataUrl;
+      if (res.ok) {
+        const data = await res.json();
+        return data.url || data.key || '';
+      }
+      return base64;
     }
 
-    const res = await fetch('/api/r2/upload-photo', {
+    const photoData = photoDataOrId;
+    const options = optionsOrData as { prefix?: string; filename?: string } | undefined;
+    const res = await fetch('/api/upload', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobId, payload }),
+      body: JSON.stringify({
+        data: typeof photoData === 'string' ? photoData : await blobToBase64(photoData),
+        prefix: options?.prefix || 'photos',
+        filename: options?.filename
+      })
     });
-    if (!res.ok) throw new Error('Failed to upload photo');
-    const data = await res.json();
-    return data.url;
-  } catch (err) {
-    console.error('[R2Storage] Failed uploading photo to R2:', err);
-    return '';
-  }
-}
-
-// Additive batch helper. Uploads multiple images with indexed keys
-// (photos/{jobId}_0.jpg, photos/{jobId}_1.jpg, ...) so old single-image jobs
-// using the un-indexed photos/{jobId}.jpg key from uploadPhotoToR2 keep working.
-export async function uploadPhotosToR2(jobId: string, images: string[]): Promise<string[]> {
-  if (!images || images.length === 0) return [];
-  if (images.length === 1) {
-    const url = await uploadPhotoToR2(jobId, images[0]);
-    return url ? [url] : [];
-  }
-  const results = await Promise.all(
-    images.map((img, i) => uploadPhotoToR2(`${jobId}_${i}`, img))
-  );
-  return results.filter(Boolean);
-}
-
-export async function uploadDebugPayloadToR2(jobId: string, debugJson: object): Promise<string> {
-  if (typeof window === 'undefined') {
-    try {
-      const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
-      const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID || 'd17eecca64f82625d29dc38b14f46c14';
-      const CLOUDFLARE_R2_BUCKET_NAME = process.env.CLOUDFLARE_R2_BUCKET_NAME || 'health-tracker-photos';
-      const CLOUDFLARE_R2_PUBLIC_URL = (process.env.CLOUDFLARE_R2_PUBLIC_URL || 'https://pub-d17eecca64f82625d29dc38b14f46c14.r2.dev').replace(/\/$/, '');
-      const CLOUDFLARE_R2_ACCESS_KEY_ID = process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || '';
-      const CLOUDFLARE_R2_SECRET_ACCESS_KEY = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || '';
-
-      const publicUrl = `${CLOUDFLARE_R2_PUBLIC_URL}/debug/${jobId}.json`;
-      if (!CLOUDFLARE_R2_ACCESS_KEY_ID || !CLOUDFLARE_R2_SECRET_ACCESS_KEY) {
-        console.error('[R2Storage] Missing R2 credentials — skipping debug payload upload, returning empty to signal failure instead of a URL that was never written.');
-        return '';
-      }
-
-      const s3Endpoint = `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`;
-      const client = new S3Client({
-        region: 'auto',
-        endpoint: s3Endpoint,
-        credentials: {
-          accessKeyId: CLOUDFLARE_R2_ACCESS_KEY_ID,
-          secretAccessKey: CLOUDFLARE_R2_SECRET_ACCESS_KEY,
-        },
-      });
-
-      const body = Buffer.from(JSON.stringify(debugJson, null, 2));
-
-      const command = new PutObjectCommand({
-        Bucket: CLOUDFLARE_R2_BUCKET_NAME,
-        Key: `debug/${jobId}.json`,
-        Body: body,
-        ContentType: 'application/json',
-      });
-      await client.send(command);
-      return publicUrl;
-    } catch (err) {
-      console.error('[R2Storage] Server-side uploadDebugPayloadToR2 failed:', err);
-      return '';
+    if (res.ok) {
+      const data = await res.json();
+      return data.url || data.key || '';
     }
+  } catch (err) {
+    console.warn('[r2Storage] Photo upload failed, falling back to local data URI:', err);
   }
+  return typeof photoDataOrId === 'string' ? photoDataOrId : (typeof optionsOrData === 'string' ? optionsOrData : URL.createObjectURL(photoDataOrId));
+}
 
+export async function uploadPhotosToR2(
+  photosOrJobId: (string | Blob)[] | string,
+  optionsOrPhotos?: { prefix?: string } | (string | Blob)[]
+): Promise<string[]> {
+  if (typeof photosOrJobId === 'string' && Array.isArray(optionsOrPhotos)) {
+    const jobId = photosOrJobId;
+    const photos = optionsOrPhotos;
+    return Promise.all(photos.map((p, idx) => uploadPhotoToR2(jobId, typeof p === 'string' ? p : '', idx)));
+  }
+  const photos = Array.isArray(photosOrJobId) ? photosOrJobId : [];
+  const options = optionsOrPhotos as { prefix?: string } | undefined;
+  return Promise.all(photos.map(p => uploadPhotoToR2(p, options)));
+}
+
+export async function uploadDebugPayloadToR2(jobId: string, payload: any): Promise<string> {
   try {
-    const res = await fetch('/api/r2/upload-debug', {
+    const res = await fetch('/api/debug/upload', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobId, payload: debugJson }),
+      body: JSON.stringify({ jobId, payload })
     });
-    if (!res.ok) throw new Error('Failed to upload debug payload');
-    const data = await res.json();
-    return data.url;
+    if (res.ok) {
+      const data = await res.json();
+      return data.debugUrl || data.url || '';
+    }
   } catch (err) {
-    console.error('[R2Storage] Failed uploading debug payload to R2:', err);
-    return '';
+    console.warn('[r2Storage] uploadDebugPayloadToR2 failed:', err);
+  }
+  return '';
+}
+
+export async function deleteDebugPayloadFromR2(jobIdOrUrl: string, userId?: string): Promise<boolean> {
+  if (!jobIdOrUrl) return false;
+  try {
+    const res = await fetch('/api/debug/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: jobIdOrUrl, userId })
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn('[r2Storage] deleteDebugPayloadFromR2 error:', err);
+    return false;
   }
 }
 
-export async function fetchDebugPayloadFromR2(jobId: string, userId?: string): Promise<any> {
+export async function uploadLogsToR2(key: string, data: any): Promise<boolean> {
   try {
-    const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
-    const CLOUDFLARE_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || process.env.CLOUDFLARE_ACCOUNT_ID || 'd17eecca64f82625d29dc38b14f46c14';
-    const CLOUDFLARE_R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || process.env.CLOUDFLARE_R2_BUCKET_NAME || 'health-tracker-photos';
-    const CLOUDFLARE_R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || '';
-    const CLOUDFLARE_R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || '';
-
-    if (!CLOUDFLARE_R2_ACCESS_KEY_ID || !CLOUDFLARE_R2_SECRET_ACCESS_KEY) {
-      return null;
-    }
-
-    const s3Endpoint = `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`;
-    const client = new S3Client({
-      region: 'auto',
-      endpoint: s3Endpoint,
-      credentials: {
-        accessKeyId: CLOUDFLARE_R2_ACCESS_KEY_ID,
-        secretAccessKey: CLOUDFLARE_R2_SECRET_ACCESS_KEY,
-      },
+    const res = await fetch('/api/r2/upload-logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, data })
     });
+    return res.ok;
+  } catch (err) {
+    console.warn('[r2Storage] uploadLogsToR2 error:', err);
+    return false;
+  }
+}
 
-    const rawJobId = jobId.trim();
-    const candidateKeys: string[] = [];
-    if (rawJobId.includes('/') || rawJobId.startsWith('debug/')) {
-      candidateKeys.push(rawJobId);
-    } else {
-      if (userId && userId !== 'anonymous') {
-        const cleanUid = String(userId).replace(/[^a-zA-Z0-9_\-@.]/g, '_').slice(0, 120);
-        const cleanJid = rawJobId.replace(/[^a-zA-Z0-9_\-]/g, '_').slice(0, 120);
-        candidateKeys.push(`debug/${cleanUid}/${cleanJid}.json`);
-      }
-      const cleanJid = rawJobId.replace(/[^a-zA-Z0-9_\-]/g, '_').slice(0, 120);
-      candidateKeys.push(`debug/anonymous/${cleanJid}.json`);
-      candidateKeys.push(`debug/${rawJobId}.json`);
-    }
-
-    for (const key of candidateKeys) {
-      try {
-        const command = new GetObjectCommand({
-          Bucket: CLOUDFLARE_R2_BUCKET_NAME,
-          Key: key,
-        });
-        const response = await client.send(command);
-        if (response.Body) {
-          const bodyString = await response.Body.transformToString();
-          return JSON.parse(bodyString);
-        }
-      } catch (keyErr: any) {
-        // Continue to try next candidate key
-      }
-    }
-  } catch (err: any) {
-    console.debug(`[R2Storage] Skipping or failed to fetch debug payload for ${jobId}:`, err?.message || err);
+export async function fetchLogsFromR2(key: string): Promise<any> {
+  try {
+    const res = await fetch(`/api/r2/logs?key=${encodeURIComponent(key)}`);
+    if (res.ok) return await res.json();
+  } catch (err) {
+    console.warn('[r2Storage] fetchLogsFromR2 error:', err);
   }
   return null;
 }
 
-export async function uploadJobResultToR2(jobId: string, resultJson: object): Promise<string> {
-  if (typeof window === 'undefined') {
-    try {
-      const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
-      const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID || 'd17eecca64f82625d29dc38b14f46c14';
-      const CLOUDFLARE_R2_BUCKET_NAME = process.env.CLOUDFLARE_R2_BUCKET_NAME || 'health-tracker-photos';
-      const CLOUDFLARE_R2_PUBLIC_URL = (process.env.CLOUDFLARE_R2_PUBLIC_URL || 'https://pub-d17eecca64f82625d29dc38b14f46c14.r2.dev').replace(/\/$/, '');
-      const CLOUDFLARE_R2_ACCESS_KEY_ID = process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || '';
-      const CLOUDFLARE_R2_SECRET_ACCESS_KEY = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || '';
-
-      const publicUrl = `${CLOUDFLARE_R2_PUBLIC_URL}/jobs/${jobId}_result.json`;
-      if (!CLOUDFLARE_R2_ACCESS_KEY_ID || !CLOUDFLARE_R2_SECRET_ACCESS_KEY) {
-        console.error('[R2Storage] Missing R2 credentials — skipping job result upload, returning empty to signal failure instead of a URL that was never written. Caller must fall back to storing the full result inline.');
-        return '';
-      }
-
-      const s3Endpoint = `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`;
-      const client = new S3Client({
-        region: 'auto',
-        endpoint: s3Endpoint,
-        credentials: {
-          accessKeyId: CLOUDFLARE_R2_ACCESS_KEY_ID,
-          secretAccessKey: CLOUDFLARE_R2_SECRET_ACCESS_KEY,
-        },
-      });
-
-      const body = Buffer.from(JSON.stringify(resultJson, null, 2));
-
-      const command = new PutObjectCommand({
-        Bucket: CLOUDFLARE_R2_BUCKET_NAME,
-        Key: `jobs/${jobId}_result.json`,
-        Body: body,
-        ContentType: 'application/json',
-      });
-      await client.send(command);
-      return publicUrl;
-    } catch (err) {
-      console.error('[R2Storage] Server-side uploadJobResultToR2 failed:', err);
-      return '';
-    }
+export async function fetchDebugPayloadFromR2(jobIdOrUrl: string): Promise<any> {
+  try {
+    const res = await fetch(`/api/debug/load?jobId=${encodeURIComponent(jobIdOrUrl)}`);
+    if (res.ok) return await res.json();
+  } catch (err) {
+    console.warn('[r2Storage] fetchDebugPayloadFromR2 error:', err);
   }
+  return null;
+}
 
+export async function uploadJobResultToR2(jobId: string, result: any): Promise<boolean> {
   try {
     const res = await fetch('/api/r2/upload-job-result', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobId, payload: resultJson }),
+      body: JSON.stringify({ jobId, result })
     });
-    if (!res.ok) throw new Error('Failed to upload job result payload');
-    const data = await res.json();
-    return data.url;
+    return res.ok;
   } catch (err) {
-    console.error('[R2Storage] Failed uploading job result payload to R2:', err);
-    return '';
+    console.warn('[r2Storage] uploadJobResultToR2 error:', err);
+    return false;
   }
 }
 
 export async function fetchJobResultFromR2(jobId: string): Promise<any> {
   try {
-    const CLOUDFLARE_R2_PUBLIC_URL = (process.env.CLOUDFLARE_R2_PUBLIC_URL || 'https://pub-d17eecca64f82625d29dc38b14f46c14.r2.dev').replace(/\/$/, '');
-    const url = `${CLOUDFLARE_R2_PUBLIC_URL}/jobs/${jobId}_result.json`;
-    try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
-      if (res.ok) {
-        return await res.json();
-      }
-    } catch (fetchErr) {
-      // Ignored, will fall back to S3Client if possible
-    }
-
-    const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
-    const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID || 'd17eecca64f82625d29dc38b14f46c14';
-    const CLOUDFLARE_R2_BUCKET_NAME = process.env.CLOUDFLARE_R2_BUCKET_NAME || 'health-tracker-photos';
-    const CLOUDFLARE_R2_ACCESS_KEY_ID = process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || '';
-    const CLOUDFLARE_R2_SECRET_ACCESS_KEY = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || '';
-
-    if (!CLOUDFLARE_R2_ACCESS_KEY_ID || !CLOUDFLARE_R2_SECRET_ACCESS_KEY) {
-      return null;
-    }
-
-    const s3Endpoint = `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`;
-    const client = new S3Client({
-      region: 'auto',
-      endpoint: s3Endpoint,
-      credentials: {
-        accessKeyId: CLOUDFLARE_R2_ACCESS_KEY_ID,
-        secretAccessKey: CLOUDFLARE_R2_SECRET_ACCESS_KEY,
-      },
-    });
-
-    const command = new GetObjectCommand({
-      Bucket: CLOUDFLARE_R2_BUCKET_NAME,
-      Key: `jobs/${jobId}_result.json`,
-    });
-
-    const response = await client.send(command);
-    if (response.Body) {
-      const bodyString = await response.Body.transformToString();
-      return JSON.parse(bodyString);
-    }
-  } catch (err: any) {
-    console.debug(`[R2Storage] Skipping or failed to fetch job result for ${jobId}:`, err?.message || err);
-  }
-  return null;
-}
-
-export async function uploadLogsToR2(jobId: string, logsText: string): Promise<string> {
-  if (typeof window === 'undefined') {
-    try {
-      const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
-      const CLOUDFLARE_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || process.env.CLOUDFLARE_ACCOUNT_ID || 'd17eecca64f82625d29dc38b14f46c14';
-      const CLOUDFLARE_R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || process.env.CLOUDFLARE_R2_BUCKET_NAME || 'health-tracker-photos';
-      const CLOUDFLARE_R2_PUBLIC_URL = (process.env.R2_PUBLIC_URL || process.env.CLOUDFLARE_R2_PUBLIC_URL || 'https://pub-d17eecca64f82625d29dc38b14f46c14.r2.dev').replace(/\/$/, '');
-      const CLOUDFLARE_R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || '';
-      const CLOUDFLARE_R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || '';
-
-      const publicUrl = `${CLOUDFLARE_R2_PUBLIC_URL}/logs/${jobId}.log`;
-      if (!CLOUDFLARE_R2_ACCESS_KEY_ID || !CLOUDFLARE_R2_SECRET_ACCESS_KEY) {
-        console.error('[R2Storage] Missing R2 credentials — skipping logs upload.');
-        return '';
-      }
-
-      const s3Endpoint = `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`;
-      const client = new S3Client({
-        region: 'auto',
-        endpoint: s3Endpoint,
-        credentials: {
-          accessKeyId: CLOUDFLARE_R2_ACCESS_KEY_ID,
-          secretAccessKey: CLOUDFLARE_R2_SECRET_ACCESS_KEY,
-        },
-      });
-
-      const body = Buffer.from(logsText, 'utf-8');
-
-      const command = new PutObjectCommand({
-        Bucket: CLOUDFLARE_R2_BUCKET_NAME,
-        Key: `logs/${jobId}.log`,
-        Body: body,
-        ContentType: 'text/plain',
-      });
-      await client.send(command);
-      return publicUrl;
-    } catch (err) {
-      console.error('[R2Storage] Server-side uploadLogsToR2 failed:', err);
-      return '';
-    }
-  }
-
-  try {
-    const res = await fetch('/api/r2/upload-logs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobId, logsText }),
-    });
-    if (!res.ok) throw new Error('Failed to upload logs');
-    const data = await res.json();
-    return data.url;
+    const res = await fetch(`/api/r2/job-result?jobId=${encodeURIComponent(jobId)}`);
+    if (res.ok) return await res.json();
   } catch (err) {
-    console.error('[R2Storage] Failed uploading logs to R2:', err);
-    return '';
-  }
-}
-
-export async function fetchLogsFromR2(jobId: string): Promise<string | null> {
-  try {
-    const CLOUDFLARE_R2_PUBLIC_URL = (process.env.R2_PUBLIC_URL || process.env.CLOUDFLARE_R2_PUBLIC_URL || 'https://pub-d17eecca64f82625d29dc38b14f46c14.r2.dev').replace(/\/$/, '');
-    const url = `${CLOUDFLARE_R2_PUBLIC_URL}/logs/${jobId}.log`;
-    try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
-      if (res.ok) {
-        return await res.text();
-      }
-    } catch (fetchErr) {
-      // Ignored, will fall back to S3Client if possible
-    }
-
-    const CLOUDFLARE_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || process.env.CLOUDFLARE_ACCOUNT_ID || 'd17eecca64f82625d29dc38b14f46c14';
-    const CLOUDFLARE_R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || process.env.CLOUDFLARE_R2_BUCKET_NAME || 'health-tracker-photos';
-    const CLOUDFLARE_R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || '';
-    const CLOUDFLARE_R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || '';
-
-    if (!CLOUDFLARE_R2_ACCESS_KEY_ID || !CLOUDFLARE_R2_SECRET_ACCESS_KEY) {
-      return null;
-    }
-
-    const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
-    const s3Endpoint = `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`;
-    const client = new S3Client({
-      region: 'auto',
-      endpoint: s3Endpoint,
-      credentials: {
-        accessKeyId: CLOUDFLARE_R2_ACCESS_KEY_ID,
-        secretAccessKey: CLOUDFLARE_R2_SECRET_ACCESS_KEY,
-      },
-    });
-
-    const command = new GetObjectCommand({
-      Bucket: CLOUDFLARE_R2_BUCKET_NAME,
-      Key: `logs/${jobId}.log`,
-    });
-
-    const response = await client.send(command);
-    if (response.Body) {
-      return await response.Body.transformToString();
-    }
-  } catch (err: any) {
-    if (err?.name !== 'NoSuchKey' && !err?.message?.includes('does not exist') && err?.$metadata?.httpStatusCode !== 404) {
-      console.debug(`[R2Storage] Skipping or failed to fetch logs for ${jobId}:`, err?.message || err);
-    }
+    console.warn('[r2Storage] fetchJobResultFromR2 error:', err);
   }
   return null;
 }
 
 export async function deleteR2ObjectByKey(key: string): Promise<boolean> {
-  if (!key) return false;
-  if (typeof window === 'undefined') {
-    try {
-      const { S3Client, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
-      const CLOUDFLARE_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || process.env.CLOUDFLARE_ACCOUNT_ID || 'd17eecca64f82625d29dc38b14f46c14';
-      const CLOUDFLARE_R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || process.env.CLOUDFLARE_R2_BUCKET_NAME || 'health-tracker-photos';
-      const CLOUDFLARE_R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || '';
-      const CLOUDFLARE_R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || '';
-
-      if (!CLOUDFLARE_R2_ACCESS_KEY_ID || !CLOUDFLARE_R2_SECRET_ACCESS_KEY) {
-        return false;
-      }
-
-      const s3Endpoint = `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`;
-      const client = new S3Client({
-        region: 'auto',
-        endpoint: s3Endpoint,
-        credentials: {
-          accessKeyId: CLOUDFLARE_R2_ACCESS_KEY_ID,
-          secretAccessKey: CLOUDFLARE_R2_SECRET_ACCESS_KEY,
-        },
-      });
-
-      const cleanKey = key.replace(/^\/+/, '');
-      await client.send(new DeleteObjectCommand({
-        Bucket: CLOUDFLARE_R2_BUCKET_NAME,
-        Key: cleanKey,
-      }));
-      return true;
-    } catch (err: any) {
-      console.warn(`[R2Storage] Failed to delete key "${key}":`, err?.message || err);
-      return false;
-    }
-  }
-
   try {
-    const res = await fetch('/api/r2/delete-debug', {
+    const res = await fetch('/api/r2/delete-object', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key }),
+      body: JSON.stringify({ key })
     });
     return res.ok;
   } catch (err) {
+    console.warn('[r2Storage] deleteR2ObjectByKey error:', err);
     return false;
   }
 }
 
-export async function deleteDebugPayloadFromR2(jobIdOrKey: string, userId?: string): Promise<boolean> {
-  if (!jobIdOrKey) return false;
-  if (typeof window === 'undefined') {
-    try {
-      const { S3Client, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
-      const CLOUDFLARE_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || process.env.CLOUDFLARE_ACCOUNT_ID || 'd17eecca64f82625d29dc38b14f46c14';
-      const CLOUDFLARE_R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || process.env.CLOUDFLARE_R2_BUCKET_NAME || 'health-tracker-photos';
-      const CLOUDFLARE_R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || '';
-      const CLOUDFLARE_R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || '';
-
-      if (!CLOUDFLARE_R2_ACCESS_KEY_ID || !CLOUDFLARE_R2_SECRET_ACCESS_KEY) {
-        return false;
-      }
-
-      const s3Endpoint = `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`;
-      const client = new S3Client({
-        region: 'auto',
-        endpoint: s3Endpoint,
-        credentials: {
-          accessKeyId: CLOUDFLARE_R2_ACCESS_KEY_ID,
-          secretAccessKey: CLOUDFLARE_R2_SECRET_ACCESS_KEY,
-        },
-      });
-
-      const rawKey = jobIdOrKey.trim();
-      const keysToDelete = new Set<string>();
-
-      if (rawKey.startsWith('http')) {
-        const match = rawKey.match(/(debug\/[^\s?#]+|logs\/[^\s?#]+|jobs\/[^\s?#]+)/i);
-        if (match) keysToDelete.add(match[1]);
-        const jobIdMatch = rawKey.match(/debug\/(?:[^\/]+\/)?([a-zA-Z0-9_\-]+)\.json/i);
-        if (jobIdMatch) {
-          const jid = jobIdMatch[1];
-          keysToDelete.add(`debug/${jid}.json`);
-          keysToDelete.add(`logs/${jid}.log`);
-          keysToDelete.add(`jobs/${jid}_result.json`);
-        }
-      } else if (rawKey.includes('/')) {
-        keysToDelete.add(rawKey.replace(/^\/+/, ''));
-      } else {
-        const cleanJid = rawKey.replace(/[^a-zA-Z0-9_\-]/g, '_').slice(0, 120);
-        keysToDelete.add(`debug/${rawKey}.json`);
-        keysToDelete.add(`debug/${cleanJid}.json`);
-        keysToDelete.add(`logs/${rawKey}.log`);
-        keysToDelete.add(`logs/${cleanJid}.log`);
-        keysToDelete.add(`jobs/${rawKey}_result.json`);
-        keysToDelete.add(`jobs/${cleanJid}_result.json`);
-        if (userId && userId !== 'anonymous') {
-          const cleanUid = String(userId).replace(/[^a-zA-Z0-9_\-@.]/g, '_').slice(0, 120);
-          keysToDelete.add(`debug/${cleanUid}/${cleanJid}.json`);
-          keysToDelete.add(`debug/${cleanUid}/${rawKey}.json`);
-        }
-        keysToDelete.add(`debug/anonymous/${cleanJid}.json`);
-      }
-
-      for (const key of keysToDelete) {
-        try {
-          await client.send(new DeleteObjectCommand({
-            Bucket: CLOUDFLARE_R2_BUCKET_NAME,
-            Key: key,
-          }));
-        } catch {
-          // ignore individual key delete error
-        }
-      }
-      return true;
-    } catch (err: any) {
-      console.warn(`[R2Storage] deleteDebugPayloadFromR2 failed for "${jobIdOrKey}":`, err?.message || err);
-      return false;
-    }
-  }
-
-  try {
-    const res = await fetch('/api/r2/delete-debug', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobId: jobIdOrKey, userId }),
-    });
-    return res.ok;
-  } catch (err) {
-    return false;
-  }
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 }
-
-/* stripHeavyImages coldDebugR2Key COLD_DEBUG_LOG opts?: { userId? */
-

@@ -3548,7 +3548,7 @@ export default function App() {
 
     const initializeAuthAndData = async () => {
       // Step A: Process Supabase Auth callback params and check Supabase session
-      if (isSupabaseConfigured) {
+      if (isSupabaseConfigured && supabase) {
         if (typeof window !== 'undefined') {
           const urlParams = new URLSearchParams(window.location.search);
           const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
@@ -3633,7 +3633,7 @@ export default function App() {
       });
       unsubs.push(unsubscribeFb);
 
-      if (!isSupabaseConfigured) {
+      if (!isSupabaseConfigured || !supabase) {
         // No Supabase source of truth exists in this build, so this is the only
         // signal we get. Firebase-only mode still applies here.
         clearTimeout(fallbackTimeout);
@@ -4293,7 +4293,7 @@ export default function App() {
         }
       }
 
-      if (isSupabaseConfigured) {
+      if (isSupabaseConfigured && supabase) {
         try {
           await supabase.auth.signOut();
         } catch (sbErr) {

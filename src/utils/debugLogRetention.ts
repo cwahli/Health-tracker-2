@@ -1,4 +1,4 @@
-import { deleteDebugPayloadFromR2 } from './r2Storage.js';
+import { deleteDebugPayloadFromR2 } from './r2Storage';
 
 export interface DebugRetentionCheckItem {
   id?: string;
@@ -28,8 +28,8 @@ export async function getBugTrackerProtectedRefs(supabaseAdminInstance?: any): P
   let admin = supabaseAdminInstance;
   if (!admin && typeof window === 'undefined') {
     try {
-      const { supabaseAdmin } = await import('../../supabaseAdmin.js');
-      admin = supabaseAdmin;
+      const mod = await import('../../supabaseAdmin');
+      admin = mod.supabaseAdmin;
     } catch {
       // client or unconfigured
     }

@@ -46,7 +46,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
   useEffect(() => {
     let sbUnsub: (() => void) | undefined;
 
-    if (isSupabaseConfigured) {
+    if (isSupabaseConfigured && supabase) {
       if (typeof window !== 'undefined') {
         const urlParams = new URLSearchParams(window.location.search);
         const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
@@ -250,7 +250,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     const cleanEmail = email.trim().toLowerCase();
     if (cleanEmail === 'cwah.liu@gmail.com' && password === 'Admin135$,') {
       try {
-        if (isSupabaseConfigured) await supabase.auth.signOut();
+        if (isSupabaseConfigured && supabase) await supabase.auth.signOut();
       } catch (e) {}
       localStorage.setItem('last_active_email', cleanEmail);
       const simulatedAdminUser: UserProfile = {
@@ -278,7 +278,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     }
 
     try {
-      if (isSupabaseConfigured) {
+      if (isSupabaseConfigured && supabase) {
         if (isSignUp) {
           // Check if email already exists on Supabase Auth via server check
           let statusRes = { exists: false, confirmed: false };
@@ -415,7 +415,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     setStatus('sending');
     const cleanEmail = email.trim().toLowerCase();
     try {
-      if (isSupabaseConfigured) {
+      if (isSupabaseConfigured && supabase) {
         let statusRes = { exists: false, confirmed: false };
         try {
           const resp = await fetch('/api/auth/check-email-status', {
@@ -463,7 +463,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     setStatus('sending');
     const cleanEmail = email.trim().toLowerCase();
     try {
-      if (isSupabaseConfigured) {
+      if (isSupabaseConfigured && supabase) {
         const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
           redirectTo: getAuthRedirectTo()
         });
@@ -487,7 +487,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
 
     const cleanEmail = email.trim().toLowerCase();
 
-    if (isSupabaseConfigured) {
+    if (isSupabaseConfigured && supabase) {
       // 1. Try to get active session in memory
       let session = (await supabase.auth.getSession()).data.session;
 
@@ -604,7 +604,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
       }
     }
 
-    if (isSupabaseConfigured) {
+    if (isSupabaseConfigured && supabase) {
       try {
         const providerMap: Record<string, string> = { Google: 'google', X: 'twitter', Facebook: 'facebook' };
         const sbProvider = providerMap[provider] || provider.toLowerCase();
@@ -728,7 +728,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
               id="auth-bypass-verify-btn"
               type="button"
               onClick={async () => {
-                if (isSupabaseConfigured) {
+                if (isSupabaseConfigured && supabase) {
                   const { data: { session } } = await supabase.auth.getSession();
                   if (session?.user) {
                     const u = session.user;
@@ -764,7 +764,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             </button>
             <button
               onClick={async () => {
-                if (isSupabaseConfigured) {
+                if (isSupabaseConfigured && supabase) {
                   try {
                     await supabase.auth.signOut();
                   } catch (e) {}

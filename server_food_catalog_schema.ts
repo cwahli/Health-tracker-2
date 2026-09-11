@@ -1,13 +1,14 @@
 import fs from 'fs';
 import path from 'path';
 import { supabaseAdmin, isSupabaseConfigured } from './supabaseAdmin.js';
+import { isD1Configured } from './server_d1.js';
 
 let ensurePromise: Promise<{ ok: boolean; method: string; error?: string }> | null = null;
 
 /** Idempotent: create food catalog tables if missing. Safe to call often. */
 export async function ensureFoodCatalogSchema(): Promise<{ ok: boolean; method: string; error?: string }> {
-  if (!isSupabaseConfigured) {
-    return { ok: true, method: 'offline_mode' };
+  if (isD1Configured() || !isSupabaseConfigured) {
+    return { ok: true, method: isD1Configured() ? 'd1_mode' : 'offline_mode' };
   }
   if (ensurePromise) return ensurePromise;
   ensurePromise = (async () => {
@@ -19,6 +20,10 @@ export async function ensureFoodCatalogSchema(): Promise<{ ok: boolean; method: 
         return { ok: true, method: 'already_exists' };
       }
       const msg = String(error.message || error);
+      if (/exceed_egress_quota|quota|restricted/i.test(msg)) {
+        console.warn('[CatalogSchema] Supabase restricted due to egress quota; using Cloudflare D1 / local mode.');
+        return { ok: true, method: 'd1_fallback' };
+      }
       if (!/schema cache|does not exist|Could not find the table/i.test(msg)) {
         // Other errors (auth, network) — do not pretend schema is fine
         return { ok: false, method: 'probe_failed', error: msg };
