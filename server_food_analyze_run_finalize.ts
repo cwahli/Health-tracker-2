@@ -43,7 +43,11 @@ import { sanitizeVerdictLabel } from './server_pure_helpers.js';
 export async function executeFinalizePhase(
   ctx: AnalyzeRunContext,
   rawParsed: any,
-  narratorInput: any,
+  // Scout compose note (was `narratorInput`). The `narrator` dispatch label and
+  // `narrator_answer`/`dietitian_answer` log tags below are kept for backward
+  // compatibility — LogChat, FullScreenLogViewer, and the debug contract all
+  // key off them. They record the scout stage's compose leg; no narrator exists.
+  composeNote: any,
   textOutput: string,
   error?: any
 ): Promise<any> {
@@ -136,7 +140,7 @@ export async function executeFinalizePhase(
   const narratorScoutLegs = ctx.accumulatedDispatches.filter((d: any) => d.agent === 'scout').length;
   const currentTurnNumber = scoutRanThisTurn ? (narratorScoutLegs || 1) : (narratorScoutLegs + 1);
 
-  if (narratorInput) {
+  if (composeNote) {
     const narratorDispatch = buildNarratorDispatch({
       turn: currentTurnNumber,
       userMessage:
@@ -146,21 +150,21 @@ export async function executeFinalizePhase(
           ? 'Analyze this meal photo.'
           : 'Text meal entry',
       mode,
-      systemInstruction: narratorInput.systemInstruction,
-      userPrompt: narratorInput.userPrompt,
+      systemInstruction: composeNote.systemInstruction,
+      userPrompt: composeNote.userPrompt,
       rawParsed,
-      model: narratorInput.model,
-      latencyMs: narratorInput.latencyMs,
-      tokens: narratorInput.tokens,
-      projected: narratorInput.projected,
+      model: composeNote.model,
+      latencyMs: composeNote.latencyMs,
+      tokens: composeNote.tokens,
+      projected: composeNote.projected,
     });
     ctx.accumulatedDispatches.push(narratorDispatch);
     ctx.sendLog('narrator_answer', 'narrator', rawParsed?.message || rawParsed?.clinicalAdvice || 'Meal narrative finalized.', {
       mode,
       turn: currentTurnNumber,
-      projected: Boolean(narratorInput.projected),
+      projected: Boolean(composeNote.projected),
     });
-    ctx.addDebugLog(`[Narrator] dispatch t${currentTurnNumber}/narrator recorded (${narratorInput.projected ? 'projector' : 'narrator LLM'}).`);
+    ctx.addDebugLog(`[Narrator] dispatch t${currentTurnNumber}/narrator recorded (${composeNote.projected ? 'projector' : 'narrator LLM'}).`);
   }
 
   // CASE B: discussion mode

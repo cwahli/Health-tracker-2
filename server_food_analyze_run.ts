@@ -6,7 +6,8 @@
  * 1. Setup & Context (server_food_analyze_run_setup.ts + createAnalyzeRunContext)
  * 2. Scout Phase / Meal Agent (server_food_analyze_run_scout.ts)
  * 3. Precalc & Finalize Dish Ledger (server_food_analyze_run_precalc.ts)
- * 4. Meal Agent Decision & Narration (server_food_analyze_run_dietitian.ts)
+ * 4. Scout Compose — single Meal Agent owns response composition, no dietitian,
+ *    no narrator (server_food_analyze_run_scout_compose.ts, pure TS)
  * 5. Finalize Meal Assemble & Gate (server_food_analyze_run_finalize.ts)
  *
  * Invariant contract anchors (enforced by docs/agent/standing.json and journeyFingerprints.test.ts):
@@ -18,7 +19,7 @@ import { AnalyzeRunContext } from './server_food_analyze_run_types.js';
 import { initializeAnalysisRun } from './server_food_analyze_run_setup.js';
 import { executeScoutPhase } from './server_food_analyze_run_scout.js';
 import { executePrecalcPhase } from './server_food_analyze_run_precalc.js';
-import { executeMealProjectorPhase, executeDietitianPhase } from './server_food_analyze_run_dietitian.js';
+import { executeScoutComposePhase } from './server_food_analyze_run_scout_compose.js';
 import { executeFinalizePhase } from './server_food_analyze_run_finalize.js';
 
 import { collectImagePayloads, decideWeightRefine } from './src/server/food/server_food_session_setup.js';
@@ -247,11 +248,11 @@ export async function runFoodAnalyze(req: any, res: any) {
     // 2. Precalc & Finalize Dish Ledger (Single writer of calories)
     await executePrecalcPhase(ctx);
 
-    // 3. Meal Agent Decision & Narration
-    const { textOutput, rawParsed, narratorInput } = await executeMealProjectorPhase(ctx);
+    // 3. Scout Compose (single Meal Agent; pure TS, no second agent)
+    const { textOutput, rawParsed, composeNote } = await executeScoutComposePhase(ctx);
 
     // 4. Finalize Meal Assemble & Gate
-    return await executeFinalizePhase(ctx, rawParsed, narratorInput, textOutput);
+    return await executeFinalizePhase(ctx, rawParsed, composeNote, textOutput);
   } catch (error: any) {
     if (ctx!) {
       return await executeFinalizePhase(ctx, null, null, '', error);

@@ -17,10 +17,20 @@ import { diffScoutToEditCommands } from './server_edit_patch_ledger.js';
 import { normalizeParsedPostDietitian } from './src/server/food/server_food_mode_routing.js';
 import { applyServerAverageNutrients, enrichBilingualItemName } from './server_pure_helpers.js';
 
-export async function executeMealProjectorPhase(ctx: AnalyzeRunContext): Promise<{ textOutput: string; rawParsed: any; narratorInput: any }> {
+/**
+ * Scout compose phase (single Meal Agent owns response composition).
+ *
+ * Formerly the projector phase in the deleted dietitian owner file.
+ * There is no dietitian and no narrator: every branch below is pure TypeScript
+ * composing rawParsed from scout outputs + the math engine. The debug-contract
+ * `narrator` dispatch label and `narrator_answer`/`dietitian_answer` log tags
+ * are kept as-is for backward compatibility (LogChat, FullScreenLogViewer,
+ * debugRunTree all key off them) — they now record this scout-owned leg.
+ */
+export async function executeScoutComposePhase(ctx: AnalyzeRunContext): Promise<{ textOutput: string; rawParsed: any; composeNote: any }> {
   let textOutput: string = '';
   let rawParsed: any;
-  let narratorInput: any = null;
+  let composeNote: any = null;
 
   const { canSkipDietitianForPureScale } = computeDietitianSkipGates({
     isPureWeightModification: ctx.isPureWeightModification,
@@ -42,7 +52,7 @@ export async function executeMealProjectorPhase(ctx: AnalyzeRunContext): Promise
     const pureScale = buildPureScaleResponse({ targetWeightGrams: targetWeight, language: ctx.userProfile?.language });
     textOutput = pureScale.textOutput;
     rawParsed = pureScale.rawParsed;
-    narratorInput = {
+    composeNote = {
       systemInstruction: PROJECTOR_NARRATOR_INSTRUCTION,
       userPrompt: `[projector] scale-only refine to ${targetWeight}g — no LLM call, ledger rescaled from locked label truth.`,
       model: 'projector',
@@ -73,7 +83,7 @@ export async function executeMealProjectorPhase(ctx: AnalyzeRunContext): Promise
     });
     textOutput = JSON.stringify(acceptParsed);
     rawParsed = acceptParsed;
-    narratorInput = {
+    composeNote = {
       systemInstruction: PROJECTOR_NARRATOR_INSTRUCTION,
       userPrompt: `[projector] portion choices within tolerance — no LLM call, TS-composed message from ledger, targets, and rest-of-day math.`,
       model: 'projector',
@@ -112,7 +122,7 @@ export async function executeMealProjectorPhase(ctx: AnalyzeRunContext): Promise
         scoutItems: ctx.visionScoutItems,
       };
       textOutput = JSON.stringify(rawParsed);
-      narratorInput = {
+      composeNote = {
         systemInstruction: PROJECTOR_NARRATOR_INSTRUCTION,
         userPrompt: `[projector] single-agent compare — evaluation finalized directly from scout compare pass.`,
         model: 'projector',
@@ -162,7 +172,7 @@ export async function executeMealProjectorPhase(ctx: AnalyzeRunContext): Promise
         },
       };
       textOutput = JSON.stringify(rawParsed);
-      narratorInput = {
+      composeNote = {
         systemInstruction: PROJECTOR_NARRATOR_INSTRUCTION,
         userPrompt: `[projector] single-agent edit — diffed scout dishes into active meal without secondary LLM call.`,
         model: 'projector',
@@ -202,7 +212,7 @@ export async function executeMealProjectorPhase(ctx: AnalyzeRunContext): Promise
       });
       textOutput = createSkip.textOutput;
       rawParsed = createSkip.rawParsed;
-      narratorInput = {
+      composeNote = {
         systemInstruction: PROJECTOR_NARRATOR_INSTRUCTION,
         userPrompt: `[projector] single-agent create — ledger finalized from scout truth and math engine.`,
         model: 'projector',
@@ -242,7 +252,7 @@ export async function executeMealProjectorPhase(ctx: AnalyzeRunContext): Promise
     });
     textOutput = createSkip.textOutput;
     rawParsed = createSkip.rawParsed;
-    narratorInput = {
+    composeNote = {
       systemInstruction: PROJECTOR_NARRATOR_INSTRUCTION,
       userPrompt: `[projector] single-agent fallback — finalized from available ledger.`,
       model: 'projector',
@@ -264,8 +274,6 @@ export async function executeMealProjectorPhase(ctx: AnalyzeRunContext): Promise
     visionScoutItems: ctx.visionScoutItems,
   });
 
-  return { textOutput, rawParsed, narratorInput };
+  return { textOutput, rawParsed, composeNote };
 }
 
-// Backward-compatible alias for any external callers
-export const executeDietitianPhase = executeMealProjectorPhase;

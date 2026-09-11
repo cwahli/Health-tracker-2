@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
-const pipeline = ["server_food_analyze_run.ts", "server_food_analyze_run_scout.ts", "server_food_analyze_run_precalc.ts", "server_food_analyze_run_dietitian.ts", "server_food_analyze_run_finalize.ts"].map(f => readFileSync(resolve(__dirname, "./" + f), "utf8")).join("\n");
+const pipeline = ["server_food_analyze_run.ts", "server_food_analyze_run_scout.ts", "server_food_analyze_run_precalc.ts", "server_food_analyze_run_scout_compose.ts", "server_food_analyze_run_finalize.ts"].map(f => readFileSync(resolve(__dirname, "./" + f), "utf8")).join("\n");
 const route = readFileSync(resolve(__dirname, './server_routes_food_analyze.ts'), 'utf8');
 
 describe('F-8.9 calorie host deleted from analyze pipeline', () => {
@@ -34,6 +34,20 @@ describe('F-8.9 calorie host deleted from analyze pipeline', () => {
     expect(route).toMatch(/runFoodAnalyze/);
     expect(route.split('\n').filter(Boolean).length).toBeLessThanOrEqual(700);
     expect(route).not.toMatch(/finalizeDishLedger/);
+  });
+});
+
+describe('Single Meal Agent owns compose: no dietitian/narrator phase', () => {
+  const compose = readFileSync(resolve(__dirname, './server_food_analyze_run_scout_compose.ts'), 'utf8');
+  it('dietitian owner file is gone; orchestrator runs the scout compose phase', () => {
+    expect(pipeline).toMatch(/executeScoutComposePhase/);
+    expect(pipeline).not.toMatch(/executeDietitianPhase/);
+    expect(pipeline).not.toMatch(/executeMealProjectorPhase\s*\(/);
+    expect(pipeline).not.toMatch(/server_food_analyze_run_dietitian/);
+  });
+
+  it('compose leg is pure TS: no live LLM call in the compose owner', () => {
+    expect(compose).not.toMatch(/callUnifiedLLM\s*\(/);
   });
 });
 
