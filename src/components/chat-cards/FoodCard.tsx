@@ -20,7 +20,7 @@ import { JobStore } from '../../jobs/JobStore';
 import { toPendingFoodLog } from '../../mealBuild/adapters';
 import { namesReferToSameFood } from '../../../server_scout_reconcile';
 import { extractMostRecentImageDate, getCurrentDateInTimezone } from '../../utils/dateUtils';
-import { normalizeMealImageUrl } from '../../utils/foodImageSources';
+import { normalizeMealImageUrl, uniqueMealImageUrls } from '../../utils/foodImageSources';
 import { scaleMealPortion, scaleSingleDishPortion } from '../../utils/portionUtils';
 import { threadHasUnansweredPortionClarify } from '../../utils/chatMessageDedupe';
 import { mapDisplayedScoutItems, resolveTileImageIndex } from '../../utils/foodCompositionTiles';
@@ -2149,10 +2149,15 @@ export const FoodCard: React.FC<AgentCardProps & {
                          </div>
                       )}
                       {(() => {
-                        const displayImgs = (msg.data?.pendingFoodLog?.imageUrls && msg.data.pendingFoodLog.imageUrls.length > 0)
+                        // Guard on the DEDUPED list: raw entries can all be dead
+                        // (revoked blob:, empty strings) and dedupe to zero while
+                        // the raw array is non-empty. Hero and tiles then agree —
+                        // no hero box when there is nothing displayable.
+                        const rawImgs = (msg.data?.pendingFoodLog?.imageUrls && msg.data.pendingFoodLog.imageUrls.length > 0)
                           ? msg.data.pendingFoodLog.imageUrls
                           : messageImages;
-                        if (!displayImgs || displayImgs.length === 0) return null;
+                        const displayImgs = uniqueMealImageUrls(rawImgs || []);
+                        if (displayImgs.length === 0) return null;
                         return (
                           <div className="overflow-hidden border-y sm:border border-slate-100 dark:border-slate-700/50 shadow-sm mb-3 w-[calc(100%+2rem)] -mx-4 sm:mx-0 sm:w-full sm:rounded-2xl">
                             <ImageSlider images={displayImgs} altText={msg.data?.pendingFoodLog?.name || (t.pendingMeal || "Pending meal")} language={language} />

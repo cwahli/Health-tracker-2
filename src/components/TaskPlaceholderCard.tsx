@@ -12,7 +12,7 @@ import { humanizeJobFailure } from '../utils/jobFailure';
 import { isJobSafeToLeave } from '../jobs/jobUploadState';
 import { toPendingFoodLog } from '../mealBuild/adapters';
 import { translations } from '../utils/translations';
-import { normalizeMealImageUrl, nextPhotoFallbackUrl, isUsableImageUrl } from '../utils/foodImageSources';
+import { normalizeMealImageUrl, nextPhotoFallbackUrl, isUsableImageUrl, uniqueMealImageUrls } from '../utils/foodImageSources';
 
 interface TaskPlaceholderCardProps {
   job: AgentJob;
@@ -159,10 +159,21 @@ export default function TaskPlaceholderCard({
         [];
 
       if (remotePhotos.length > 0) {
-        const normRemotes = remotePhotos.map((r: string) => normalizeMealImageUrl(r) || r);
+        // Sanitize (never `|| r`): dead entries (empty strings, revoked blob:,
+        // placeholder tokens) must not be persisted — they later dedupe to
+        // zero and orphan the hero slider on reload, especially offline.
+        const normRemotes = uniqueMealImageUrls(remotePhotos);
         if (finalImageUrls.length === 0) finalImageUrls = normRemotes;
-        if (!finalImageUrl) finalImageUrl = normRemotes[0];
+        if (!finalImageUrl) finalImageUrl = normRemotes[0] || '';
       }
+
+      // Final sanitize before persist: drop dead entries, prefer durable
+      // /photos|https over ephemeral data:/blob: duplicates of the same
+      // capture. data: URLs are the durable-offline form and are kept when
+      // no durable copy exists yet (R2 upload happens on sync).
+      if (finalImageUrl) finalImageUrls = [finalImageUrl, ...finalImageUrls];
+      finalImageUrls = uniqueMealImageUrls(finalImageUrls);
+      finalImageUrl = finalImageUrls[0] || '';
 
       // Apply the resolved image URL(s) if found
       if (finalImageUrl) {

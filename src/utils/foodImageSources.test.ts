@@ -67,4 +67,10 @@ describe('foodImageSources B11d', () => {
     const b = 'data:image/jpeg;base64,' + 'B'.repeat(40);
     expect(uniqueMealImageUrls([a, a, b])).toEqual([a, b]);
   });
+
+  it('dedupes an all-dead list to zero (orphaned hero-slider root cause)', () => {
+    expect(uniqueMealImageUrls(['', '   ', null, undefined])).toEqual([]);
+    expect(uniqueMealImageUrls(['[image_removed_for_snapshot]', 'Image reference preserved'])).toEqual([]);
+    expect(uniqueMealImageUrls(['blob:revoked-after-reload'])).toEqual(['blob:revoked-after-reload']);
+  });
 });

@@ -344,13 +344,13 @@ export default function ImageSlider({
     };
   }, [viewerIndex]);
 
+  // Empty (after dedupe) renders nothing, not a placeholder. Callers guard on
+  // raw lists, but raw entries can all be dead (revoked blob:, empty strings)
+  // and dedupe to zero — showing a box with a leaked `imgNoImages` key then
+  // disagrees with the item tiles, which fall back gracefully. Null keeps hero
+  // and tiles consistent: no usable photos means no hero box.
   if (allImages.length === 0) {
-    return (
-      <div className="w-full h-44 bg-slate-100 dark:bg-slate-950 flex flex-col items-center justify-center text-slate-400 rounded-2xl">
-        <ImageIcon className="w-8 h-8 mb-1.5 opacity-60" />
-        <span className="text-[10px] font-medium">{t(language, 'imgNoImages')}</span>
-      </div>
-    );
+    return null;
   }
 
   return (
