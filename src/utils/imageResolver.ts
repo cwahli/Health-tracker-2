@@ -6,7 +6,7 @@ import { normalizeMealImageUrl } from './foodImageSources';
  * Fallbacks to parentLog.imageUrls[0] if img is missing.
  */
 export function resolveFoodImage(img: string | undefined | null, foodLogs: FoodLog[], parentLog?: FoodLog): string | undefined {
-  const targetImg = img || (parentLog?.imageUrls && parentLog.imageUrls.length > 0 ? parentLog.imageUrls[0] : undefined);
+  const targetImg = img || (parentLog?.imageUrls && parentLog.imageUrls.length > 0 ? parentLog.imageUrls[0] : parentLog?.imageUrl);
   if (!targetImg || targetImg === '[image_removed_for_snapshot]') return undefined;
   
   let result: string | undefined = undefined;
@@ -26,9 +26,16 @@ export function resolveFoodImage(img: string | undefined | null, foodLogs: FoodL
           const nextImg = nextLog?.imageUrl || nextLog?.imageUrls?.[0];
           if (typeof nextImg === 'string' && !nextImg.startsWith('ref:')) {
             result = nextImg;
+          } else if (typeof nextImg === 'string' && nextImg.startsWith('ref:')) {
+            result = `/photos/${nextImg.replace('ref:', '')}.jpg`;
           }
         }
+      } else {
+        result = `/photos/${primaryId}.jpg`;
       }
+    } else {
+      // Direct R2 fallback when referenced donor log is not loaded in current slice
+      result = `/photos/${primaryId}.jpg`;
     }
   }
 
