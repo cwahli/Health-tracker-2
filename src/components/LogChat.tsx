@@ -6357,47 +6357,51 @@ ${logsText}`);
                                   });
                                 };
 
+                                // NOTE (setState-in-render fix): persistAnswered writes to
+                                // JobStore, whose subscribers setState (e.g. FoodHistoryTab).
+                                // It must NEVER run inside a setMessages updater — updater
+                                // functions execute during render/commit, so the notified
+                                // setStates fire mid-render ("Cannot update a component
+                                // while rendering a different component"). Compute the next
+                                // messages from the committed `messages` value, persist to
+                                // the job store first, then setMessages with a plain value.
                                 if (!isOverThreshold) {
                                   recordBreadcrumb('portion_clarify_local', 'portion_clarify_card', { choices, maxDiffPercent, inPlaceMsgId: msg.id });
-                                  setMessages(prev => {
-                                    const next = retirePortionClarifyPayloads(prev, answeredLog, msg.id);
-                                    persistAnswered(next, { status: 'succeeded', statusMessage: 'Analysis complete.' });
-                                    return next;
-                                  });
+                                  const nextLocal = retirePortionClarifyPayloads(messages, answeredLog, msg.id);
+                                  persistAnswered(nextLocal, { status: 'succeeded', statusMessage: 'Analysis complete.' });
+                                  setMessages(nextLocal);
                                   setIsAnalyzing(false);
                                   return;
                                 }
 
                                 recordBreadcrumb('portion_clarify_agent_edit', 'portion_clarify_card', { choices, maxDiffPercent, inPlaceMsgId: msg.id });
                                 setIsAnalyzing(true);
-                                setMessages(prev => {
-                                  const retired = retirePortionClarifyPayloads(prev, answeredLog, msg.id);
-                                  const next = retired.map((m: ChatMessage) =>
-                                    m.id === msg.id
-                                      ? {
-                                          ...m,
-                                          isLive: true,
-                                          content: 'Updating portion…',
+                                const retiredForEdit = retirePortionClarifyPayloads(messages, answeredLog, msg.id);
+                                const nextForEdit = retiredForEdit.map((m: ChatMessage) =>
+                                  m.id === msg.id
+                                    ? {
+                                        ...m,
+                                        isLive: true,
+                                        content: 'Updating portion…',
+                                        portionClarify: null,
+                                        needsPortionClarify: false,
+                                        portionClarifyAnswered: true,
+                                        data: {
+                                          ...(m.data || {}),
+                                          pendingFoodLog: answeredLog,
                                           portionClarify: null,
                                           needsPortionClarify: false,
                                           portionClarifyAnswered: true,
-                                          data: {
-                                            ...(m.data || {}),
-                                            pendingFoodLog: answeredLog,
-                                            portionClarify: null,
-                                            needsPortionClarify: false,
-                                            portionClarifyAnswered: true,
-                                            agentResult: {
-                                              ...(m.data?.agentResult || {}),
-                                              scoutScratchpad: 'Applying portion selection...',
-                                            },
+                                          agentResult: {
+                                            ...(m.data?.agentResult || {}),
+                                            scoutScratchpad: 'Applying portion selection...',
                                           },
-                                        }
-                                      : m
-                                  );
-                                  persistAnswered(next, { status: 'running', statusMessage: 'Updating portion…' });
-                                  return next;
-                                });
+                                        },
+                                      }
+                                    : m
+                                );
+                                persistAnswered(nextForEdit, { status: 'running', statusMessage: 'Updating portion…' });
+                                setMessages(nextForEdit);
 
                                 if (typeof handleSend === 'function') {
                                   const clarifyScoutItems = (Array.isArray(msg.data?.scoutItems) && msg.data.scoutItems.length > 0)
