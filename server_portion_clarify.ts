@@ -408,10 +408,21 @@ export function applyPortionChoices(
     if (w != null && Number(w) > 0) {
       const weightGrams = Math.round(Number(w));
       const prevW = Math.round(Number(it.estimatedWeightGrams) || 0) || weightGrams;
+      const labelG = parseServingGramsFromLabel(it?.rawNutritionLabel?.servingSize || it?.rawNutritionLabel?.serving);
+      const storedBasis = Number(it.nutrientBasisWeight);
+      let nutrientBasisWeight = prevW;
+      if (Number.isFinite(storedBasis) && storedBasis > 0) {
+        // A 1g "serving" with a 70g pick is WRONG_BASIS (R>9). Don't keep it.
+        nutrientBasisWeight = (weightGrams / storedBasis > 9.2)
+          ? (labelG || prevW)
+          : storedBasis;
+      } else if (labelG && labelG > 0) {
+        nutrientBasisWeight = labelG;
+      }
       updatedItem = {
         ...updatedItem,
         estimatedWeightGrams: weightGrams,
-        nutrientBasisWeight: it.nutrientBasisWeight || prevW,
+        nutrientBasisWeight,
         portionChoiceApplied: weightGrams,
       };
       if (!isDishEstimateEnabled()) {

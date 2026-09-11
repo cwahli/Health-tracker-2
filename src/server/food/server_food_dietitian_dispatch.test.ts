@@ -167,6 +167,9 @@ describe('F-8.10 shard 28 — create-skip synthesis and salvaged aggregates', ()
     expect(salvageLedgerPlausibility({ calories: 1347.7, protein: 47.9 }, 1060).ok).toBe(true);
     expect(salvageLedgerPlausibility({ calories: 960, protein: 20 }, 100).ok).toBe(false); // 9.6/g > fat ceiling
     expect(salvageLedgerPlausibility({}, 0).ok).toBe(true);
+    // Pia 100 Nanas: 6300 kcal / 70g (90 kcal/g) from a 1-gram serving parse. Weight < 100g must still fail.
+    expect(salvageLedgerPlausibility({ calories: 6300, protein: 2, totalFat: 1750 }, 70).ok).toBe(false);
+    expect(salvageLedgerPlausibility({ calories: 90, protein: 2, totalFat: 25 }, 70).ok).toBe(true);
   });
 });
 

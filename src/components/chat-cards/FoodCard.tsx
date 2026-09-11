@@ -22,6 +22,7 @@ import { namesReferToSameFood } from '../../../server_scout_reconcile';
 import { extractMostRecentImageDate, getCurrentDateInTimezone } from '../../utils/dateUtils';
 import { normalizeMealImageUrl } from '../../utils/foodImageSources';
 import { scaleMealPortion, scaleSingleDishPortion } from '../../utils/portionUtils';
+import { threadHasUnansweredPortionClarify } from '../../utils/chatMessageDedupe';
 import { mapDisplayedScoutItems, resolveTileImageIndex } from '../../utils/foodCompositionTiles';
 import ImageSlider from '../ImageSlider';
 import { NutrientPieChart } from '../NutrientPieChart';
@@ -2418,10 +2419,24 @@ export const FoodCard: React.FC<AgentCardProps & {
                           const isLiveOver = liveDiffRatio > 0.30;
                           const livePct = Math.round(liveDiffRatio * 100);
 
+                          const awaitingPortionClarify = !(msg as any).portionClarifyAnswered && !!(
+                            msg.data?.portionClarify ||
+                            (msg as any).portionClarify ||
+                            currentLog?.portionClarify ||
+                            msg.data?.needsPortionClarify ||
+                            threadHasUnansweredPortionClarify(messages)
+                          );
+
                           return (
                             <div className="flex flex-col gap-2 w-full my-1">
                               <div className="flex flex-wrap items-center gap-2">
                                 {(hasWeight || hasQty) && (
+                                  awaitingPortionClarify ? (
+                                    <span className="inline-flex items-center gap-1.5 text-[11px] bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 px-2.5 py-1 rounded-full font-bold font-sans border border-indigo-200/60 dark:border-indigo-800/40">
+                                      <span>{hasWeight ? `${wGrams}g` : ''}</span>
+                                      {hasQty && <span className="opacity-80 font-normal">({rawQty})</span>}
+                                    </span>
+                                  ) : (
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -2435,11 +2450,12 @@ export const FoodCard: React.FC<AgentCardProps & {
                                     {hasQty && <span className="opacity-80 font-normal">({rawQty})</span>}
                                     <span className="text-[10px] text-indigo-500 group-hover:text-indigo-700 dark:text-indigo-400 font-medium">✏️ Adjust portion</span>
                                   </button>
+                                  )
                                 )}
                                 {dt && <span className="font-mono text-[10px] text-slate-400">{dt}</span>}
                               </div>
 
-                              {showPortionAdjuster && (
+                              {showPortionAdjuster && !awaitingPortionClarify && (
                                 <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 text-xs space-y-3 animation-fade-in w-full text-left shadow-xs">
                                   <div className="flex items-center justify-between">
                                     <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">

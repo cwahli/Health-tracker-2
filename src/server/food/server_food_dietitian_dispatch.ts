@@ -339,17 +339,23 @@ export function sumSalvagedAggregates(preCalculatedItems: any): Record<string, n
 /**
  * Salvage plausibility gate: a summed ledger can inherit garbage from an
  * unscaled estimator (observed: 9600 kcal / 2276 g protein from a baseline
- * runaway). Refuse success on physically impossible ledgers so the job fails
- * retryably instead of logging absurd numbers as a completed meal.
+ * runaway; 6300 kcal / 70g from a 1-gram serving parse). Refuse success on
+ * physically impossible ledgers so the job fails retryably instead of
+ * logging absurd numbers as a completed meal.
+ *
+ * kcal/g > 9.2 is unsavable at any consumed weight (not only ≥100g). Pure
+ * fat is 9 kcal/g; a 70g pastry at 6300 kcal is 90 kcal/g and must not log.
  */
 export function salvageLedgerPlausibility(nutrients: any, weightGrams: any): { ok: boolean; reason: string } {
   const kcal = Number(nutrients?.calories) || 0;
   const protein = Number(nutrients?.protein) || 0;
+  const fat = Number(nutrients?.totalFat ?? nutrients?.fat ?? nutrients?.fatGrams) || 0;
   const g = Number(weightGrams) || 0;
   const density = g > 0 ? kcal / g : 0;
   if (kcal > 8000) return { ok: false, reason: `kcal=${kcal}` };
   if (protein > 500) return { ok: false, reason: `protein=${protein}g` };
-  if (g >= 100 && density > 9.2) return { ok: false, reason: `density=${density.toFixed(2)}kcal/g` };
+  if (g > 0 && density > 9.2) return { ok: false, reason: `density=${density.toFixed(2)}kcal/g` };
+  if (g > 0 && fat > g + 1) return { ok: false, reason: `fat=${fat}g exceeds weight=${g}g` };
   return { ok: true, reason: '' };
 }
 

@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { dedupeConsecutiveAssistantMessages, dropAnsweredClarifyMessages } from './chatMessageDedupe';
+import {
+  dedupeConsecutiveAssistantMessages,
+  dropAnsweredClarifyMessages,
+  dropStaleTimeoutMessages,
+  firstPortionClarifyMessageIndex,
+  retirePortionClarifyPayloads,
+  shouldInjectPortionClarifyMessage,
+  threadHasUnansweredPortionClarify,
+} from './chatMessageDedupe';
 
 describe('dedupeConsecutiveAssistantMessages', () => {
   it('merges consecutive assistant bubbles when enabled (food cards)', () => {
@@ -68,5 +76,53 @@ describe('dropAnsweredClarifyMessages', () => {
     delete nulled.pendingFoodLog.portionClarify;
     const msgs: any[] = [nulled, mealCard('card')];
     expect(dropAnsweredClarifyMessages(msgs, true).map((m: any) => m.id)).toEqual(['q', 'card']);
+  });
+});
+
+describe('portion clarify UI ownership', () => {
+  it('first payload occurrence owns the picker even when item shapes differ', () => {
+    const msgs: any[] = [
+      { id: 'q', role: 'assistant', data: { portionClarify: { promptMessage: 'How much?', items: [{ name: 'Pia' }] } } },
+      { id: 'card', role: 'assistant', pendingFoodLog: { portionClarify: { promptMessage: 'How much?', scoutItems: [{ name: 'Pia' }] }, itemsBreakdown: [{ name: 'Pia' }] } },
+    ];
+    expect(firstPortionClarifyMessageIndex(msgs)).toBe(0);
+    expect(shouldInjectPortionClarifyMessage(msgs, false)).toBe(false);
+    expect(shouldInjectPortionClarifyMessage(msgs, true)).toBe(false);
+    expect(shouldInjectPortionClarifyMessage([{ id: 'u', role: 'user' }], false)).toBe(true);
+  });
+
+  it('retirePortionClarifyPayloads strips every copy so a rebuild cannot resurrect the picker', () => {
+    const msgs: any[] = [
+      { id: 'q', role: 'assistant', data: { portionClarify: { promptMessage: 'How much?', items: [{ name: 'Pia' }] }, needsPortionClarify: true } },
+      { id: 'card', role: 'assistant', pendingFoodLog: { name: 'Pia', itemsBreakdown: [{}], portionClarify: { promptMessage: 'How much?' } }, data: { portionClarify: { items: [] } } },
+    ];
+    const out = retirePortionClarifyPayloads(msgs, { name: 'Pia', itemsBreakdown: [{}] }, 'q');
+    expect(out.every((m: any) => !m.data?.portionClarify && !m.pendingFoodLog?.portionClarify)).toBe(true);
+    expect(out.every((m: any) => m.portionClarifyAnswered)).toBe(true);
+  });
+
+  it('drops a timeout bubble once a later meal card exists', () => {
+    const msgs: any[] = [
+      { id: 't', role: 'assistant', content: 'Analysis timed out after 3 minutes. Tap Retry to try again.' },
+      { id: 'card', role: 'assistant', pendingFoodLog: { name: 'Pia', itemsBreakdown: [{ name: 'Pia' }] }, data: { pendingFoodLog: { name: 'Pia', itemsBreakdown: [{ name: 'Pia' }] } } },
+    ];
+    expect(dropStaleTimeoutMessages(msgs).map((m: any) => m.id)).toEqual(['card']);
+  });
+
+  it('hides the Adjust-portion chip while any unanswered picker is in the thread', () => {
+    const picker = { id: 'q', role: 'assistant', data: { portionClarify: { items: [{ name: 'Pia' }] } } };
+    const meal = { id: 'card', role: 'assistant', pendingFoodLog: { name: 'Pia', itemsBreakdown: [{}] } };
+    expect(threadHasUnansweredPortionClarify([picker, meal])).toBe(true);
+    expect(threadHasUnansweredPortionClarify([{ ...picker, portionClarifyAnswered: true, data: { portionClarify: null } }, meal])).toBe(false);
+  });
+
+  it('does not inject a second bubble when the meal card already exists', () => {
+    const meal = { id: 'card', role: 'assistant', pendingFoodLog: { name: 'Pia', itemsBreakdown: [{}] }, data: { pendingFoodLog: { name: 'Pia', itemsBreakdown: [{}] } } };
+    expect(shouldInjectPortionClarifyMessage([meal], false)).toBe(true);
+    const withPayload = {
+      ...meal,
+      pendingFoodLog: { ...meal.pendingFoodLog, portionClarify: { items: [{ name: 'Pia' }] } },
+    };
+    expect(shouldInjectPortionClarifyMessage([withPayload], false)).toBe(false);
   });
 });

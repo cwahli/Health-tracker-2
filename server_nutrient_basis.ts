@@ -45,9 +45,18 @@ export function inferBasisFromServingText(
     return { basisType: 'per_serving', servingGrams: g };
   }
 
-  if (/\b(pack|dish|bowl|portion|container|pot|slice|pie|item|serving|bar|can|bottle)\b/i.test(rawLower)) {
+  if (/\b(pack|dish|bowl|portion|container|pot|slice|pie|item|serving|bar|can|bottle|pcs?|porsi|sajian|saji|pieces?|units?|buah)\b/i.test(rawLower)) {
     const fallbackGrams = estimatedWeightGrams && estimatedWeightGrams > 0 ? estimatedWeightGrams : null;
     return { basisType: 'per_dish', servingGrams: fallbackGrams };
+  }
+
+  // Bare small integer ("1") is a serving count, not 1 gram. WRONG_BASIS otherwise.
+  if (/^\d+(?:\.\d+)?$/.test(rawLower)) {
+    const n = parseFloat(rawLower);
+    if (n >= 1 && n <= 12) {
+      const fallbackGrams = estimatedWeightGrams && estimatedWeightGrams > 0 ? estimatedWeightGrams : null;
+      return { basisType: 'per_dish', servingGrams: fallbackGrams };
+    }
   }
 
   return { basisType: 'per_100g', servingGrams: 100 };

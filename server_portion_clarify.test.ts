@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyPortionChoices, detectPortionAmbiguity, buildPortionClarifyPayload } from './server_portion_clarify';
+import { applyPortionChoices, detectPortionAmbiguity, buildPortionClarifyPayload, parseServingGramsFromLabel } from './server_portion_clarify';
 
 describe('detectPortionAmbiguity & buildPortionClarifyPayload', () => {
   it('parses Indonesian serving counts ("23 sajian per Kemasan") as servings, not countable units', () => {
@@ -309,5 +309,52 @@ describe('applyPortionChoices', () => {
     const items = [{ scoutIndex: 0, estimatedWeightGrams: 150, estimatedCalories: 300 }];
     expect(applyPortionChoices(items, null)).toEqual(items);
     expect(applyPortionChoices(items, {})).toEqual(items);
+  });
+
+  it('does not keep a 1g WRONG_BASIS when the user picks a real serving', () => {
+    const items = [
+      {
+        scoutIndex: 0,
+        estimatedWeightGrams: 70,
+        nutrientBasisWeight: 1,
+        estimatedCalories: 90,
+        rawNutritionLabel: { servingSize: '1 serving (70g)', calories: '90' },
+        keyword: 'pia',
+      },
+    ];
+    const out = applyPortionChoices(items, { '0': 70 });
+    expect(out[0].estimatedWeightGrams).toBe(70);
+    expect(out[0].nutrientBasisWeight).toBe(70);
+  });
+});
+
+describe('parseServingGramsFromLabel', () => {
+  it('requires a g/ml unit so "1 serving (70g)" is 70, not 1', () => {
+    expect(parseServingGramsFromLabel('1 serving (70g)')).toBe(70);
+    expect(parseServingGramsFromLabel('1 pcs')).toBeNull();
+    expect(parseServingGramsFromLabel('1 porsi')).toBeNull();
+    expect(parseServingGramsFromLabel('1 serving')).toBeNull();
+    expect(parseServingGramsFromLabel('100g')).toBe(100);
+  });
+});
+
+describe('detectPortionAmbiguity brand names', () => {
+  it('does not treat a brand name number as pack unit count (Pia 100 Nanas)', () => {
+    const item = {
+      scoutIndex: 0,
+      originalName: 'Pia 100 Nanas',
+      keyword: 'pineapple pie',
+      estimatedWeightGrams: 70,
+      packGrams: 70,
+      rawNutritionLabel: {
+        servingSize: '1 serving (70g)',
+        calories: '90 kkal',
+        protein: '2g',
+        totalFat: '25g',
+        carbohydrates: '8g',
+      },
+    };
+    const res = detectPortionAmbiguity(item, 0);
+    expect(res).toBeNull();
   });
 });
