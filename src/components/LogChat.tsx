@@ -3,7 +3,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { agentCardRegistry } from './chat-cards';
 import { decideFrontDeskHandoff } from '../utils/handoffGuard';
 import { mapFrontDeskSpecialist, specialistDisplayName } from '../utils/frontDeskRouting';
-import { dedupeConsecutiveAssistantMessages, dropAnsweredClarifyMessages } from '../utils/chatMessageDedupe';
+import { dedupeConsecutiveAssistantMessages, dropAnsweredClarifyMessages, dropStaleTimeoutMessages, firstPortionClarifyMessageIndex, hasPortionClarifyPayload, retirePortionClarifyPayloads, shouldInjectPortionClarifyMessage } from '../utils/chatMessageDedupe';
 import { AgentThoughtBox } from './chat-cards/FoodCard';
 import { trackApiCall, setActiveQueryId, generateQueryId } from '../utils/apiTracker';
 import { saveAgentRequestLog, getAgentRequestLogs } from '../utils/agentLogsTracker';
@@ -1471,9 +1471,9 @@ ${logsText}`);
         // job): never resurrect the question on rebuilds.
         const clarifyAnswered = !!(job.result as any)?.portionClarifyAnswered ||
           !!(job.result as any)?.clean_result?.portionClarifyAnswered;
-        const dedupedBaseMsgs: ChatMessage[] = dropAnsweredClarifyMessages(dedupeConsecutiveAssistantMessages(baseMsgs, {
+        const dedupedBaseMsgs: ChatMessage[] = dropStaleTimeoutMessages(dropAnsweredClarifyMessages(dedupeConsecutiveAssistantMessages(baseMsgs, {
           enabled: type === 'food'
-        }), clarifyAnswered);
+        }), clarifyAnswered));
         if (
           type === 'front_desk'
           && job.result
@@ -1500,8 +1500,26 @@ ${logsText}`);
             (Array.isArray(rawResult.scoutItems) && rawResult.scoutItems.length > 0)
               ? rawResult.scoutItems
               : (Array.isArray(portionClarify?.scoutItems) ? portionClarify.scoutItems : []);
-          let assistantClarifyMsg = dedupedBaseMsgs.find((m: any) => m.id === `msg_assistant_clarify_${activeJobId}` || (m.role === 'assistant' && (m.data?.portionClarify || m.data?.needsPortionClarify)));
-          if (!assistantClarifyMsg) {
+          let assistantClarifyMsg = dedupedBaseMsgs.find((m: any) => m.id === `msg_assistant_clarify_${activeJobId}` || (m.role === 'assistant' && hasPortionClarifyPayload(m)));
+          // One owner: if the meal card is already in the thread, hang the picker
+          // on it. A second clarify bubble is what showed the question twice.
+          if (!assistantClarifyMsg && portionClarify) {
+            const mealMsg = dedupedBaseMsgs.find((m: any) => m.pendingFoodLog || m.data?.pendingFoodLog);
+            if (mealMsg) {
+              const log = mealMsg.pendingFoodLog || mealMsg.data?.pendingFoodLog;
+              const logWith = log ? { ...log, portionClarify } : log;
+              mealMsg.pendingFoodLog = logWith;
+              mealMsg.data = {
+                ...(mealMsg.data || {}),
+                pendingFoodLog: logWith,
+                portionClarify,
+                needsPortionClarify: true,
+                scoutItems: mealMsg.data?.scoutItems?.length ? mealMsg.data.scoutItems : scoutItems,
+              };
+              assistantClarifyMsg = mealMsg;
+            }
+          }
+          if (!assistantClarifyMsg && shouldInjectPortionClarifyMessage(dedupedBaseMsgs, clarifyAnswered)) {
             assistantClarifyMsg = {
               id: `msg_assistant_clarify_${activeJobId}`,
               role: 'assistant',
@@ -1769,6 +1787,30 @@ ${logsText}`);
             setMessages([welcome, userMsg, assistantMsg], false);
           }
         } else if (job.status === 'awaiting_user') {
+          const answeredFallback = !!(job.result as any)?.portionClarifyAnswered ||
+            !!(job.result as any)?.clean_result?.portionClarifyAnswered;
+          if (answeredFallback) {
+            const foodLog = resolvePendingFoodLog(job);
+            const raw = job.result?.raw || (job.result as any)?.clean_result || job.result || {};
+            const assistantMsg: ChatMessage = {
+              id: `msg_assistant_${activeJobId}`,
+              role: 'assistant',
+              content: raw.message || raw.reply || raw.globalSummary || 'Analysis complete.',
+              timestamp: job.updatedAt || new Date().toISOString(),
+              agentType: type as any,
+              pendingFoodLog: foodLog ? { ...foodLog, portionClarify: null } : foodLog,
+              portionClarifyAnswered: true,
+              data: {
+                pendingFoodLog: foodLog ? { ...foodLog, portionClarify: null } : foodLog,
+                portionClarify: null,
+                needsPortionClarify: false,
+                portionClarifyAnswered: true,
+                scoutItems: job.result?.scoutItems || raw.scoutItems || [],
+                agentResult: { ...raw, ...(raw.agentResult || {}) },
+              }
+            } as ChatMessage;
+            setMessages([welcome, userMsg, assistantMsg], false);
+          } else {
           const rawResult = job.result?.clean_result || job.result || (job as any).clean_result || {};
           const portionClarify =
             rawResult.portionClarify ||
@@ -1777,16 +1819,20 @@ ${logsText}`);
           const scoutItems =
             rawResult.scoutItems ||
             [];
+          const foodLog = resolvePendingFoodLog(job);
+          const logWithClarify = foodLog ? { ...foodLog, portionClarify: foodLog.portionClarify || portionClarify } : foodLog;
           const assistantClarifyMsg: ChatMessage = {
-            id: `msg_assistant_clarify_${activeJobId}`,
+            id: logWithClarify ? `msg_assistant_${activeJobId}` : `msg_assistant_clarify_${activeJobId}`,
             role: 'assistant',
             content: promptMsg,
             timestamp: job.updatedAt || new Date().toISOString(),
             isLive: false,
             agentType: type as any,
+            pendingFoodLog: logWithClarify,
             data: {
               needsPortionClarify: true,
               portionClarify,
+              pendingFoodLog: logWithClarify,
               scoutItems,
               photoUrl: job.photoUrl || rawResult.photoUrl,
               debugUrl: job.debugUrl || rawResult.debugUrl,
@@ -1799,6 +1845,7 @@ ${logsText}`);
             }
           };
           setMessages([welcome, userMsg, assistantClarifyMsg], false);
+          }
         } else if (job.status === 'failed') {
           const assistantMsg: ChatMessage = {
             id: `msg_assistant_${activeJobId}`,
@@ -2269,6 +2316,10 @@ ${logsText}`);
   const handleSend = async (overrideText?: string | { text?: string; imageUrls?: string[]; compareOnly?: boolean; compareItems?: string[]; sourceMsgId?: string; skipScout?: boolean; activeScoutItems?: any; scoutContentType?: any; overrideMode?: string; userSelectedMode?: string; } | any, extraImages?: any[], extraOptions?: any) => {
     // Pre-warm auth session token to prevent unauthenticated fallbacks on slow connections
     auth.currentUser?.getIdToken(true).catch(() => {});
+    extraOptions = {
+      ...(typeof overrideText === 'object' && overrideText ? overrideText : {}),
+      ...(extraOptions || {}),
+    };
     if (isCompressing) {
       console.log('[handleSend] Blocked — image compression in progress.');
       return;
@@ -2294,18 +2345,19 @@ ${logsText}`);
       return;
     }
     const isHandoffContinuation = !!extraOptions?.isHandoffContinuation;
+    const isPortionConfirmTurn = !!(extraOptions?.inPlaceMsgId || extraOptions?.portionChoices);
     const downstreamTargetAgent = extraOptions?.downstreamTargetAgent;
     const now = Date.now();
-    if (!isHandoffContinuation && (now - lastSendClickTimeRef.current < 1000)) {
+    if (!isHandoffContinuation && !isPortionConfirmTurn && (now - lastSendClickTimeRef.current < 1000)) {
       console.log('[handleSend] Blocked — debounced duplicate click within 1000ms.');
       return;
     }
     if (isSendingRef.current || isAnalyzing || isSubmitting) {
-      if (!isHandoffContinuation) {
+      if (!isHandoffContinuation && !isPortionConfirmTurn) {
         console.log('[handleSend] Blocked — analysis already in progress or duplicate tap.');
         return;
       }
-      console.log('[handleSend] isHandoffContinuation: clearing prior in-progress state to proceed with seamless handoff');
+      console.log('[handleSend] portion/handoff: clearing prior in-progress state to proceed');
       isSendingRef.current = false;
       setIsSubmitting(false);
       setIsAnalyzing(false);
@@ -3246,7 +3298,6 @@ ${logsText}`);
     // Task 9: Only reset the live-log accumulator for brand-new submissions.
     // Portion-confirm turns (inPlaceMsgId set) preserve the prior logs so
     // the full turn-1 + turn-2 trace remains visible without a blank gap.
-    const isPortionConfirmTurn = !!(extraOptions as any)?.inPlaceMsgId;
     if (!isPortionConfirmTurn) {
       setGlobalLiveLogs('');
       globalLiveLogsRef.current = '';
@@ -6261,18 +6312,9 @@ ${logsText}`);
                           if ((msg as any).portionClarifyAnswered) return null;
                           const clarifyData = msg.data?.portionClarify || (msg as any).portionClarify || msg.pendingFoodLog?.portionClarify;
                           if (!clarifyData) return null;
-                          // Dedupe: server attaches the same payload top-level AND nested
-                          // in pendingFoodLog, so both the clarify message and the meal
-                          // message match. First occurrence owns the card.
-                          const clarifyKey = (d: any) => JSON.stringify({
-                            p: d?.promptMessage || null,
-                            items: Array.isArray(d?.items) ? d.items.map((i: any) => i?.name ?? i) : null,
-                          });
-                          const key = clarifyKey(clarifyData);
-                          const firstIdx = messages.findIndex((m: any) => {
-                            const d = m.data?.portionClarify || m.portionClarify || m.pendingFoodLog?.portionClarify;
-                            return !!d && clarifyKey(d) === key;
-                          });
+                          // First occurrence in the thread owns the picker. Do not key
+                          // off payload shape — items vs scoutItems used to render twice.
+                          const firstIdx = firstPortionClarifyMessageIndex(messages);
                           if (firstIdx >= 0 && messages[firstIdx] !== msg) return null;
                           return (
                             <PortionClarifyCard
@@ -6285,84 +6327,77 @@ ${logsText}`);
                                 }
 
                                 const { updatedLog, isOverThreshold, maxDiffPercent, changesSummary } = applyPortionChoicesToLog(activeMeal, choices);
-                                // Answering retires the question everywhere it nests: the card
-                                // renders from msg.data/pendingFoodLog portionClarify, and the
-                                // ledger spread preserves it — null it on the answered copy
-                                // or the answered card resurrects on the next rebuild.
                                 const answeredLog = { ...updatedLog, portionClarify: null } as any;
 
-                                if (!isOverThreshold) {
-                                  // <= 30% difference: apply changes directly without calling agent again
-                                  recordBreadcrumb('portion_clarify_local', 'portion_clarify_card', { choices, maxDiffPercent, inPlaceMsgId: msg.id });
-                                  setMessages(prev => prev.map(m => {
-                                    if (m.id === msg.id) {
-                                      const nextData = {
-                                        ...m.data,
-                                        pendingFoodLog: answeredLog,
-                                        data: answeredLog,
-                                        portionClarify: null,
-                                        needsPortionClarify: false,
-                                        scoutItems: answeredLog.scoutItems || m.data?.scoutItems,
-                                        receiptTable: answeredLog.receiptTable || m.data?.receiptTable,
-                                      };
-                                      return {
-                                        ...m,
-                                        pendingFoodLog: answeredLog,
-                                        data: nextData,
-                                        portionClarify: null,
-                                        needsPortionClarify: false,
-                                        portionClarifyAnswered: true,
-                                      };
-                                    }
-                                    return m;
-                                  }));
-                                  if (jobId) {
-                                    const cur = JobStore.getJob(jobId);
-                                    if (cur) {
-                                      JobStore.updateJob(jobId, {
-                                        result: {
-                                          ...cur.result,
-                                          pendingFoodLog: answeredLog,
-                                          data: answeredLog,
-                                          portionClarify: null,
-                                          needsPortionClarify: false,
-                                          portionClarifyAnswered: true,
-                                        }
-                                      });
-                                    }
-                                  }
-                                  return;
-                                }
-
-                                // > 30% difference: treated like an edit with the agent reviewing the data and providing a new verdict
-                                recordBreadcrumb('portion_clarify_agent_edit', 'portion_clarify_card', { choices, maxDiffPercent, inPlaceMsgId: msg.id });
-                                if (jobId) {
-                                  const curJob = JobStore.getJob(jobId);
-                                  if (curJob) {
-                                    JobStore.updateJob(jobId, {
-                                      result: { ...curJob.result, portionClarifyAnswered: true }
-                                    });
-                                  }
-                                }
-                                setMessages(prev => prev.map(m => {
-                                  if (m.id === msg.id) {
-                                    return {
-                                      ...m,
-                                      pendingFoodLog: answeredLog,
-                                      data: {
-                                        ...m.data,
-                                        pendingFoodLog: answeredLog,
-                                        data: answeredLog,
-                                        portionClarify: null,
-                                        needsPortionClarify: false,
-                                      },
+                                const persistAnswered = (nextMessages: ChatMessage[], extraJob?: Record<string, any>) => {
+                                  if (!jobId) return;
+                                  const cur = JobStore.getJob(jobId);
+                                  if (!cur) return;
+                                  const nextResult = {
+                                    ...cur.result,
+                                    pendingFoodLog: answeredLog,
+                                    data: answeredLog,
+                                    portionClarify: null,
+                                    needsPortionClarify: false,
+                                    portionClarifyAnswered: true,
+                                  };
+                                  if ((cur.result as any)?.clean_result) {
+                                    (nextResult as any).clean_result = {
+                                      ...(cur.result as any).clean_result,
                                       portionClarify: null,
                                       needsPortionClarify: false,
                                       portionClarifyAnswered: true,
+                                      pendingFoodLog: answeredLog,
                                     };
                                   }
-                                  return m;
-                                }));
+                                  JobStore.updateJob(jobId, {
+                                    result: nextResult,
+                                    messages: nextMessages,
+                                    ...extraJob,
+                                  });
+                                };
+
+                                if (!isOverThreshold) {
+                                  recordBreadcrumb('portion_clarify_local', 'portion_clarify_card', { choices, maxDiffPercent, inPlaceMsgId: msg.id });
+                                  setMessages(prev => {
+                                    const next = retirePortionClarifyPayloads(prev, answeredLog, msg.id);
+                                    persistAnswered(next, { status: 'succeeded', statusMessage: 'Analysis complete.' });
+                                    return next;
+                                  });
+                                  setIsAnalyzing(false);
+                                  return;
+                                }
+
+                                recordBreadcrumb('portion_clarify_agent_edit', 'portion_clarify_card', { choices, maxDiffPercent, inPlaceMsgId: msg.id });
+                                setIsAnalyzing(true);
+                                setMessages(prev => {
+                                  const retired = retirePortionClarifyPayloads(prev, answeredLog, msg.id);
+                                  const next = retired.map((m: ChatMessage) =>
+                                    m.id === msg.id
+                                      ? {
+                                          ...m,
+                                          isLive: true,
+                                          content: 'Updating portion…',
+                                          portionClarify: null,
+                                          needsPortionClarify: false,
+                                          portionClarifyAnswered: true,
+                                          data: {
+                                            ...(m.data || {}),
+                                            pendingFoodLog: answeredLog,
+                                            portionClarify: null,
+                                            needsPortionClarify: false,
+                                            portionClarifyAnswered: true,
+                                            agentResult: {
+                                              ...(m.data?.agentResult || {}),
+                                              scoutScratchpad: 'Applying portion selection...',
+                                            },
+                                          },
+                                        }
+                                      : m
+                                  );
+                                  persistAnswered(next, { status: 'running', statusMessage: 'Updating portion…' });
+                                  return next;
+                                });
 
                                 if (typeof handleSend === 'function') {
                                   const clarifyScoutItems = (Array.isArray(msg.data?.scoutItems) && msg.data.scoutItems.length > 0)

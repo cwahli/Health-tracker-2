@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { scaleMealPortion, scaleSingleDishPortion } from './portionUtils';
+import { scaleMealPortion, scaleSingleDishPortion, applyPortionChoicesToLog } from './portionUtils';
 
 describe('portionUtils', () => {
   const sampleLog: any = {
@@ -68,6 +68,17 @@ describe('portionUtils', () => {
     expect(scaled.weightGrams).toBe(350); // 300 + 50
     expect(scaled.receiptTable).toContain('300g');
     expect(scaled.receiptTable).toContain('GRAND MEAL TOTAL - 350g');
+  });
+
+  it('forces agent review when the current ledger density is physically impossible', () => {
+    const insane: any = {
+      weightGrams: 70,
+      calories: 6300,
+      nutrients: { calories: 6300, totalFat: 1750, protein: 2 },
+      itemsBreakdown: [{ scoutIndex: 0, name: 'Pia 100 Nanas', weightGrams: 70, estimatedWeightGrams: 70, calories: 6300, nutrients: { calories: 6300, totalFat: 1750 } }],
+    };
+    const res = applyPortionChoicesToLog(insane, { '0': 70 });
+    expect(res.isOverThreshold).toBe(true);
   });
 });
 

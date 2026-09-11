@@ -443,6 +443,15 @@ export function applyPortionChoicesToLog<T extends FoodLogLike>(
 
   const items = Array.isArray(log.itemsBreakdown) ? [...log.itemsBreakdown] : [];
 
+  const currentKcal = Number((log as any).calories ?? (log as any).nutrients?.calories ?? 0);
+  const currentG = Number((log as any).weightGrams ?? 0);
+  const currentFat = Number((log as any).nutrients?.totalFat ?? (log as any).nutrients?.fatGrams ?? (log as any).nutrients?.fat ?? 0);
+  const currentDensity = currentG > 0 ? currentKcal / currentG : 0;
+  // Insane ledger (WRONG_BASIS leftover): never take the local ≤30% shortcut.
+  if ((currentG > 0 && currentDensity > 9.2) || (currentG > 0 && currentFat > currentG + 1)) {
+    isOverThreshold = true;
+  }
+
   for (const [key, targetWeight] of Object.entries(choices)) {
     const targetGrams = Math.round(Number(targetWeight));
     if (!targetGrams || targetGrams <= 0) continue;

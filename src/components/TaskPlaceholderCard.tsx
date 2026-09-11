@@ -753,7 +753,7 @@ export default function TaskPlaceholderCard({
           {/* Actions */}
           <div className="flex items-center justify-end gap-2 mt-3 pt-2 border-t border-theme-border/40">
             {/* View / Select Portion Button */}
-            {job.status === 'awaiting_user' ? (
+            {job.status === 'awaiting_user' && !job.result?.portionClarifyAnswered && !job.result?.clean_result?.portionClarifyAnswered ? (
               <button
                 type="button"
                 onClick={() => onView(job.id)}

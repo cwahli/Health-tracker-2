@@ -23,6 +23,7 @@ import { backfillSparseMicronutrients } from './server_pure_helpers';
 import { deduceSugarBreakdown } from './server_sugar_engine';
 import { classifyUniversalPhysicalFormV3 } from './server_matching_engine';
 import { decidePrepAddition } from './server_prep_policy';
+import { inferBasisFromServingText } from './server_nutrient_basis';
 
 export interface FinalizeInput {
   item: any;
@@ -83,32 +84,40 @@ export function parseOcrLabel(rawLabel: any, targetWeight: number, defaultR: num
     return { ocrNutrients, lockedKeys };
   }
 
-  const isPer100g = rawLabel.basisType === 'per_100g' ||
+  const isPer100gFlag = rawLabel.basisType === 'per_100g' ||
     rawLabel.servingSize === '100g' ||
     rawLabel.serving === '100g' ||
     (storedOcrLock && storedOcrLock.basisType === 'per_100g');
-      
+
   let ocrServingGrams: number | null = null;
+  const servingText = String(rawLabel.servingSize || rawLabel.serving || '').trim();
+  const hadServingText = servingText.length > 0;
   if (rawLabel.servingGrams && Number(rawLabel.servingGrams) > 0) {
     ocrServingGrams = Number(rawLabel.servingGrams);
-  } else if (rawLabel.servingSize) {
-    const match = String(rawLabel.servingSize).match(/([\d.]+)\s*(?:g|grams?|ml|mL|milliliters?|fl\s*oz)?/i);
-    if (match && match[1]) {
-      const parsedNum = parseFloat(match[1]);
+  } else if (hadServingText) {
+    if (/fl\s*oz/i.test(servingText)) {
+      const parsedNum = parseFloat(servingText.replace(/[^0-9.]/g, ''));
       if (Number.isFinite(parsedNum) && parsedNum > 0) {
-        if (/fl\s*oz/i.test(String(rawLabel.servingSize))) {
-          ocrServingGrams = Math.round(parsedNum * 29.57);
-        } else {
-          ocrServingGrams = parsedNum;
-        }
+        ocrServingGrams = Math.round(parsedNum * 29.57);
+      }
+    } else {
+      const inferred = inferBasisFromServingText(servingText, targetWeight);
+      const explicit100 = /\b100\s*(?:g|ml)\b/i.test(servingText) || /per\s*100/i.test(servingText);
+      if (inferred.basisType === 'per_100g' && (explicit100 || inferred.servingGrams === 100)) {
+        ocrServingGrams = 100;
+      } else if (inferred.servingGrams && inferred.servingGrams > 0 && inferred.basisType !== 'per_100g') {
+        ocrServingGrams = inferred.servingGrams;
       }
     }
   } else if (rawLabel.servingsPerContainer && Number(rawLabel.servingsPerContainer) > 1 && targetWeight > 50) {
     ocrServingGrams = Math.round(targetWeight / Number(rawLabel.servingsPerContainer));
   }
+  const isPer100g = !!(isPer100gFlag || ocrServingGrams === 100);
+  // Serving text without parseable grams: never apply an R>9 leftover from a 1g basis.
+  const fallbackScale = (hadServingText && defaultR > 9.2) ? 1 : defaultR;
   const ocrScale = isPer100g
     ? (targetWeight / 100)
-    : ((ocrServingGrams && ocrServingGrams > 0) ? (targetWeight / ocrServingGrams) : defaultR);
+    : ((ocrServingGrams && ocrServingGrams > 0) ? (targetWeight / ocrServingGrams) : fallbackScale);
       
   const rawCalStr = rawLabel.calories ?? rawLabel.energy ?? rawLabel.kcal ?? rawLabel.energyKcal ?? rawLabel.energiTotal ?? rawLabel.energi ?? rawLabel.kalori;
   const ocrCal = typeof rawCalStr === 'number'

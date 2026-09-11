@@ -14,6 +14,11 @@ describe('server_nutrient_basis', () => {
     expect(inferBasisFromServingText('30g serving')).toEqual({ basisType: 'per_serving', servingGrams: 30 });
     expect(inferBasisFromServingText('1/4 pot (40g)')).toEqual({ basisType: 'per_serving', servingGrams: 40 });
     expect(inferBasisFromServingText('1 bowl', 450)).toEqual({ basisType: 'per_dish', servingGrams: 450 });
+    expect(inferBasisFromServingText('1 serving (70g)', 70)).toEqual({ basisType: 'per_serving', servingGrams: 70 });
+    expect(inferBasisFromServingText('1 pcs', 70)).toEqual({ basisType: 'per_dish', servingGrams: 70 });
+    expect(inferBasisFromServingText('1 porsi', 70)).toEqual({ basisType: 'per_dish', servingGrams: 70 });
+    expect(inferBasisFromServingText('1 serving', 70)).toEqual({ basisType: 'per_dish', servingGrams: 70 });
+    expect(inferBasisFromServingText('1', 70)).toEqual({ basisType: 'per_dish', servingGrams: 70 });
   });
 
   it('scales per_100g nutrients to consumed weight (120 kcal / 100g to 180g = 216 kcal)', () => {

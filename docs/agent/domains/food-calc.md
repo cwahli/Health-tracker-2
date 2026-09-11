@@ -44,7 +44,7 @@ Edit later: same Meal Agent emits modificationCommand or [] → applyMealEdits �
 | Calories | **`finalizeDishLedger` is the only writer.** Forbidden: LLM `calories` on agent schema, First-Principles Injection, `aggregateItemsNutrients` after finalize, receipt-as-calculator, Modify Math inherit. |
 | Edit / Q&A | Same role: `modificationCommand` or `[]` (Q&A). Never rebuild `itemsBreakdown`. New identities need scout-shaped `estimate` (P/C/F, no kcal). Dietitian instruction pack is this slice, not a required create stage. |
 | Edit apply | `applyMealEdits` then finalize dirty rows. Same meal id in the same modal. |
-| Gate | `evaluateMealGate` — unsavable on fail. Not a log grep. |
+| Gate | `evaluateMealGate` — unsavable on fail. Not a log grep. `kcal/g > 9.2` at any consumed weight is unsavable (not only ≥100g). |
 | Modes | Same finalize math for **Mode A, Mode D, and Edit** |
 | HTTP adapter | `server_routes_food_analyze.ts` orders stages and returns JSON. It is not a second calculator. When the new path is 100%, the old host is **deleted**. |
 

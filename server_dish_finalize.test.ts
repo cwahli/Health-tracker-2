@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { finalizeDishLedger } from "./server_dish_finalize";
+import { finalizeDishLedger, parseOcrLabel } from "./server_dish_finalize";
 
 describe("server_dish_finalize", () => {
   it("scales scout baseline nutrients proportionally by R (consumedWeight / nutrientBasisWeight)", async () => {
@@ -743,5 +743,55 @@ describe("server_dish_finalize", () => {
     expect(ledger.nutrients.totalFat).toBeGreaterThan(0);
     expect(ledger.componentsDetailList[0].calories).toBeGreaterThan(0);
     expect(ledger.componentsDetailList[1].calories).toBeGreaterThan(0);
+  });
+
+  it('does not treat unit-count "1 serving (70g)" as 1 gram (Pia 100 Nanas)', () => {
+    const { ocrNutrients } = parseOcrLabel({
+      servingSize: '1 serving (70g)',
+      calories: '90',
+      protein: '2g',
+      totalFat: '25g',
+      carbohydrates: '8g',
+    }, 70, 70);
+    expect(ocrNutrients.calories).toBe(90);
+    expect(ocrNutrients.totalFat).toBe(25);
+    expect(ocrNutrients.protein).toBe(2);
+    expect(ocrNutrients.carbohydrates).toBe(8);
+  });
+
+  it('does not treat "1 pcs" or "1 porsi" as 1 gram', () => {
+    for (const servingSize of ['1 pcs', '1 porsi', '1 serving', '1']) {
+      const { ocrNutrients } = parseOcrLabel({
+        servingSize,
+        calories: '90',
+        protein: '2g',
+        totalFat: '25g',
+        carbohydrates: '8g',
+      }, 70, 70);
+      expect(ocrNutrients.calories).toBe(90);
+    }
+  });
+
+  it('finalizes a 70g labeled serving at 90 kcal, not 6300', async () => {
+    const ledger = await finalizeDishLedger({
+      item: {
+        scoutIndex: 0,
+        originalName: 'Pia 100 Nanas',
+        keyword: 'pineapple pie',
+        estimatedWeightGrams: 70,
+        rawNutritionLabel: {
+          servingSize: '1 serving (70g)',
+          calories: '90',
+          protein: '2g',
+          totalFat: '25g',
+          carbohydrates: '8g',
+        },
+      },
+      nutrientBasisWeight: 70,
+      consumedWeight: 70,
+    });
+    expect(ledger.dbSource).toBe('label');
+    expect(ledger.nutrients.calories).toBe(90);
+    expect(ledger.nutrients.totalFat).toBe(25);
   });
 });
