@@ -657,7 +657,7 @@ export async function upsertJobToSupabase(
       status: job.status,
       progress_percent: job.progressPercent || 0,
       status_message: job.statusMessage || '',
-      photo_url: photoUrl || job.result?.photoUrl || null,
+      photo_url: photoUrl || job.photoUrl || job.result?.photoUrl || null,
       debug_url: debugUrl || job.result?.debugUrl || null,
       clean_result: finalCleanResult,
       updated_at: new Date().toISOString(),

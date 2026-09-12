@@ -265,6 +265,11 @@ export const getFoodImageUrl = (foodName: string, suppliedUrl?: string) => {
   
   const name = foodName.toLowerCase();
   
+  // Specific category: Drinks, Teas, Juices, Beverages, Cooling water
+  if (name.includes('drink') || name.includes('tea') || name.includes('water') || name.includes('beverage') || name.includes('juice') || name.includes('soda') || name.includes('cooling') || name.includes('coffee') || name.includes('latte') || name.includes('botol') || name.includes('can') || name.includes('adem') || name.includes('alang')) {
+    return "https://images.unsplash.com/photo-1556881286-fc6915169721?w=400&auto=format&fit=crop&q=60";
+  }
+
   // Specific category: Pepper, Spices, Seasonings, Herbs
   if (name.includes('pepper') || name.includes('spice') || name.includes('chili') || name.includes('salt') || name.includes('seasoning') || name.includes('powder') || name.includes('herb') || name.includes('curry')) {
     return "https://images.unsplash.com/photo-1506368249639-73a05d6f6488?w=400&auto=format&fit=crop&q=60";
@@ -905,22 +910,41 @@ export const FoodCard: React.FC<AgentCardProps & {
       }
     }
 
-    // 1. If the current assistant message itself has imageUrls or imageUrl
-    const localUrls = msg.imageUrls && msg.imageUrls.length > 0
-      ? msg.imageUrls
-      : (msg.imageUrl ? [msg.imageUrl] : []);
+    // 1. If the current assistant message itself has imageUrls, imageUrl, or photoUrl
+    const localUrls = [
+      ...(msg.imageUrls || []),
+      msg.imageUrl,
+      (msg as any).photoUrl,
+      (msg as any).photo_url,
+      msg.data?.photoUrl,
+      msg.data?.photo_url,
+      msg.data?.imageUrl,
+      ...(msg.data?.imageUrls || []),
+      msg.data?.agentResult?.photoUrl,
+      msg.data?.agentResult?.photo_url,
+      msg.data?.portionClarify?.photoUrl
+    ];
     const validLocal = filterValidUrls(localUrls);
     if (validLocal.length > 0) return validLocal;
 
-    // 2. If the pending food log in msg has imageUrls
+    // 2. If the pending food log in msg has imageUrls or photoUrl
     const pendingLogUrls = filterValidUrls([
       ...(msg.data?.pendingFoodLog?.imageUrls || []),
       msg.data?.pendingFoodLog?.imageUrl,
+      msg.data?.pendingFoodLog?.photoUrl,
+      msg.data?.pendingFoodLog?.photo_url,
       ...(msg.pendingFoodLog?.imageUrls || []),
       msg.pendingFoodLog?.imageUrl,
+      msg.pendingFoodLog?.photoUrl,
+      msg.pendingFoodLog?.photo_url,
       ...(msg.data?.foodLog?.imageUrls || []),
       msg.data?.foodLog?.imageUrl,
-      ...(msg.data?.data?.imageUrls || [])
+      msg.data?.foodLog?.photoUrl,
+      msg.data?.foodLog?.photo_url,
+      ...(msg.data?.data?.imageUrls || []),
+      msg.data?.data?.imageUrl,
+      msg.data?.data?.photoUrl,
+      msg.data?.data?.photo_url
     ]);
     if (pendingLogUrls.length > 0) return pendingLogUrls;
 
@@ -933,20 +957,45 @@ export const FoodCard: React.FC<AgentCardProps & {
         const msgUrls = filterValidUrls([
           ...(m.imageUrls || []),
           m.imageUrl,
+          (m as any).photoUrl,
+          (m as any).photo_url,
+          m.data?.photoUrl,
+          m.data?.photo_url,
+          m.data?.imageUrl,
+          ...(m.data?.imageUrls || []),
+          m.data?.agentResult?.photoUrl,
+          m.data?.agentResult?.photo_url,
           ...(m.data?.pendingFoodLog?.imageUrls || []),
           m.data?.pendingFoodLog?.imageUrl,
+          m.data?.pendingFoodLog?.photoUrl,
+          m.data?.pendingFoodLog?.photo_url,
           ...(m.pendingFoodLog?.imageUrls || []),
           m.pendingFoodLog?.imageUrl,
+          m.pendingFoodLog?.photoUrl,
+          m.pendingFoodLog?.photo_url,
           ...(m.data?.foodLog?.imageUrls || []),
-          m.data?.foodLog?.imageUrl
+          m.data?.foodLog?.imageUrl,
+          m.data?.foodLog?.photoUrl,
+          m.data?.foodLog?.photo_url
         ]);
         if (msgUrls.length > 0) return msgUrls;
       }
     }
 
-    // 4. Fallback to same-origin R2 photo proxy if job/meal ID is known
-    const cleanJobId = msg.data?.jobId || msg.data?.id || (typeof msg.id === 'string' && (msg.id.startsWith('job_') || msg.id.startsWith('meal_') || msg.id.startsWith('food_')) ? msg.id : null);
+    // 4. Check JobStore for current job or matched job
+    const cleanJobId = msg.data?.jobId || msg.data?.id || (typeof msg.id === 'string' ? (msg.id.match(/(job_[a-zA-Z0-9_\-]+|meal_[a-zA-Z0-9_\-]+|food_[a-zA-Z0-9_\-]+)/)?.[1] || (msg.id.startsWith('job_') || msg.id.startsWith('meal_') || msg.id.startsWith('food_') ? msg.id : null)) : null);
     if (cleanJobId) {
+      const storeJob = JobStore.getJob(cleanJobId);
+      if (storeJob) {
+        const jobUrls = filterValidUrls([
+          storeJob.photoUrl,
+          storeJob.result?.photoUrl,
+          storeJob.result?.photo_url,
+          storeJob.result?.imageUrl,
+          ...(storeJob.result?.imageUrls || [])
+        ]);
+        if (jobUrls.length > 0) return jobUrls;
+      }
       return [`/photos/${cleanJobId}.jpg`];
     }
 
@@ -1012,14 +1061,28 @@ export const FoodCard: React.FC<AgentCardProps & {
     
     // Enrich each group's items with boundingBox2D and sourceImageIndex from scoutItems
     const groups = rawGroups.map((g: any) => {
-      const items = (g.items || []).map((rawItem: any) => {
+      let candidateItems = Array.isArray(g.items) && g.items.length > 0 ? g.items : [];
+      if (candidateItems.length === 0) {
+        if (Array.isArray(g.scoutItemIndices) && g.scoutItemIndices.length > 0) {
+          candidateItems = g.scoutItemIndices.map((idx: any) => {
+            const num = typeof idx === 'number' ? idx : parseInt(String(idx), 10);
+            const s = (resolvedScoutItems || [])[num];
+            return s ? { name: s.name || s.originalName || s.keyword, scoutIndex: num, boundingBox2D: s.boundingBox2D, sourceImageIndex: s.sourceImageIndex } : null;
+          }).filter(Boolean);
+        } else if (Array.isArray(g.itemNames) && g.itemNames.length > 0) {
+          candidateItems = g.itemNames;
+        }
+      }
+
+      const items = candidateItems.map((rawItem: any) => {
         // In compare mode the agent emits items as plain strings (dish names).
         // Normalise to an object so downstream code can always do item.name etc.
         const item: any = typeof rawItem === 'string' ? { name: rawItem } : rawItem;
         const matchingScout = (resolvedScoutItems || []).find((s: any) => {
           if (scoutIndexAgrees(item, s)) return true;
           return namesReferToSameFood(item.name, s.keyword || s.originalName);
-        }) || (resolvedScoutItems || []).find((s: any) => {
+        }) || (typeof item.scoutIndex === 'number' ? (resolvedScoutItems || [])[item.scoutIndex] : null)
+          || (resolvedScoutItems || []).find((s: any) => {
           return namesReferToSameFood(g.groupName, s.keyword || s.originalName);
         });
 
@@ -1040,7 +1103,7 @@ export const FoodCard: React.FC<AgentCardProps & {
           sourceImageIndex: 0
         }
       ].map(item => {
-        const matchingScout = (resolvedScoutItems || []).find((s: any) => {
+        let matchingScout = (resolvedScoutItems || []).find((s: any) => {
           const gName = (g.groupName || "").toLowerCase();
           const sKw = (s.keyword || "").toLowerCase();
           const sOrig = (s.originalName || "").toLowerCase();
@@ -1050,6 +1113,12 @@ export const FoodCard: React.FC<AgentCardProps & {
             (gName.split(' ')[0] === sKw.split(' ')[0])
           );
         });
+        if (!matchingScout && Array.isArray(g.scoutItemIndices) && g.scoutItemIndices.length > 0) {
+          const firstIdx = Number(g.scoutItemIndices[0]);
+          if (!isNaN(firstIdx) && (resolvedScoutItems || [])[firstIdx]) {
+            matchingScout = (resolvedScoutItems || [])[firstIdx];
+          }
+        }
         return {
           ...item,
           boundingBox2D: matchingScout ? matchingScout.boundingBox2D : null,
@@ -1456,6 +1525,10 @@ export const FoodCard: React.FC<AgentCardProps & {
                                       const matchingScout = (resolvedScoutItems || []).find((s: any) => {
                                         if (scoutIndexAgrees(firstItem, s)) return true;
                                         return namesReferToSameFood(firstItem.name, s.keyword || s.originalName);
+                                      }) || (typeof firstItem.scoutIndex === 'number' ? (resolvedScoutItems || [])[firstItem.scoutIndex] : null)
+                                        || (Array.isArray(group.scoutItemIndices) && group.scoutItemIndices.length > 0 ? (resolvedScoutItems || [])[Number(group.scoutItemIndices[0])] : null)
+                                        || (resolvedScoutItems || []).find((s: any) => {
+                                        return namesReferToSameFood(group.groupName, s.keyword || s.originalName);
                                       });
                                       const imgIdx = typeof firstItem.sourceImageIndex === 'number' 
                                         ? firstItem.sourceImageIndex 
