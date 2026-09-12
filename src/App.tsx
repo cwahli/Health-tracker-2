@@ -1736,6 +1736,7 @@ export default function App() {
                     isLive: false,
                     agentType: 'food',
                     data: {
+                      jobId: job.id,
                       agentResult: {
                         backendLogs: liveLogs || timeoutMsg,
                         globalLiveLogs: liveLogs || timeoutMsg,

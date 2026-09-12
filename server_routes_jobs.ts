@@ -336,7 +336,7 @@ jobsRouter.all('/api/jobs/debug', async (req, res) => {
     }
 
     const cleanJobId = String(jobId).trim();
-    const rawJobId = cleanJobId.replace(/^clarify_/, '');
+    const rawJobId = cleanJobId.replace(/^(?:clarify_|timeout_)/, '');
     const { getInMemoryServerJob } = await import('./serverJobs.js');
     let job: any = getInMemoryServerJob(cleanJobId) || getInMemoryServerJob(rawJobId);
 
@@ -395,7 +395,7 @@ jobsRouter.all('/api/jobs/debug', async (req, res) => {
         if (req.body?.dialogInventory || req.body?.result || req.body?.dispatches || req.body?.clientSessionEvents) {
           debugPayload = {
             jobId: cleanJobId,
-            status: req.body?.status || 'succeeded',
+            status: req.body?.status || (cleanJobId.includes('timeout') ? 'failed' : 'unknown'),
             result: req.body?.result || {},
             dialogInventory: req.body?.dialogInventory,
             dispatches: req.body?.dispatches,

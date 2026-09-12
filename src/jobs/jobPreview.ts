@@ -3,6 +3,9 @@ import { AgentJob, JobStatus } from './types';
 export function isTurnInFlight(
   job: Pick<AgentJob, 'status' | 'inFlightTurnAt' | 'finishedAt'> & { currentTurn?: number }
 ): boolean {
+  if (job.status === 'failed' || job.status === 'cancelled' || job.status === 'cancel_requested') {
+    return false;
+  }
   if (typeof job.inFlightTurnAt === 'number') {
     return !job.finishedAt || new Date(job.finishedAt).getTime() < job.inFlightTurnAt;
   }
@@ -30,6 +33,9 @@ export function isEditJob(job: Pick<AgentJob, 'mode' | 'inputSnapshot' | 'messag
 
 function isPreviewFailed(job: AgentJob, lastMsgContent?: string): boolean {
   const effectiveStatus = previewStatus(job);
+  if (effectiveStatus === 'queued' || effectiveStatus === 'running' || effectiveStatus === 'processing') {
+    return false;
+  }
   if (effectiveStatus === 'failed' || effectiveStatus === 'cancelled' || effectiveStatus === 'cancel_requested') {
     return true;
   }
@@ -71,6 +77,11 @@ export function previewStatusLabel(
     case 'running':
     case 'processing':
       if (edit) return d?.updatingMeal || 'Updating meal...';
+      if (job.attemptCount && job.attemptCount > 1) {
+        return (d?.retryingAttemptNofM || 'Retrying (attempt {n}/{max})...')
+          .replace('{n}', String(job.attemptCount))
+          .replace('{max}', String(job.maxAttempts || 3));
+      }
       return d?.attemptOf
         ? d.attemptOf.replace('{current}', String(job.attemptCount || 1)).replace('{max}', String(job.maxAttempts || 3))
         : `Attempt ${job.attemptCount || 1} of ${job.maxAttempts || 3}`;

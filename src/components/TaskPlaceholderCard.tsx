@@ -398,17 +398,24 @@ export default function TaskPlaceholderCard({
   const turnInFlight = isTurnInFlight(job);
   const effectiveStatus: AgentJob['status'] = previewStatus(job);
 
+  const isActivelyRetryingOrRunning =
+    effectiveStatus === 'running' ||
+    effectiveStatus === 'processing' ||
+    effectiveStatus === 'queued';
+
   const isFailedOrTimedOut =
-    effectiveStatus === 'failed' ||
-    effectiveStatus === 'cancelled' ||
-    effectiveStatus === 'cancel_requested' ||
-    (effectiveStatus !== 'succeeded' && (
-      !!job.error ||
-      (typeof job.statusMessage === 'string' && /(?:timed out|analysis failed|server error)/i.test(job.statusMessage) && !/analysis complete/i.test(job.statusMessage)) ||
-      (typeof job.result?.message === 'string' && /(?:timed out|analysis failed)/i.test(job.result.message)) ||
-      (typeof job.result?.error === 'string' && !!job.result.error) ||
-      (typeof lastMsgContent === 'string' && /(?:timed out|analysis failed|server error)/i.test(lastMsgContent) && !job.result?.pendingFoodLog && !job.result?.modificationCommand && !job.result?.extractedData)
-    ));
+    !isActivelyRetryingOrRunning && (
+      effectiveStatus === 'failed' ||
+      effectiveStatus === 'cancelled' ||
+      effectiveStatus === 'cancel_requested' ||
+      (effectiveStatus !== 'succeeded' && (
+        !!job.error ||
+        (typeof job.statusMessage === 'string' && /(?:timed out|analysis failed|server error)/i.test(job.statusMessage) && !/analysis complete/i.test(job.statusMessage)) ||
+        (typeof job.result?.message === 'string' && /(?:timed out|analysis failed)/i.test(job.result.message)) ||
+        (typeof job.result?.error === 'string' && !!job.result.error) ||
+        (typeof lastMsgContent === 'string' && /(?:timed out|analysis failed|server error)/i.test(lastMsgContent) && !job.result?.pendingFoodLog && !job.result?.modificationCommand && !job.result?.extractedData)
+      ))
+    );
 
   const isEditMode = isEditJob(job);
 
@@ -510,7 +517,7 @@ export default function TaskPlaceholderCard({
   };
 
   const detectedName = extractMealName();
-  const rawInputText = job.inputSnapshot?.text?.trim() || '';
+  const rawInputText = (job.inputSnapshot?.text?.trim() || '').replace(/^Portion Selection:\s*/i, '');
   const displayTitle =
     job.status === 'awaiting_user'
       ? (detectedName
@@ -801,8 +808,8 @@ export default function TaskPlaceholderCard({
               </button>
             )}
 
-            {/* Retry Button for Failed, Cancelled, or Timed-out Jobs */}
-            {(isFailedOrTimedOut || job.status === 'failed' || job.status === 'cancelled' || job.status === 'cancel_requested' || (Array.isArray(job.result?.degradedStages) && job.result.degradedStages.includes('dietitian'))) && (
+            {/* Retry Button for Failed, Cancelled, or Timed-out Jobs (or stuck jobs) */}
+            {(isFailedOrTimedOut || job.status === 'failed' || job.status === 'cancelled' || job.status === 'cancel_requested' || (Array.isArray(job.result?.degradedStages) && job.result.degradedStages.includes('dietitian')) || elapsedIsLong) && (!isActivelyRetryingOrRunning || elapsedIsLong) && (
               <button
                 type="button"
                 onClick={() => {
