@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyPortionChoices, detectPortionAmbiguity, buildPortionClarifyPayload, parseServingGramsFromLabel } from './server_portion_clarify';
+import { applyPortionChoices, detectPortionAmbiguity, buildPortionClarifyPayload, parseServingGramsFromLabel, resolveItemQuantities, statedMatchesEstimate } from './server_portion_clarify';
 
 describe('detectPortionAmbiguity & buildPortionClarifyPayload', () => {
   it('parses Indonesian serving counts ("23 sajian per Kemasan") as servings, not countable units', () => {
@@ -356,5 +356,124 @@ describe('detectPortionAmbiguity brand names', () => {
     };
     const res = detectPortionAmbiguity(item, 0);
     expect(res).toBeNull();
+  });
+});
+
+describe('S-10 PORTION_FUNNEL quantity resolution', () => {
+  const kacang = (est: number, extra: any = {}) => ({
+    scoutIndex: 2,
+    originalName: 'Indomaret Kacang Kulit',
+    keyword: 'kacang kulit',
+    estimatedWeightGrams: est,
+    packGrams: 180,
+    packageLabelText: 'Indomaret Kacang Kulit Berat Bersih 180 g',
+    rawNutritionLabel: { servingSize: 'per 100g', calories: '607' },
+    ...extra,
+  });
+  const drumstick = (est: number) => ({
+    scoutIndex: 0,
+    originalName: 'Fried Chicken Drumstick',
+    keyword: 'fried chicken',
+    estimatedWeightGrams: est,
+  });
+  const cooltopia = (est: number) => ({
+    scoutIndex: 1,
+    originalName: 'Cooltopia Melon Orange Drink',
+    keyword: 'cooltopia',
+    estimatedWeightGrams: est,
+    packGrams: 320,
+  });
+
+  it('statedMatchesEstimate uses one named kitchen-rounding tolerance', () => {
+    expect(statedMatchesEstimate(100, 100)).toBe(true);
+    expect(statedMatchesEstimate(95, 100)).toBe(true);
+    expect(statedMatchesEstimate(90, 100)).toBe(false);
+    expect(statedMatchesEstimate(0, 100)).toBe(false);
+    expect(statedMatchesEstimate(100, 0)).toBe(false);
+  });
+
+  it('case-2 shape: stated 100g matching est suppresses the picker', () => {
+    const items = [drumstick(100), cooltopia(320), kacang(100)];
+    const funnel = resolveItemQuantities(items, { userText: 'I had 100g of kacang', locale: 'en' });
+    expect(funnel.clarifyItems).toHaveLength(0);
+    expect(buildPortionClarifyPayload(items, { userText: 'I had 100g of kacang', locale: 'en' })).toBeNull();
+    const kacangRes = funnel.resolutions.find((r) => r.scoutIndex === 2)!;
+    expect(kacangRes.decision).toBe('accept-stated');
+    expect(funnel.items[2].estimatedWeightGrams).toBe(100);
+    expect(funnel.items[2].statedGramsAdopted).toBe(true);
+  });
+
+  it('case-1 shape: 28g est on 180g pack with no statement still asks (half/quarter are real options)', () => {
+    const items = [kacang(28, { packGrams: 180 })];
+    const payload = buildPortionClarifyPayload(items);
+    expect(payload).not.toBeNull();
+    const weights = payload!.items[0].options.map((o) => o.weightGrams);
+    expect(weights).toContain(28);
+    expect(weights).toContain(90);
+    expect(weights).toContain(45);
+  });
+
+  it('parses Indonesian pack prints into packGrams (boundary data, not logic)', () => {
+    const item = kacang(28, { packGrams: undefined });
+    delete (item as any).packGrams;
+    const res = detectPortionAmbiguity(item, 2);
+    expect(res).not.toBeNull();
+    expect(res?.packGrams).toBe(180);
+  });
+
+  it('bare grams across dishes injects "You said" options instead of dying silently', () => {
+    const items = [drumstick(100), kacang(80)];
+    // Bare unitless "90" is not a quantity (could be anything) — ignored.
+    expect(buildPortionClarifyPayload(items, { userText: '90', locale: 'en' })!.items.some((i) => i.options.some((o) => o.id.startsWith('stated_')))).toBe(false);
+    const payload = buildPortionClarifyPayload(items, { userText: '90g', locale: 'en' });
+    expect(payload).not.toBeNull();
+    expect(payload!.items.some((i) => i.options.some((o) => o.id === 'stated_90'))).toBe(true);
+  });
+
+  it('fraction without pack basis forces the question when options exist', () => {
+    const item = {
+      scoutIndex: 0,
+      originalName: 'Rolled Oats',
+      keyword: 'oats',
+      estimatedWeightGrams: 60,
+      rawNutritionLabel: { servingSize: 'per 100g', calories: '150' },
+    };
+    const funnel = resolveItemQuantities([item], { userText: 'half the oats', locale: 'en' });
+    expect(funnel.clarifyItems).toHaveLength(1);
+    expect(funnel.resolutions[0].decision).toBe('ask');
+  });
+
+  it('fraction with known pack adopts without asking', () => {
+    const funnel = resolveItemQuantities([kacang(100)], { userText: 'half the kacang', locale: 'en' });
+    expect(funnel.clarifyItems).toHaveLength(0);
+    expect(funnel.items[0].estimatedWeightGrams).toBe(90);
+    expect(funnel.resolutions[0].decision).toBe('adopt-stated');
+  });
+
+  it('diverged statement is adopted with overflow noted, never silently clamped', () => {
+    const funnel = resolveItemQuantities([kacang(100)], { userText: 'I ate 500g of kacang', locale: 'en' });
+    expect(funnel.clarifyItems).toHaveLength(0);
+    expect(funnel.items[0].estimatedWeightGrams).toBe(500);
+    expect(funnel.resolutions[0].why).toMatch(/exceeds 180g pack/);
+  });
+
+  it('questions and past references yield zero candidates (behavior unchanged)', () => {
+    const items = [drumstick(100)];
+    // No pack divergence on a single unpackaged item: nothing to ask, with or without text.
+    expect(buildPortionClarifyPayload(items, { userText: 'is 100g a lot?', locale: 'en' })).toBeNull();
+    expect(buildPortionClarifyPayload(items, { userText: 'kacang yesterday 100g', locale: 'en' })).toBeNull();
+    expect(buildPortionClarifyPayload(items, { userText: 'This is delicious', locale: 'en' })).toBeNull();
+    expect(buildPortionClarifyPayload(items)).toBeNull();
+  });
+
+  it('ambiguous match across two items synthesizes disambiguation (no silent adopt)', () => {
+    const items = [
+      { scoutIndex: 0, originalName: 'Chicken Rice', keyword: 'chicken rice', estimatedWeightGrams: 200 },
+      { scoutIndex: 1, originalName: 'Chicken Soup', keyword: 'chicken soup', estimatedWeightGrams: 300 },
+    ];
+    const funnel = resolveItemQuantities(items, { userText: '100g chicken', locale: 'en' });
+    expect(funnel.clarifyItems.length).toBeGreaterThan(0);
+    expect(funnel.items[0].statedGramsAdopted).toBeUndefined();
+    expect(funnel.items[1].statedGramsAdopted).toBeUndefined();
   });
 });

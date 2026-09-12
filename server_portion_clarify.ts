@@ -1,4 +1,6 @@
 import { isDishEstimateEnabled } from "./server_food_flags";
+import { parseStatedQuantity, type StatedQuantity } from "./src/utils/quantityText";
+import { namesReferToSameFood } from "./server_scout_reconcile";
 
 export type PortionOption = {
   id: string;
@@ -20,6 +22,8 @@ export type PortionClarifyPayload = {
   promptMessage: string;
   items: PortionClarifyItem[];
   scoutItems?: any[];
+  /** S-10: per-item quantity resolution (candidates, decision, why) for debug export. */
+  resolutions?: QuantityResolution[];
 };
 
 export function parseServingGramsFromLabel(servingSize: any): number | null {
@@ -54,6 +58,25 @@ function hasEnoughLabelFields(raw: any): boolean {
   return filled >= 4;
 }
 
+/**
+ * Single source of scanned text for pack/portion detection. The pack parser
+ * and the ambiguity detector MUST read the same blob — a prior split (pack
+ * parser blind to `packageLabelText`) let a 28g guess on a 180g printed pack
+ * through silently while the export proved the text was there all along.
+ */
+export function scoutItemTextBlob(item: any): string {
+  if (!item) return '';
+  const raw = item.rawNutritionLabel || {};
+  return [
+    item.originalName, item.keyword, item.name,
+    item.ingredientsList, item.ingredients,
+    item.packageLabelText, item.labelText, item.stickerText, item.ocrText,
+    typeof raw === 'string' ? raw : JSON.stringify(raw),
+  ]
+    .filter((v) => typeof v === 'string' && v.trim())
+    .join(' ');
+}
+
 export function detectPackNetWeightGrams(item: any): number | null {
   if (!item) return null;
   // 1. Explicit package weight fields
@@ -82,12 +105,13 @@ export function detectPackNetWeightGrams(item: any): number | null {
     }
   }
 
-  const name = String(item.originalName || item.keyword || item.name || '').trim();
-  const ing = String(item.ingredientsList || item.ingredients || '').trim();
-  const blob = `${name} ${ing} ${String(item.keyword || '')} ${JSON.stringify(raw)}`;
+  const blob = scoutItemTextBlob(item);
 
-  // 2. Front of pack net weight OCR: e.g. "80g", "85g", "net weight 80g", "e 85g", "80 g e"
-  const netMatch = blob.match(/\b(?:net\s*wt\.?|net\s*weight|pack\s*size|netto|weight|e\s*|\b)(\d{2,3})\s*(?:g|grams)\b(?:\s*e\b)?/i);
+  // 2. Front of pack net weight OCR: e.g. "80g", "85g", "net weight 80g", "e 85g", "80 g e",
+  // "Berat Bersih 180 g" (id), "Isi Bersih 90 g" (id). These cues are boundary
+  // DATA (locale pack-print vocabulary), not decision logic: the funnel below
+  // is language-free and only consumes the parsed grams.
+  const netMatch = blob.match(/\b(?:net\s*wt\.?|net\s*weight|pack\s*size|netto|berat\s*bersih|isi\s*bersih|weight|e\s*|\b)(\d{2,3})\s*(?:g|grams)\b(?:\s*e\b)?/i);
   if (netMatch) {
     const parsedG = parseInt(netMatch[1], 10);
     if (parsedG >= 25 && parsedG <= 500 && parsedG !== 100) {
@@ -149,7 +173,7 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
   const name = String(item.originalName || item.keyword || item.name || 'Item').trim();
   const nameL = name.toLowerCase();
   const ing = String(item.ingredientsList || item.ingredients || '').toLowerCase();
-  const blob = `${nameL} ${ing} ${String(item.keyword || '').toLowerCase()} ${String(item.packageLabelText || '').toLowerCase()}`;
+  const blob = scoutItemTextBlob(item).toLowerCase();
   const w = Math.round(Number(item.estimatedWeightGrams ?? item.weightGrams) || 0);
   const raw = item?.rawNutritionLabel;
   const rawServing = String(raw?.servingSize || raw?.serving || '').trim();
@@ -189,7 +213,10 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
   // If packGrams wasn't directly found, derive it if item is a multipack or has servings count
   if (!packGrams || packGrams <= 0) {
     const isVisual = item.source === 'visual' || item.contentType === 'visual' || item.contentType === 'visual_food' || !item.rawNutritionLabel;
-    if (isVisual && (!detectedUnits || detectedUnits < 2)) {
+    // Label-bound visual items still get pack-checked: the label proves a pack
+    // exists, so unit/serving derivation below must run. Pure visual guesses
+    // without labels or unit counts stay silent (nothing to anchor a question).
+    if (isVisual && !item.rawNutritionLabel && (!detectedUnits || detectedUnits < 2)) {
       return null;
     }
     if (detectedUnits >= 2 && w > 0) {
@@ -301,14 +328,19 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
       }
     }
   } else if (packGrams >= 100) {
-    if (wholePackSane) {
+    // Half/quarter sanity is per-option (same 5x multiple as whole-pack):
+    // a 90g half of a 180g pack is a real choice even when the whole pack
+    // is not. Gating halves on whole-pack sanity hid the only meaningful
+    // options and silenced the question entirely.
+    const saneCap = 5 * servingGrams;
+    if (wholePackSane || packGrams / 2 <= saneCap) {
       const half = Math.round(packGrams / 2);
-      if (half >= 15 && !seen.has(half) && half !== packGrams) {
+      if (half >= 15 && half <= saneCap && !seen.has(half) && half !== packGrams) {
         seen.add(half);
         options.push({ id: `half_${half}`, label: `Half pack (${half}g)`, weightGrams: half });
       }
       const quarter = Math.round(packGrams / 4);
-      if (quarter >= 15 && !seen.has(quarter) && quarter !== packGrams) {
+      if (quarter >= 15 && quarter <= saneCap && !seen.has(quarter) && quarter !== packGrams) {
         seen.add(quarter);
         options.push({ id: `quarter_${quarter}`, label: `1/4 pack (${quarter}g)`, weightGrams: quarter });
       }
@@ -347,44 +379,295 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
   };
 }
 
-export function buildPortionClarifyPayload(scoutItems: any[]): PortionClarifyPayload | null {
-  if (!Array.isArray(scoutItems) || scoutItems.length === 0) return null;
-  const items: PortionClarifyItem[] = [];
-  scoutItems.forEach((it, idx) => {
-    const si = it.scoutIndex != null ? Number(it.scoutIndex) : idx;
-    const found = detectPortionAmbiguity(it, si);
-    if (found) {
-      items.push(found);
-    }
+/**
+ * S-10 PORTION_FUNNEL — quantity resolution.
+ *
+ * Candidates carry provenance-fixed confidence (assigned here, never by the
+ * model): user-stated HIGH (the diner knows what they ate), label-derived
+ * HIGH for pack totals (arithmetic on transcribed facts), visual LOW unless
+ * corroborated. Decision table:
+ * - unambiguous user statement (+tolerance) → adopt, never ask
+ * - ambiguous user statement                  → ask (disambiguation; stated grams injected as options)
+ * - no statement + pack known + consumed unknown → ask (existing detector)
+ * - otherwise                                 → accept visual (unchanged)
+ */
+export const STATED_MATCH_TOLERANCE_G = 2;
+export const STATED_MATCH_TOLERANCE_RATIO = 0.05;
 
-    // Check composite sub-components
-    const subComps: any[] = (Array.isArray(it.compositeSiblings) && it.compositeSiblings.length > 0)
-      ? it.compositeSiblings
-      : ((Array.isArray(it.components) && it.components.length > 0)
-        ? it.components
-        : []);
+export function statedMatchesEstimate(statedG: number, estG: number): boolean {
+  if (!(statedG > 0) || !(estG > 0)) return false;
+  // Kitchen-rounding rationale: diners round to the nearest few grams.
+  return Math.abs(statedG - estG) <= Math.max(STATED_MATCH_TOLERANCE_G, STATED_MATCH_TOLERANCE_RATIO * estG);
+}
 
-    if (subComps.length > 1) {
-      subComps.forEach((comp: any, cIdx: number) => {
-        if (!comp) return;
-        const compIndex = 10000 + (si * 100) + cIdx;
-        const compFound = detectPortionAmbiguity(comp, compIndex);
-        if (compFound) {
-          items.push(compFound);
-        }
-      });
+export interface QuantityCandidate {
+  source: 'user' | 'label' | 'visual';
+  grams: number | null;
+  packGrams: number | null;
+  confidence: 'high' | 'low';
+  note: string;
+}
+
+export interface QuantityResolution {
+  scoutIndex: number;
+  name: string;
+  candidates: QuantityCandidate[];
+  decision: 'accept-stated' | 'adopt-stated' | 'ask' | 'accept-visual';
+  why: string;
+}
+
+export interface QuantityFunnelResult {
+  /** Scout items with unambiguous stated grams applied (copies; originals untouched). */
+  items: any[];
+  clarifyItems: PortionClarifyItem[];
+  resolutions: QuantityResolution[];
+}
+
+function itemNameVariants(it: any): string[] {
+  return [it?.originalName, it?.keyword, it?.name, it?.genericEnglishName].filter(
+    (v) => typeof v === 'string' && v.trim()
+  ) as string[];
+}
+
+function matchStatedToItem(stated: StatedQuantity, it: any): boolean {
+  if (!stated.itemRefText) return false;
+  return itemNameVariants(it).some((variant) => {
+    try {
+      return namesReferToSameFood(stated.itemRefText, variant);
+    } catch {
+      return false;
     }
   });
-  if (items.length === 0) return null;
-  const names = items.map((i) => i.name).join('; ');
+}
+
+function scoutEstGrams(it: any): number {
+  return Math.round(Number(it?.estimatedWeightGrams ?? it?.weightGrams) || 0);
+}
+
+function packGramsOf(it: any): number | null {
+  const p = detectPackNetWeightGrams(it);
+  return p && p > 0 ? p : null;
+}
+
+/** Inject "You said Xg" into clarify options so even the ask path honors the user. */
+function injectStatedOption(found: PortionClarifyItem, grams: number): PortionClarifyItem {
+  if (!(grams > 0)) return found;
+  if (found.options.some((o) => Math.abs(o.weightGrams - grams) <= Math.max(2, 0.05 * grams))) return found;
+  return {
+    ...found,
+    options: [...found.options, { id: `stated_${grams}`, label: `You said ${grams}g`, weightGrams: grams }],
+  };
+}
+
+function minimalClarifyItem(it: any, si: number, extraGrams: number[], reason: string): PortionClarifyItem | null {
+  const w = scoutEstGrams(it);
+  const raw = it?.rawNutritionLabel;
+  const rawServing = String(raw?.servingSize || raw?.serving || '').trim();
+  const ssG = parseServingGramsFromLabel(rawServing) ?? (raw ? 100 : null);
+  const options: PortionOption[] = [];
+  const seen = new Set<number>();
+  const push = (id: string, label: string, weightGrams: number) => {
+    if (weightGrams > 0 && !seen.has(weightGrams)) {
+      seen.add(weightGrams);
+      options.push({ id, label, weightGrams });
+    }
+  };
+  if (w > 0) push(`photo_${w}`, `Portion in photo (${w}g)`, w);
+  for (const g of extraGrams) {
+    const rg = Math.round(g);
+    push(`stated_${rg}`, `You said ${rg}g`, rg);
+  }
+  if (ssG === 100 && w !== 100) push('panel_100', '100g (nutrition panel basis)', 100);
+  if (options.length < 2) return null;
+  const name = String(it?.originalName || it?.keyword || it?.name || 'Item').trim();
+  return { scoutIndex: si, name, estimatedWeightGrams: w, packGrams: packGramsOf(it), labelServingGrams: ssG || 100, options, reason };
+}
+
+export function resolveItemQuantities(
+  scoutItems: any[],
+  opts?: { userText?: unknown; locale?: unknown }
+): QuantityFunnelResult {
+  const items = Array.isArray(scoutItems) ? scoutItems : [];
+  const locale = opts?.locale || 'en';
+  const statedAll = parseStatedQuantity(opts?.userText, locale).filter((s) => !s.isQuestion && !s.isPastReference);
+  const adopted = items.map((it) => ({ ...it }));
+  const clarifyItems: PortionClarifyItem[] = [];
+  const resolutions: QuantityResolution[] = [];
+  const statedCounts = new Map<number, number>();
+
+  const estOf = (idx: number) => scoutEstGrams(adopted[idx]);
+  const nameOf = (idx: number) =>
+    String(adopted[idx]?.originalName || adopted[idx]?.keyword || adopted[idx]?.name || `Item #${idx + 1}`);
+
+  // 1. Attribute each stated quantity to meal items (closed world: this meal only).
+  statedAll.forEach((stated) => {
+    const matchedIdx: number[] = [];
+    if (stated.itemRefText) {
+      adopted.forEach((it, idx) => {
+        if (matchStatedToItem(stated, it)) matchedIdx.push(idx);
+      });
+    } else if (adopted.length === 1) {
+      matchedIdx.push(0);
+    }
+    (stated as any)._matchedIdx = matchedIdx;
+  });
+
+  // 2. Resolve per item.
+  adopted.forEach((it, idx) => {
+    const si = it.scoutIndex != null ? Number(it.scoutIndex) : idx;
+    const name = nameOf(idx);
+    const w = estOf(idx);
+    const pack = packGramsOf(it);
+    const candidates: QuantityCandidate[] = [];
+    if (pack != null) candidates.push({ source: 'label', grams: null, packGrams: pack, confidence: 'high', note: 'pack total from label/OCR math' });
+    candidates.push({ source: 'visual', grams: w > 0 ? w : null, packGrams: null, confidence: 'low', note: 'uncorroborated scout guess' });
+
+    const mine = statedAll.filter((s) => ((s as any)._matchedIdx as number[]).includes(idx));
+    const myGrams = mine.find((s) => s.grams != null && (s as any)._matchedIdx.length === 1);
+    if (myGrams && myGrams.grams != null) {
+      candidates.unshift({ source: 'user', grams: myGrams.grams, packGrams: null, confidence: 'high', note: `stated "${myGrams.raw}"` });
+      if (statedMatchesEstimate(myGrams.grams, w)) {
+        adopted[idx] = { ...it, estimatedWeightGrams: myGrams.grams, weightGrams: myGrams.grams, statedGramsAdopted: true };
+        resolutions.push({ scoutIndex: si, name, candidates, decision: 'accept-stated', why: `unambiguous user statement (${myGrams.grams}g) corroborates scout est (${w}g)` });
+      } else {
+        const overflow = pack != null && myGrams.grams > pack ? `; stated exceeds ${pack}g pack — downstream plausibility gate is the backstop` : '';
+        adopted[idx] = { ...it, estimatedWeightGrams: myGrams.grams, weightGrams: myGrams.grams, statedGramsAdopted: true };
+        resolutions.push({ scoutIndex: si, name, candidates, decision: 'adopt-stated', why: `explicit user statement outranks visual guess (${w}g → ${myGrams.grams}g)${overflow}` });
+      }
+      return;
+    }
+
+    const myFraction = mine.find((s) => s.fraction != null && (s as any)._matchedIdx.length === 1);
+    if (myFraction && myFraction.fraction != null) {
+      candidates.unshift({ source: 'user', grams: null, packGrams: null, confidence: 'high', note: `stated fraction "${myFraction.raw}"` });
+      if (pack != null) {
+        const g = Math.max(1, Math.round(pack * (myFraction.fraction as number)));
+        adopted[idx] = { ...it, estimatedWeightGrams: g, weightGrams: g, statedGramsAdopted: true };
+        resolutions.push({ scoutIndex: si, name, candidates, decision: 'adopt-stated', why: `fraction ${(myFraction.fraction as number) * 100}% of ${pack}g pack = ${g}g` });
+          return;
+      }
+      // Fraction without a known basis cannot resolve — force the question.
+      const forced = minimalClarifyItem(it, si, [], `you said "${myFraction.raw}" but the pack size is unknown — confirm`);
+      if (forced) {
+        clarifyItems.push(forced);
+        resolutions.push({ scoutIndex: si, name, candidates, decision: 'ask', why: 'stated fraction has no pack basis to resolve against' });
+          return;
+      }
+    }
+
+    const myCount = mine.find((s) => s.count != null && s.unitNoun && (s as any)._matchedIdx.length === 1);
+    if (myCount && myCount.count != null) {
+      candidates.unshift({ source: 'user', grams: null, packGrams: null, confidence: 'high', note: `stated count "${myCount.raw}"` });
+      // Counts resolve through the detector's unit options; mark for the ask path below.
+      statedCounts.set(idx, myCount.count);
+    }
+
+    // 3. Ambiguous or bare statements: inject grams into options when asked.
+    const bare = statedAll.find((s) => s.grams != null && !s.itemRefText && adopted.length > 1);
+    const ambiguous = mine.filter((s) => (s as any)._matchedIdx.length > 1);
+    const inject: number[] = [];
+    if (bare?.grams != null) inject.push(bare.grams);
+    for (const a of ambiguous) if (a.grams != null) inject.push(a.grams);
+
+    const found = detectPortionAmbiguity(it, si);
+    if (found) {
+      let enriched = found;
+      for (const g of inject) enriched = injectStatedOption(enriched, g);
+      clarifyItems.push(enriched);
+      resolutions.push({
+        scoutIndex: si, name, candidates, decision: 'ask',
+        why: inject.length > 0 ? `pack/estimate diverge; user-stated ${inject.join('/')}g offered back as options` : `package (${pack}g) differs from estimated portion (${w}g) — confirm how much was eaten`,
+      });
+      return;
+    }
+    if (inject.length > 0 || statedCounts.has(idx)) {
+      // Detector silent but the user spoke about this item: synthesize the
+      // disambiguation question rather than dropping their statement.
+      const synth = minimalClarifyItem(it, si, inject, `your note mentions this item — confirm the portion`);
+      if (synth) {
+        clarifyItems.push(synth);
+        resolutions.push({ scoutIndex: si, name, candidates, decision: 'ask', why: 'user statement needs disambiguation; detector was silent' });
+          return;
+      }
+    }
+    resolutions.push({ scoutIndex: si, name, candidates, decision: 'accept-visual', why: 'no statement, no pack divergence — visual estimate stands' });
+  });
+
+  return { items: adopted, clarifyItems, resolutions };
+}
+
+function buildPayloadFromFunnel(funnel: QuantityFunnelResult): PortionClarifyPayload | null {
+  if (funnel.clarifyItems.length === 0) return null;
+  const names = funnel.clarifyItems.map((i) => i.name).join('; ');
   return {
     promptMessage:
-      items.length === 1
-        ? `How much of “${items[0].name}” did you eat? (Label is per 100g — pick a portion so we don’t guess.)`
+      funnel.clarifyItems.length === 1
+        ? `How much of “${funnel.clarifyItems[0].name}” did you eat? (Label is per 100g — pick a portion so we don’t guess.)`
         : `Confirm portions for: ${names}`,
-    items,
-    scoutItems: scoutItems,
+    items: funnel.clarifyItems,
+    scoutItems: funnel.items,
+    resolutions: funnel.resolutions,
   };
+}
+
+export function buildPortionClarifyPayload(
+  scoutItems: any[],
+  opts?: { userText?: unknown; locale?: unknown }
+): PortionClarifyPayload | null {
+  if (!Array.isArray(scoutItems) || scoutItems.length === 0) return null;
+  const funnel = resolveItemQuantities(scoutItems, opts);
+  const payload = buildPayloadFromFunnel(funnel);
+
+  // Check composite sub-components (legacy path for items the funnel accepted).
+  if (payload) {
+    funnel.items.forEach((it, idx) => {
+      const si = it.scoutIndex != null ? Number(it.scoutIndex) : idx;
+      const subComps: any[] = (Array.isArray(it.compositeSiblings) && it.compositeSiblings.length > 0)
+        ? it.compositeSiblings
+        : ((Array.isArray(it.components) && it.components.length > 0)
+          ? it.components
+          : []);
+      if (subComps.length > 1) {
+        subComps.forEach((comp: any, cIdx: number) => {
+          if (!comp) return;
+          const compIndex = 10000 + (si * 100) + cIdx;
+          const compFound = detectPortionAmbiguity(comp, compIndex);
+          if (compFound && !payload.items.some((i) => i.scoutIndex === compIndex)) {
+            payload.items.push(compFound);
+          }
+        });
+      }
+    });
+  } else {
+    // Funnel silent: legacy composite scan still applies (no user-text involved).
+    const items: PortionClarifyItem[] = [];
+    funnel.items.forEach((it, idx) => {
+      const si = it.scoutIndex != null ? Number(it.scoutIndex) : idx;
+      const subComps: any[] = (Array.isArray(it.compositeSiblings) && it.compositeSiblings.length > 0)
+        ? it.compositeSiblings
+        : ((Array.isArray(it.components) && it.components.length > 0)
+          ? it.components
+          : []);
+      if (subComps.length > 1) {
+        subComps.forEach((comp: any, cIdx: number) => {
+          if (!comp) return;
+          const compFound = detectPortionAmbiguity(comp, 10000 + (si * 100) + cIdx);
+          if (compFound) items.push(compFound);
+        });
+      }
+    });
+    if (items.length > 0) {
+      const names = items.map((i) => i.name).join('; ');
+      return {
+        promptMessage: items.length === 1
+          ? `How much of “${items[0].name}” did you eat? (Label is per 100g — pick a portion so we don’t guess.)`
+          : `Confirm portions for: ${names}`,
+        items,
+        scoutItems: funnel.items,
+      };
+    }
+  }
+  return payload;
 }
 
 /** choices: map scoutIndex (string or number key) → weightGrams */

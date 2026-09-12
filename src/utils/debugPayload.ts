@@ -321,7 +321,30 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
     for (const it of clarifyItems) {
       lines.push(`- **Ask:** ${it?.name} (est ${it?.estimatedWeightGrams}g, pack ${it?.packGrams}g)`);
     }
+    // S-10 PORTION_FUNNEL: per-item quantity resolution (candidates, decision, why).
+    const resolutions = Array.isArray((pendingClarify as any).resolutions) ? (pendingClarify as any).resolutions : [];
+    for (const r of resolutions) {
+      const cands = Array.isArray(r?.candidates)
+        ? r.candidates.map((c: any) => `${c?.source}${c?.grams != null ? ` ${c.grams}g` : ''}${c?.packGrams != null ? ` pack ${c.packGrams}g` : ''} (${c?.confidence})`).join(' · ')
+        : '';
+      lines.push(`- **Resolved:** ${r?.name} → ${r?.decision} (${r?.why || 'no reason recorded'})${cands ? ` [${cands}]` : ''}`);
+    }
     lines.push(`- **Status:** ${tree.status === 'awaiting_user' ? 'awaiting user answer' : tree.status}`);
+    lines.push('');
+  }
+
+  // 2c2. Quantity resolution audit (S-10) — recorded even when no question
+  // fired, so "why didn't it ask" is answerable from the export.
+  const qtyAudit = (tree.pendingFoodLog as any)?.quantityResolutions;
+  if ((!pendingClarify || typeof pendingClarify !== 'object') && Array.isArray(qtyAudit) && qtyAudit.length > 0) {
+    lines.push(`## 🧮 Quantity Resolution (no question asked)`);
+    lines.push('');
+    for (const r of qtyAudit) {
+      const cands = Array.isArray(r?.candidates)
+        ? r.candidates.map((c: any) => `${c?.source}${c?.grams != null ? ` ${c.grams}g` : ''}${c?.packGrams != null ? ` pack ${c.packGrams}g` : ''} (${c?.confidence})`).join(' · ')
+        : '';
+      lines.push(`- **Resolved:** ${r?.name} → ${r?.decision} (${r?.why || 'no reason recorded'})${cands ? ` [${cands}]` : ''}`);
+    }
     lines.push('');
   }
 

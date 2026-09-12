@@ -288,6 +288,13 @@ export async function executeFinalizePhase(
         if (pendingFoodLog) (pendingFoodLog as any).portionClarify = ctx.portionClarify;
         parsedData.portionClarify = ctx.portionClarify;
       }
+      // S-10: quantity resolutions ride along even when nothing was asked,
+      // so "why didn't it ask" is answerable from the debug export.
+      const quantityResolutionsA = (ctx as any).quantityResolutions;
+      if (Array.isArray(quantityResolutionsA) && quantityResolutionsA.length > 0) {
+        if (pendingFoodLog) (pendingFoodLog as any).quantityResolutions = quantityResolutionsA;
+        (parsedData as any).quantityResolutions = quantityResolutionsA;
+      }
       const finalMeal = pendingFoodLog || parsedData;
       const gate = evaluateMealGate(
         buildNewLogGateInput({
@@ -355,6 +362,12 @@ export async function executeFinalizePhase(
     if (ctx.portionClarify) {
       if (pendingFoodLog) (pendingFoodLog as any).portionClarify = ctx.portionClarify;
       parsedData.portionClarify = ctx.portionClarify;
+    }
+    // S-10: quantity resolutions ride along even when nothing was asked.
+    const quantityResolutionsB = (ctx as any).quantityResolutions;
+    if (Array.isArray(quantityResolutionsB) && quantityResolutionsB.length > 0) {
+      if (pendingFoodLog) (pendingFoodLog as any).quantityResolutions = quantityResolutionsB;
+      (parsedData as any).quantityResolutions = quantityResolutionsB;
     }
     const finalMeal = pendingFoodLog || parsedData;
     const gate = evaluateMealGate(

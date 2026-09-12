@@ -76,6 +76,7 @@ export async function executeScoutPhase(ctx: AnalyzeRunContext): Promise<void> {
         ctx.sendLog('scout_instruction', 'scout', `Vision Scout Instruction dispatched (model: ${ctx.engine || "gemini-3.5-flash-lite"}). Prompt length: ${scoutPromptText.length} chars — see [UnifiedLLM-Prompt:scout] below for full text.`);
         ctx.sendLog('scout_system_instruction', 'scout', `Vision Scout System Instruction dispatched (model: ${ctx.engine || "gemini-3.5-flash-lite"}) — see [UnifiedLLM-Prompt:scout] below for full text.`);
         ctx.addDebugLog(`[Vision Scout] Running Stage 3 lightweight vision scout with retry protection...`);
+        const scoutLegStartMs = Date.now();
         let { scoutResult, lastScoutErr } = await runScoutRetryLoop({
           engine: ctx.engine, language: ctx.userProfile?.language, scoutPromptText, imagePayloads: ctx.imagePayloads,
           isCompare: ctx.userSelectedMode === 'compare', systemInstruction: resolvedScoutSystemInstruction, message: ctx.message, callUnifiedLLM: ctx.callUnifiedLLM,
@@ -110,6 +111,32 @@ export async function executeScoutPhase(ctx: AnalyzeRunContext): Promise<void> {
         }
         logScoutItemSummaries(ctx.visionScoutItems, ctx.addDebugLog);
         logScoutImageInventory({ perImage: (ctx.rawScoutData as any)?.perImage, imageCount: ctx.imagePayloads?.length || 0, items: ctx.visionScoutItems, onLog: ctx.addDebugLog });
+        // S-10: record the scout leg in the run tree (system instruction as
+        // dispatched, model, latency). Without this leg the tree holds only
+        // the narrator dispatch, so the QUANTITY & MULTIPACKS chunk law and
+        // any weight triage are uncheckable from the export.
+        const scoutLegs = ctx.accumulatedDispatches.filter((d: any) => d?.agent === 'scout').length;
+        const scoutTurn = scoutLegs + 1;
+        const scoutModel =
+          (typeof ctx.engine === 'object' ? (ctx.engine as any)?.name || (ctx.engine as any)?.model : ctx.engine) ||
+          'gemini-3.5-flash-lite';
+        ctx.accumulatedDispatches.push({
+          id: `t${scoutTurn}/scout`,
+          parent: null,
+          turn: scoutTurn,
+          agent: 'scout',
+          user: ctx.message && ctx.message.trim() ? ctx.message.trim() : (hasImage ? 'Analyze this meal photo.' : 'Text meal entry'),
+          received: { mode: ctx.userSelectedMode || 'new_log' },
+          systemInstruction: resolvedScoutSystemInstruction,
+          userPrompt: scoutPromptText,
+          instruction: [
+            `=== SYSTEM INSTRUCTION ===\n${resolvedScoutSystemInstruction}`,
+            `=== USER PROMPT ===\n${scoutPromptText}`,
+          ].join('\n\n'),
+          model: scoutModel,
+          latency_ms: Date.now() - scoutLegStartMs,
+          error: null,
+        });
         ctx.emitStageUsage('scout');
       }
     }

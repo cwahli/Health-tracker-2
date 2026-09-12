@@ -136,6 +136,8 @@ Found while triaging `debug-job_1789169906811` + red gates. Work in this order:
 
 **Status 2026-09-12: S-7/S-8/S-9 all green.** Single root cause found: `bca0f80` bulk-overwrote `src/utils/translations.ts` (6,538 lines) with humanized key names and dropped keys. Fix = reverted that file to `bca0f80~1`, deleted tracked junk `scratch_keys.json`. S-7 verified by 3/3 `dialog-inventory.spec.ts` passing with zero spec changes; S-8 by 54/54 i18n+dispatch+narration tests; S-9 by 7/7 deskProcess golden after the prefix export. Class: `TRANSLATION_DUMP_REGRESSION`. Note: `bca0f80` was a 144-file commit that also deleted golden assets (`tests/Golden_meal/7/8/9`, compare sets) — those deletions were NOT restored here (out of blast radius); `src/utils/storageUtils.test.ts` (S-5 gate) still does not exist.
 
+| **S-10** | `PORTION_FUNNEL` | **COMPLETE 2026-09-12.** Portion clarify asked redundantly (stated 100g re-asked) and stayed silent on 28g-vs-180g-pack: `buildPortionClarifyPayload` never saw user text; pack cues missed `Berat Bersih`; halves gated on whole-pack sanity; pack parser blind to `packageLabelText`. Fix: `src/utils/quantityText.ts` locale boundary (structured candidates, one locale table), candidate funnel in `server_portion_clarify.ts` (user > label > visual; adopt/suppress/inject), shared text blob, per-option sanity, scout dispatch leg + `quantityResolution` in debug export. No prompt/schema/ledger changes. | `server_portion_clarify.test.ts` (38) + `quantityText.test.ts` (10) + `portion-funnel.spec.ts` Playwright + shell-smoke 8/8 + Guard PASS | Second LLM for narration; per-country code paths; silent clamping past pack (record overflow, plausibility gate is backstop) |
+
 # Remaining work
 
 ## Track B — Biomarkers (active)

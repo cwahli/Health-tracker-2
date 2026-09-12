@@ -5,7 +5,7 @@ import { inferPackagedBindChains, injectExplicitFoodTags, checkMenuScaleBypass }
 import { isPackagedBindItem } from './server_brand_match.js';
 import { buildFoodSearchQuerySet } from './server_query_set.js';
 import { detectChainKeyFromText, enrichScoutComponentsWithMatches } from './src/server/food/server_food_analyze_helpers.js';
-import { buildPortionClarifyPayload } from './server_portion_clarify.js';
+import { buildPortionClarifyPayload, resolveItemQuantities } from './server_portion_clarify.js';
 import { collectFdcHintTasks, isFdcHintRelevant, mapLedgersToPrecalcItems } from './src/server/food/server_food_precalc.js';
 import { finalizeDishLedger } from './server_dish_finalize.js';
 import { extractUSDANutrientsPer100g, extractOFFNutrientsPer100g } from './server_pure_helpers.js';
@@ -143,8 +143,21 @@ export async function executePrecalcPhase(ctx: AnalyzeRunContext, dbDeps?: any):
   }
 
   enrichScoutComponentsWithMatches(ctx.visionScoutItems, ctx.databaseMatchesArray);
-  ctx.portionClarify = buildPortionClarifyPayload(ctx.visionScoutItems);
+  // S-10 PORTION_FUNNEL: user-stated quantities (ctx.message) resolve first.
+  // Unambiguous statements are adopted onto scout copies (never asked back);
+  // the detector then sees adopted estimates, so it cannot redundantly ask.
+  const funnel = resolveItemQuantities(ctx.visionScoutItems, {
+    userText: (ctx as any).message,
+    locale: (ctx as any).userProfile?.language,
+  });
+  ctx.visionScoutItems = funnel.items;
+  (ctx as any).quantityResolutions = funnel.resolutions;
+  ctx.portionClarify = buildPortionClarifyPayload(ctx.visionScoutItems, {
+    userText: (ctx as any).message,
+    locale: (ctx as any).userProfile?.language,
+  });
   if (ctx.portionClarify) {
+    (ctx.portionClarify as any).resolutions = funnel.resolutions;
     ctx.addDebugLog(`[PortionClarify] Non-blocking clarification check attached for: ${ctx.portionClarify.items.map((i: any) => i.name).join('; ')}`);
   }
 
