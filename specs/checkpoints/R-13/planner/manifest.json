@@ -1,0 +1,16 @@
+{
+  "slug": "R-13",
+  "node": "planner",
+  "at": "2026-09-12T10:49:32.810Z",
+  "git": {
+    "head": "4a519ea3c3194ba2bd6a2dbf1452ef04ce54d4cb",
+    "stashCommit": "527da35ca45297c30e2eff576a96150be6cf7eec"
+  },
+  "files": [
+    "docs/agent/standing.json",
+    "server_vision_scout.ts",
+    "src/server/food/server_food_analyze_schema.ts",
+    "prototype/meallog/compare/scout_only_compare_instructions.ts",
+    "specs/active/R-13.md"
+  ]
+}
