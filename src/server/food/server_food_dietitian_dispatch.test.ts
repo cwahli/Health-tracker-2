@@ -12,8 +12,6 @@ import {
   salvageLedgerPlausibility,
   isAcceptDefaultsWithinTolerance,
   composeAcceptDefaultsParsed,
-  buildNarratorDispatch,
-  PROJECTOR_NARRATOR_INSTRUCTION,
 } from './server_food_dietitian_dispatch';
 import { NUTRIENT_KEYS } from '../../utils/nutrients';
 
@@ -289,55 +287,5 @@ describe('accept-defaults gate (portion choices within 30%, no agent)', () => {
     expect(out.clinicalAdvice).toContain('kkal');
     expect(out.clinicalAdvice).toContain('gula');
     expect(out.verdict.label).toBeTruthy();
-  });
-});
-
-describe('narrator dispatch row (no dietitian agent)', () => {
-  const emission = (words = 40) => ({
-    verdict: { label: 'Sugar Over Limit', level: 'alert' },
-    message: Array.from({ length: words }, (_, i) => `w${i}`).join(' '),
-  });
-
-  it('records an LLM narrator row with model, latency, and turn linkage', () => {
-    const d = buildNarratorDispatch({
-      turn: 1,
-      userMessage: 'Analyze this meal photo.',
-      mode: 'review',
-      systemInstruction: 'SYS',
-      userPrompt: 'PROMPT',
-      rawParsed: emission(),
-      model: 'gemini-3.5-flash-lite',
-      latencyMs: 2100,
-      tokens: 900,
-    });
-    expect(d.id).toBe('t1/narrator');
-    expect(d.agent).toBe('narrator');
-    expect(d.agent).not.toBe('dietitian');
-    expect(d.turn).toBe(1);
-    expect(d.model).toBe('gemini-3.5-flash-lite');
-    expect(d.latency_ms).toBe(2100);
-    expect(d.tokens).toBe(900);
-    expect(d.output.verdict.label).toBe('Sugar Over Limit');
-    expect(d.instruction).toContain('SYS');
-    expect(d.instruction).toContain('PROMPT');
-    expect(d.received.mode).toBe('review');
-  });
-
-  it('records a projector row for TS-only turns with the targeted marker', () => {
-    const d = buildNarratorDispatch({
-      turn: 2,
-      userMessage: 'brownies 15g',
-      mode: 'edit',
-      systemInstruction: PROJECTOR_NARRATOR_INSTRUCTION,
-      userPrompt: '[projector] scale-only refine to 15g — no LLM call.',
-      rawParsed: emission(),
-      model: 'projector',
-      latencyMs: 0,
-      tokens: 0,
-      projected: true,
-    });
-    expect(d.id).toBe('t2/narrator');
-    expect(d.received.projected).toBe(true);
-    expect(d.systemInstruction).toContain('TARGETED DISH UPDATE ONLY');
   });
 });

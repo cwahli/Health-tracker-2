@@ -122,10 +122,8 @@ export function determinePack(input: Partial<DebugReportInput>): 'food' | 'recep
 }
 
 /**
- * Single-agent compare runs have no narrator or dietitian — the scout leg is
- * the only dispatch. The export layer used to backfill a synthetic narrator
- * dispatch whenever advice text existed, resurrecting the folded agent on
- * compare exports. Gate both backfill sites on this.
+ * Single Meal Agent: food runs have no narrator or dietitian — the scout leg is
+ * the only dispatch.
  */
 export function isCompareRunTree(input: Partial<DebugReportInput>, dispatchList: Array<{ agent?: string; received?: any }> = []): boolean {
   const mode = String((input as any)?.mode || '').toLowerCase();
@@ -414,12 +412,9 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
       const turnSet = new Set(enriched.map(d => Number(d.turn) || 1));
       for (const t of turnSet) {
         const turnDispatches = enriched.filter(d => (Number(d.turn) || 1) === t);
-        // No narrator backfill on compare runs: the scout leg is the only
-        // dispatch by design (isCompareRunTree).
         if (isCompareRunTree(input, enriched)) continue;
-        const hasNarratorOrDietitian = turnDispatches.some(d => d.agent === 'narrator' || d.agent === 'dietitian' || d.agent === 'expert');
-        if (!hasNarratorOrDietitian) {
-          const matchingScout = turnDispatches.find(d => d.agent === 'scout') || turnDispatches[0];
+        const matchingScout = turnDispatches.find(d => d.agent === 'scout');
+        if (matchingScout && (!matchingScout.rawEmission && !matchingScout.output)) {
           const pfl = input.pendingFoodLog || (input as any)?.result?.pendingFoodLog || (input as any)?.result;
           const verdict = pfl?.verdict || (input.receiptTable as any)?.verdict;
           const advice = pfl?.clinicalAdvice || pfl?.message || (input as any)?.result?.clinicalAdvice || (input as any)?.result?.message;
@@ -431,26 +426,8 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
               message: advice || '',
               dishes,
             };
-            enriched.push({
-              id: `t${t}/narrator`,
-              parent: matchingScout ? matchingScout.id : null,
-              turn: t,
-              agent: 'narrator',
-              user: matchingScout?.user || '',
-              received: {
-                mode: input.mode || 'new_log',
-                projected: true,
-              },
-              systemInstruction: undefined,
-              userPrompt: undefined,
-              instruction: 'Projector narrative stage. TARGETED DISH UPDATE ONLY.',
-              output: emission,
-              rawEmission: emission,
-              model: 'projector',
-              latency_ms: 0,
-              tokens: 0,
-              error: null,
-            });
+            matchingScout.output = matchingScout.output || emission;
+            matchingScout.rawEmission = matchingScout.rawEmission || emission;
           }
         }
       }
@@ -667,38 +644,23 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
     });
   }
 
-  if (pack === 'food' && !isCompareRunTree(input, dispatches) && !dispatches.some(d => d.agent === 'narrator' || d.agent === 'dietitian' || d.agent === 'expert')) {
-    const pfl = input.pendingFoodLog || (input as any)?.result?.pendingFoodLog || (input as any)?.result;
-    const verdict = pfl?.verdict || (input.receiptTable as any)?.verdict;
-    const advice = pfl?.clinicalAdvice || pfl?.message || (input as any)?.result?.clinicalAdvice || (input as any)?.result?.message;
-    const dishes = pfl?.dishes || (input.receiptTable as any)?.dishes || [];
-    if (verdict || (advice && advice.length > 20) || dishes.length > 0) {
-      const emission = {
-        verdict: verdict || { label: 'Supports Metabolic Energy', level: 'neutral' },
-        clinicalAdvice: advice || '',
-        message: advice || '',
-        dishes,
-      };
-      dispatches.push({
-        id: 't1/narrator',
-        parent: hasScout ? 't1/scout' : null,
-        turn: 1,
-        agent: 'narrator',
-        user: defaultUserPrompt,
-        received: {
-          mode: input.mode || 'new_log',
-          projected: true,
-        },
-        systemInstruction: undefined,
-        userPrompt: undefined,
-        instruction: 'Projector narrative stage. TARGETED DISH UPDATE ONLY.',
-        output: emission,
-        rawEmission: emission,
-        model: 'projector',
-        latency_ms: 0,
-        tokens: 0,
-        error: null,
-      });
+  if (pack === 'food' && !isCompareRunTree(input, dispatches)) {
+    const scoutDispatch = dispatches.find(d => d.agent === 'scout');
+    if (scoutDispatch && (!scoutDispatch.rawEmission && !scoutDispatch.output)) {
+      const pfl = input.pendingFoodLog || (input as any)?.result?.pendingFoodLog || (input as any)?.result;
+      const verdict = pfl?.verdict || (input.receiptTable as any)?.verdict;
+      const advice = pfl?.clinicalAdvice || pfl?.message || (input as any)?.result?.clinicalAdvice || (input as any)?.result?.message;
+      const dishes = pfl?.dishes || (input.receiptTable as any)?.dishes || [];
+      if (verdict || (advice && advice.length > 20) || dishes.length > 0) {
+        const emission = {
+          verdict: verdict || { label: 'Supports Metabolic Energy', level: 'neutral' },
+          clinicalAdvice: advice || '',
+          message: advice || '',
+          dishes,
+        };
+        scoutDispatch.output = scoutDispatch.output || emission;
+        scoutDispatch.rawEmission = scoutDispatch.rawEmission || emission;
+      }
     }
   }
 

@@ -49,6 +49,13 @@ describe('Single Meal Agent owns compose: no dietitian/narrator phase', () => {
   it('compose leg is pure TS: no live LLM call in the compose owner', () => {
     expect(compose).not.toMatch(/callUnifiedLLM\s*\(/);
   });
+
+  it('no narrator dispatch or emission in analyze pipeline', () => {
+    expect(pipeline).not.toMatch(/buildNarratorDispatch/);
+    expect(pipeline).not.toMatch(/PROJECTOR_NARRATOR_INSTRUCTION/);
+    expect(pipeline).not.toMatch(/agent:\s*['"]narrator['"]/);
+    expect(pipeline).not.toMatch(/['"]narrator_answer['"]/);
+  });
 });
 
 describe('F-8 compiler uses finalize not aggregateItemsNutrients', () => {

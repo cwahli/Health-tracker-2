@@ -710,19 +710,18 @@ describe('Agent-output verification rows (15-19)', () => {
     expect(r?.actual).toMatch(/t1/);
   });
 
-  it('passes when a narrator row covers the clarify turn (no dietitian agent)', () => {
+  it('passes when scout row covers verdict+advice (single meal agent)', () => {
     const tree = buildCanonicalRunTree({
-      pack: 'food', jobId: 'j_narr_t1', status: 'succeeded',
+      pack: 'food', jobId: 'j_scout_t1', status: 'succeeded',
       pendingFoodLog: { nutrients: fullNuts({ calories: 693 }) },
       dispatches: [
-        { id: 't1/scout', turn: 1, agent: 'scout', received: { mode: 'review' }, output: { verdict: { label: 'High Sugar Load', level: 'warning' }, dishes: [stdDish()] } },
         {
-          id: 't1/narrator', turn: 1, agent: 'narrator', received: { mode: 'review' },
-          output: { verdict: { label: 'High Sugar Load', level: 'warning' }, message: stdAdvice() },
+          id: 't1/scout', turn: 1, agent: 'scout', received: { mode: 'review' },
+          output: { verdict: { label: 'High Sugar Load', level: 'warning' }, message: stdAdvice(), dishes: [stdDish()] },
         },
         {
-          id: 't2/dietitian', turn: 2, agent: 'dietitian', received: { mode: 'edit' },
-          output: { verdict: { label: 'Sugar Over Limit', level: 'alert' }, message: stdAdvice() },
+          id: 't2/scout', turn: 2, agent: 'scout', received: { mode: 'edit' },
+          output: { verdict: { label: 'Sugar Over Limit', level: 'alert' }, message: stdAdvice(), dishes: [stdDish()] },
         },
       ],
     });
