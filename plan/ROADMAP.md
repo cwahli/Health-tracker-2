@@ -124,6 +124,18 @@ Landed on GitHub `155a49a` (2026-09-04): empty-demo chat wipe, vision-scout heal
 
 **Who runs Track S:** OpenCode plus Token Plan Qwen (DeepSeek PAYG after Token Plan is gone) for one class / one PR. Antigravity only on chiwah.liu@gmail.com for a large class-fix. Grok Bot triages a red golden or reviews a short diff and does not click the next seven cases. Skip Aider+Qwen and Alibaba Qwen Code / Lingma.
 
+### Track S (continued) — 2026-09-12 log-issue queue (meal-log journey first)
+
+Found while triaging `debug-job_1789169906811` + red gates. Work in this order:
+
+| ID | Class | Item | Gate (inner) | Do not |
+|---|---|---|---|---|
+| **S-7** | `MEAL_JOURNEY_OPEN` | Meal-log journey: quick-action → Log Meal dialog → composer → stubbed card (Q-8.3 `prototype/tests/dialog-inventory.spec.ts` 2 failing: composer never appears after Log Meal click) | Spec green; if the dialog itself fails to open in-app, fix the app open flow, not the locators | Paint the spec to match a broken dialog; live Gemini in the loop |
+| **S-8** | `LEAK_KEY` | Raw i18n keys from meal compose/narration (`ledgerLoggedMeal`, `adviceProbioticSugar`, `balancedMealFallbackName`, `apMealPosition/…`): 10 failing tests in `server_food_dietitian_dispatch.test.ts` + `narration.test.ts` | The 10 tests + `src/utils/i18n.test.ts` parity (en + id) | Touch helper logic; add en without id |
+| **S-9** | `CHAT_STALE` | Empty-demo wipe misses prefixes: export `CHAT_MEMORY_PREFIXES` from `storageUtils.ts`, clear `last_sent_payload_` / `active_session_id_` / `jobstore_` / `chat_messages_` (`tests/deskProcess.golden.test.ts` 1 failing) | deskProcess golden | Widen beyond demo-wipe callers; drop `preferred_language` |
+
+**Status 2026-09-12: S-7/S-8/S-9 all green.** Single root cause found: `bca0f80` bulk-overwrote `src/utils/translations.ts` (6,538 lines) with humanized key names and dropped keys. Fix = reverted that file to `bca0f80~1`, deleted tracked junk `scratch_keys.json`. S-7 verified by 3/3 `dialog-inventory.spec.ts` passing with zero spec changes; S-8 by 54/54 i18n+dispatch+narration tests; S-9 by 7/7 deskProcess golden after the prefix export. Class: `TRANSLATION_DUMP_REGRESSION`. Note: `bca0f80` was a 144-file commit that also deleted golden assets (`tests/Golden_meal/7/8/9`, compare sets) — those deletions were NOT restored here (out of blast radius); `src/utils/storageUtils.test.ts` (S-5 gate) still does not exist.
+
 # Remaining work
 
 ## Track B — Biomarkers (active)
