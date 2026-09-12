@@ -107,6 +107,26 @@ export function initNetworkDiagnosticInterceptor() {
 
     const cleanUrl = url.split('?')[0];
 
+    // Automatically attach auth session token to /api/ calls if present and unauthenticated
+    try {
+      if (typeof window !== 'undefined' && cleanUrl.includes('/api/')) {
+        const authToken = localStorage.getItem('auth_token');
+        if (authToken) {
+          if (!args[1]) args[1] = {};
+          if (!args[1].headers) args[1].headers = {};
+          if (args[1].headers instanceof Headers) {
+            if (!args[1].headers.has('Authorization')) {
+              args[1].headers.set('Authorization', `Bearer ${authToken}`);
+            }
+          } else if (typeof args[1].headers === 'object') {
+            if (!('Authorization' in args[1].headers) && !('authorization' in args[1].headers)) {
+              args[1].headers['Authorization'] = `Bearer ${authToken}`;
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
     try {
       let response = await originalFetch.apply(window, args);
       let duration = Date.now() - start;

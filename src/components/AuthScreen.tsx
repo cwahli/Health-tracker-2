@@ -248,13 +248,53 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     setStatus('sending');
 
     const cleanEmail = email.trim().toLowerCase();
+
+    // 1. Primary: Server-side authentication (Cloudflare D1 + Express)
+    try {
+      const resp = await fetch(isSignUp ? '/api/auth/signup' : '/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, password, nickname })
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (resp.ok && data.success) {
+        if (data.token) {
+          localStorage.setItem('auth_token', data.token);
+        }
+        localStorage.setItem('last_active_email', cleanEmail);
+        const isCwah = cleanEmail.includes('cwah.liu') || cleanEmail.includes('chiwah.liu');
+        const resolvedProfile: UserProfile = {
+          uid: data.userProfile?.uid || (isCwah ? 'hiJun2hTdDTk2igwerun2LKvwb42' : `usr_${cleanEmail.replace(/[^a-z0-9]/gi, '_')}`),
+          nickname: data.userProfile?.nickname || (isCwah ? 'C. Liu' : (nickname || cleanEmail.split('@')[0] || 'User').trim()),
+          photoUrl: '',
+          email: cleanEmail,
+          age: isCwah ? 28 : 28,
+          ethnicity: isCwah ? 'Chinese' : 'Unknown',
+          weight: isCwah ? 70 : 70,
+          height: isCwah ? 175 : 175,
+          gender: isCwah ? 'Male' : 'Unknown',
+          language,
+          userType: data.userProfile?.userType || (isCwah ? 'Admin' : 'Standard')
+        };
+        handleSuccessfulLogin(resolvedProfile);
+        setStatus('idle');
+        return;
+      } else if (!resp.ok && data.error) {
+        setErrorMsg(data.error);
+        setStatus('idle');
+        return;
+      }
+    } catch (apiErr) {
+      console.warn('[Auth] Server auth endpoint unreachable, falling back to client logic:', apiErr);
+    }
+
     if (cleanEmail === 'cwah.liu@gmail.com' && password === 'Admin135$,') {
       try {
         if (isSupabaseConfigured && supabase) await supabase.auth.signOut();
       } catch (e) {}
       localStorage.setItem('last_active_email', cleanEmail);
       const simulatedAdminUser: UserProfile = {
-        uid: 'admin_cwah_liu_gmail_com',
+        uid: 'hiJun2hTdDTk2igwerun2LKvwb42',
         nickname: 'C. Liu',
         photoUrl: '',
         email: 'cwah.liu@gmail.com',

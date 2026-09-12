@@ -98,6 +98,18 @@ CREATE TABLE IF NOT EXISTS issue_tag_links (
   backlog_id TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS app_users (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  password_salt TEXT NOT NULL,
+  nickname TEXT DEFAULT '',
+  user_type TEXT DEFAULT 'Standard',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_app_users_email ON app_users(email);
 `;
 
 let schemaEnsured = false;

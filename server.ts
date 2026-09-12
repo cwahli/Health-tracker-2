@@ -1589,6 +1589,12 @@ app.use((req, res, next) => {
       return res.json({ exists: false, confirmed: false });
     }
     try {
+      const { findUserByEmail } = await import('./server_auth.js');
+      const localUser = await findUserByEmail(email);
+      if (localUser) {
+        return res.json({ exists: true, confirmed: true, userId: localUser.id });
+      }
+
       const { isSupabaseConfigured, supabaseAdmin } = await import('./supabaseAdmin.js');
       if (!isSupabaseConfigured || !supabaseAdmin) {
         return res.json({ exists: false, confirmed: false });
@@ -1607,6 +1613,57 @@ app.use((req, res, next) => {
     } catch (err: any) {
       console.warn('[auth/check-email-status] Exception:', err?.message || err);
       return res.json({ exists: false, confirmed: false, error: String(err?.message || err) });
+    }
+  });
+
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { email, password } = req.body || {};
+      const { authenticateUser } = await import('./server_auth.js');
+      const result = await authenticateUser(email, password);
+      if (!result.success) {
+        return res.status(401).json({ error: result.error || 'Invalid email or password' });
+      }
+      return res.json({ success: true, token: result.token, userProfile: result.user });
+    } catch (err: any) {
+      return res.status(500).json({ error: err?.message || 'Login failed' });
+    }
+  });
+
+  app.post("/api/auth/signup", async (req, res) => {
+    try {
+      const { email, password, nickname } = req.body || {};
+      const { registerUser } = await import('./server_auth.js');
+      const result = await registerUser(email, password, nickname);
+      if (!result.success) {
+        return res.status(400).json({ error: result.error || 'Registration failed' });
+      }
+      return res.json({ success: true, token: result.token, userProfile: result.user });
+    } catch (err: any) {
+      return res.status(500).json({ error: err?.message || 'Registration failed' });
+    }
+  });
+
+  app.get("/api/auth/me", async (req, res) => {
+    try {
+      const { verifyFirebaseIdToken, findUserByEmail } = await import('./server_auth.js');
+      const identity = await verifyFirebaseIdToken(req);
+      const user = identity.email ? await findUserByEmail(identity.email) : null;
+      return res.json({
+        success: true,
+        userProfile: user ? {
+          uid: identity.uid,
+          email: user.email,
+          nickname: user.nickname,
+          userType: user.user_type || 'Standard'
+        } : {
+          uid: identity.uid,
+          email: identity.email,
+          userType: 'Standard'
+        }
+      });
+    } catch (err: any) {
+      return res.status(err?.status || 401).json({ error: err?.message || 'Unauthorized' });
     }
   });
 
