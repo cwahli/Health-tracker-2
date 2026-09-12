@@ -1360,9 +1360,10 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
           item = overlayAutoRemaining(item, board);
           const nextJob = pipe.jobId || jobId;
           try {
-            const { uploadLogsToR2, uploadDebugPayloadToR2 } = await import('./src/utils/r2Storage.js');
+            const { uploadLogsToR2 } = await import('./src/utils/r2Storage.js');
+            const { uploadDebugPayloadToR2Direct } = await import('./server_routes_r2.js');
             if (pipe.logText) await uploadLogsToR2(nextJob, pipe.logText);
-            await uploadDebugPayloadToR2(nextJob, {
+            await uploadDebugPayloadToR2Direct(nextJob, {
               jobId: nextJob,
               source: 'bug-reanalyze-skipScout',
               pendingFoodLog: pipe.foodLog || tape.foodLog,

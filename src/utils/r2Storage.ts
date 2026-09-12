@@ -12,10 +12,12 @@ export async function uploadPhotoToR2(
       const id = photoDataOrId;
       const base64 = optionsOrData;
       const filename = `${id}${typeof index === 'number' && index > 0 ? `_${index}` : ''}.jpg`;
-      const res = await fetch('/api/upload', {
+      const res = await fetch('/api/r2/upload-photo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          jobId: id,
+          payload: base64,
           data: base64,
           prefix: 'photos',
           filename
@@ -23,17 +25,18 @@ export async function uploadPhotoToR2(
       });
       if (res.ok) {
         const data = await res.json();
-        return data.url || data.key || '';
+        return data.url || data.publicUrl || data.key || '';
       }
       return base64;
     }
 
     const photoData = photoDataOrId;
     const options = optionsOrData as { prefix?: string; filename?: string } | undefined;
-    const res = await fetch('/api/upload', {
+    const res = await fetch('/api/r2/upload-photo', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        payload: typeof photoData === 'string' ? photoData : await blobToBase64(photoData),
         data: typeof photoData === 'string' ? photoData : await blobToBase64(photoData),
         prefix: options?.prefix || 'photos',
         filename: options?.filename
@@ -41,12 +44,14 @@ export async function uploadPhotoToR2(
     });
     if (res.ok) {
       const data = await res.json();
-      return data.url || data.key || '';
+      return data.url || data.publicUrl || data.key || '';
     }
   } catch (err) {
     console.warn('[r2Storage] Photo upload failed, falling back to local data URI:', err);
   }
-  return typeof photoDataOrId === 'string' ? photoDataOrId : (typeof optionsOrData === 'string' ? optionsOrData : URL.createObjectURL(photoDataOrId));
+  if (typeof optionsOrData === 'string' && optionsOrData.length > 0) return optionsOrData;
+  if (typeof photoDataOrId === 'string' && (photoDataOrId.startsWith('data:') || photoDataOrId.startsWith('http') || photoDataOrId.startsWith('/photos/'))) return photoDataOrId;
+  return (typeof photoDataOrId === 'object' && photoDataOrId !== null && photoDataOrId instanceof Blob) ? URL.createObjectURL(photoDataOrId) : '';
 }
 
 export async function uploadPhotosToR2(
@@ -65,7 +70,7 @@ export async function uploadPhotosToR2(
 
 export async function uploadDebugPayloadToR2(jobId: string, payload: any): Promise<string> {
   try {
-    const res = await fetch('/api/debug/upload', {
+    const res = await fetch('/api/r2/upload-debug', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ jobId, payload })
@@ -95,18 +100,21 @@ export async function deleteDebugPayloadFromR2(jobIdOrUrl: string, userId?: stri
   }
 }
 
-export async function uploadLogsToR2(key: string, data: any): Promise<boolean> {
+export async function uploadLogsToR2(key: string, data: any): Promise<string> {
   try {
     const res = await fetch('/api/r2/upload-logs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key, data })
+      body: JSON.stringify({ jobId: key, logsText: typeof data === 'string' ? data : JSON.stringify(data) })
     });
-    return res.ok;
+    if (res.ok) {
+      const json = await res.json();
+      return json.url || '';
+    }
   } catch (err) {
     console.warn('[r2Storage] uploadLogsToR2 error:', err);
-    return false;
   }
+  return '';
 }
 
 export async function fetchLogsFromR2(key: string): Promise<any> {
@@ -119,9 +127,11 @@ export async function fetchLogsFromR2(key: string): Promise<any> {
   return null;
 }
 
-export async function fetchDebugPayloadFromR2(jobIdOrUrl: string): Promise<any> {
+export async function fetchDebugPayloadFromR2(jobIdOrUrl: string, userId?: string): Promise<any> {
   try {
-    const res = await fetch(`/api/debug/load?jobId=${encodeURIComponent(jobIdOrUrl)}`);
+    const query = new URLSearchParams({ jobId: jobIdOrUrl });
+    if (userId) query.set('userId', userId);
+    const res = await fetch(`/api/debug/load?${query.toString()}`);
     if (res.ok) return await res.json();
   } catch (err) {
     console.warn('[r2Storage] fetchDebugPayloadFromR2 error:', err);

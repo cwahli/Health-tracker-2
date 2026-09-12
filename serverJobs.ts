@@ -1,4 +1,4 @@
-import { uploadPhotoToR2, uploadPhotosToR2, uploadDebugPayloadToR2 } from './src/utils/r2Storage';
+import { uploadBase64ToR2, uploadPhotosToR2Direct, uploadDebugPayloadToR2Direct, uploadLogsToR2Direct } from './server_routes_r2.js';
 // [FreeTier] thin clean_result
 import { isD1Configured } from './server_d1.js';
 import { d1UpsertJob, d1UpdateJob, d1GetStuckJobs } from './server_db_d1.js';
@@ -400,8 +400,9 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
     if (initialUpsertError) {
       accumulatedLogs.push(`[error] ${initialUpsertError}`);
     }
-    let photoUrl = imageUrls[0] || payload.photoUrl || existingMemJob?.photo_url || '';
-    let photoUrls: string[] = imageUrls || [];
+    const isValidPhotoUrl = (u: any) => typeof u === 'string' && u && u !== jobId && (u.startsWith('http') || u.startsWith('/photos/') || u.startsWith('/api/r2/photos/') || u.startsWith('data:image/') || u.startsWith('blob:'));
+    let photoUrl = [imageUrls[0], payload.photoUrl, existingMemJob?.photo_url].find(isValidPhotoUrl) || '';
+    let photoUrls: string[] = (imageUrls || []).filter(isValidPhotoUrl);
     let currentProgress = 5;
     let currentStatusMessage = 'Starting cloud food analysis...';
     let finalData: any = null;
@@ -451,9 +452,11 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
     try {
       // Step A: Upload ALL photos to Cloudflare R2 (was: only images[0])
       if (images.length > 0) {
-        photoUrls = await uploadPhotosToR2(jobId, images);
-        if (!photoUrl && photoUrls.length > 0) {
-          photoUrl = photoUrls[0]; // keep legacy single-photo field populated for backward compatibility
+        const uploaded = await uploadPhotosToR2Direct(jobId, images);
+        const validUploaded = uploaded.filter(isValidPhotoUrl);
+        if (validUploaded.length > 0) {
+          photoUrls = validUploaded;
+          photoUrl = validUploaded[0];
         }
       }
 
@@ -793,8 +796,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
       if (finalData.needsPortionClarify) {
         let logsUrl = '';
         try {
-          const { uploadLogsToR2 } = await import('./src/utils/r2Storage');
-          logsUrl = await uploadLogsToR2(jobId, accumulatedLogs.join('\n'));
+          logsUrl = await uploadLogsToR2Direct(jobId, accumulatedLogs.join('\n'));
         } catch (r2LogErr) {
           console.warn('[ServerJobs] Failed uploading portion clarify logs to R2:', r2LogErr);
         }
@@ -905,25 +907,30 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
             pendingFoodLog.date = mostRecentDate || fallbackDate;
           }
           // Replace base64 strings with public R2 URL or remove them
-          if (pendingFoodLog.imageUrl && String(pendingFoodLog.imageUrl).startsWith('data:')) {
+          if (pendingFoodLog.imageUrl && (String(pendingFoodLog.imageUrl).startsWith('data:') || pendingFoodLog.imageUrl === jobId)) {
             pendingFoodLog.imageUrl = photoUrl || '';
+          } else if (!pendingFoodLog.imageUrl && photoUrl) {
+            pendingFoodLog.imageUrl = photoUrl;
           }
           if (Array.isArray(pendingFoodLog.imageUrls)) {
             // First, replace any base64 placeholders with newly uploaded R2 URLs
             pendingFoodLog.imageUrls = pendingFoodLog.imageUrls.map((url: any, idx: number) => 
-              String(url).startsWith('data:') ? (photoUrls[idx] || photoUrl || '') : url
-            ).filter(Boolean);
+              (String(url).startsWith('data:') || url === jobId) ? (photoUrls[idx] || photoUrl || '') : url
+            ).filter(isValidPhotoUrl);
             
             // Then, if there are additional new photos uploaded in this turn that weren't mapped, append them
             const existingSet = new Set(pendingFoodLog.imageUrls);
             for (const newUrl of photoUrls) {
-              if (newUrl && !existingSet.has(newUrl)) {
+              if (isValidPhotoUrl(newUrl) && !existingSet.has(newUrl)) {
                 pendingFoodLog.imageUrls.push(newUrl);
                 existingSet.add(newUrl);
               }
             }
           } else {
-            pendingFoodLog.imageUrls = photoUrls.length > 0 ? photoUrls : (photoUrl ? [photoUrl] : []);
+            pendingFoodLog.imageUrls = photoUrls.filter(isValidPhotoUrl);
+          }
+          if (!pendingFoodLog.imageUrl && pendingFoodLog.imageUrls.length > 0) {
+            pendingFoodLog.imageUrl = pendingFoodLog.imageUrls[0];
           }
           delete pendingFoodLog.imageBase64;
           delete pendingFoodLog.images;
@@ -966,8 +973,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         }
 
         try {
-          const { uploadLogsToR2 } = await import('./src/utils/r2Storage');
-          logsUrl = await uploadLogsToR2(jobId, rawLogsText);
+          logsUrl = await uploadLogsToR2Direct(jobId, rawLogsText);
         } catch (r2LogErr) {
           console.warn('[ServerJobs] Failed uploading execution logs to R2:', r2LogErr);
         }
@@ -1132,7 +1138,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         };
 
         try {
-          const debugUrl = await uploadDebugPayloadToR2(jobId, {
+          const debugUrl = await uploadDebugPayloadToR2Direct(jobId, {
             jobId,
             userId,
             kind,
@@ -1303,8 +1309,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
       let logsUrl = '';
       const rawErrorLogs = accumulatedLogs.join('\n');
       try {
-        const { uploadLogsToR2 } = await import('./src/utils/r2Storage');
-        logsUrl = await uploadLogsToR2(jobId, rawErrorLogs);
+        logsUrl = await uploadLogsToR2Direct(jobId, rawErrorLogs);
       } catch (r2LogErr) {
         console.warn('[ServerJobs] Failed uploading error logs to R2:', r2LogErr);
       }
@@ -1321,7 +1326,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         errorCleanResult.pendingFoodLog = finalData.pendingFoodLog || finalData.data;
       }
       try {
-        const debugUrl = await uploadDebugPayloadToR2(jobId, {
+        const debugUrl = await uploadDebugPayloadToR2Direct(jobId, {
           jobId,
           userId,
           kind,

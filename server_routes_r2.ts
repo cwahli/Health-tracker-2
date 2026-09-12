@@ -79,6 +79,107 @@ export async function uploadBase64ToR2(id: string, base64Data: string, index: nu
   }
 }
 
+export async function uploadPhotosToR2Direct(jobId: string, images: (string | any)[]): Promise<string[]> {
+  if (!images || !Array.isArray(images) || images.length === 0) return [];
+  return Promise.all(
+    images.map(async (img, idx) => {
+      if (typeof img === 'string' && img.startsWith('data:image/')) {
+        return uploadBase64ToR2(jobId, img, idx);
+      }
+      return typeof img === 'string' ? img : '';
+    })
+  );
+}
+
+export async function uploadDebugPayloadToR2Direct(jobId: string, payload: any, userId?: string): Promise<string> {
+  const { stripHeavyImages, coldDebugR2Key, COLD_DEBUG_LOG } = await import('./src/utils/debugPayload.js');
+  const key = coldDebugR2Key(String(jobId || 'unknown'), userId || payload?.userId || 'anonymous');
+  const publicUrl = `${CLOUDFLARE_R2_PUBLIC_URL}/${key}`;
+  const client = getS3Client();
+  if (!client) {
+    return publicUrl;
+  }
+  try {
+    const stripped = stripHeavyImages(payload || {});
+    const body = Buffer.from(JSON.stringify(stripped, null, 2));
+    const command = new PutObjectCommand({
+      Bucket: CLOUDFLARE_R2_BUCKET_NAME,
+      Key: key,
+      Body: body,
+      ContentType: 'application/json',
+    });
+    await client.send(command);
+    console.log(`${COLD_DEBUG_LOG} direct ok key=${key} bytes=${body.length}`);
+    return publicUrl;
+  } catch (err) {
+    console.error('Failed to upload direct debug to R2:', err);
+    return publicUrl;
+  }
+}
+
+export async function uploadLogsToR2Direct(jobId: string, logsText: string): Promise<string> {
+  const safeId = String(jobId || 'unknown').replace(/[^a-zA-Z0-9_\-]/g, '_').slice(0, 120);
+  const objectKey = `logs/${safeId}.txt`;
+  const publicUrl = `${CLOUDFLARE_R2_PUBLIC_URL}/${objectKey}`;
+  const client = getS3Client();
+  if (!client) {
+    return publicUrl;
+  }
+  try {
+    const command = new PutObjectCommand({
+      Bucket: CLOUDFLARE_R2_BUCKET_NAME,
+      Key: objectKey,
+      Body: Buffer.from(logsText || '', 'utf-8'),
+      ContentType: 'text/plain; charset=utf-8',
+    });
+    await client.send(command);
+    return publicUrl;
+  } catch (err) {
+    console.error('[R2 uploadLogsToR2Direct] Failed uploading logs to R2:', err);
+    return publicUrl;
+  }
+}
+
+export async function fetchLogsFromR2Direct(jobId: string): Promise<string | null> {
+  const client = getS3Client();
+  if (!client) return null;
+  const safeId = String(jobId || 'unknown').replace(/[^a-zA-Z0-9_\-]/g, '_').slice(0, 120);
+  const key = `logs/${safeId}.txt`;
+  try {
+    const { GetObjectCommand } = await import('@aws-sdk/client-s3');
+    const cmd = new GetObjectCommand({
+      Bucket: CLOUDFLARE_R2_BUCKET_NAME,
+      Key: key,
+    });
+    const res = await client.send(cmd);
+    if (res.Body) {
+      return await (res.Body as any).transformToString();
+    }
+  } catch (err: any) {}
+  return null;
+}
+
+export async function fetchDebugPayloadFromR2Direct(jobId: string, userId?: string): Promise<any> {
+  const client = getS3Client();
+  if (!client) return null;
+  const safeId = String(jobId || 'unknown').replace(/[^a-zA-Z0-9_\-]/g, '_').slice(0, 120);
+  try {
+    const { coldDebugR2Key } = await import('./src/utils/debugPayload.js');
+    const key = coldDebugR2Key(safeId, userId || 'anonymous');
+    const { GetObjectCommand } = await import('@aws-sdk/client-s3');
+    const cmd = new GetObjectCommand({
+      Bucket: CLOUDFLARE_R2_BUCKET_NAME,
+      Key: key,
+    });
+    const res = await client.send(cmd);
+    if (res.Body) {
+      const str = await (res.Body as any).transformToString();
+      return JSON.parse(str);
+    }
+  } catch (err: any) {}
+  return null;
+}
+
 /** Stream meal photo from R2 (works when bucket is private). B11d. */
 export async function streamR2Photo(res: any, rawKey: string) {
   const { GetObjectCommand } = await import('@aws-sdk/client-s3');
@@ -145,9 +246,14 @@ r2Router.get(['/debug/:key(*)', '/api/r2/debug/:key(*)'], async (req, res) => {
   }
 });
 
-r2Router.post('/api/r2/upload-photo', async (req, res) => {
+r2Router.post(['/api/r2/upload-photo', '/api/upload'], async (req, res) => {
   try {
-    const { jobId, payload } = req.body;
+    const jobId = req.body.jobId || req.body.filename?.replace(/\.jpg$/i, '') || req.body.id || `photo_${Date.now()}`;
+    const payload = req.body.payload || req.body.data || req.body.photoData;
+    if (!payload || typeof payload !== 'string') {
+      return res.status(400).json({ error: 'Missing image payload' });
+    }
+
     const safeId = String(jobId || 'unknown').replace(/[^a-zA-Z0-9_\-]/g, '_').slice(0, 120);
     const objectKey = `photos/${safeId}.jpg`;
     // B11d: same-origin proxy works with private buckets; publicUrl is secondary
@@ -155,7 +261,7 @@ r2Router.post('/api/r2/upload-photo', async (req, res) => {
     const publicUrl = `${CLOUDFLARE_R2_PUBLIC_URL}/${objectKey}`;
     const client = getS3Client();
     if (!client) {
-      return res.json({ url: proxyUrl, proxyUrl, publicUrl });
+      return res.json({ url: proxyUrl, proxyUrl, publicUrl, key: objectKey });
     }
 
     let body;
@@ -318,12 +424,13 @@ r2Router.post('/api/r2/migrate-firestore-images', async (req, res) => {
 
 r2Router.post('/api/r2/upload-logs', async (req, res) => {
   try {
-    const { jobId, logsText } = req.body || {};
-    if (!jobId || logsText === undefined) {
+    const { jobId, logsText, key, data } = req.body || {};
+    const finalJobId = jobId || key;
+    const finalLogs = logsText !== undefined ? logsText : (typeof data === 'string' ? data : JSON.stringify(data));
+    if (!finalJobId || finalLogs === undefined) {
       return res.status(400).json({ error: 'jobId and logsText are required' });
     }
-    const { uploadLogsToR2 } = await import('./src/utils/r2Storage.js');
-    const url = await uploadLogsToR2(String(jobId), String(logsText));
+    const url = await uploadLogsToR2Direct(String(finalJobId), String(finalLogs));
     return res.json({ success: true, url });
   } catch (err: any) {
     console.error('[API] /api/r2/upload-logs failed:', err);
@@ -334,7 +441,6 @@ r2Router.post('/api/r2/upload-logs', async (req, res) => {
 r2Router.post('/api/r2/migrate-backend-logs', async (req, res) => {
   try {
     console.log('[MigrateLogs] Starting migration of backend logs from Supabase & Firestore to R2...');
-    const { uploadLogsToR2 } = await import('./src/utils/r2Storage.js');
     const { supabaseAdmin } = await import('./supabaseAdmin.js');
 
     let supabaseInspected = 0;
@@ -361,7 +467,7 @@ r2Router.post('/api/r2/migrate-backend-logs', async (req, res) => {
         const logLength = rawLogs.length;
         if (logLength < 10) continue;
 
-        const logsUrl = await uploadLogsToR2(job.id, rawLogs);
+        const logsUrl = await uploadLogsToR2Direct(job.id, rawLogs);
         if (!logsUrl) {
           console.warn(`[MigrateLogs] Failed to upload logs to R2 for job ${job.id}`);
           continue;
@@ -414,7 +520,7 @@ r2Router.post('/api/r2/migrate-backend-logs', async (req, res) => {
             continue;
           }
 
-          const logsUrl = await uploadLogsToR2(docSnap.id, rawLogs);
+          const logsUrl = await uploadLogsToR2Direct(docSnap.id, rawLogs);
           if (logsUrl) {
             await updateDoc(docSnap.ref, {
               backendLogsUrl: logsUrl,
@@ -554,30 +660,11 @@ r2Router.get('/api/r2/log-proxy', async (req, res) => {
   }
 });
 
-r2Router.post('/api/r2/upload-debug', async (req, res) => {
+r2Router.post(['/api/r2/upload-debug', '/api/debug/upload'], async (req, res) => {
   try {
     const { jobId, payload, userId } = req.body;
-    const { stripHeavyImages, coldDebugR2Key, COLD_DEBUG_LOG } = await import('./src/utils/debugPayload.js');
-    const key = coldDebugR2Key(String(jobId || 'unknown'), userId || payload?.userId || 'anonymous');
-    const publicUrl = `${CLOUDFLARE_R2_PUBLIC_URL}/${key}`;
-    const client = getS3Client();
-    if (!client) {
-      return res.json({ url: publicUrl });
-    }
-
-    const stripped = stripHeavyImages(payload || {});
-    const body = Buffer.from(JSON.stringify(stripped, null, 2));
-
-    const command = new PutObjectCommand({
-      Bucket: CLOUDFLARE_R2_BUCKET_NAME,
-      Key: key,
-      Body: body,
-      ContentType: 'application/json',
-    });
-    await client.send(command);
-    console.log(`${COLD_DEBUG_LOG} api ok key=${key} bytes=${body.length}`);
-
-    res.json({ url: publicUrl });
+    const url = await uploadDebugPayloadToR2Direct(jobId, payload, userId);
+    res.json({ url, debugUrl: url });
   } catch (err) {
     console.error('Failed to upload debug to R2:', err);
     res.status(500).json({ error: 'Failed to upload debug' });
@@ -632,3 +719,29 @@ r2Router.post('/api/r2/delete-debug', async (req, res) => {
     res.status(500).json({ error: err?.message || 'Failed to delete R2 debug object' });
   }
 });
+
+r2Router.get(['/api/debug/load', '/api/r2/debug/load'], async (req, res) => {
+  try {
+    const jobId = String(req.query.jobId || req.query.id || '');
+    const userId = req.query.userId ? String(req.query.userId) : undefined;
+    if (!jobId) return res.status(400).json({ error: 'jobId required' });
+    const payload = await fetchDebugPayloadFromR2Direct(jobId, userId);
+    if (!payload) return res.status(404).json({ error: 'Debug payload not found' });
+    return res.json(payload);
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to load debug payload' });
+  }
+});
+
+r2Router.get(['/api/r2/logs', '/api/logs'], async (req, res) => {
+  try {
+    const key = String(req.query.key || req.query.jobId || '');
+    if (!key) return res.status(400).json({ error: 'key required' });
+    const logs = await fetchLogsFromR2Direct(key);
+    if (!logs) return res.status(404).json({ error: 'Logs not found' });
+    return res.type('text/plain').send(logs);
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to fetch logs' });
+  }
+});
+

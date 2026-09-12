@@ -4,7 +4,6 @@ import path from 'path';
 import { getAuth as getAdminAuth } from 'firebase-admin/auth';
 import { verifyFirebaseIdToken } from './server_auth.js';
 import { supabaseAdmin } from './supabaseAdmin.js';
-import { uploadPhotoToR2 } from './src/utils/r2Storage.js';
 import { uploadBase64ToR2 } from './server_routes_r2.js';
 import { isD1Configured } from './server_d1.js';
 import {
@@ -849,8 +848,8 @@ syncRouter.post("/api/sync/supabase-push", async (req, res) => {
               if (url && typeof url === 'string' && url.startsWith('data:image/')) {
                 console.log(`[R2 Auto-upload] Uploading push-sync base64 image for food log ${food.id} (index ${i}) to R2...`);
                 try {
-                  const uploadedUrl = await uploadPhotoToR2(`${food.id}_${i}`, url);
-                  if (uploadedUrl && uploadedUrl.startsWith('http')) {
+                  const uploadedUrl = await uploadBase64ToR2(food.id, url, i);
+                  if (uploadedUrl && (uploadedUrl.startsWith('http') || uploadedUrl.startsWith('/photos/'))) {
                     updatedUrls.push(uploadedUrl);
                   } else {
                     updatedUrls.push(url);

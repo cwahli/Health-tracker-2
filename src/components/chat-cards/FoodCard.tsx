@@ -20,7 +20,7 @@ import { JobStore } from '../../jobs/JobStore';
 import { toPendingFoodLog } from '../../mealBuild/adapters';
 import { namesReferToSameFood } from '../../../server_scout_reconcile';
 import { extractMostRecentImageDate, getCurrentDateInTimezone } from '../../utils/dateUtils';
-import { normalizeMealImageUrl, uniqueMealImageUrls } from '../../utils/foodImageSources';
+import { normalizeMealImageUrl, uniqueMealImageUrls, isUsableImageUrl } from '../../utils/foodImageSources';
 import { scaleMealPortion, scaleSingleDishPortion } from '../../utils/portionUtils';
 import { threadHasUnansweredPortionClarify } from '../../utils/chatMessageDedupe';
 import { mapDisplayedScoutItems, resolveTileImageIndex } from '../../utils/foodCompositionTiles';
@@ -886,6 +886,11 @@ export const FoodCard: React.FC<AgentCardProps & {
   }, [messages, foodLogs]);
 
   const messageImages = React.useMemo(() => {
+    const filterValidUrls = (urls: any[]) =>
+      (urls || [])
+        .map(u => resolveFoodImage(u, foodLogs) || u)
+        .filter(u => typeof u === 'string' && isUsableImageUrl(u) && u !== msg.id && u !== msg.data?.jobId && u !== msg.data?.id);
+
     // 0. If messages contains in-memory data: or blob: images from user upload for this thread, prefer them for crisp client cropping
     if (messages && messages.length > 0) {
       const currentIdx = messages.indexOf(msg);
@@ -894,7 +899,8 @@ export const FoodCard: React.FC<AgentCardProps & {
         const m = messages[i];
         const rawMUrls = m.imageUrls || (m.imageUrl ? [m.imageUrl] : []);
         if (rawMUrls.length > 0 && rawMUrls.some((u: string) => typeof u === 'string' && (u.startsWith('data:') || u.startsWith('blob:')))) {
-          return rawMUrls.map(url => (typeof url === 'string' && (url.startsWith('data:') || url.startsWith('blob:'))) ? url : (resolveFoodImage(url, foodLogs) || url));
+          const res = filterValidUrls(rawMUrls);
+          if (res.length > 0) return res;
         }
       }
     }
@@ -903,24 +909,20 @@ export const FoodCard: React.FC<AgentCardProps & {
     const localUrls = msg.imageUrls && msg.imageUrls.length > 0
       ? msg.imageUrls
       : (msg.imageUrl ? [msg.imageUrl] : []);
-    
-    if (localUrls.length > 0) {
-      return localUrls.map(url => resolveFoodImage(url, foodLogs) || url);
-    }
+    const validLocal = filterValidUrls(localUrls);
+    if (validLocal.length > 0) return validLocal;
 
     // 2. If the pending food log in msg has imageUrls
-    if (msg.data?.pendingFoodLog?.imageUrls && msg.data.pendingFoodLog.imageUrls.length > 0) {
-      return msg.data.pendingFoodLog.imageUrls.map((url: string) => resolveFoodImage(url, foodLogs) || url);
-    }
-    if (msg.pendingFoodLog?.imageUrls && msg.pendingFoodLog.imageUrls.length > 0) {
-      return msg.pendingFoodLog.imageUrls.map((url: string) => resolveFoodImage(url, foodLogs) || url);
-    }
-    if (msg.data?.foodLog?.imageUrls && msg.data.foodLog.imageUrls.length > 0) {
-      return msg.data.foodLog.imageUrls.map((url: string) => resolveFoodImage(url, foodLogs) || url);
-    }
-    if (msg.data?.data?.imageUrls && msg.data.data.imageUrls.length > 0) {
-      return msg.data.data.imageUrls.map((url: string) => resolveFoodImage(url, foodLogs) || url);
-    }
+    const pendingLogUrls = filterValidUrls([
+      ...(msg.data?.pendingFoodLog?.imageUrls || []),
+      msg.data?.pendingFoodLog?.imageUrl,
+      ...(msg.pendingFoodLog?.imageUrls || []),
+      msg.pendingFoodLog?.imageUrl,
+      ...(msg.data?.foodLog?.imageUrls || []),
+      msg.data?.foodLog?.imageUrl,
+      ...(msg.data?.data?.imageUrls || [])
+    ]);
+    if (pendingLogUrls.length > 0) return pendingLogUrls;
 
     // 3. Search backwards through messages in this conversation to find the source images for this meal thread
     if (messages) {
@@ -928,22 +930,24 @@ export const FoodCard: React.FC<AgentCardProps & {
       const startIdx = currentIdx > 0 ? currentIdx - 1 : messages.length - 1;
       for (let i = startIdx; i >= 0; i--) {
         const m = messages[i];
-        if (m.imageUrls && m.imageUrls.length > 0) {
-          return m.imageUrls.map(url => resolveFoodImage(url, foodLogs) || url);
-        }
-        if (m.imageUrl) {
-          return [resolveFoodImage(m.imageUrl, foodLogs) || m.imageUrl];
-        }
-        if (m.data?.pendingFoodLog?.imageUrls && m.data.pendingFoodLog.imageUrls.length > 0) {
-          return m.data.pendingFoodLog.imageUrls.map((url: string) => resolveFoodImage(url, foodLogs) || url);
-        }
-        if (m.pendingFoodLog?.imageUrls && m.pendingFoodLog.imageUrls.length > 0) {
-          return m.pendingFoodLog.imageUrls.map((url: string) => resolveFoodImage(url, foodLogs) || url);
-        }
-        if (m.data?.foodLog?.imageUrls && m.data.foodLog.imageUrls.length > 0) {
-          return m.data.foodLog.imageUrls.map((url: string) => resolveFoodImage(url, foodLogs) || url);
-        }
+        const msgUrls = filterValidUrls([
+          ...(m.imageUrls || []),
+          m.imageUrl,
+          ...(m.data?.pendingFoodLog?.imageUrls || []),
+          m.data?.pendingFoodLog?.imageUrl,
+          ...(m.pendingFoodLog?.imageUrls || []),
+          m.pendingFoodLog?.imageUrl,
+          ...(m.data?.foodLog?.imageUrls || []),
+          m.data?.foodLog?.imageUrl
+        ]);
+        if (msgUrls.length > 0) return msgUrls;
       }
+    }
+
+    // 4. Fallback to same-origin R2 photo proxy if job/meal ID is known
+    const cleanJobId = msg.data?.jobId || msg.data?.id || (typeof msg.id === 'string' && (msg.id.startsWith('job_') || msg.id.startsWith('meal_') || msg.id.startsWith('food_')) ? msg.id : null);
+    if (cleanJobId) {
+      return [`/photos/${cleanJobId}.jpg`];
     }
 
     return [];

@@ -1436,34 +1436,57 @@ ${logsText}`);
           }
           return m;
         });
-        const remotePhoto = job.photoUrl || job.result?.photoUrl || (job.result as any)?.clean_result?.photoUrl;
-        const remotePhotos = job.result?.imageUrls || job.result?.photoUrls || job.result?.clean_result?.imageUrls || job.result?.clean_result?.photoUrls || (job as any).clean_result?.imageUrls || (job as any).clean_result?.photoUrls || (remotePhoto ? [remotePhoto] : []);
+        const isDisplayablePhotoUrl = (u: any) =>
+          typeof u === 'string' &&
+          u &&
+          u !== activeJobId &&
+          u !== 'Image reference preserved' &&
+          u !== 'loading' &&
+          !u.startsWith('/_/upload/') &&
+          (u.startsWith('http') || u.startsWith('/photos/') || u.startsWith('/api/r2/photos/') || u.startsWith('data:image/') || u.startsWith('blob:'));
+
+        const candidateRemotePhotos = [
+          ...(Array.isArray(job.result?.imageUrls) ? job.result.imageUrls : []),
+          ...(Array.isArray(job.result?.photoUrls) ? job.result.photoUrls : []),
+          ...(Array.isArray(job.result?.clean_result?.imageUrls) ? job.result.clean_result.imageUrls : []),
+          ...(Array.isArray(job.result?.clean_result?.photoUrls) ? job.result.clean_result.photoUrls : []),
+          ...(Array.isArray((job as any).clean_result?.imageUrls) ? (job as any).clean_result.imageUrls : []),
+          ...(Array.isArray((job as any).clean_result?.photoUrls) ? (job as any).clean_result.photoUrls : []),
+          job.photoUrl,
+          job.result?.photoUrl,
+          job.result?.clean_result?.photoUrl,
+          (job as any).clean_result?.photoUrl,
+          (job as any).photo_url
+        ].filter(isDisplayablePhotoUrl);
+        const remotePhotos = candidateRemotePhotos.length > 0 ? Array.from(new Set(candidateRemotePhotos)) : [`/photos/${activeJobId}.jpg`];
+
         try {
           const realImages = await ImageStore.getImages(activeJobId);
-          const realUrls = (realImages && realImages.length > 0)
+          const rawRealUrls = (realImages && realImages.length > 0)
             ? await Promise.all(realImages.map((img: any) => typeof img === 'string' ? img : blobToDurableDataUrl(img as Blob)))
             : remotePhotos;
+          const realUrls = rawRealUrls.filter(isDisplayablePhotoUrl);
           if (realUrls.length > 0) {
             baseMsgs.forEach((m: any) => {
-              if (!m.imageUrl || m.imageUrl === 'Image reference preserved' || m.imageUrl === 'loading' || m.imageUrl.startsWith('/_/upload/')) {
+              if (!m.imageUrl || !isDisplayablePhotoUrl(m.imageUrl)) {
                 m.imageUrl = realUrls[0];
               }
-              if (!m.imageUrls || m.imageUrls.some((u: string) => u === 'Image reference preserved' || u.startsWith('/_/upload/'))) {
+              if (!m.imageUrls || m.imageUrls.some((u: string) => !isDisplayablePhotoUrl(u))) {
                 m.imageUrls = realUrls;
               }
               if (m.pendingFoodLog) {
-                if (!m.pendingFoodLog.imageUrl || m.pendingFoodLog.imageUrl === 'Image reference preserved' || m.pendingFoodLog.imageUrl.startsWith('/_/upload/')) {
+                if (!m.pendingFoodLog.imageUrl || !isDisplayablePhotoUrl(m.pendingFoodLog.imageUrl)) {
                   m.pendingFoodLog.imageUrl = realUrls[0];
                 }
-                if (!m.pendingFoodLog.imageUrls || m.pendingFoodLog.imageUrls.some((u: string) => u === 'Image reference preserved' || u.startsWith('/_/upload/'))) {
+                if (!m.pendingFoodLog.imageUrls || m.pendingFoodLog.imageUrls.some((u: string) => !isDisplayablePhotoUrl(u))) {
                   m.pendingFoodLog.imageUrls = realUrls;
                 }
               }
               if (m.data?.pendingFoodLog) {
-                if (!m.data.pendingFoodLog.imageUrl || m.data.pendingFoodLog.imageUrl === 'Image reference preserved' || m.data.pendingFoodLog.imageUrl.startsWith('/_/upload/')) {
+                if (!m.data.pendingFoodLog.imageUrl || !isDisplayablePhotoUrl(m.data.pendingFoodLog.imageUrl)) {
                   m.data.pendingFoodLog.imageUrl = realUrls[0];
                 }
-                if (!m.data.pendingFoodLog.imageUrls || m.data.pendingFoodLog.imageUrls.some((u: string) => u === 'Image reference preserved' || u.startsWith('/_/upload/'))) {
+                if (!m.data.pendingFoodLog.imageUrls || m.data.pendingFoodLog.imageUrls.some((u: string) => !isDisplayablePhotoUrl(u))) {
                   m.data.pendingFoodLog.imageUrls = realUrls;
                 }
               }

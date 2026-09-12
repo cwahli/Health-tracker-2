@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { verifyFirebaseIdToken } from './server_auth.js';
 import { supabaseAdmin } from './supabaseAdmin.js';
-import { uploadPhotoToR2 } from './src/utils/r2Storage.js';
+import { uploadBase64ToR2, uploadDebugPayloadToR2Direct } from './server_routes_r2.js';
 import { isD1Configured } from './server_d1.js';
 import { d1UpsertJob, d1DeleteJob, d1ListJobs, d1GetJob, d1UpdateJob } from './server_db_d1.js';
 
@@ -92,8 +92,8 @@ jobsRouter.post('/api/jobs/submit', async (req, res) => {
         if (typeof img === 'string' && img.startsWith('data:image/')) {
           console.log(`[POST /api/jobs/submit] Uploading image ${i} to R2 for job ${jobId}...`);
           try {
-            const r2Url = await uploadPhotoToR2(`${jobId}_${i}`, img);
-            return (r2Url && r2Url.startsWith('http')) ? r2Url : img;
+            const r2Url = await uploadBase64ToR2(jobId, img, i);
+            return (r2Url && (r2Url.startsWith('http') || r2Url.startsWith('/photos/'))) ? r2Url : img;
           } catch (e) {
             console.error(`[POST /api/jobs/submit] Failed to upload image ${i} to R2`, e);
             return img;
@@ -371,10 +371,10 @@ jobsRouter.all('/api/jobs/debug', async (req, res) => {
     }
 
     let debugPayload = null;
-    const { fetchDebugPayloadFromR2, fetchLogsFromR2 } = await import('./src/utils/r2Storage.js');
+    const { fetchDebugPayloadFromR2Direct, fetchLogsFromR2Direct } = await import('./server_routes_r2.js');
 
     try {
-      debugPayload = await fetchDebugPayloadFromR2(cleanJobId, userId ? String(userId) : undefined);
+      debugPayload = await fetchDebugPayloadFromR2Direct(cleanJobId, userId ? String(userId) : undefined);
     } catch (r2Err) {
       console.warn('[JobsDebug] R2 direct debug payload fetch failed:', r2Err);
     }
@@ -441,7 +441,7 @@ jobsRouter.all('/api/jobs/debug', async (req, res) => {
 
     if (!debugPayload.backendLogs || String(debugPayload.backendLogs).startsWith('[Logs stored in R2') || String(debugPayload.backendLogs).startsWith('http')) {
       try {
-        const logsFromR2 = await fetchLogsFromR2(cleanJobId);
+        const logsFromR2 = await fetchLogsFromR2Direct(cleanJobId);
         if (logsFromR2) {
           debugPayload.backendLogs = logsFromR2;
         }
@@ -527,9 +527,8 @@ jobsRouter.all('/api/jobs/debug', async (req, res) => {
         }
         const targetUserId = userId || debugPayload?.userId || (memJob as any)?.user_id;
         if (targetUserId) {
-          const { uploadDebugPayloadToR2 } = await import('./src/utils/r2Storage.js');
           debugPayload.dialogInventory = effectiveDialogInventory;
-          void uploadDebugPayloadToR2(cleanJobId, debugPayload).catch((e: any) =>
+          void uploadDebugPayloadToR2Direct(cleanJobId, debugPayload, targetUserId).catch((e: any) =>
             console.warn('[JobsDebug] Background update of debug payload to R2 failed:', e)
           );
         }
