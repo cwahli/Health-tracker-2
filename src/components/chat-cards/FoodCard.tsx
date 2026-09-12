@@ -227,6 +227,19 @@ export const CroppedFoodImage: React.FC<CroppedFoodImageProps> = ({
             height: `${100 * scaleY}%`,
             objectFit: 'fill'
           }}
+          onError={(e) => {
+            const t = e.target as HTMLImageElement;
+            const fallback = getFoodImageUrl(alt || 'food');
+            if (t.src !== fallback) {
+              t.src = fallback;
+              t.className = 'w-full h-full object-cover';
+              t.style.top = '0';
+              t.style.left = '0';
+              t.style.width = '100%';
+              t.style.height = '100%';
+              t.style.position = 'static';
+            }
+          }}
         />
       </div>
     );
@@ -855,6 +868,19 @@ export const FoodCard: React.FC<AgentCardProps & {
   }, [messages, foodLogs]);
 
   const messageImages = React.useMemo(() => {
+    // 0. If messages contains in-memory data: or blob: images from user upload for this thread, prefer them for crisp client cropping
+    if (messages && messages.length > 0) {
+      const currentIdx = messages.indexOf(msg);
+      const startIdx = currentIdx > 0 ? currentIdx - 1 : messages.length - 1;
+      for (let i = startIdx; i >= 0; i--) {
+        const m = messages[i];
+        const rawMUrls = m.imageUrls || (m.imageUrl ? [m.imageUrl] : []);
+        if (rawMUrls.length > 0 && rawMUrls.some((u: string) => typeof u === 'string' && (u.startsWith('data:') || u.startsWith('blob:')))) {
+          return rawMUrls.map(url => (typeof url === 'string' && (url.startsWith('data:') || url.startsWith('blob:'))) ? url : (resolveFoodImage(url, foodLogs) || url));
+        }
+      }
+    }
+
     // 1. If the current assistant message itself has imageUrls or imageUrl
     const localUrls = msg.imageUrls && msg.imageUrls.length > 0
       ? msg.imageUrls
