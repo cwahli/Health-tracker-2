@@ -2,6 +2,13 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { JobStore } from '../JobStore';
 import { previewStatus, previewStatusLabel } from '../jobPreview';
 import { mergeFoodEditMessages } from '../mergeFoodEditMessages';
+import { scheduleCoalescedJobUpsert, upsertJobToSupabase } from '../SupabaseJobSync';
+
+vi.mock('../SupabaseJobSync', () => ({
+  deleteJobFromBackend: vi.fn(async () => {}),
+  scheduleCoalescedJobUpsert: vi.fn(),
+  upsertJobToSupabase: vi.fn(async () => {}),
+}));
 
 vi.mock('idb-keyval', () => {
   const store = new Map();
@@ -264,5 +271,27 @@ describe('JobSession contract (STALE_TURN)', () => {
     expect(job.currentTurn).toBe(1);
     expect(job.result?.pendingFoodLog?.nutrients?.calories).toBe(650);
     expect(previewStatus(job)).toBe('succeeded');
+  });
+
+  it('duplicate completions route through the coalesced scheduler, never direct upserts (DIAG4 storm guard)', () => {
+    vi.mocked(scheduleCoalescedJobUpsert).mockClear();
+    vi.mocked(upsertJobToSupabase).mockClear();
+    JobStore.createJob({ id: 'storm1', status: 'running', currentTurn: 1 });
+    const finish: any = {
+      type: 'AnalyzeFinished',
+      id: 'storm1',
+      status: 'succeeded',
+      result: next,
+      finishedAt: new Date().toISOString(),
+      progressPercent: 100,
+    };
+    // Runner + poller + realtime triple-completion, as seen live.
+    JobStore.apply({ ...finish });
+    JobStore.apply({ ...finish });
+    JobStore.apply({ ...finish });
+    expect(JobStore.getJob('storm1')!.status).toBe('succeeded');
+    expect(vi.mocked(scheduleCoalescedJobUpsert).mock.calls.length).toBeGreaterThan(0);
+    // The store hot path must never fire a raw upsert per event.
+    expect(vi.mocked(upsertJobToSupabase)).not.toHaveBeenCalled();
   });
 });

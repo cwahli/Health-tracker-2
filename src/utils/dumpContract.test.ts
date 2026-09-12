@@ -649,7 +649,7 @@ describe('Agent-output verification rows (15-19)', () => {
       pendingFoodLog: { nutrients: fullNuts({ calories: 420 }) },
       dispatches: [{
         id: 't1/compare', received: { mode: 'evaluation' },
-        systemInstruction: '=== ACTIVE TASK: PRODUCT EVALUATION & COMPARISON === rank items',
+        systemInstruction: 'You are a Clinical Dietitian & Vision Scout evaluating competing food options (Mode D). rank items',
       }],
     });
     const r1 = law(dPass, 'Mode instruction chunk');

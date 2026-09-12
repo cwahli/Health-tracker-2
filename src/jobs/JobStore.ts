@@ -5,7 +5,7 @@ import { mergeFoodEditMessages, shouldMergeFoodEditTurn } from './mergeFoodEditM
 import { ImageStore } from './ImageStore';
 import { MealBuild } from '../mealBuild/types';
 import { rebaseUserEdit } from '../mealBuild/consolidate';
-import { deleteJobFromBackend, upsertJobToSupabase } from './SupabaseJobSync';
+import { deleteJobFromBackend, scheduleCoalescedJobUpsert } from './SupabaseJobSync';
 
 type Listener = () => void;
 
@@ -540,7 +540,9 @@ class JobStoreImpl {
       !turnStillInFlight &&
       (patch.status === 'succeeded' || patch.status === 'awaiting_user' || (job.status === 'succeeded' && patch.result))
     ) {
-      upsertJobToSupabase(job).catch(() => {});
+      // Coalesced: completion applies AnalyzeFinished 2-3x within ms and
+      // every event re-applies — collapsing bursts to active+trailing.
+      scheduleCoalescedJobUpsert(job);
     }
   }
 

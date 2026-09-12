@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import path from 'node:path';
 import fs from 'node:fs';
+import { countCompareExtracted } from '../../src/server/food/server_food_scout_source';
 
 /**
  * End-to-End Playwright test suite for Compare Mode (Mode D) across the 6 test cases.
@@ -245,4 +246,62 @@ test.describe('Compare Mode (Mode D) - 6 Cases End-to-End Pipeline & Card Verifi
       console.log(`[Compare E2E] Case ${c.setNum} (${c.name}): Backend API & UI Card verified successfully!`);
     });
   }
+});
+
+test.describe('Mode D shelf-failure regression (debug-job_1789202906586)', () => {
+  test.setTimeout(180000);
+  /**
+   * Live shape of the shipped bug: a beverage-shelf photo returned ZERO
+   * extracted items/groups yet status=succeeded with a NAMED recommended
+   * product grounded on nothing. Set 4 (juice & beverage list) is the shelf
+   * analog: the funnel must return non-empty groups AND a recommendation that
+   * is either null or traceable to extracted content.
+   */
+  test('beverage shelf compare returns grounded groups, never empty success', async ({ request }) => {
+    const base64Images = loadImagesAsBase64(['set4_juice_and_beverage_list.jpg']);
+    const res = await request.post('/api/gemini/food-analyze', {
+      headers: { 'x-session-id': 'server-job-compare-e2e-shelf-regression' },
+      data: {
+        message: 'Analyze this meal photo.',
+        images: base64Images,
+        userSelectedMode: 'compare',
+        userProfile: { language: 'en' },
+      },
+    });
+    expect(res.ok(), 'shelf compare API request succeeded').toBeTruthy();
+    const body = await res.json();
+    expect(body.mode, 'mode should be evaluation').toBe('evaluation');
+
+    // The never-ship-empty invariant, evaluated on the live payload with the
+    // real server counter: photo compare with images must extract > 0.
+    const extracted = countCompareExtracted(
+      body.comparison || {},
+      body.items || body.comparison?.items || body.scoutItems || [],
+    );
+    expect(extracted, 'shelf compare must extract at least one item/group').toBeGreaterThan(0);
+    expect(
+      (body.comparison?.groups || []).length,
+      'user must get visible groups with advice',
+    ).toBeGreaterThanOrEqual(1);
+
+    // Grounded recommendation: a named product with zero backing items is
+    // the exact shipped failure — recOption must be null or traceable.
+    const rec = body.comparison?.recommendedOption;
+    if (rec) {
+      const corpus = JSON.stringify([
+        body.comparison?.items || [],
+        (body.comparison?.groups || []).map((g: any) => [g.groupName, g.items, g.scoutItemIndices]),
+      ]).toLowerCase();
+      const recWords = String(rec).toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3);
+      const grounded = recWords.some((w) => corpus.includes(w));
+      expect(grounded, `recommendedOption "${rec}" must be traceable to extracted items/groups`).toBe(true);
+    }
+
+    // Every rendered group carries advice (sentence + tip), per the golden
+    // compare contract (Golden Meal 03).
+    for (const group of body.comparison.groups) {
+      expect(group.comparisonSentence, 'group advice sentence present').toBeTruthy();
+      expect(group.verdict?.label, 'group verdict present').toBeTruthy();
+    }
+  });
 });

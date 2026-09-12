@@ -766,5 +766,26 @@ describe('debugPayload', () => {
     // 5. Recommendation narrative
     expect(md).toContain('**Top Recommended Option:** `Whole Wheat Loaf`');
   });
+
+  it('allowance table stops at JSON-escaped newlines (no prompt-fragment rows)', () => {
+    // Live failure shape (debug-job_1789202906586): patientContext arrives as
+    // an object, so the TARGET STATUS match lands in JSON.stringify output
+    // where newlines are literal \n — the capture used to swallow the whole
+    // following instruction block and comma-split it into fake nutrients.
+    const md = buildDebugMarkdownReport({
+      jobId: 'job_allowance_cut',
+      status: 'succeeded',
+      pack: 'food',
+      mode: 'new_log',
+      patientContext: {
+        targetBlock: '=== NUTRITIONAL TARGET STATUS ===\n3 days avg: Sat fat (27.7g - 38% over), Calorie (2500kcal - 39% over), Trans Fat (0.1g)\n\nYou are a Clinical Dietitian.\nGROUP EVERY EXTRACTED DISH INTO NUTRITIONAL CLUSTERS WITH <=10% MACRO VARIANCE.\n1. EVALUATION ONLY (NON-ADDITIVE): items are mutually exclusive choices.',
+      },
+    });
+    expect(md).toContain('| **Calorie** | 2500kcal |');
+    expect(md).toContain('| **Sat fat** | 27.7g |');
+    expect(md).not.toContain('GROUP EVERY');
+    expect(md).not.toContain('EVALUATION ONLY');
+    expect(md).not.toContain('NON-ADDITIVE');
+  });
 });
 

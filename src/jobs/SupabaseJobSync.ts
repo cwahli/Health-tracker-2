@@ -734,6 +734,44 @@ export async function upsertJobToSupabase(
   }
 }
 
+/**
+ * Upsert storm guard (DIAG4 flood): JobStore.apply fires on EVERY job event,
+ * and completion applies AnalyzeFinished 2-3x within milliseconds — each used
+ * to spawn a full upsert (photo payload, 0.3-6s). Bursts collapse to at most
+ * one active + one trailing run, always ending on the LATEST snapshot.
+ * Fire-and-forget like the JobStore call site; completion paths that need the
+ * result keep calling upsertJobToSupabase directly.
+ */
+const coalescedUpsertState = new Map<string, { inflight: Promise<unknown> | null; pending: AgentJob | null }>();
+
+export function scheduleCoalescedJobUpsert(job: AgentJob): void {
+  if (!job || !job.id) return;
+  let st = coalescedUpsertState.get(job.id);
+  if (!st) {
+    st = { inflight: null, pending: null };
+    coalescedUpsertState.set(job.id, st);
+  }
+  st.pending = job;
+  if (st.inflight) return;
+  void runCoalescedUpsert(job.id);
+}
+
+async function runCoalescedUpsert(jobId: string): Promise<void> {
+  const st = coalescedUpsertState.get(jobId);
+  if (!st) return;
+  while (st.pending) {
+    const next = st.pending;
+    st.pending = null;
+    st.inflight = upsertJobToSupabase(next).catch(() => {});
+    try {
+      await st.inflight;
+    } finally {
+      st.inflight = null;
+    }
+  }
+  coalescedUpsertState.delete(jobId);
+}
+
 export async function deleteJobFromBackend(
   jobId: string,
   userId: string = 'anonymous'

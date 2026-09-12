@@ -92,7 +92,13 @@ export async function executeScoutComposePhase(ctx: AnalyzeRunContext): Promise<
       projected: true,
     };
   } else if (ctx.visionScoutRanAndReturnedItems || (ctx.visionScoutItems && ctx.visionScoutItems.length > 0) || ctx.rawScoutData) {
-    if (ctx.userSelectedMode === 'compare' && (ctx.rawScoutData?.comparisonTitle || ctx.rawScoutData?.groups || ctx.rawScoutData?.items)) {
+    // Empty arrays are truthy — require NON-EMPTY compare content, otherwise
+    // a zero-extraction scout run falls into this path and ships an empty
+    // comparison with an ungrounded recommendation (Mode D empty bug).
+    const compareContentCount = (ctx.rawScoutData?.groups?.length || 0)
+      + (ctx.rawScoutData?.items?.length || 0)
+      + (ctx.rawScoutData?.allExtractedDishes?.length || 0);
+    if (ctx.userSelectedMode === 'compare' && (ctx.rawScoutData?.comparisonTitle || compareContentCount > 0)) {
       ctx.addDebugLog('[MealAgent] Single-agent compare path: using Scout comparison directly without secondary LLM call.');
       ctx.sendStreamEvent({ type: 'status', stage: 'finalize', status: 'completed', message: 'Comparison analysis finalized.' });
       const enrichedGroups = applyServerAverageNutrients(ctx.rawScoutData.groups || [], {});
@@ -103,13 +109,19 @@ export async function executeScoutComposePhase(ctx: AnalyzeRunContext): Promise<
           name: enrichBilingualItemName(name),
         };
       });
-      const recOption = ctx.rawScoutData.recommendedOption
-        ? enrichBilingualItemName(ctx.rawScoutData.recommendedOption)
-        : (enrichedGroups[0]?.items?.[0]?.name || enrichedGroups[0]?.groupName || 'Recommended Choice');
+      // Never emit a NAMED recommendation with nothing behind it: an
+      // ungrounded product name is worse than an honest empty state.
+      const recOption = compareContentCount > 0
+        ? (ctx.rawScoutData.recommendedOption
+          ? enrichBilingualItemName(ctx.rawScoutData.recommendedOption)
+          : (enrichedGroups[0]?.items?.[0]?.name || enrichedGroups[0]?.groupName || 'Recommended Choice'))
+        : null;
       rawParsed = {
         _internalReasoning: ctx.scoutInternalReasoning || '[MealAgent] Single-agent compare path',
         mode: 'evaluation',
-        message: ctx.rawScoutData.summary || ctx.rawScoutData.message || ctx.rawScoutData.clinicalAdvice || 'Here is the product evaluation.',
+        message: compareContentCount > 0
+          ? (ctx.rawScoutData.summary || ctx.rawScoutData.message || ctx.rawScoutData.clinicalAdvice || 'Here is the product evaluation.')
+          : t(ctx.userProfile?.language, 'compareEmptyExtraction'),
         comparison: {
           comparisonTitle: ctx.rawScoutData.comparisonTitle,
           comparisonType: ctx.rawScoutData.comparisonType,

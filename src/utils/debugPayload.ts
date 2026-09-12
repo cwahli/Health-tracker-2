@@ -162,7 +162,18 @@ export function parseNutritionalTargetStatus(input: DebugReportInput): {
   if (!match) return null;
 
   const days = Number(match[1]) || 3;
-  const rawList = match[2].replace(/\.\s*Budgets[\s\S]*$/i, '').trim();
+  // The match may land inside a JSON.stringify'd source, where newlines are
+  // literal \n sequences — [^\n\r]+ then swallows the whole following
+  // instruction block and comma-splitting turns prompt fragments with parens
+  // into fake nutrients ("GROUP EVERY ... (NON-ADDITIVE)" -> NON/ADDITIVE).
+  // Terminate at the first JSON-escaped newline too (stripping leading ones,
+  // since the capture itself can start on an escaped newline). Also strip a
+  // leading "N days avg:" prefix the regex couldn't consume inside JSON
+  // sources (it otherwise becomes part of the first nutrient's key, as seen
+  // live: "**\n3 days avg: Sat fat**").
+  const rawList = match[2].replace(/^(?:\\n)+/, '').split(/\\n/)[0]
+    .replace(/^\d+\s*days?\s*avg:\s*/i, '')
+    .replace(/\.\s*Budgets[\s\S]*$/i, '').trim();
   const parts = rawList.split(/,(?![^(]*\))/).map(s => s.trim()).filter(Boolean);
   if (parts.length === 0) return null;
 

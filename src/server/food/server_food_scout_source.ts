@@ -291,6 +291,19 @@ export function buildScoutFailureError(lastScoutErr: any, language?: unknown): E
   throw new Error(`Vision Scout Failed: Couldn't reliably read this image, please try again or re-upload. (Details: ${raw})`);
 }
 
+/**
+ * Mode D empty-extraction guard: counts every form of compare evidence
+ * (parsed items, comparison groups, the allExtractedDishes transcription
+ * list). A photo compare run totalling zero must retry, never ship empty.
+ */
+export function countCompareExtracted(rawScoutData: any, visionScoutItems: any[]): number {
+  const items = Array.isArray(visionScoutItems) ? visionScoutItems.length : 0;
+  const rawItems = Array.isArray(rawScoutData?.items) ? rawScoutData.items.length : 0;
+  const groups = Array.isArray(rawScoutData?.groups) ? rawScoutData.groups.length : 0;
+  const extracted = Array.isArray(rawScoutData?.allExtractedDishes) ? rawScoutData.allExtractedDishes.length : 0;
+  return items + rawItems + groups + extracted;
+}
+
 export interface ScoutResultStateArgs {
   scoutResult: any;
   requestedMode?: string;
@@ -342,7 +355,41 @@ export function applyScoutResultState(args: ScoutResultStateArgs): {
       }
     });
   }
-  const visionScoutItems = (scoutResult.items || []).map((item: any) => {
+  // Mode D empty-extraction heal (lives here, NOT in server_vision_scout.ts,
+  // per the food_log_instruction_leaked standing invariant): the compare
+  // schema requires BOTH allExtractedDishes and items, but a model may fill
+  // only the transcription list and leave items[] empty — which used to ship
+  // as a zero-item "successful" comparison with an ungrounded recommendation.
+  // Promote transcription entries so the extraction work is never dropped.
+  // NOTE: the field name below is compare-domain vocabulary handled entirely
+  // in this compare-owned module; the shared meal parser stays untouched.
+  let stateItems: any[] = Array.isArray(scoutResult.items) ? scoutResult.items : [];
+  if (requestedMode === 'compare' && stateItems.length === 0
+    && rawScoutData && Array.isArray(rawScoutData.allExtractedDishes) && rawScoutData.allExtractedDishes.length > 0) {
+    stateItems = rawScoutData.allExtractedDishes.map((entry: any, idx: number) => {
+      const obj = (entry && typeof entry === 'object') ? entry : null;
+      const name = obj
+        ? (obj.name || obj.dish || obj.product || obj.originalName || obj.keyword || 'Unnamed item')
+        : (typeof entry === 'string' && entry.trim() ? entry.trim() : 'Unnamed item');
+      return {
+        ...(obj || {}),
+        scoutIndex: idx,
+        keyword: name,
+        originalName: name,
+        name,
+        estimatedWeightGrams: 100,
+        nutrientBasisWeight: 100,
+        source: 'visual',
+        sourceImageIndex: typeof obj?.sourceImageIndex === 'number' ? obj.sourceImageIndex : 0,
+        rawNutritionLabel: null,
+        nutrients: null,
+        per100g: {},
+      };
+    });
+    rawScoutData.items = stateItems;
+    onLog(`[Vision Scout Compare Heal] items[] empty — promoted ${stateItems.length} allExtractedDishes transcription(s).`);
+  }
+  const visionScoutItems = stateItems.map((item: any) => {
     const rawName = item.name || item.originalName || item.keyword;
     const enrichedName = (requestedMode === 'compare') ? enrichBilingualItemName(rawName) : rawName;
     return {

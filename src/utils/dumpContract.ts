@@ -665,7 +665,10 @@ export const DEBUG_MODE_INSTRUCTION_MARKERS: Array<{
   {
     modes: ['evaluation', 'compare', 'compare_menu', 'compare_shelf'],
     label: 'Mode D compare',
-    markers: ['ACTIVE TASK: PRODUCT EVALUATION & COMPARISON'],
+    // Live compare path (buildScoutComparePrompt + scoutOnlyCompareInstruction)
+    // never emits the old ACTIVE TASK line — that marker only exists in the
+    // meal-path builder. Match the string the dispatched instruction holds.
+    markers: ['evaluating competing food options (Mode D)'],
   },
   {
     modes: ['modify', 'edit'],

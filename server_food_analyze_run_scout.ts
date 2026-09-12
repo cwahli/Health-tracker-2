@@ -1,5 +1,5 @@
 import { AnalyzeRunContext } from './server_food_analyze_run_types.js';
-import { runScoutRetryLoop, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries, logScoutImageInventory, applyWeightModShortcut, applySkipScoutShortcut, buildScoutFailureError, mapCompareItemsToScoutItems } from './src/server/food/server_food_scout_source.js';
+import { runScoutRetryLoop, applyScoutResultState, mergeScoutIntoActiveMeal, logScoutItemSummaries, logScoutImageInventory, applyWeightModShortcut, applySkipScoutShortcut, buildScoutFailureError, mapCompareItemsToScoutItems, countCompareExtracted } from './src/server/food/server_food_scout_source.js';
 import { scoutSystemInstruction, buildVisualScoutPrompt, buildScoutPersonalizationBlock } from './agents/scoutInstructions.js';
 import { scoutOnlyCompareSystemInstruction, buildScoutComparePrompt } from './prototype/meallog/compare/scout_only_compare_instructions.js';
 import { withScoutLanguage } from './src/utils/i18n.js';
@@ -100,12 +100,51 @@ export async function executeScoutPhase(ctx: AnalyzeRunContext): Promise<void> {
           onLog: ctx.addDebugLog, onEvent: (type, stage, message, data) => ctx.sendLog(type, stage, message, data),
           onStream: (event) => ctx.sendStreamEvent(event),
         });
-        ctx.scoutInternalReasoning = scoutState.scoutInternalReasoning; ctx.rawScoutData = scoutState.rawScoutData;
-        ctx.visionScoutItems = scoutState.visionScoutItems; ctx.scoutConfidenceRating = scoutState.scoutConfidenceRating;
-        ctx.scoutConfidenceComment = scoutState.scoutConfidenceComment; ctx.scoutCookingMethod = scoutState.scoutCookingMethod;
-        ctx.visionScoutContentType = scoutState.visionScoutContentType; ctx.diningEnvironment = scoutState.diningEnvironment;
-        ctx.scoutRecommendedMode = scoutState.scoutRecommendedMode; ctx.queriesToSearch.push(...scoutState.queriesToSearch);
-        ctx.scoutOriginalQueries.push(...scoutState.queriesToSearch); ctx.visionScoutRanAndReturnedItems = scoutState.visionScoutRanAndReturnedItems;
+        const applyState = (st: ReturnType<typeof applyScoutResultState>) => {
+          ctx.scoutInternalReasoning = st.scoutInternalReasoning; ctx.rawScoutData = st.rawScoutData;
+          ctx.visionScoutItems = st.visionScoutItems; ctx.scoutConfidenceRating = st.scoutConfidenceRating;
+          ctx.scoutConfidenceComment = st.scoutConfidenceComment; ctx.scoutCookingMethod = st.scoutCookingMethod;
+          ctx.visionScoutContentType = st.visionScoutContentType; ctx.diningEnvironment = st.diningEnvironment;
+          ctx.scoutRecommendedMode = st.scoutRecommendedMode; ctx.queriesToSearch.push(...st.queriesToSearch);
+          ctx.scoutOriginalQueries.push(...st.queriesToSearch); ctx.visionScoutRanAndReturnedItems = st.visionScoutRanAndReturnedItems;
+        };
+        applyState(scoutState);
+        // Mode D empty-extraction guard: a photo compare that extracts zero
+        // products must retry once with a strengthened prompt, then fail
+        // loudly (Retry visible) — never ship an empty comparison with an
+        // ungrounded recommendation.
+        if (ctx.userSelectedMode === 'compare' && hasImage
+          && countCompareExtracted(ctx.rawScoutData, ctx.visionScoutItems) === 0) {
+          ctx.addDebugLog(`[Vision Scout Empty Compare] Zero products extracted from ${imageCount} image(s) — retrying once with strengthened extraction prompt.`);
+          ctx.sendStreamEvent({ type: 'status', stage: 'scout', status: 'started', message: 'Reading your photos...' });
+          const strengthenedPrompt = `${scoutPromptText}\n\nCRITICAL RETRY: Your previous response listed ZERO products, but the photo(s) clearly show legible packaged products, labels, or menu dishes. Transcribe EVERY legible product or dish name into 'allExtractedDishes' AND 'items' — an empty extraction is a failure. Do not summarize without listing.`;
+          const retryOut = await runScoutRetryLoop({
+            engine: ctx.engine, language: ctx.userProfile?.language, scoutPromptText: strengthenedPrompt, imagePayloads: ctx.imagePayloads,
+            isCompare: true, systemInstruction: resolvedScoutSystemInstruction, message: ctx.message, callUnifiedLLM: ctx.callUnifiedLLM,
+            sleep: (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms)), onLog: ctx.addDebugLog,
+            onStreamChunk: (chunk: string, isThought?: boolean) => {
+              if (ctx.isStream && ctx.hasSentHeaders) {
+                try {
+                  ctx.res.write(`data: ${JSON.stringify({ type: 'stream', chunk, stage: 'scout' })}\n\n`);
+                  if (typeof (ctx.res as any).flush === 'function') (ctx.res as any).flush();
+                } catch (e) {}
+              }
+            },
+          });
+          if (retryOut.scoutResult) {
+            applyState(applyScoutResultState({
+              scoutResult: retryOut.scoutResult, requestedMode: ctx.req.body.userSelectedMode, hasActiveMealDocument: ctx.hasActiveMealDocument,
+              activeMealDining: ctx.activeMeal?.diningEnvironment, currentRecommendedMode: ctx.scoutRecommendedMode,
+              onLog: ctx.addDebugLog, onEvent: (type, stage, message, data) => ctx.sendLog(type, stage, message, data),
+              onStream: (event) => ctx.sendStreamEvent(event),
+            }));
+          }
+          if (countCompareExtracted(ctx.rawScoutData, ctx.visionScoutItems) === 0) {
+            ctx.addDebugLog(`[Vision Scout Empty Compare] Retry still extracted zero products — failing loudly so Retry stays visible.`);
+            throw buildScoutFailureError(new Error('Vision Scout Empty Compare: no legible products extracted from photo(s) after retry'), ctx.userProfile?.language);
+          }
+          ctx.addDebugLog(`[Vision Scout Empty Compare] Retry recovered ${countCompareExtracted(ctx.rawScoutData, ctx.visionScoutItems)} extracted evidence item(s).`);
+        }
         if (ctx.hasActiveMealDocument && Array.isArray(ctx.activeMeal.itemsBreakdown) && ctx.activeMeal.itemsBreakdown.length > 0) {
           ctx.visionScoutItems = mergeScoutIntoActiveMeal({ activeMealItemsBreakdown: ctx.activeMeal.itemsBreakdown, visionScoutItems: ctx.visionScoutItems, onLog: ctx.addDebugLog, isModify: ctx.isModifySession, userLockedSlots: ctx.activeMeal?.userLockedSlots, userMessage: ctx.message });
         }

@@ -5,10 +5,12 @@ import { Type } from "@google/genai";
  * Scout-Only Compare System Instruction & Schema
  * Streamlined, schema-first architecture for Mode D Product Evaluation & Comparison.
  */
-export const scoutOnlyCompareSystemInstruction = `=== NUTRITIONAL TARGET STATUS ===
-3 days avg: Sat fat (27.7g - 38% over), Calorie (2500kcal - 39% over), Sodium (3000mg - 30% over), Protein (100g - 17% under), Carbohydrates (263.3g - 32% over), Total Fibre (22.3g - 26% under), Potassium (2100mg), Soluble Fibre (3.5g), Added Sugar (45g - 50% over), Trans Fat (0.1g)
-
-You are a Clinical Dietitian & Vision Scout evaluating competing food options (Mode D).
+// NOTE (2026-09-12, Mode D duplicate-baseline fix): the live NUTRITIONAL
+// TARGET STATUS block is appended dynamically per-run by the server
+// (buildNutritionTargetStatus). A stale hardcoded averages block used to live
+// at the top of the template below, sending the model two conflicting
+// baselines (3-day vs 4-day) in one prompt — it is intentionally absent.
+export const scoutOnlyCompareSystemInstruction = `You are a Clinical Dietitian & Vision Scout evaluating competing food options (Mode D).
 
 TASK:
 STEP 1: FIRST, EXHAUSTIVELY LIST EVERY LEGIBLE DISH/PRODUCT ACROSS ALL IMAGES INTO 'allExtractedDishes'.

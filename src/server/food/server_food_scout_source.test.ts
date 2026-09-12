@@ -22,6 +22,7 @@ import {
   checkMenuScaleBypass,
   buildScoutCallArgs,
   runScoutRetryLoop,
+  countCompareExtracted,
 } from './server_food_scout_source';
 import { visionScoutResponseSchema } from './server_food_analyze_schema';
 
@@ -531,5 +532,63 @@ describe('Turn 2 Portion Selection — multi-dish preservation', () => {
     expect(databaseMatchesArray).toHaveLength(3);
     expect(dbMatchMap.get('usda_2')?.name).toBe('Instant Oatmeal');
     expect(dbMatchMap.get('usda_1')?.name).toBe('Fried Chicken');
+  });
+
+  it('countCompareExtracted totals zero only when every compare evidence list is empty', () => {
+    // Live failure shape: all four lists empty -> guard must fire.
+    expect(countCompareExtracted({ items: [], groups: [], allExtractedDishes: [] }, [])).toBe(0);
+    expect(countCompareExtracted(null, [])).toBe(0);
+    expect(countCompareExtracted(undefined, undefined as any)).toBe(0);
+    // Any single evidence form silences the guard.
+    expect(countCompareExtracted({ items: [], groups: [], allExtractedDishes: ['A'] }, [])).toBe(1);
+    expect(countCompareExtracted({ items: [], groups: [{ groupName: 'g' }] }, [])).toBe(1);
+    expect(countCompareExtracted({ items: [{ name: 'A' }] }, [])).toBe(1);
+    expect(countCompareExtracted({}, [{ keyword: 'A' }])).toBe(1);
+  });
+
+  it('applyScoutResultState promotes allExtractedDishes when compare items is empty (Mode D heal)', () => {
+    // Live failure shape (debug-job_1789202906586): model transcribed the
+    // shelf but left items[] empty -> shipped a zero-item "successful"
+    // comparison with an ungrounded recommendation.
+    const logs: string[] = [];
+    const out = applyScoutResultState({
+      scoutResult: {
+        items: [],
+        rawScoutJson: {
+          comparisonTitle: 'Refrigerator Beverage Shelf Selection',
+          allExtractedDishes: [
+            'Larutan Cap Kaki Tiga Lemon Lime',
+            { name: 'Cooltopia Melon Orange', brand: 'Cap Kaki Tiga' },
+          ],
+          items: [],
+          groups: [],
+        },
+      },
+      requestedMode: 'compare',
+      hasActiveMealDocument: false,
+      onLog: (m) => logs.push(m),
+      onEvent: () => {},
+      onStream: () => {},
+    });
+    expect(out.visionScoutItems.length).toBe(2);
+    expect(out.visionScoutItems[0].keyword).toMatch(/Kaki Tiga/);
+    expect(out.visionScoutItems[1].keyword).toBe('Cooltopia Melon Orange');
+    expect(out.rawScoutData.items.length).toBe(2);
+    expect(logs.some((m) => m.includes('Compare Heal'))).toBe(true);
+  });
+
+  it('applyScoutResultState leaves populated compare items untouched (heal is empty-only)', () => {
+    const out = applyScoutResultState({
+      scoutResult: {
+        items: [{ name: 'A' }],
+        rawScoutJson: { allExtractedDishes: ['A', 'B'], items: [{ name: 'A' }] },
+      },
+      requestedMode: 'compare',
+      hasActiveMealDocument: false,
+      onLog: () => {},
+      onEvent: () => {},
+      onStream: () => {},
+    });
+    expect(out.visionScoutItems.length).toBe(1);
   });
 });
