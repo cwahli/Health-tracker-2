@@ -11,6 +11,7 @@ import {
   buildCanonicalRunTree,
   deduplicateBreadcrumbs,
   deduplicateSessionEvents,
+  isCompareRunTree,
 } from './debugRunTree';
 
 const JOB = 'job_test_123';
@@ -101,6 +102,39 @@ it('deduplicateSessionEvents collapses duplicate event ids keeping first', () =>
 it('buildCanonicalRunTree minimal input has jobId and pack fields', () => {
   const tree = buildCanonicalRunTree({ jobId: 'job_minimal', pack: 'food' } as any);
   expect(tree).toMatchObject({ jobId: 'job_minimal', pack: 'food' });
+});
+
+it('compare runs emit scout only — no narrator backfill (single-agent compare)', () => {
+  // Live shape (debug-job_1789204750819): the export showed a synthetic
+  // t1/narrator with meal-framed projector text. No narrator exists on
+  // compare runs, so none may be constructed at export time either.
+  const tree = buildCanonicalRunTree(foodInput({
+    mode: 'compare',
+    pendingFoodLog: undefined,
+    dispatches: [{
+      id: 't1/scout',
+      parent: null,
+      turn: 1,
+      agent: 'scout',
+      user: 'Analyze this meal photo.',
+      received: { mode: 'compare' },
+      systemInstruction: 'You are a Clinical Dietitian & Vision Scout evaluating competing food options (Mode D).',
+      userPrompt: 'List all visible dishes.',
+      model: 'gemini-3.5-flash-lite',
+      latency_ms: 54482,
+    }],
+    comparisonData: { comparisonTitle: 'Shelf', groups: [{ groupName: 'Tier 1' }] },
+    result: {
+      message: 'This shelf contains cooling waters and juices. Given your targets, opt for cooling waters while avoiding sugary juices.',
+      comparison: { groups: [{ groupName: 'Tier 1' }] },
+    },
+  }) as any);
+  const agents = tree.dispatches.map((d: any) => d.agent);
+  expect(agents).toContain('scout');
+  expect(agents).not.toContain('narrator');
+  expect(agents).not.toContain('dietitian');
+  expect(isCompareRunTree({ mode: 'compare' } as any)).toBe(true);
+  expect(isCompareRunTree({ mode: 'new_log' } as any)).toBe(false);
 });
 
 function foodInput(over: any = {}) {

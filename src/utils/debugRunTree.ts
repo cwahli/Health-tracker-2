@@ -121,6 +121,21 @@ export function determinePack(input: Partial<DebugReportInput>): 'food' | 'recep
   return 'food';
 }
 
+/**
+ * Single-agent compare runs have no narrator or dietitian — the scout leg is
+ * the only dispatch. The export layer used to backfill a synthetic narrator
+ * dispatch whenever advice text existed, resurrecting the folded agent on
+ * compare exports. Gate both backfill sites on this.
+ */
+export function isCompareRunTree(input: Partial<DebugReportInput>, dispatchList: Array<{ agent?: string; received?: any }> = []): boolean {
+  const mode = String((input as any)?.mode || '').toLowerCase();
+  if (mode === 'compare' || mode === 'evaluation' || mode === 'compare_menu' || mode === 'compare_shelf') return true;
+  if ((input as any)?.comparisonData || (input as any)?.result?.comparison || (input as any)?.comparison) return true;
+  return dispatchList.some(
+    (d) => d?.agent === 'scout' && ['compare', 'evaluation', 'compare_menu', 'compare_shelf'].includes(String(d?.received?.mode || '').toLowerCase())
+  );
+}
+
 /** Deduplicate breadcrumbs by timestamp/action/target key to keep traces compact */
 export function deduplicateBreadcrumbs(crumbs: any[]): any[] {
   if (!Array.isArray(crumbs)) return [];
@@ -399,6 +414,9 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
       const turnSet = new Set(enriched.map(d => Number(d.turn) || 1));
       for (const t of turnSet) {
         const turnDispatches = enriched.filter(d => (Number(d.turn) || 1) === t);
+        // No narrator backfill on compare runs: the scout leg is the only
+        // dispatch by design (isCompareRunTree).
+        if (isCompareRunTree(input, enriched)) continue;
         const hasNarratorOrDietitian = turnDispatches.some(d => d.agent === 'narrator' || d.agent === 'dietitian' || d.agent === 'expert');
         if (!hasNarratorOrDietitian) {
           const matchingScout = turnDispatches.find(d => d.agent === 'scout') || turnDispatches[0];
@@ -649,7 +667,7 @@ export function extractDispatches(input: DebugReportInput): DispatchTrace[] {
     });
   }
 
-  if (pack === 'food' && !dispatches.some(d => d.agent === 'narrator' || d.agent === 'dietitian' || d.agent === 'expert')) {
+  if (pack === 'food' && !isCompareRunTree(input, dispatches) && !dispatches.some(d => d.agent === 'narrator' || d.agent === 'dietitian' || d.agent === 'expert')) {
     const pfl = input.pendingFoodLog || (input as any)?.result?.pendingFoodLog || (input as any)?.result;
     const verdict = pfl?.verdict || (input.receiptTable as any)?.verdict;
     const advice = pfl?.clinicalAdvice || pfl?.message || (input as any)?.result?.clinicalAdvice || (input as any)?.result?.message;

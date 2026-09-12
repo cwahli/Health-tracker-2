@@ -141,6 +141,14 @@ export async function executeFinalizePhase(
   const currentTurnNumber = scoutRanThisTurn ? (narratorScoutLegs || 1) : (narratorScoutLegs + 1);
 
   if (composeNote) {
+    // Single-agent compare owns composition end-to-end: no narrator exists,
+    // so no narrator dispatch is emitted. (The synthetic leg used to put
+    // meal-framed "TARGETED DISH UPDATE ONLY" projector text on compare
+    // exports; the scout leg already carries model + latency_ms.)
+    const isCompareRun = ctx.userSelectedMode === 'compare';
+    if (isCompareRun) {
+      ctx.addDebugLog(`[Narrator] suppressed synthetic narrator dispatch for compare run — scout leg is the only dispatch.`);
+    } else {
     const narratorDispatch = buildNarratorDispatch({
       turn: currentTurnNumber,
       userMessage:
@@ -165,6 +173,7 @@ export async function executeFinalizePhase(
       projected: Boolean(composeNote.projected),
     });
     ctx.addDebugLog(`[Narrator] dispatch t${currentTurnNumber}/narrator recorded (${composeNote.projected ? 'projector' : 'narrator LLM'}).`);
+    }
   }
 
   // CASE B: discussion mode
