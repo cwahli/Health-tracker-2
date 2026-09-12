@@ -757,6 +757,14 @@ export const FoodCard: React.FC<AgentCardProps & {
     let log = msg.data?.pendingFoodLog || msg.pendingFoodLog;
     if (isValid(log)) return log;
 
+    // Mode D boundary: a compare result renders group cards, never a meal
+    // log. Fabricating one here produced the mega &-joined title, doubled
+    // composition rows, and a "Log This Food" button that would log 19
+    // compared products as a consumed meal.
+    if (comparisonData && Array.isArray((comparisonData as any).groups) && (comparisonData as any).groups.length > 0) {
+      return null;
+    }
+
     const raw = msg.data?.agentResult || msg.agentResult || msg.data?.clean_result || msg.data || {};
     if (isValid(raw.pendingFoodLog)) return raw.pendingFoodLog;
     if (isValid(raw.foodData)) return raw.foodData;
@@ -2917,8 +2925,8 @@ export const FoodCard: React.FC<AgentCardProps & {
                         </div>
                       )}
 
-                      {/* Log Action Button */}
-                      {!((msg.data?.needsPortionClarify || (msg as any).needsPortionClarify) && !msg.data?.pendingFoodLog) && (() => {
+                      {/* Log Action Button (never on compare cards: candidates aren't a meal) */}
+                      {!((msg.data?.needsPortionClarify || (msg as any).needsPortionClarify) && !msg.data?.pendingFoodLog) && !(mode === 'evaluation' && comparisonData && comparisonData.groups && comparisonData.groups.length > 0) && (() => {
                         const gate = msg.data?.gate || msg.data?.agentResult?.gate || msg.data?.pendingFoodLog?.gate || (msg as any).gate;
                         const isSavable = gate ? gate.savable !== false : (
                           msg.data?.savable !== false &&

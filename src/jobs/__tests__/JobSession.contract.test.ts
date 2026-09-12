@@ -294,4 +294,34 @@ describe('JobSession contract (STALE_TURN)', () => {
     // The store hot path must never fire a raw upsert per event.
     expect(vi.mocked(upsertJobToSupabase)).not.toHaveBeenCalled();
   });
+
+  it('compare completion preserves mode=evaluation + comparison through the store (group render boundary)', () => {
+    // Live shape (debug-job_1789204750819): the App.tsx poller finalize reads
+    // job.result for mode/comparison. If the store dropped either, group
+    // cards never render on the server-owned polling path.
+    const compareResult: any = {
+      mode: 'evaluation',
+      message: 'shelf summary',
+      comparison: {
+        comparisonTitle: 'Shelf',
+        groups: [{ groupName: 'Tier 1', verdict: { level: 'good', label: 'x' }, comparisonSentence: 's', message: 'm', items: [{ name: 'A' }] }],
+        items: [{ name: 'A' }],
+        recommendedOption: 'A',
+      },
+      scoutItems: [{ keyword: 'A' }],
+    };
+    JobStore.createJob({ id: 'cmp1', status: 'running', currentTurn: 1 });
+    JobStore.apply({
+      type: 'AnalyzeFinished',
+      id: 'cmp1',
+      status: 'succeeded',
+      result: compareResult,
+      finishedAt: new Date().toISOString(),
+      progressPercent: 100,
+    });
+    const stored = JobStore.getJob('cmp1')!.result as any;
+    expect(stored.mode).toBe('evaluation');
+    expect(stored.comparison?.groups?.length).toBe(1);
+    expect(stored.comparison?.recommendedOption).toBe('A');
+  });
 });

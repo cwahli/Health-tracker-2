@@ -11,6 +11,7 @@ import React, { useState, useRef, useEffect, Suspense } from 'react';
 import { ChatMessage, FoodLog, UserProfile, FoodIdea } from '../types';
 import { translations } from '../utils/translations';
 import { displayStatusLabel, dictionaryFor } from '../utils/i18n';
+import { isCompareOnlyResult } from '../utils/compareMealLogGuard';
 import { X, Send, Image, Camera, FolderOpen, MessageSquare, Sparkles, Plus, Terminal, ChevronDown, ChevronUp, Loader, MapPin, Trash2, Check, Table, RotateCcw, RefreshCw, AlertTriangle, ShieldAlert, Edit2, Maximize2, Minimize2, Flag, BrainCircuit, Download } from 'lucide-react';
 import { UniversalModal } from './UniversalModal';
 import { biomarkerDefinitions, getBiomarkerStatus, isAsianEthnicity, getBiomarkerStatusLabel, isBiomarkerValueImprobable, getMergedBiomarkerDef, detectFlaggedTelemetryErrors, buildReviewBiomarkerContext, buildBiomarkerReviewPrefill, getMappedBiomarkerKey, isBiomarkerApproved, isCatalogBuiltIn, shouldStampExtractedDefPending } from '../utils/biomarkers';
@@ -59,6 +60,10 @@ function isValidFoodLog(log: any): boolean {
 function resolvePendingFoodLog(job: any): any {
   if (!job) return null;
   const rawResult = job.result?.clean_result || job.result?.raw?.data || job.result?.data || job.result || (job as any).clean_result || {};
+  // Mode D boundary (sibling of extractPendingFoodLogFromCleanResult): a
+  // compare result is never a meal. Without this, compared products were
+  // fabricated into a pseudo food log (mega &-title, doubled rows).
+  if (isCompareOnlyResult(rawResult)) return null;
   const candidates = [
     job.result?.pendingFoodLog,
     job.result?.clean_result?.pendingFoodLog,
@@ -1357,7 +1362,9 @@ ${logsText}`);
       const remotePhotos = job.result?.imageUrls || job.result?.photoUrls || job.result?.clean_result?.imageUrls || job.result?.clean_result?.photoUrls || (job as any).clean_result?.imageUrls || (job as any).clean_result?.photoUrls || (remotePhoto ? [remotePhoto] : []);
       if (job.status === 'succeeded' && type === 'food') {
         let currentResult = job.result?.clean_result || job.result || (job as any).clean_result || {};
-        if (currentResult.is_r2 || (job as any).clean_result?.is_r2 || !resolvePendingFoodLog(job)) {
+        // Compare results carry no meal log by design (Mode D boundary) —
+        // treat them as content-bearing so we don't refetch in a loop.
+        if (currentResult.is_r2 || (job as any).clean_result?.is_r2 || (!resolvePendingFoodLog(job) && !isCompareOnlyResult(currentResult))) {
           try {
             const baseUrl = typeof window !== 'undefined' ? '' : 'http://localhost:3000';
             const r = await fetch(`${baseUrl}/api/jobs/status?jobId=${activeJobId}&full=true`);
@@ -1682,7 +1689,7 @@ ${logsText}`);
             }
           }
         }
-        if (job.status === 'succeeded' && (job.result?.data || job.result?.pendingFoodLog || job.result?.mealBuild || job.mealBuild || job.result?.foodData || type === 'medical' || resolvePendingFoodLog(job))) {
+          if (job.status === 'succeeded' && (job.result?.data || job.result?.pendingFoodLog || job.result?.mealBuild || job.mealBuild || job.result?.foodData || type === 'medical' || resolvePendingFoodLog(job) || isCompareOnlyResult(job.result) || isCompareOnlyResult((job.result as any)?.clean_result))) {
           const foodLog = resolvePendingFoodLog(job);
           try {
             if (foodLog && (!foodLog.imageUrls || foodLog.imageUrls.length === 0 || foodLog.imageUrls.some((u: string) => u.startsWith('blob:')))) {

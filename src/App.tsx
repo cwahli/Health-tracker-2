@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { lazyWithRetry } from './utils/lazyWithRetry';
+import { isCompareOnlyResult } from './utils/compareMealLogGuard';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { UserProfile, FoodLog, BiomarkerLog, HealthAction, DailyBenefit, RecommendationReport, DbInteraction, QuotaData, FoodIdea } from './types';
 import Header from './components/Header';
@@ -57,6 +58,11 @@ function visibilityAwareSleep(ms: number): Promise<void> {
 
 function extractPendingFoodLogFromCleanResult(cleanResult: any, photoUrl?: string): any {
   if (!cleanResult) return null;
+  // Mode D boundary: a compare result is never a meal — its items are
+  // mutually exclusive candidates. Fabricating a log here produced a
+  // 19-name &-joined title, doubled composition rows, and a "Log This Food"
+  // button that would log compared products as consumed.
+  if (isCompareOnlyResult(cleanResult)) return null;
   let log: any = null;
   const isEditResult = cleanResult.mode === 'modify' || cleanResult.mode === 'edit';
 
@@ -1350,6 +1356,10 @@ export default function App() {
                     globalLiveLogs: cleanResult.backendLogs || '',
                     dietitianAnswer: cleanResult.message || cleanResult.text || '',
                     scoutItems: cleanResult.scoutItems,
+                    // Mode D boundary (App.tsx poller finalize): the whitelist
+                    // used to drop `comparison`, so group cards never rendered
+                    // on the server-owned polling path. Copy it through.
+                    comparison: cleanResult.comparison,
                     // FIX: server.ts's medical-analyze responses (agent1_step1, agent1,
                     // biomarker_review, data_review) are flat top-level objects — they
                     // never set a nested "agentResult" key. The spread below was always
@@ -1412,6 +1422,10 @@ export default function App() {
                       debugUrl: serverJob.debug_url || cleanResult.debugUrl,
                       scoutItems: cleanResult.scoutItems || [],
                       mode: serverJob.mode || cleanResult.mode || 'review',
+                      // Mode D: carry the comparison through (groups render
+                      // from data.comparison; the LogChat direct path sets it,
+                      // the poller path used to drop it).
+                      comparison: cleanResult.comparison,
                       agentResult,
                     },
                   };

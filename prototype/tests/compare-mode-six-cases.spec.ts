@@ -248,6 +248,131 @@ test.describe('Compare Mode (Mode D) - 6 Cases End-to-End Pipeline & Card Verifi
   }
 });
 
+test.describe('Mode D live-assembly diagnostics (fresh-load path)', () => {
+  test.setTimeout(240000);
+  /**
+   * Diagnostic for the live "page doesn't show grouping" report: push a real
+   * compare response through JobStore, then RELOAD (fresh-load assembly path
+   * with resolvePendingFoodLog synthesis) and capture what the rendered
+   * message actually carries.
+   */
+  test('fresh load keeps mode=evaluation, comparison groups, and no pseudo meal log', async ({ request, page }) => {
+    const base64Images = loadImagesAsBase64(['set4_juice_and_beverage_list.jpg']);
+    const res = await request.post('/api/gemini/food-analyze', {
+      headers: { 'x-session-id': 'server-job-compare-e2e-freshload-diag' },
+      data: {
+        message: 'Analyze this meal photo.',
+        images: base64Images,
+        userSelectedMode: 'compare',
+        userProfile: { language: 'en' },
+      },
+    });
+    expect(res.ok()).toBeTruthy();
+    const body = await res.json();
+    expect((body.comparison?.groups || []).length).toBeGreaterThanOrEqual(1);
+
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    const demoBtn = page.locator('#demo-login-btn');
+    if (await demoBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await demoBtn.click();
+    }
+    await page.locator('#nav-tab-home').waitFor({ state: 'attached', timeout: 30000 });
+
+    const jobId = 'job_test_compare_freshload';
+    await page.evaluate(({ testData, jid }) => {
+      const win = window as any;
+      win.JobStore.createJob({
+        id: jid,
+        kind: 'food_compare',
+        status: 'succeeded',
+        updatedAt: new Date().toISOString(),
+        inputSnapshot: { mode: 'compare', hasImage: true, text: 'Analyze this meal photo.', agentType: 'food' },
+        result: testData,
+      });
+      if (win.setActiveJobId) win.setActiveJobId(jid);
+    }, { testData: body, jid: jobId });
+
+    // Fresh load: exercises the else-branch assembly + pseudo-log synthesis.
+    page.on('console', (m) => {
+      const t = `[browser:${m.type()}] ${m.text()}`.slice(0, 300);
+      if (/error|fail|exception|compare|scout|foodlog|pendingfoodlog/i.test(t)) console.log(t);
+    });
+    page.on('pageerror', (e) => console.log(`[browser:pageerror] ${String(e).slice(0, 300)}`));
+    page.on('load', () => console.log(`[Freshload Diag] PAGE LOAD event at ${new Date().toISOString()}`));
+    page.on('framenavigated', (f) => { if (f === page.mainFrame()) console.log(`[Freshload Diag] NAVIGATED to ${f.url()}`); });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(5000);
+    await page.screenshot({ path: 'test-results/freshload-diag.png' }).catch(() => {});
+    // Reload drops demo auth: log back in the same way as the initial flow.
+    const demoBtn2 = page.locator('#demo-login-btn');
+    if (await demoBtn2.isVisible({ timeout: 8000 }).catch(() => false)) {
+      await demoBtn2.click();
+    } else {
+      // Fallback: any visible email-continue style entry.
+      const altLogin = page.locator('button:has-text("Continue"), button:has-text("Demo"), button:has-text("Sign in")').first();
+      if (await altLogin.isVisible({ timeout: 5000 }).catch(() => false)) await altLogin.click();
+    }
+    await page.locator('#nav-tab-home').waitFor({ state: 'attached', timeout: 30000 });
+
+    // Re-enter the compare chat exactly as a user would, then attach the
+    // persisted succeeded job: this drives the fresh-load assembly path.
+    const quickActionBtn = page.locator('button[title="Open quick actions"], button.w-14.h-14').first();
+    await quickActionBtn.click();
+    const compareBtn = page.locator('#quick-action-compare-meal');
+    await expect(compareBtn).toBeVisible({ timeout: 8000 });
+    await compareBtn.click();
+    await expect(page.locator('#food-chat-input')).toBeVisible({ timeout: 15000 });
+    await page.waitForFunction(() => (window as any).setActiveJobId !== undefined, null, { timeout: 15000 });
+    await page.evaluate((jid) => {
+      const win = window as any;
+      if (win.setActiveJobId) win.setActiveJobId(jid);
+    }, jobId);
+    await page.screenshot({ path: 'test-results/freshload-after-attach.png' }).catch(() => {});
+    console.log(`[Freshload Diag] after attach: input visible=${await page.locator('#food-chat-input').isVisible().catch(() => 'err')}, cards=${await page.locator('[data-testid="compare-group-card"]').count()}`);
+    // Assembly + tile render with image resolution can take a while: wait
+    // for cards like the Case-N tests do instead of a fixed sleep.
+    const groupCards = page.locator('[data-testid="compare-group-card"]');
+    await groupCards.first().waitFor({ state: 'visible', timeout: 45000 }).catch(() => {});
+    const groupCount = await groupCards.count();
+    console.log(`[Freshload Diag] group cards after reload: ${groupCount}`);
+
+    const dom = await page.evaluate((jid) => {
+      const win = window as any;
+      const out: any = { jobId: jid };
+      try {
+        const job = win.JobStore?.getJob?.(jid);
+        out.jobStatus = job?.status;
+        out.jobKind = job?.kind;
+        out.resultKeys = job?.result ? Object.keys(job.result) : null;
+        out.resultMode = job?.result?.mode;
+        out.resultGroups = job?.result?.comparison?.groups?.length
+          ?? job?.result?.clean_result?.comparison?.groups?.length ?? null;
+      } catch (e) { out.jobErr = String(e).slice(0, 120); }
+      out.compareTitles = document.querySelectorAll('[data-testid="compare-title"]').length;
+      out.bodyText = (document.body.innerText || '').slice(0, 1500);
+      return out;
+    }, jobId);
+    console.log(`[Freshload Diag] dom: ${JSON.stringify(dom, null, 1).slice(0, 2200)}`);
+    expect(groupCount, 'group cards survive fresh-load assembly').toBeGreaterThanOrEqual(1);
+
+    // No mega &-joined pseudo-meal title: the compare title must stay short.
+    const compTitle = page.locator('[data-testid="compare-title"]');
+    if (await compTitle.count() > 0) {
+      const titleText = (await compTitle.first().innerText()).trim();
+      console.log(`[Freshload Diag] compare title (${titleText.length} chars): ${titleText.slice(0, 120)}`);
+      expect(titleText.length, 'no mega &-joined pseudo-meal title').toBeLessThan(160);
+    }
+
+    // No pseudo meal log anywhere: no giant &-joined h4, no Log button.
+    const h4Texts = await page.locator('h4').allInnerTexts();
+    const longestH4 = h4Texts.reduce((m, t) => Math.max(m, t.trim().length), 0);
+    console.log(`[Freshload Diag] longest h4: ${longestH4} chars across ${h4Texts.length} h4s`);
+    expect(longestH4, 'no mega pseudo-meal title element').toBeLessThan(220);
+    const logBtn = page.locator('button:has-text("Log This Food")');
+    expect(await logBtn.count(), 'no Log button on compare cards').toBe(0);
+  });
+});
+
 test.describe('Mode D shelf-failure regression (debug-job_1789202906586)', () => {
   test.setTimeout(180000);
   /**
