@@ -1421,11 +1421,11 @@ export default function App() {
                       photoUrl: serverJob.photo_url || cleanResult.photoUrl,
                       debugUrl: serverJob.debug_url || cleanResult.debugUrl,
                       scoutItems: cleanResult.scoutItems || [],
-                      mode: serverJob.mode || cleanResult.mode || 'review',
+                      mode: cleanResult.mode || serverJob.mode || (job.kind === 'food_compare' ? 'compare' : 'review'),
                       // Mode D: carry the comparison through (groups render
                       // from data.comparison; the LogChat direct path sets it,
                       // the poller path used to drop it).
-                      comparison: cleanResult.comparison,
+                      comparison: cleanResult.comparison || (cleanResult.groups ? cleanResult : undefined),
                       agentResult,
                     },
                   };

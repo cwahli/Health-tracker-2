@@ -4,6 +4,9 @@ import { isCompareOnlyResult } from './compareMealLogGuard';
 describe('isCompareOnlyResult (Mode D meal boundary)', () => {
   it('flags evaluation+comparison results as never-a-meal', () => {
     expect(isCompareOnlyResult({ mode: 'evaluation', comparison: { groups: [{ groupName: 'g' }] } })).toBe(true);
+    expect(isCompareOnlyResult({ mode: 'compare', comparison: { groups: [{ groupName: 'g' }] } })).toBe(true);
+    expect(isCompareOnlyResult({ kind: 'food_compare', comparison: { groups: [{ groupName: 'g' }] } })).toBe(true);
+    expect(isCompareOnlyResult({ mode: 'compare', groups: [{ groupName: 'g' }] })).toBe(true);
   });
 
   it('passes meal modes through (new_log / modify / portion_clarify)', () => {

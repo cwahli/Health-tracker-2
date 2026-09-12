@@ -34,6 +34,7 @@ import { resolveFoodImage } from '../../utils/imageResolver';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { ZoomableImage } from '../ZoomableImage';
 import { FoodScoutItemPreview, OnlineFoodImage } from './FoodScoutItemPreview';
+import { FoodEvaluationComparisonCard } from './FoodEvaluationComparisonCard';
 import { translations } from '../../utils/translations';
 /** Scout index matches the exact visual detected slot for the dish */
 function scoutIndexAgrees(item: any, s: any): boolean {
@@ -487,8 +488,25 @@ export const FoodCard: React.FC<AgentCardProps & {
   // this component now runs unconditionally; the live branch lives after the
   // last hook (see below). Do not add an early return above the hooks again.
 
-  const comparisonData = msg.data?.comparison || msg.data?.agentResult?.comparison || msg.agentResult?.comparison;
-  const mode = msg.data?.mode || msg.data?.agentResult?.mode || msg.agentResult?.mode;
+  const comparisonData =
+    msg.data?.comparison ||
+    msg.data?.agentResult?.comparison ||
+    msg.agentResult?.comparison ||
+    (msg.data?.groups ? msg.data : null) ||
+    (msg.data?.agentResult?.groups ? msg.data.agentResult : null) ||
+    (msg.data?.rawScout?.groups ? msg.data.rawScout : null);
+  const mode =
+    msg.data?.mode ||
+    msg.data?.agentResult?.mode ||
+    msg.agentResult?.mode ||
+    (msg.agentType === 'food_compare' || msg.data?.kind === 'food_compare' || (msg as any).kind === 'food_compare' ? 'compare' : undefined);
+
+  const isCompareEvaluation = Boolean(
+    (mode === 'evaluation' || mode === 'compare' || msg.agentType === 'food_compare' || msg.data?.kind === 'food_compare' || (msg as any).kind === 'food_compare' || msg.data?.userSelectedMode === 'compare') &&
+    comparisonData &&
+    Array.isArray(comparisonData.groups) &&
+    comparisonData.groups.length > 0
+  );
 
   const [expandedTables, setExpandedTables] = React.useState<Record<string, boolean>>({});
   const [expandedScouts, setExpandedScouts] = React.useState<Record<string, boolean>>({});
@@ -849,7 +867,7 @@ export const FoodCard: React.FC<AgentCardProps & {
   }
 
   const isFoodAgentType = !msg.agentType || msg.agentType === 'food' || msg.agentType === 'food_log' || msg.agentType === 'food_analyze' || msg.agentType === 'food_compare' || msg.agentType === 'front_desk' || msg.agentType === 'new_log' || msg.agentType === 'modify' || msg.agentType === 'review' || msg.agentType === 'medical';
-  const hasFoodPayload = !!(effectiveFoodLog || msg.data?.scoutItems?.length || msg.data?.comparison || msg.data?.agentResult?.mealBuild || msg.agentResult?.scoutItems?.length);
+  const hasFoodPayload = !!(effectiveFoodLog || msg.data?.scoutItems?.length || (comparisonData && comparisonData.groups?.length) || msg.data?.comparison || msg.data?.agentResult?.mealBuild || msg.agentResult?.scoutItems?.length);
 
   // NOTE: the null guard for non-food messages also lives after the last hook
   // (see below) for the same hooks-crash reason. Do not return early here.
@@ -1219,9 +1237,9 @@ export const FoodCard: React.FC<AgentCardProps & {
 
   return (
     <>
-      {(mode === 'evaluation' && comparisonData && comparisonData.groups && comparisonData.groups.length > 0) && (
+      {isCompareEvaluation && (
                     <div data-testid="compare-evaluation-card" className="space-y-3 animation-fade-in w-full max-w-full min-w-0 overflow-hidden bg-transparent">
-                      {msg.data.correctionOf && (
+                      {msg.data?.correctionOf && (
                          <div className="flex justify-center pb-2">
                            <button 
                              onClick={() => {
@@ -2139,10 +2157,15 @@ export const FoodCard: React.FC<AgentCardProps & {
         );
       })()}
 
+      {/* Options grid comparison fallback if no tiered groups are present */}
+      {!isCompareEvaluation && !!(comparisonData?.options || msg.data?.agentResult?.comparisonSet?.optionMeals || (comparisonData as any)?.optionMeals) && (
+        <FoodEvaluationComparisonCard msg={msg} language={language} onLogFood={props.onLogFood} />
+      )}
+
       {/* Case F: Food Origin & Details experiential encyclopedia card renderer */}
 
 
-                  {msg.data?.pendingFoodLog && !(mode === 'evaluation' && comparisonData && comparisonData.groups && comparisonData.groups.length > 0) && (
+                  {msg.data?.pendingFoodLog && !isCompareEvaluation && (
                     <div className="bg-transparent border-0 rounded-none p-0 shadow-none space-y-3 animation-fade-in w-full max-w-full min-w-0 overflow-hidden font-sans">
                       {/* Flag incorrect / missing-link backlog entry */}
                       <FoodResultFlagButton
@@ -2952,7 +2975,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                       )}
 
                       {/* Log Action Button (never on compare cards: candidates aren't a meal) */}
-                      {!((msg.data?.needsPortionClarify || (msg as any).needsPortionClarify) && !msg.data?.pendingFoodLog) && !(mode === 'evaluation' && comparisonData && comparisonData.groups && comparisonData.groups.length > 0) && (() => {
+                      {!((msg.data?.needsPortionClarify || (msg as any).needsPortionClarify) && !msg.data?.pendingFoodLog) && !isCompareEvaluation && (() => {
                         const gate = msg.data?.gate || msg.data?.agentResult?.gate || msg.data?.pendingFoodLog?.gate || (msg as any).gate;
                         const isSavable = gate ? gate.savable !== false : (
                           msg.data?.savable !== false &&
@@ -3046,7 +3069,7 @@ export const FoodCard: React.FC<AgentCardProps & {
       {/* Standalone Response / Discussion / Clinical Advice Card when no Pending Food Log or Comparison exists */}
       {(() => {
         const hasPendingLog = !!msg.data?.pendingFoodLog;
-        const hasComparison = !!(mode === 'evaluation' && comparisonData && comparisonData.groups && comparisonData.groups.length > 0);
+        const hasComparison = isCompareEvaluation || !!(comparisonData?.options || msg.data?.agentResult?.comparisonSet?.optionMeals || (comparisonData as any)?.optionMeals);
         if (hasPendingLog || hasComparison) return null;
 
         // Suppress standalone fallback text when portion clarification is active (prevents duplicate prompt text)

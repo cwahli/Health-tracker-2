@@ -1606,8 +1606,8 @@ ${logsText}`);
               debugUrl: job.debugUrl || raw.debugUrl,
               scoutItems: job.result?.scoutItems || raw.scoutItems || [],
               scoutContentType: raw.scoutContentType,
-              mode: raw.mode || (job.inputSnapshot as any)?.mode || 'review',
-              comparison: raw.comparison,
+              mode: raw.mode || (job.inputSnapshot as any)?.mode || (job.kind === 'food_compare' ? 'compare' : 'review'),
+              comparison: raw.comparison || raw.agentResult?.comparison || (raw.groups ? raw : undefined),
               agentResult: {
                 ...raw,
                 ...(raw.agentResult || {}),
@@ -1637,7 +1637,8 @@ ${logsText}`);
           const latestFoodLog = resolvePendingFoodLog(job);
           const raw = job.result?.raw || (job.result as any)?.clean_result || job.result || {};
           const lastAssistantIdx = dedupedBaseMsgs.map((m: any) => m.role).lastIndexOf('assistant');
-          if (lastAssistantIdx !== -1 && latestFoodLog) {
+          const isCompareResult = isCompareOnlyResult(raw) || isCompareOnlyResult(job.result) || !!raw.comparison || !!(raw.groups && raw.groups.length > 0) || job.kind === 'food_compare';
+          if (lastAssistantIdx !== -1 && (latestFoodLog || isCompareResult)) {
             const rawContent = raw.message || raw.reply || raw.text || raw.globalSummary;
             dedupedBaseMsgs[lastAssistantIdx] = {
               ...dedupedBaseMsgs[lastAssistantIdx],
@@ -1650,6 +1651,8 @@ ${logsText}`);
                 photoUrl: job.photoUrl || raw.photoUrl || latestFoodLog?.imageUrl || dedupedBaseMsgs[lastAssistantIdx].data?.photoUrl,
                 debugUrl: job.debugUrl || raw.debugUrl || dedupedBaseMsgs[lastAssistantIdx].data?.debugUrl,
                 scoutItems: job.result?.scoutItems || raw.scoutItems || dedupedBaseMsgs[lastAssistantIdx].data?.scoutItems || [],
+                mode: raw.mode || (job.inputSnapshot as any)?.mode || (job.kind === 'food_compare' ? 'compare' : dedupedBaseMsgs[lastAssistantIdx].data?.mode || 'review'),
+                comparison: raw.comparison || raw.agentResult?.comparison || (raw.groups ? raw : undefined) || dedupedBaseMsgs[lastAssistantIdx].data?.comparison,
                 agentResult: {
                   ...(dedupedBaseMsgs[lastAssistantIdx].data?.agentResult || {}),
                   ...raw,
@@ -1745,8 +1748,8 @@ ${logsText}`);
               hasImage: !!(foodLog?.imageUrl || foodLog?.imageUrls?.length || (job.inputSnapshot as any)?.hasImage),
               scoutItems: job.result?.scoutItems || raw.scoutItems || [],
               scoutContentType: raw.scoutContentType,
-              mode: raw.mode || (job.inputSnapshot as any)?.mode || 'review',
-              comparison: raw.comparison,
+              mode: raw.mode || (job.inputSnapshot as any)?.mode || (job.kind === 'food_compare' ? 'compare' : 'review'),
+              comparison: raw.comparison || raw.agentResult?.comparison || (raw.groups ? raw : undefined),
               agentResult: {
                 ...raw,
                 ...(raw.agentResult || {}),
@@ -3461,13 +3464,14 @@ ${logsText}`);
           if (resData.dispatches) assistantMsg.data.dispatches = resData.dispatches;
           assistantMsg.data.pendingFoodLog = newFoodLog;
           assistantMsg.pendingFoodLog = newFoodLog;
-        } else if (resData.mode === 'evaluation') {
+        } else if (resData.mode === 'evaluation' || resData.mode === 'compare' || resData.comparison || (resData.groups && resData.groups.length > 0)) {
           let carryOverScoutItems = resData.scoutItems || [];
           if (compareOnly && sourceMsgId) {
              const sourceMsg = messages.find(m => m.id === sourceMsgId);
              if (sourceMsg?.data?.scoutItems) carryOverScoutItems = sourceMsg.data.scoutItems;
           }
-          assistantMsg.data.comparison = resData.comparison;
+          assistantMsg.data.mode = resData.mode || 'evaluation';
+          assistantMsg.data.comparison = resData.comparison || (resData.groups ? resData : undefined);
           assistantMsg.data.scoutItems = carryOverScoutItems;
         } else if (resData.mode === 'origin') {
           assistantMsg.data.mode = 'origin';

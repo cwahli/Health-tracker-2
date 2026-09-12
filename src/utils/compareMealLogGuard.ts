@@ -14,5 +14,8 @@
  *    server-owned polling path (the path every real photo submission takes).
  */
 export function isCompareOnlyResult(res: any): boolean {
-  return !!res && res != null && (res as any).mode === 'evaluation' && !!(res as any).comparison;
+  if (!res || typeof res !== 'object') return false;
+  const isCompareMode = (res as any).mode === 'evaluation' || (res as any).mode === 'compare' || (res as any).kind === 'food_compare';
+  const hasComparison = !!(res as any).comparison || (Array.isArray((res as any).groups) && (res as any).groups.length > 0);
+  return isCompareMode && hasComparison;
 }

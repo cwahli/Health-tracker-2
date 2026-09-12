@@ -12,20 +12,23 @@ export const FoodEvaluationComparisonCard: React.FC<FoodEvaluationComparisonCard
   const t = translations[language || "en"] || translations.en;
   const [loggedOptions, setLoggedOptions] = React.useState<Record<number, boolean>>({});
 
-  if (!msg.agentResult || msg.agentResult.mode !== 'evaluation' || !msg.agentResult.comparison) return null;
+  const comparisonData = msg.data?.comparison || msg.data?.agentResult?.comparison || msg.agentResult?.comparison;
+  const comparisonSet = msg.data?.agentResult?.comparisonSet || msg.agentResult?.comparisonSet;
+
+  if (!comparisonData && !comparisonSet) return null;
 
   return (
     <>
       <div className="bg-white dark:bg-slate-800 border border-theme-border rounded-2xl p-4 shadow-md space-y-3 animation-fade-in w-[70%] max-w-full mx-auto min-w-0 overflow-hidden font-sans">
         <div className="flex items-center justify-between border-b border-theme-border/50 pb-2 gap-2">
           <h4 className="font-bold text-theme-text text-sm break-words flex flex-wrap items-center gap-1.5 w-full font-display">
-            <span className="shrink-0">{t.comparisonLabel}</span> <span className="text-indigo-600 dark:text-indigo-400 font-bold break-words">{msg.agentResult.comparison.keyNutrientConcern || t.nutrientsOfConcern}</span>
+            <span className="shrink-0">{t.comparisonLabel}</span> <span className="text-indigo-600 dark:text-indigo-400 font-bold break-words">{comparisonData?.keyNutrientConcern || comparisonData?.comparisonTitle || t.nutrientsOfConcern}</span>
           </h4>
         </div>
         {/* ComparisonSet Options Grid */}
-        {(msg.agentResult.comparisonSet?.optionMeals || msg.agentResult.comparison?.options) && (
+        {(comparisonSet?.optionMeals || comparisonData?.options) && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-            {(msg.agentResult.comparisonSet?.optionMeals || msg.agentResult.comparison?.options).map((opt: any, i: number) => {
+            {(comparisonSet?.optionMeals || comparisonData?.options).map((opt: any, i: number) => {
               const defaultOpt = t.optionN ? t.optionN.replace('{n}', String(i + 1)) : `Option ${i + 1}`;
               const name = opt.content?.name || opt.name || opt.title || defaultOpt;
               const protein = Number(opt.nutrients?.protein ?? opt.protein) || 0;
@@ -101,27 +104,27 @@ export const FoodEvaluationComparisonCard: React.FC<FoodEvaluationComparisonCard
         )}
 
         {/* Key Nutrient Comparison Table */}
-        {(msg.agentResult.comparison.comparisonTable || msg.agentResult.comparison.comparisonTableJson || msg.agentResult.comparison.comparisonTableMarkdown) && (
+        {(comparisonData?.comparisonTable || comparisonData?.comparisonTableJson || comparisonData?.comparisonTableMarkdown) && (
           <div className="border border-theme-border rounded-xl overflow-hidden bg-slate-50/30 dark:bg-slate-900/10 mt-2">
             <div className="px-3 py-1.5 bg-slate-100/70 dark:bg-slate-800/60 border-b border-theme-border">
               <span className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider">
                 {t.comparisonMatrix}
               </span>
             </div>
-            {(msg.agentResult.comparison.comparisonTable || msg.agentResult.comparison.comparisonTableJson) ? (
+            {(comparisonData.comparisonTable || comparisonData.comparisonTableJson) ? (
               <div className="p-0 overflow-x-auto">
                 <table className="w-full text-[11px] text-left border-collapse">
                   <thead className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-10 border-b border-theme-border">
                     <tr>
                       <th className="px-3 py-2.5 font-bold text-theme-text-secondary font-mono text-[10px] tracking-wider uppercase whitespace-nowrap">{t.nutrientLabel}</th>
-                      {(msg.agentResult.comparison.foods || []).map((food: any, i: number) => (
+                      {(comparisonData.foods || []).map((food: any, i: number) => (
                         <th key={i} className="px-3 py-2.5 font-bold text-theme-text-secondary font-mono text-[10px] tracking-wider uppercase whitespace-nowrap">{food.name}</th>
                       ))}
                       <th className="px-3 py-2.5 font-bold text-theme-text-secondary font-mono text-[10px] tracking-wider uppercase whitespace-nowrap">{t.targetLabel}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {((msg.agentResult.comparison.comparisonTable || msg.agentResult.comparison.comparisonTableJson).rows || []).map((row: any, idx: number) => (
+                    {((comparisonData.comparisonTable || comparisonData.comparisonTableJson).rows || []).map((row: any, idx: number) => (
                       <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 group">
                         <td className="px-3 py-2 whitespace-nowrap font-bold text-theme-text">{row.nutrient}</td>
                         {(row.values || []).map((val: string, vIdx: number) => (
@@ -135,7 +138,7 @@ export const FoodEvaluationComparisonCard: React.FC<FoodEvaluationComparisonCard
               </div>
             ) : (
               <div className="p-3 text-[11px] prose dark:prose-invert prose-p:leading-relaxed prose-pre:m-0 prose-pre:bg-transparent overflow-x-auto max-w-none text-theme-neutral">
-                {msg.agentResult.comparison.comparisonTableMarkdown}
+                {comparisonData.comparisonTableMarkdown}
               </div>
             )}
           </div>
