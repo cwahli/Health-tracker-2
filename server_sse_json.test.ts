@@ -32,7 +32,7 @@ describe('SSE res.json wrap (DEGRADE_NOT_TERMINAL)', () => {
   });
 
   it('food-analyze stream path attaches the SSE json responder', () => {
-    const src = fs.readFileSync(path.join(__dirname, 'server_food_analyze_run.ts'), 'utf8');
+    const src = fs.readFileSync(path.join(__dirname, 'server_food_analyze_run_setup.ts'), 'utf8');
     expect(src).toMatch(/attachSseJsonResponder\(res\)/);
   });
 });

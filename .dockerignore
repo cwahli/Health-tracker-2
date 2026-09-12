@@ -1,0 +1,9 @@
+node_modules
+.git
+.agents
+.gemini
+dist
+*.log
+prototype/tests/captures
+tmp
+specs/checkpoints

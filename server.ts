@@ -1537,7 +1537,7 @@ process.on('unhandledRejection', (reason) => {
   console.error('[UNHANDLED REJECTION]', reason);
 });
 const imageSearchCache = new Map<string, any>();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 const SERVER_START_TIME = Date.now();
 console.log("[boot] server.ts evaluated, starting…");
 
@@ -3312,7 +3312,8 @@ app.post("/api/gemini/menu-image-search", async (req, res) => {
         // Fallback
         if (!ogImageUrl) {
            try {
-             const fallbackRes = await fetch("http://localhost:3000/api/gemini/food-image-search", {
+             const internalApiBase = process.env.INTERNAL_BASE_URL || `http://127.0.0.1:${PORT}`;
+             const fallbackRes = await fetch(`${internalApiBase}/api/gemini/food-image-search`, {
                 method: "POST", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ query: label })
              });
@@ -3331,7 +3332,8 @@ app.post("/api/gemini/menu-image-search", async (req, res) => {
       console.error("Batch error:", e);
       for (const label of batch) {
          try {
-             const fallbackRes = await fetch("http://localhost:3000/api/gemini/food-image-search", {
+             const internalApiBase = process.env.INTERNAL_BASE_URL || `http://127.0.0.1:${PORT}`;
+             const fallbackRes = await fetch(`${internalApiBase}/api/gemini/food-image-search`, {
                 method: "POST", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ query: label })
              });
