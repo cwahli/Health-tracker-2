@@ -1322,6 +1322,12 @@ export default function App() {
                     messages: [...nonLiveMsgs, clarifyAssistant],
                     photoUrl: serverJob.photo_url || cleanResult.photoUrl,
                     debugUrl: serverJob.debug_url || cleanResult.debugUrl,
+                    // Fix: without clearing this, isTurnInFlight() in jobPreview.ts stays true
+                    // forever (job.finishedAt is never set for awaiting_user turns), which makes
+                    // previewStatus() permanently override the card's displayed status back to
+                    // 'running' even though job.status is correctly 'awaiting_user'. That froze
+                    // the card on "Updating meal..." and hid the portion-select dialog.
+                    inFlightTurnAt: undefined,
                   });
                   done = true;
                   return;
