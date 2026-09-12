@@ -99,27 +99,12 @@ export async function clearCachedAppData(email?: string | null): Promise<void> {
   } catch {}
 }
 
-/**
- * Chat-session memory prefixes wiped on empty-demo reseed (S-9, CHAT_STALE).
- * Covers transcripts, last-sent payloads, session ids, and the job cache.
- * Never add profile/locale keys here (`preferred_language` etc. survive).
- */
-export const CHAT_MEMORY_PREFIXES: readonly string[] = [
-  'chat_memory_',
-  'chatStorage_',
-  'payloadStorage_',
-  'last_sent_payload_',
-  'active_session_id_',
-  'jobstore_',
-  'chat_messages_',
-];
-
 export function clearChatMemoryKeys(): void {
   try {
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (k && CHAT_MEMORY_PREFIXES.some((p) => k.startsWith(p))) {
+      if (k && (k.startsWith('chat_memory_') || k.startsWith('chatStorage_') || k.startsWith('payloadStorage_'))) {
         keysToRemove.push(k);
       }
     }

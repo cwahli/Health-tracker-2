@@ -1,6 +1,5 @@
-import 'dotenv/config';
-import compression from 'compression';
 import dns from 'node:dns';
+import compression from "compression";
 try {
   dns.setDefaultResultOrder('ipv4first');
 } catch (e) {}
@@ -1537,7 +1536,7 @@ process.on('unhandledRejection', (reason) => {
   console.error('[UNHANDLED REJECTION]', reason);
 });
 const imageSearchCache = new Map<string, any>();
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = 3000;
 const SERVER_START_TIME = Date.now();
 console.log("[boot] server.ts evaluated, starting…");
 
