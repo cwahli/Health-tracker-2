@@ -154,7 +154,7 @@ export function parseNutritionalTargetStatus(input: DebugReportInput): {
     typeof input.patientContext === 'string' ? input.patientContext : JSON.stringify(input.patientContext || ''),
     typeof input.agentInstructions === 'string' ? input.agentInstructions : JSON.stringify(input.agentInstructions || ''),
     input.backendLogs || '',
-    ...(input.dispatches || []).map(d => `${d.systemInstruction || ''} ${d.instruction || ''} ${d.userPrompt || ''}`),
+    ...(input.dispatches || []).map(d => `${d.systemInstruction || ''} ${d.instruction || ''}`),
   ].join('\n');
 
   const match = sources.match(/=== NUTRITIONAL TARGET STATUS ===\s*(?:(\d+)\s*days?\s*avg:\s*)?([^\n\r]+)/i)

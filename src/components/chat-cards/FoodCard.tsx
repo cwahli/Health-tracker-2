@@ -581,7 +581,7 @@ export const FoodCard: React.FC<AgentCardProps & {
   const [searchErrors, setSearchErrors] = React.useState<Record<string, string>>({});
   
 
-  const [previewState, setPreviewState] = React.useState<{ groupIdx: number, itemIdx: number, resolvedImgSrc?: string, overrideSrc?: string } | null>(null);
+  const [previewState, setPreviewState] = React.useState<{ groupIdx: number, itemIdx: number, resolvedImgSrc?: string, overrideSrc?: string, groupBoundingBox?: number[] | null } | null>(null);
   const [scoutPreviewIdx, setScoutPreviewIdx] = React.useState<number | null>(null);
   const [externalPreviewImg, setExternalPreviewImg] = React.useState<{ url: string; title: string } | null>(null);
 
@@ -1012,7 +1012,10 @@ export const FoodCard: React.FC<AgentCardProps & {
     
     // Enrich each group's items with boundingBox2D and sourceImageIndex from scoutItems
     const groups = rawGroups.map((g: any) => {
-      const items = (g.items || []).map((item: any) => {
+      const items = (g.items || []).map((rawItem: any) => {
+        // In compare mode the agent emits items as plain strings (dish names).
+        // Normalise to an object so downstream code can always do item.name etc.
+        const item: any = typeof rawItem === 'string' ? { name: rawItem } : rawItem;
         const matchingScout = (resolvedScoutItems || []).find((s: any) => {
           if (scoutIndexAgrees(item, s)) return true;
           return namesReferToSameFood(item.name, s.keyword || s.originalName);
@@ -1480,7 +1483,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                               if (activeScoutIdx !== -1) {
                                                 setScoutPreviewIdx(activeScoutIdx);
                                               } else {
-                                                setPreviewState({ groupIdx: idx, itemIdx: 0, resolvedImgSrc });
+                                                setPreviewState({ groupIdx: idx, itemIdx: 0, resolvedImgSrc, groupBoundingBox: group.boundingBox2D || bb || null });
                                               }
                                             }}
                                           />
@@ -1830,7 +1833,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                                             if (searchResults[fullItemKey] && searchResults[fullItemKey].length > 0) {
                                                               setSearchModes(prev => ({...prev, [fullItemKey]: !prev[fullItemKey]}));
                                                             } else {
-                                                              setPreviewState({ groupIdx: idx, itemIdx: itemIdx, resolvedImgSrc, overrideSrc: fetchedUrl && typeof fetchedUrl === 'string' ? fetchedUrl : undefined });
+                                                              setPreviewState({ groupIdx: idx, itemIdx: itemIdx, resolvedImgSrc, overrideSrc: fetchedUrl && typeof fetchedUrl === 'string' ? fetchedUrl : undefined, groupBoundingBox: (bb && isValidBoundingBox(bb) ? null : (group.boundingBox2D || null)) });
                                                             }
                                                           }
                                                         };
@@ -2090,7 +2093,7 @@ export const FoodCard: React.FC<AgentCardProps & {
           resolvedImgSrc = previewState.overrideSrc;
         }
         const hasLookedUpImage = !!(onlineImageUrls[itemKeyForCache] || previewState.overrideSrc);
-        const bb = hasLookedUpImage ? null : (item.boundingBox2D || (matchingScout ? matchingScout.boundingBox2D : null));
+        const bb = hasLookedUpImage ? null : (item.boundingBox2D || (matchingScout ? matchingScout.boundingBox2D : null) || previewState.groupBoundingBox || null);
         const groupKey = `${msg.id}-${previewState.groupIdx}`;
         const itemDisplayName = showTranslations[groupKey] ? (item.keyword || item.name) : (item.originalName || item.name);
         return (
