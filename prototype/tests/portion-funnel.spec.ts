@@ -1,4 +1,9 @@
 import { test, expect } from '@playwright/test';
+import {
+  detectPortionAmbiguity,
+  detectPackNetWeightGrams,
+  resolveItemQuantities,
+} from '../../server_portion_clarify';
 
 /**
  * S-10 PORTION_FUNNEL — stubbed portion-clarify journey (no live Gemini):
@@ -127,5 +132,129 @@ test.describe('S-10: Portion funnel clarify journey', () => {
     // Picker retires; no crash.
     await expect(prompt).not.toBeVisible({ timeout: 10000 });
     expect(pageErrors).toEqual([]);
+  });
+});
+
+test.describe('S-10: live debug-file regression cases (real funnel, no stubs)', () => {
+  /**
+   * Case 1 — debug-job_1789171414373: photo-only log, scout est 28g on a
+   * 180g "Berat Bersih" pack, label without serving fields. Shipped silent
+   * (28g locked, no question). The funnel must ASK.
+   */
+  test('case-1 silent 28g pack item now asks', () => {
+    const items = [
+      {
+        scoutIndex: 0,
+        originalName: 'Kacang Kulit',
+        keyword: 'Kacang Kulit',
+        estimatedWeightGrams: 28,
+        source: 'visual',
+        packageLabelText: 'Indomaret Kacang Kulit Berat Bersih 180 g',
+        rawNutritionLabel: { calories: 170, protein: 2.5, sodium: 135 },
+      },
+      {
+        scoutIndex: 1,
+        originalName: 'Fried Chicken Drumstick',
+        keyword: 'Fried Chicken Drumstick',
+        estimatedWeightGrams: 120,
+        source: 'visual',
+      },
+      {
+        scoutIndex: 2,
+        originalName: 'Larutan Cap Kaki Tiga Cooltopia Melon Orange',
+        keyword: 'Larutan Cap Kaki Tiga Cooltopia Melon Orange',
+        estimatedWeightGrams: 320,
+        packGrams: 320,
+        source: 'visual',
+      },
+    ];
+
+    // Root cause of the shipped silence: the old detector had no sticker-text
+    // cue, so with no packGrams FIELD it found no pack and bailed on the
+    // visual early-return. The cue now derives the pack from the OCR text.
+    expect(detectPackNetWeightGrams(items[0])).toBe(180);
+    expect(detectPortionAmbiguity(items[0], 0)).not.toBeNull();
+
+    const funnel = resolveItemQuantities(items, { userText: '' });
+    expect(funnel.clarifyItems.length).toBe(1);
+    expect(funnel.clarifyItems[0].name).toMatch(/kacang/i);
+    const weights = funnel.clarifyItems[0].options.map((o) => o.weightGrams);
+    expect(weights).toContain(28);
+    expect(weights).toContain(90);
+    const res = funnel.resolutions.find((r) => r.scoutIndex === 0);
+    expect(res?.decision).toBe('ask');
+
+    // Siblings stay silent: chicken has no pack divergence, the 320ml drink
+    // equals its single-serve pack (CORE LAW) — no over-asking.
+    expect(funnel.clarifyItems.some((i) => i.scoutIndex === 1)).toBe(false);
+    expect(funnel.clarifyItems.some((i) => i.scoutIndex === 2)).toBe(false);
+  });
+
+  /**
+   * Case 2 — debug-job_1789171484121: user said "I had 100g of kacang",
+   * scout est 100g on the 180g pack. Shipped a REDUNDANT question.
+   * The funnel must stay silent and adopt the stated 100g.
+   */
+  test('case-2 stated 100g matching est stays silent', () => {
+    const items = [
+      {
+        scoutIndex: 0,
+        originalName: 'Fried Chicken Drumstick',
+        keyword: 'Fried Chicken Drumstick',
+        estimatedWeightGrams: 100,
+        source: 'visual',
+      },
+      {
+        scoutIndex: 1,
+        originalName: 'Cooltopia Melon Orange Drink',
+        keyword: 'Cooltopia Melon Orange',
+        estimatedWeightGrams: 320,
+        packGrams: 320,
+        source: 'visual',
+      },
+      {
+        scoutIndex: 2,
+        originalName: 'Indomaret Kacang Kulit',
+        keyword: 'Indomaret Kacang Kulit',
+        estimatedWeightGrams: 100,
+        source: 'visual',
+        packageLabelText: 'Berat Bersih: 180 g',
+      },
+    ];
+
+    // The detector still fires on these grams WITHOUT user context (it never
+    // sees user text) — the shipped bug was asking DESPITE the stated 100g.
+    // The funnel suppresses it.
+    expect(detectPortionAmbiguity(items[2], 2)).not.toBeNull();
+
+    const funnel = resolveItemQuantities(items, { userText: 'I had 100g of kacang' });
+    expect(funnel.clarifyItems.length).toBe(0);
+    const res = funnel.resolutions.find((r) => r.scoutIndex === 2);
+    expect(res?.decision).toBe('accept-stated');
+    expect(funnel.items[2].estimatedWeightGrams).toBe(100);
+    expect(funnel.items[2].statedGramsAdopted).toBe(true);
+  });
+
+  /**
+   * Case 3 — debug-job_1789201936859 (live repro of case 1): est "28"
+   * (string, as the scout emits), sticker-only pack evidence, no user text.
+   * Must ASK with the live option set.
+   */
+  test('case-3 live 28g repro asks with pack halves', () => {
+    const items = [
+      {
+        scoutIndex: 0,
+        originalName: 'Indomaret Kacang Kulit',
+        keyword: 'Indomaret Kacang Kulit',
+        estimatedWeightGrams: '28',
+        source: 'visual',
+        packageLabelText: 'Kacang Kulit Berat Bersih 180 g',
+        rawNutritionLabel: { calories: 170, protein: 3.6, sodium: 0 },
+      },
+    ];
+    const funnel = resolveItemQuantities(items, {});
+    expect(funnel.clarifyItems.length).toBe(1);
+    const weights = funnel.clarifyItems[0].options.map((o) => o.weightGrams);
+    expect(weights).toEqual(expect.arrayContaining([28, 90, 45, 100]));
   });
 });
